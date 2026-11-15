@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The state badges' half of the band's PGG_AUTO_ACT harness: the three the band raises at once (and all six), the one
+/// The state badges' half of the band's _PGG_AUTO_ACT harness: the three the band raises at once (and all six), the one
 /// a graph that stopped reading raises, the one an old git raises, and the one files for a missing Git LFS raise.
 /// Split from `WindowBandActs` for length alone; each verb stands itself up on its own `running:`
 /// (`WindowAutoActDriver`).
@@ -17,7 +17,7 @@ Item {
     required property Item mainUi
     required property IdentityDialog identityDialog
 
-    // PGG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has placed the group — an order a
+    // _PGG_AUTO_ACT=badges-hover-early: the stand-in pointer put down before the band has placed the group — an order a
     // hand cannot take, and the one `BandStateGroup.asking` is for (a pointer that cannot move raises the beat
     // once, so the card is asked for again when the row answers); `badges-hover` passes with or without it. Written
     // in the completion handler, the first moment this verb exists (`WindowHarness.begun`); the rest is shared.
@@ -26,7 +26,7 @@ Item {
             topBar.statePointedAt = true
     }
 
-    // PGG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band asks for, which only the
+    // _PGG_AUTO_ACT=badges: all three of the band's state badges at once — the widest the band asks for, which only the
     // floor keeps from pushing `>_` off the end (`BandStateGroup`'s header). The argument is `<width>[:<tabs>]`: the
     // window width (or `floor`), and how many tabs the run built the strip out of (`verify::repos::band_tab_count`).
     // The added tabs come off `tab-widths`' name ladder, and the preset goes to the last one, the tab in front. It has
@@ -242,13 +242,14 @@ Item {
             + " lfsCount=" + window.curPage.pageWorktree.lfsNeeded
     }
 
-    // PGG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history, and
-    // the card line that says which way. `graph-stale` fails the off-screen rebuild (a whole graph goes out of date);
-    // `graph-stopped` fails the stream (the column empties). Both go in at the walk (`GraphModel.failGraphPass`): no
-    // git fails on a demo repository, so the fault (`harness::fail_graph_pass`, `PassHooks::fault`) makes the
-    // ordinary reporting arm say it. No argument, and any preset will do. Under `graph-stopped` the card's line turns
-    // to git's words (`words=`). The card is overlay.png's. `graph-stopped`'s app.png is told from an opening by the
-    // ring: the column is empty with the ring still, where one just opened has it turning.
+    // _PGG_AUTO_ACT=graph-stale / graph-stopped: the badge that says what is drawn is not this repository's history,
+    // and the card line that says which way. `graph-stale` fails the off-screen rebuild (a whole graph goes out of
+    // date); `graph-stopped` fails the stream (the column empties). Both go in at the walk
+    // (`GraphModel.failGraphPass`): no git fails on a demo repository, so the fault (`harness::fail_graph_pass`,
+    // `PassHooks::fault`) makes the ordinary reporting arm say it. No argument, and any preset will do. Under
+    // `graph-stopped` the card's line turns to git's words (`words=`). The card is overlay.png's. `graph-stopped`'s
+    // app.png is told from an opening by the ring: the column is empty with the ring still, where one just opened has
+    // it turning.
     WindowStage {
         id: staleActTimer
         name: "graph_stale"
@@ -310,7 +311,7 @@ Item {
                 "report": () => acts.staleLine() })
         }
     }
-    // PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other worktree's row
+    // _PGG_AUTO_ACT=wip-landing: where the page lands when the pass it opened on carries every other worktree's row
     // and none of its own. The run starts with the hold raised (`--preset carried`, `xtask::verify::child`): which of
     // the walk and the first status comes first is the scheduler's.
     //
@@ -390,7 +391,7 @@ Item {
             + " cardRows=" + topBar.stateCardRows
     }
 
-    // PGG_AUTO_ACT=old-git / old-git-card / old-git-fold: the run is handed a git that answers `--version` with an
+    // _PGG_AUTO_ACT=old-git / old-git-card / old-git-fold: the run is handed a git that answers `--version` with an
     // older number (`verify-ui --old-git`). The window sized (`sized`, a width or `floor` in the argument), then the
     // pointer down (`pointed`, `-card`). `-card`'s card is overlay.png's.
     WindowStage {
@@ -480,7 +481,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=no-lfs / no-lfs-card: the run's git answers `git lfs` as a git without Git LFS does
+    // _PGG_AUTO_ACT=no-lfs / no-lfs-card: the run's git answers `git lfs` as a git without Git LFS does
     // (`verify-ui --no-lfs`, staged by the verb's name), over a preset with files for LFS pending (`--preset lfs`).
     // The argument is a width, or `floor` for the folded mark, as `old-git`'s is. The window sized (`sized`), then
     // the pointer down (`pointed`, `-card`), as `old-git` does. `-card`'s card is overlay.png's; scene.png shows it on

@@ -33,7 +33,7 @@ claudeはこの資料を無視して
 はこの値を直接読む。席の文字・ブランチ・絶対パスを直ちに報告し、割り当てられたツリーだけで作業する。返却・rebase・GUI 起
 動・land の許可は `CLAUDE.md` に従う。席の返却を報告する前に、解除結果と worktree のロック状態を確認する。席の保持を解く
 のは land・返却・ユーザーが指示した乗っ取り
-(<!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`)だけ。 Claude の会話と同じく、この
+(<!--cmd:seat.takeover-->`PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`)だけ。 Claude の会話と同じく、この
 チャットでの返信・依頼の完了・ユーザーの入力待ち・再開をまたいで席を保つ。ユーザーが返却を指示した時だけ返し、land では
 共有の手順が返す。同じ席で作業を続ける。 rebase はユーザーの指示がある時だけ行う。作業中の変更は新しいコミットに積み、コ
 ミットログの squash / amend は land 時の再編で行う。

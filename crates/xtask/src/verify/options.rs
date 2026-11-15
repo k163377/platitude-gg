@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 /// The run's ceiling, and the height every other one here is set from:
-/// the app's own watchdog is handed this (`PGG_AUTO_WATCHDOG_MS`), the
+/// the app's own watchdog is handed this (`_PGG_AUTO_WATCHDOG_MS`), the
 /// deadline thread looks past it, and the parent reaps behind them both
 /// (`super::child`).
 ///
@@ -36,12 +36,12 @@ pub(super) struct Options {
     pub(super) build: bool,
     pub(super) select: bool,
     /// Park the view at one end once the page has stopped arriving
-    /// (`PGG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`); empty leaves it
+    /// (`_PGG_SCROLL_TO`: `top` / `bottom` / `nav-bottom`); empty leaves it
     /// where the run puts it. A flag because `app_env` clears the parent
-    /// shell's `PGG_*`, so the variable alone never reaches the app.
+    /// shell's `_PGG_*`, so the variable alone never reaches the app.
     pub(super) scroll_to: String,
     /// Ask for the window shape of the two platforms that cannot fold the
-    /// band into the title bar (`PGG_SYSTEM_TITLE_BAR`), to photograph it
+    /// band into the title bar (`_PGG_SYSTEM_TITLE_BAR`), to photograph it
     /// from a machine that merges. A flag for the same reason as
     /// [`Options::scroll_to`].
     pub(super) system_title_bar: bool,
@@ -54,32 +54,32 @@ pub(super) struct Options {
     /// folder's screen, which the runner's reads of the same folder must
     /// not see.
     pub(super) app_env: Vec<(String, String)>,
-    /// Hold the app at the station this names, for good (`PGG_FAULT_HANG`;
+    /// Hold the app at the station this names, for good (`_PGG_FAULT_HANG`;
     /// the words are `harness::deadline`'s). A run that always fails, for
     /// `super::faults`.
     pub(super) fault_hang: String,
-    /// Start the app with no deadline thread (`PGG_FAULT_NO_DEADLINE`), so
+    /// Start the app with no deadline thread (`_PGG_FAULT_NO_DEADLINE`), so
     /// it leaves no report of its own — the shape a wedge past `exiting`
     /// has anyway.
     pub(super) fault_no_deadline: bool,
-    /// Swallow the verb's completion (`PGG_FAULT_HOLD_ACT`), so the run
+    /// Swallow the verb's completion (`_PGG_FAULT_HOLD_ACT`), so the run
     /// ends at the ceiling with the loop still turning. A run that always
     /// fails, for `super::faults`.
     pub(super) fault_hold_act: bool,
     /// Hold every configuration save the app makes until the station
-    /// this names (`PGG_FAULT_HOLD_SAVE`), so a close can land on one
+    /// this names (`_PGG_FAULT_HOLD_SAVE`), so a close can land on one
     /// provably out and the exit can be read joining it. Set unasked for
     /// the verb whose subject that is (`super::child`); any other verb
     /// may carry it. A station past the join (`exiting`) never lets the
     /// save go, so that run stands until the ceiling.
     pub(super) fault_hold_save: String,
     /// Have one picture's readings of the page say a read is on its way
-    /// (`PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]`), so the
+    /// (`_PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]`), so the
     /// picture taken again can be read from outside: driven by
     /// `shot-check` (`super::shot_check`).
     pub(super) fault_owed_at_shot: String,
     /// Hold the command log's records back from the write's first asked
-    /// command until a wait stands on them alone (`PGG_FAULT_HOLD_RECORDS`):
+    /// command until a wait stands on them alone (`_PGG_FAULT_HOLD_RECORDS`):
     /// driven by `records-check` (`super::records_check`).
     pub(super) fault_hold_records: bool,
     /// Stall the parent's own look at a run reaped at the ceiling
@@ -391,7 +391,7 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     Ok(())
 }
 
-/// `PGG_FAULT_OWED_AT_SHOT` as it is read (`WindowHarness.owedForPicture`):
+/// `_PGG_FAULT_OWED_AT_SHOT` as it is read (`WindowHarness.owedForPicture`):
 /// one of the three pictures and the reading the injected read lands in,
 /// and after `before` or `during` the name that read goes by. The harness
 /// splits the value and asks nothing of its parts, so one refused here

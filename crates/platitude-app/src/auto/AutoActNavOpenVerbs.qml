@@ -146,7 +146,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it — the whole path,
+    // _PGG_AUTO_ACT=nav-open-tip: the worktree's path the open row keeps for the hand that opened it — the whole path,
     // which the lines never carry (デザイン規約 §左メニューの所作). Run on `--preset worktrees` (row 3 by default). The
     // picture shows the words (overlay.png / scene.png); `same=` holds them against the path the open row asks for
     // (`NavProbe.factsSays`), so a tip drawn from anywhere else fails. A rest on the lines themselves is the real
@@ -213,7 +213,7 @@ Item {
                                 + " lit=" + navProbe.rowWashLit("branch", 2) })
         }
     }
-    // PGG_AUTO_ACT=nav-follow / nav-follow-lit. The landing is read off the graph, not the press: the page's selection
+    // _PGG_AUTO_ACT=nav-follow / nav-follow-lit. The landing is read off the graph, not the press: the page's selection
     // is only the click's bookkeeping, so `landed=` is the graph's row for that commit, lit and laid out.
     //
     // No `order`: a row whose lines go nowhere completes where it opened, one with a line that goes somewhere after
@@ -342,7 +342,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=nav-tip / nav-open / nav-open-then / nav-open-foot. Every run first opens a control row — the first
+    // _PGG_AUTO_ACT=nav-tip / nav-open / nav-open-then / nav-open-foot. Every run first opens a control row — the first
     // WORKTREES row, the one section every repository has — so an empty overlay still says the pointer arrived
     // somewhere. The hand leaves it on the beat it opened, before its supplement could show, so it raises nothing.
     //
@@ -367,8 +367,8 @@ Item {
         property string kind: "branch"
         property int row: 0
         property bool head: false
-        /// Whether the run reads the lines a row opens (PGG_AUTO_ACT=nav-open) instead of the shared tooltip, and
-        /// what the hand does once the row is open (PGG_AUTO_ACT=nav-open-then / nav-open-foot: the argument).
+        /// Whether the run reads the lines a row opens (_PGG_AUTO_ACT=nav-open) instead of the shared tooltip, and
+        /// what the hand does once the row is open (_PGG_AUTO_ACT=nav-open-then / nav-open-foot: the argument).
         readonly property bool opens: Harness.autoAct === "nav-open" || Harness.autoAct === "nav-open-then"
                                       || Harness.autoAct === "nav-open-foot"
         readonly property string then: Harness.autoAct === "nav-open-then" || Harness.autoAct === "nav-open-foot"
@@ -387,7 +387,7 @@ Item {
         /// out the ceiling — that case is `view_tests`' `the_stand_in_follows_whichever_fold_closed_over_it`.
         property int fold: -1
         /// Whether the row rested on is the last of its section, the list taken to its end first
-        /// (PGG_AUTO_ACT=nav-open-foot). Scrolled once — not re-applied under a hand that has arrived.
+        /// (_PGG_AUTO_ACT=nav-open-foot). Scrolled once — not re-applied under a hand that has arrived.
         readonly property bool foot: Harness.autoAct === "nav-open-foot"
         /// Whether the hand moves on once the row is open (`afterOpen`).
         readonly property bool moves: navTipTimer.opens && navTipTimer.then !== ""
@@ -602,7 +602,7 @@ Item {
                 "report": () => op.foot ? op.footLine() : op.then !== "" ? op.thenLine() : op.tipLine() })
         }
     }
-    // PGG_AUTO_ACT=nav-open-tag: the lines a TAGS row opens under itself, one per remote carrying the name.
+    // _PGG_AUTO_ACT=nav-open-tag: the lines a TAGS row opens under itself, one per remote carrying the name.
     //
     // The readings must be in first: nothing local records a remote's `refs/tags/` (`remote::tags::list_tags`), so a
     // row rested on before `ls-remote` answered looks like nobody else's tag. Waits on the answer itself, as
@@ -624,7 +624,7 @@ Item {
         /// remote's (read with `here_apart=true`). A run's tip stands at the head of the lines (`TipSeat.seatY`), so
         /// `:tip` and `:name` frame in the same seat — the argument and the line say which rest it was.
         property string rest: ""
-        /// PGG_AUTO_ACT=tag-line-menu: the line the menu is asked for on, -1 for a run that only opens the row.
+        /// _PGG_AUTO_ACT=tag-line-menu: the line the menu is asked for on, -1 for a run that only opens the row.
         property int menuLine: -1
         function begin(arg, menuLine) {
             const parts = ("" + arg).split(":")

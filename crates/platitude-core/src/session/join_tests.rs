@@ -872,9 +872,9 @@ fn a_tag_menu_reaches_the_remote_it_can_name() {
 /// the two git reads. How to run it and the record:
 /// `ci/baseline/refs-join-windows-x64.md`.
 #[test]
-#[ignore = "needs PGG_PERF_REPO pointed at a large repository"]
+#[ignore = "needs _PGG_PERF_REPO pointed at a large repository"]
 fn refs_join_at_scale() {
-    let repo = std::env::var("PGG_PERF_REPO").unwrap_or_else(|_| ".".to_string());
+    let repo = std::env::var("_PGG_PERF_REPO").unwrap_or_else(|_| ".".to_string());
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(&repo)

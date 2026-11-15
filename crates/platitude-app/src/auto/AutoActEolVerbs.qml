@@ -94,7 +94,7 @@ Item {
                                 + " text=" + wipPane.pointedEolText })
         }
     }
-    // PGG_AUTO_ACT=eol-gone. The card is asked for as the hover asks (the row's, or the button's once something is
+    // _PGG_AUTO_ACT=eol-gone. The card is asked for as the hover asks (the row's, or the button's once something is
     // staged), the hand is put in it as the card reads a hand (`AppCard.contentPointed`), and the warning is taken
     // away with one write: the card goes, held hand or not (`WipPane.weighEol`).
     PageStage {
@@ -184,7 +184,7 @@ Item {
                                 + " gone=" + !wipPane.eolCardOpen + " warned=" + worktree.eolStagedCount })
         }
     }
-    // PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
+    // _PGG_AUTO_ACT=eol-walk / eol-stay. The hand on the row's words as the pane hears it (`HandWatch.stir`), the card
     // out, then the unstaged list sent down under the still hand: the card goes and the hand is held. A whole row
     // (`eol-walk`): the light goes to the row that arrived under the hand at once, and its own card comes after a
     // tremor and the rest (デザイン規約 §hover のツールチップ「手が動いたかの見切り」). A pixel (`eol-stay`): the row

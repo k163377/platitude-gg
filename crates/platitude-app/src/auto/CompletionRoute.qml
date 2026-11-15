@@ -50,7 +50,7 @@ Item {
     signal readied()
 
     function finishFrom(from) {
-        // A run ordered to hold its act has none (`PGG_FAULT_HOLD_ACT`): only the ceiling ends it — the shape
+        // A run ordered to hold its act has none (`_PGG_FAULT_HOLD_ACT`): only the ceiling ends it — the shape
         // `cargo xtask wedge-check` reads back (`xtask::verify::faults`).
         if (Harness.faultHoldAct || route.read)
             return

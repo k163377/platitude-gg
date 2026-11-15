@@ -21,7 +21,7 @@
 //!   ahead of the window as soon as a page family or `isWriteAct` takes it.
 //!
 //! Both sides are read from the tree: the names the harness compares
-//! `PGG_AUTO_ACT` against, and each line's first word — not the skill's
+//! `_PGG_AUTO_ACT` against, and each line's first word — not the skill's
 //! prose, which undercounts. The failure for a gone verb is judged against
 //! every kebab-case word the harness holds, not only dispatches — a verb
 //! can be reached through a list (the file-row family), and the narrower
@@ -33,7 +33,7 @@ use std::path::Path;
 use crate::gate::{Composition, Lines, Tiers};
 
 /// Where the harness answers a verb by name. Nothing outside this
-/// directory reads `PGG_AUTO_ACT`'s value as a verb.
+/// directory reads `_PGG_AUTO_ACT`'s value as a verb.
 const HARNESS: &str = "crates/platitude-app/src/auto/";
 
 /// The file whose `defersCompletion` names the verbs the page leaves to

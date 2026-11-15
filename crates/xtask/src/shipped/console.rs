@@ -28,7 +28,7 @@ use crate::wait::{Budget, LOOK_AGAIN, Wait, stood};
 
 /// Which run of `shipped` this is: unset for the caller, else one of the
 /// three below.
-const ROLE: &str = "PGG_SHIPPED_CONSOLE";
+const ROLE: &str = "PGGDEV_SHIPPED_CONSOLE";
 const HOST: &str = "host";
 /// The cargo that starts the window on the host's console and leaves.
 const LEAVING: &str = "leaving";

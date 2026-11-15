@@ -6,7 +6,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// PGG_AUTO_ACT runs one operation — a write, or a surface left standing for the overlay shot — through the code
+/// _PGG_AUTO_ACT runs one operation — a write, or a surface left standing for the overlay shot — through the code
 /// path a click takes, so the wiring can be proven headlessly. `PageHarness` builds this only when a verb was given.
 // `Item` because `QtObject` has no default property to hold the timers below.
 Item {

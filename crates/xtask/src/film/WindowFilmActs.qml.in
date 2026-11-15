@@ -7,7 +7,7 @@ import QtTest
 import platitude
 import platitude.ui
 
-// PGG_AUTO_ACT=film, put into the tree by `cargo xtask film in` and never committed. Plays a scene with synthetic
+// _PGG_AUTO_ACT=film, put into the tree by `cargo xtask film in` and never committed. Plays a scene with synthetic
 // input — QtTest's TestEvent, real mouse and key events through the window, so hover is Qt's own — and grabs the
 // scene's views of the window (the content with the overlay over it), the hand and the caption band under them, every
 // tick into Harness.shotDir as fNNNN.png (sNNNN.png under the setup, see `number`), with frames.tsv beside them.

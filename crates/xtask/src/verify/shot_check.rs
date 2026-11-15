@@ -7,7 +7,7 @@
 //! refreshed, the window drawn afresh — and not off the texture the read
 //! was drawn into cannot be read off the run's lines alone: the lines say
 //! what the driver believed of its attempts. So the read is injected
-//! (`PGG_FAULT_OWED_AT_SHOT`, `WindowHarness.owedForPicture`), a mark is
+//! (`_PGG_FAULT_OWED_AT_SHOT`, `WindowHarness.owedForPicture`), a mark is
 //! drawn into the content for as long as the injected read stands, and
 //! the saved pictures are decoded: the mark in one is a texture the
 //! attempt should have thrown away. Two cases stand the mark and inject
@@ -41,7 +41,7 @@ const PICTURES: [&str; 3] = ["app", "overlay", "scene"];
 
 /// One run with a read injected into one picture's readings.
 struct Case {
-    /// `PGG_FAULT_OWED_AT_SHOT`'s value: the picture, when, and — for the
+    /// `_PGG_FAULT_OWED_AT_SHOT`'s value: the picture, when, and — for the
     /// case that injects under a name of the page's — the read's name.
     fault: &'static str,
     /// Must all appear in what the run printed: the attempts' own lines

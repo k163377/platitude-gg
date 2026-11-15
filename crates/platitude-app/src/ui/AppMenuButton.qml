@@ -31,7 +31,7 @@ ToolButton {
         menuSeat.active = true
         return menuSeat.item
     }
-    /// Automation (`PGG_AUTO_ACT=clone-*`): emits the row's own `triggered`, so a run goes through the hand's wiring.
+    /// Automation (`_PGG_AUTO_ACT=clone-*`): emits the row's own `triggered`, so a run goes through the hand's wiring.
     function clickCloneRow() {
         menuButton.card().cloneItem.triggered()
     }

@@ -147,7 +147,7 @@ AppCard {
         return true
     }
     /// Hover cannot be injected (verify-ui §hover の絵の撮り方): a run writes the row's `pointedAt` and reads the wash
-    /// back with `rowLit` (PGG_AUTO_ACT=ref-list-lit) — off the row, not the picture: the wash is one step off the
+    /// back with `rowLit` (_PGG_AUTO_ACT=ref-list-lit) — off the row, not the picture: the wash is one step off the
     /// ground, so a row that never took the answer pictures like one that did.
     function pointRow(i) {
         const row = refList.rowAt(i)
@@ -168,7 +168,7 @@ AppCard {
         const row = refList.rowAt(i)
         return row ? row.lit : false
     }
-    /// Presses the name a row opens under itself (`RefChip.followMate`; PGG_AUTO_ACT=ref-list-follow). False where
+    /// Presses the name a row opens under itself (`RefChip.followMate`; _PGG_AUTO_ACT=ref-list-follow). False where
     /// the row has nowhere to go.
     function followRow(i) {
         const row = refList.rowAt(i)
@@ -178,7 +178,7 @@ AppCard {
         return true
     }
     /// The pointer resting on that name, written where the pointer writes; read back with `mateAimed`
-    /// (PGG_AUTO_ACT=ref-list-follow-lit).
+    /// (_PGG_AUTO_ACT=ref-list-follow-lit).
     function pointMate(i) {
         const row = refList.rowAt(i)
         if (!row || !row.chip.mateGoes)
@@ -387,7 +387,7 @@ AppCard {
                 // …and a worktree's folder, which is no ref but has a name to change (`RepoPage.startRename`).
                 readonly property bool renameable: GitFacts.namedKind(refRow.modelData.kind) !== ""
                 /// A left click and a double-click, named so a run puts its clicks in here
-                /// (PGG_AUTO_ACT=graph-reclick-list / ref-list-pick). Every row takes the click: a row leading nowhere
+                /// (_PGG_AUTO_ACT=graph-reclick-list / ref-list-pick). Every row takes the click: a row leading nowhere
                 /// still has a name, and renaming starts with a click.
                 function leftClick(modifiers) {
                     const mods = modifiers === undefined ? Qt.NoModifier : modifiers
@@ -440,7 +440,7 @@ AppCard {
                     onPressedChanged: if (rowTap.pressed) refRow.leftClick(rowTap.point.modifiers)
                     onDoubleTapped: refRow.doubleClick(rowTap.point.modifiers)
                 }
-                /// A right-click, named for runs as `leftClick` is (PGG_AUTO_ACT=list-menu).
+                /// A right-click, named for runs as `leftClick` is (_PGG_AUTO_ACT=list-menu).
                 function rightClick() {
                     refList.menuAsked(refRow.modelData)
                 }

@@ -6,7 +6,7 @@ import QtTest
 // room left of a box standing against the chip's end would take neither a press nor the hand. A `containmentMask`
 // leaving out the box's span hands the presses and the hover on either side to the row, and the ones on the box to the
 // box drawn under the area. This is Qt's side of it, on an area of its own; the product's area is asked by
-// `PGG_AUTO_ACT=graph-rename-fit` (`hits=`).
+// `_PGG_AUTO_ACT=graph-rename-fit` (`hits=`).
 Item {
     id: root
     width: 300

@@ -116,7 +116,7 @@ impl Harness {
     }
 
     /// Writes one line of the memory breakdown, tagged with where the run
-    /// had got to (`PGG_MEM_REPORT=1` only; `harness::memprobe::note_now`).
+    /// had got to (`_PGG_MEM_REPORT=1` only; `harness::memprobe::note_now`).
     #[qslot]
     fn note_memory(&self, label: String) {
         super::memprobe::note_now(&label);
@@ -147,7 +147,7 @@ impl Harness {
     }
 
     /// How many configuration saves stand at the hold a run asked for
-    /// (`PGG_FAULT_HOLD_SAVE`): the proof a close lands on a save that is
+    /// (`_PGG_FAULT_HOLD_SAVE`): the proof a close lands on a save that is
     /// out (`WindowDialogActs`, `quit-save-held`).
     #[qslot]
     fn held_saves(&self) -> i32 {

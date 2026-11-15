@@ -11,10 +11,10 @@
    `ref-list-card` / `author-card-open` / `co-authors-open` / `badges-hover` / `eol-hover` / `eol-commit` /
    `avatar-hover`。ポインタの下で色・印・道具が変わる形: `tab-mark` / `card-note-lit` / `line-tools` / `hunk-tools` /
    `stage-many` / `graph-divider` / `graph-bar` / `nav-peek` 系 / `avatar-row-lit`。
-2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は `PGG_AUTO_ACT` へ素通しするので、実装は
+2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は `_PGG_AUTO_ACT` へ素通しするので、実装は
    QML の op(`PageStage` / `WindowStage`)1 つ — ページ内は `AutoActDriver.qml` が束ねる `AutoAct*Verbs.qml` のどれか、
    ウィンドウ横断(タブ・identity・窓)は `WindowAutoActDriver.qml` の下の `Window*Acts.qml`(加えて登録表の行と verbs.md
-   の索引行 —— SKILL.md §PGG_AUTO_ACT 動詞表)。作法は 3 点: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書
+   の索引行 —— SKILL.md §_PGG_AUTO_ACT 動詞表)。作法は 3 点: **実 hover が書くのと同じ 1 つのプロパティ / シグナルへ書
    く**(`eol-hover` / `pointAtTab` が手本。書き先が無い形なら先に `*PointedAt` / `pointed` の 1 本を切る — 形の一覧は
    rules-refs/app-ui.md)・**ページ側の表示条件の判定を通す**(`row-card` の注意 = 直接呼出しは出さないはずの場面まで開い
    て緑になる)・**出力側の述語を完了の `when` に置き、`op.complete` で終える**(書き方と `defersCompletion` の足し忘れの

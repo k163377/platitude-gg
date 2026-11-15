@@ -22,10 +22,10 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             "verify-ui perf takes none, details, diff, scroll, scroll-none, font-walk, colour, diff-scroll, or sequence".into(),
         );
     }
-    cmd.env("PGG_AUTO_PERF", "1")
-        .env("PGG_PERF_TRACE_FRAMES", "1")
+    cmd.env("_PGG_AUTO_PERF", "1")
+        .env("_PGG_PERF_TRACE_FRAMES", "1")
         .env(
-            "PGG_PERF_SELECTION",
+            "_PGG_PERF_SELECTION",
             if ["none", "scroll-none", "font-walk"].contains(&arg) {
                 "none"
             } else {
@@ -33,7 +33,7 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             },
         )
         .env(
-            "PGG_PERF_DIFF",
+            "_PGG_PERF_DIFF",
             if ["diff", "scroll", "colour", "diff-scroll", "sequence"].contains(&arg) {
                 "1"
             } else {
@@ -41,18 +41,18 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
             },
         );
     if ["scroll", "scroll-none"].contains(&arg) {
-        cmd.env("PGG_AUTO_SCROLL", "1");
+        cmd.env("_PGG_AUTO_SCROLL", "1");
     }
     if ["colour", "diff-scroll", "sequence"].contains(&arg) {
-        cmd.env("PGG_PERF_COMPLETION", "coloured");
+        cmd.env("_PGG_PERF_COMPLETION", "coloured");
     }
     if ["diff-scroll", "sequence"].contains(&arg) {
-        cmd.env("PGG_PERF_DIFF_SCROLL", "1");
+        cmd.env("_PGG_PERF_DIFF_SCROLL", "1");
     }
     if arg == "sequence" {
         let repo = cmd
             .get_envs()
-            .find(|(key, _)| *key == "PGG_AUTO_OPEN")
+            .find(|(key, _)| *key == "_PGG_AUTO_OPEN")
             .and_then(|(_, value)| value)
             .ok_or("perf sequence needs a repository")?
             .to_string_lossy()
@@ -67,14 +67,14 @@ pub(super) fn configure(cmd: &mut Command, verb: &str, arg: &str) -> Result<(), 
         if cases.len() != 2 {
             return Err("perf sequence needs two commits".into());
         }
-        cmd.env("PGG_PERF_CASES", cases.join("\n"))
-            .env("PGG_PERF_CYCLES", "2");
+        cmd.env("_PGG_PERF_CASES", cases.join("\n"))
+            .env("_PGG_PERF_CYCLES", "2");
     }
     // The calibration run's shape (`perf::fonts`). Offscreen the font
     // database is empty, so this checks only the walk's three lines, in
     // order.
     if arg == "font-walk" {
-        cmd.env("PGG_PERF_FONT_WALK", "1");
+        cmd.env("_PGG_PERF_FONT_WALK", "1");
     }
     Ok(())
 }

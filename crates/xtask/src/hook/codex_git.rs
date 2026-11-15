@@ -267,8 +267,8 @@ mod tests {
             "Start-Process git -ArgumentList commit -UseNewEnvironment",
             "Start-Process git -UseNew",
             "Start-Process git -Environment @{CODEX_THREAD_ID=$null}",
-            "PGG_GATE_SKIP=1 git commit -m x",
-            "$env:pgg_gate_skip = '1'",
+            "PGGDEV_GATE_SKIP=1 git commit -m x",
+            "$env:pggdev_gate_skip = '1'",
         ] {
             assert!(gate_control_refusal(command).is_some(), "{command}");
         }

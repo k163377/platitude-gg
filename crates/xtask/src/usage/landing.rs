@@ -108,7 +108,7 @@ pub(super) const ENTRIES: &str = "  land [<branch>]
       Real-window start for 「起動して」 asks (the verify-ui skill's fast
       path): reap this tree's stale runs, build release, start detached,
       and confirm it outlived its first second. Run it with
-      PGG_ALLOW_GUI=1 in front — a real window is the user's ask. The app
+      PGGDEV_ALLOW_GUI=1 in front — a real window is the user's ask. The app
       keeps a per-tree settings store on its own, so seats never fight
       over one instance lock. Somebody is waiting at the screen for this,
       so its build takes the machine ahead of every test and behind a
@@ -150,7 +150,7 @@ pub(super) const ENTRIES: &str = "  land [<branch>]
       `seat release [<letter>]` hands a seat back without landing and
       names what it still carries; the letter is needed only when the
       session holds more than one. And `seat takeover <letter>`, behind
-      PGG_ALLOW_TAKEOVER=1, moves the letter to this session whoever holds
+      PGGDEV_ALLOW_TAKEOVER=1, moves the letter to this session whoever holds
       it — a live session, one that is gone, nobody — with the tree as it
       stands: nothing moved to main's tip, the board's pictures kept, a
       tree that went away grown back on the letter's own branch. The

@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [features]
 # The verification harness (src/harness + the `platitude.auto` QML module)
-# that reads the `PGG_*` knobs. Off in a shipped build; every xtask that
+# that reads the `_PGG_*` knobs. Off in a shipped build; every xtask that
 # drives the app turns it on.
 automation = []
 # The counting global allocator (src/harness/memprobe.rs): the Rust heap's

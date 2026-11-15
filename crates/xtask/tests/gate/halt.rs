@@ -4,9 +4,9 @@
 
 use crate::support::{ALWAYS, Sandbox};
 
-/// The Linux step holds until the halt reaches it (`PGG_GATE_FAKE_HOLD` —
+/// The Linux step holds until the halt reaches it (`PGGDEV_GATE_FAKE_HOLD` —
 /// faked steps otherwise end as they start), and the host's red waits for
-/// it to start (`PGG_GATE_FAKE_FAIL_AFTER`): what is checked is a running
+/// it to start (`PGGDEV_GATE_FAKE_FAIL_AFTER`): what is checked is a running
 /// step, never one the halt met at its door.
 #[test]
 fn the_first_red_ends_what_the_other_side_is_running() {
@@ -17,9 +17,9 @@ fn the_first_red_ends_what_the_other_side_is_running() {
         &sb.seat,
         &[],
         &[
-            ("PGG_GATE_FAKE_FAIL", "test platitude-core 1"),
-            ("PGG_GATE_FAKE_HOLD", "test platitude-core 1 linux"),
-            ("PGG_GATE_FAKE_FAIL_AFTER", "test platitude-core 1 linux"),
+            ("PGGDEV_GATE_FAKE_FAIL", "test platitude-core 1"),
+            ("PGGDEV_GATE_FAKE_HOLD", "test platitude-core 1 linux"),
+            ("PGGDEV_GATE_FAKE_FAIL_AFTER", "test platitude-core 1 linux"),
         ],
     );
     assert!(!ok, "{text}");
@@ -57,7 +57,7 @@ fn a_red_always_step_starts_neither_side() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--keep-going"],
-        &[("PGG_GATE_FAKE_FAIL", "fmt")],
+        &[("PGGDEV_GATE_FAKE_FAIL", "fmt")],
     );
     assert!(!ok, "{text}");
     assert!(text.contains("stopped at the first red (fmt)"), "{text}");

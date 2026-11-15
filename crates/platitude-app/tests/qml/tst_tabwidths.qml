@@ -3,7 +3,7 @@ import QtTest
 import platitude.ui
 
 // How the tab strip hands its run out, and what a tab drawn under the answer does with it
-// (the order: `TabShare`'s header). Which widths go in is the font's and the model's (`PGG_AUTO_ACT=tab-widths`);
+// (the order: `TabShare`'s header). Which widths go in is the font's and the model's (`_PGG_AUTO_ACT=tab-widths`);
 // here every case costs a function call instead of a window and a repository per tab.
 Item {
     id: root

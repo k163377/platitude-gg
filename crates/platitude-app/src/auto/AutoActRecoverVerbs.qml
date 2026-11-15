@@ -392,13 +392,13 @@ Item {
                 acts.notLoaded++
         }
     }
-    // PGG_AUTO_ACT=recover-escape (`--preset discards`): Esc on an entry on the graph, entered at `escapePressed` where
-    // `Keys.onEscapePressed` enters, twice over. First on an entry the graph walked again from nothing under it (F5:
-    // `RepoTab.refreshAll`, whose rows go and come back), with the keyboard on the graph as a press on a row leaves
-    // it — it goes back to the list. Then on another entry with the log reading again, where a press may pick nothing
-    // but the entry still goes down. **The line is the judgment**: the picture is the list up with nothing picked, which
-    // a key that fell through to nobody after a `✕` would also draw. How the key climbs from the list and the filter
-    // to the page is `tst_recoverpane.qml`'s.
+    // _PGG_AUTO_ACT=recover-escape (`--preset discards`): Esc on an entry on the graph, entered at `escapePressed`
+    // where `Keys.onEscapePressed` enters, twice over. First on an entry the graph walked again from nothing under it
+    // (F5: `RepoTab.refreshAll`, whose rows go and come back), with the keyboard on the graph as a press on a row
+    // leaves it — it goes back to the list. Then on another entry with the log reading again, where a press may pick
+    // nothing but the entry still goes down. **The line is the judgment**: the picture is the list up with nothing
+    // picked, which a key that fell through to nobody after a `✕` would also draw. How the key climbs from the list and
+    // the filter to the page is `tst_recoverpane.qml`'s.
     PageStage {
         id: escapeTimer
         name: "recover_escape"

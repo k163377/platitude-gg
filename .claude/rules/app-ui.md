@@ -37,8 +37,8 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
   の行)
 - **QML モジュールは 2 つ — 製品 `ui/`(`platitude.ui`)と、Cargo feature `automation` でだけ埋め込む検証ハーネス
   `auto/`(`platitude.auto`)**。製品はハーネスの型を URL 越し(`HarnessSeat`)でだけ参照し、置くのは中立な property だけ —
-  走らせ方は `auto/` と `Harness` singleton が決める。**Rust 側で `PGG_*` を読むのは `harness::knobs` だけ**(例外は
-  `main.rs` の `PGG_LOG`)、core へは値で渡す。どれも**機械化済み: `cargo xtask structure`**
+  走らせ方は `auto/` と `Harness` singleton が決める。**Rust 側で knob(`_PGG_*`)を読むのは `harness::knobs` だけ**、core
+  へは値で渡す。どれも**機械化済み: `cargo xtask structure`**
 - **意匠の土台は既存の部品から選ぶ**(一覧は rules-refs の台座の行)。素の `Popup` / `ListView` / `RotationAnimator` /
   `elide` を新しく書かない — 台座に積んだ罠避けがまるごと落ちる。**3 箇所以上で言う同じ文・語は `Words`**
 - 配線: データは親→子へ property、操作・状態変更は子→親へ signal(渡されたモデルの slot は呼んでよい)。ウィンドウ横断 (タ
@@ -49,7 +49,7 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
 - **`onXChanged` は同じ `x` から導かれるバインディングより先に走り、`FontMetrics.advanceWidth()` 等のメソッドはバイン
   ディングが依存を取らない** — 測って押し出す値は、元のプロパティを自分で読み直す関数にする(各論は rules-refs)
 
-## UI 自動化(`PGG_AUTO_ACT` 動詞)の不変条件
+## UI 自動化(`_PGG_AUTO_ACT` 動詞)の不変条件
 
 - **完了条件は動詞固有の因果だけ** — 入力の受理 → busy 開始 → 終了 → 対象モデルの更新 → 出力プロパティか描画可能状
   態。**完了は `op.complete({ when, report })`** — 共通の経路(`CompletionRoute`)が `when`・page の
@@ -58,13 +58,13 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
   FAIL(`pictured … name=window … page=`)。`--watchdog-ms` は診断の天井で撮影時点を選ばない。性能測定の窓は測定入力で、完
   了は `perf_done` と親 watchdog の別勘定
 - **1 run の完了 owner は 1 つ**(page が原子的に claim し、window-level 動詞は defer)。撮影は完了 1 回の後だけ
-- **run は自分の環境と状態を建てる** — 起動前に全 `PGG_AUTO_*` を除いてから自分の値だけを設定し、repo / config / shot は
-  run 固有(明示した `--repo` / `--config-dir` / `--shot-dir` は原子的に所有、同時利用は fail fast)。worktree からの起動
-  は親が監督する `cargo xtask verify-ui` / `linux verify-ui`。build は一度、反復・並行は `--no-build`
+- **run は自分の環境と状態を建てる** — 起動前に全 `_PGG_*` を除いてから自分の値だけを設定し、repo / config / shot は run
+  固有(明示した `--repo` / `--config-dir` / `--shot-dir` は原子的に所有、同時利用は fail fast)。worktree からの起動は親
+  が監督する `cargo xtask verify-ui` / `linux verify-ui`。build は一度、反復・並行は `--no-build`
 - **待ちの型は rules-refs**(前提条件は入力を出す枝で読む・書き込みの答えは読み直しより先に来る・readiness の前の 0 /
   false は答えでない・一瞬の edge は signal で latch・描画境界は `grabToImage` callback で、`frameSwapped` を待つのは
   `window.update()` で頼んだ後だけ = 素の `requestUpdate()` は静止した scene で swap しない)— 動詞を書く前に
-  `PGG_AUTO_ACT` / `finishAutoAct` / 動詞名で Grep する。QML テストの待ちも `cargo xtask waits` が見る(残す理由は
+  `_PGG_AUTO_ACT` / `finishAutoAct` / 動詞名で Grep する。QML テストの待ちも `cargo xtask waits` が見る(残す理由は
   `// waits(<purpose>): <reason>`、core.md §非同期・並行テスト)
 - **ドライバは取りこぼしても止まらない形に組む** — 状態の述語は sampler の拍ごとに見直す(signal だけで進むと、繋いでいな
   い入力 — 寸法・可視・attached — が最後に変わった run が watchdog まで止まる)。**効果を待つ要求は、効果が見えるまで拍ご

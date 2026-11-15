@@ -76,7 +76,7 @@ AppCard {
     /// Headless stand-in for the pointer on the note — hover cannot be injected (verify-ui スキル §hover の絵の撮り方).
     property bool notePointedAt: false
     readonly property bool notePointed: noteHand.containsMouse || hoverCard.notePointedAt
-    /// What the note actually paints, for a run to read back (PGG_AUTO_ACT=card-note-lit).
+    /// What the note actually paints, for a run to read back (_PGG_AUTO_ACT=card-note-lit).
     readonly property alias noteWordColor: noteWords.color
     readonly property alias noteRuleColor: noteRule.color
 

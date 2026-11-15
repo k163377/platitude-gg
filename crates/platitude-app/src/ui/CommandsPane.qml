@@ -40,7 +40,7 @@ Rectangle {
 
     color: Theme.bgBase
 
-    /// Automation: the colour the `>_` in this band came out to (`PGG_AUTO_ACT=commands-clear`).
+    /// Automation: the colour the `>_` in this band came out to (`_PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: seat.markColor
 
     /// The panel opens on its newest row. Coming up is being built: the page builds the panel as the log is raised
@@ -99,14 +99,14 @@ Rectangle {
         textPick.releaseText()
     }
     /// Automation: the same hand started on the ground under the last row, in pixels
-    /// (`PGG_AUTO_ACT=commands-sweep`).
+    /// (`_PGG_AUTO_ACT=commands-sweep`).
     function sweepGround(fx, fy) {
         return textPick.sweepFromGround(fx, fy)
     }
     /// Whether there is ground to sweep from (a full log has none), and where it begins.
     readonly property bool hasGround: textPick.hasGround
     readonly property real groundTop: textPick.groundTop
-    /// Automation: how many rows wear a wash rectangle, and whether all do (`PGG_AUTO_ACT=commands-select`). Counted
+    /// Automation: how many rows wear a wash rectangle, and whether all do (`_PGG_AUTO_ACT=commands-select`). Counted
     /// on the paint: a row can hold its selection and draw nothing, and an unwashed log photographs like an untouched
     /// one.
     function washTally() {

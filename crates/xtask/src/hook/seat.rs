@@ -693,7 +693,7 @@ mod tests {
         assert!(reason.contains("mine"), "{reason}");
         assert!(reason.contains("cargo xtask seat"), "{reason}");
         // The user's word is what moves a claim.
-        assert!(reason.contains("PGG_ALLOW_TAKEOVER=1"), "{reason}");
+        assert!(reason.contains("PGGDEV_ALLOW_TAKEOVER=1"), "{reason}");
         assert!(reason.contains("no process is asked"), "{reason}");
     }
 
@@ -707,7 +707,7 @@ mod tests {
             assert!(takes_over_unasked(command), "{command}");
         }
         for command in [
-            "PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover b",
+            "PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover b",
             "cargo xtask seat",
             "cargo xtask seat release",
             "cargo xtask seats",

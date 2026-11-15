@@ -111,7 +111,7 @@ AppCard {
         // The list has gone, whatever the last hover said. A `true` left here opens every later peek for good.
         peek.contentPointed = false
     }
-    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): the open list's, for the section beside the folded rail.
+    /// Smoke hooks (_PGG_AUTO_ACT=nav-reclick): the open list's, for the section beside the folded rail.
     function clickRow(index) {
         return peekList.clickRow(index)
     }
@@ -127,7 +127,7 @@ AppCard {
     function rowInView(index) {
         return peekList.rowInView(index)
     }
-    /// Rest the pointer on one of these rows (PGG_AUTO_ACT=nav-peek-open), through the list's `pointedTipRow`.
+    /// Rest the pointer on one of these rows (_PGG_AUTO_ACT=nav-peek-open), through the list's `pointedTipRow`.
     function pointTipAt(index) {
         peekList.pointedTipRow = index
     }
@@ -150,7 +150,7 @@ AppCard {
     /// Automation only: the list itself, for a run that sends it by its own hand and reads where it went.
     readonly property alias list: peekList
     /// Automation only: the beat after a leave is still running — what a run waits out to read whether the section
-    /// was kept (PGG_AUTO_ACT=menu-peek).
+    /// was kept (_PGG_AUTO_ACT=menu-peek).
     readonly property bool settling: peekKeeper.leaving
     readonly property HoverSeat peekKeeper: HoverSeat {
         id: peekKeeper

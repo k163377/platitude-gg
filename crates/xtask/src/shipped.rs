@@ -288,7 +288,7 @@ fn check_delivery(lines: &[String]) -> Result<(), String> {
 /// says.
 fn app_command(exe: &Path, path: &OsStr, config: &Path) -> Command {
     let mut cmd = Command::new(exe);
-    // A stray `PGG_AUTO_ACT` in the shell would make this a run other
+    // A stray `_PGG_AUTO_ACT` in the shell would make this a run other
     // than the one being judged.
     crate::app_env::clear_automation(&mut cmd);
     cmd.current_dir(config)

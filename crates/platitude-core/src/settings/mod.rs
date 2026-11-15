@@ -51,15 +51,12 @@ pub const SCHEMA_VERSION: i64 = 1;
 /// nothing", which is what a test or a screenshot run wants.
 pub const CONFIG_DIR_ENV: &str = "PGG_CONFIG_DIR";
 
-/// Automation knobs all share this prefix, and a person never sets one.
-const AUTOMATION_PREFIX: &str = "PGG_";
-
-/// `PGG_*` variables that say nothing about who is driving: a person turns
-/// the logging up at their own window, `PGG_ALLOW_GUI` is a person asking
-/// for a window (CLAUDE.md ビルド・テスト), and `PGG_STEP` only addresses
-/// a stop inside a gate's container. Kept by hand in step with
-/// `xtask::app_env`.
-const NOT_AUTOMATION: [&str; 4] = [CONFIG_DIR_ENV, "PGG_LOG", "PGG_ALLOW_GUI", "PGG_STEP"];
+/// Every knob read only under verification shares this prefix, and no
+/// other variable starts with it: the product's own spell `PGG_`, xtask's
+/// and the hooks' `PGGDEV_`, the build's inputs `PLATITUDE_`.
+/// `xtask::app_env` spells the same prefix (xtask links no crates): change
+/// one, change both.
+const AUTOMATION_PREFIX: &str = "_PGG_";
 
 /// Failure to write. Reading has no error type: the caller could only
 /// carry on with defaults.

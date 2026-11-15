@@ -22,7 +22,7 @@ const YARD: &str = "pgg-tests";
 /// from the tree this suite was built in, or the container's own temp
 /// folder (`linux::environment::IN_CONTAINER`).
 fn temp_root() -> PathBuf {
-    if std::env::var_os("PGG_IN_CONTAINER").is_some() {
+    if std::env::var_os("PGGDEV_IN_CONTAINER").is_some() {
         return std::env::temp_dir();
     }
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -153,16 +153,16 @@ impl Sandbox {
             // folder of it that holds no repository must not find main.
             .env("GIT_CEILING_DIRECTORIES", temp_root())
             .env("LC_ALL", "C")
-            .env("PGG_GATE_FAKE_LOG", &self.fake_log)
-            .env_remove("PGG_GATE_FAKE_FAIL")
-            .env_remove("PGG_GATE_FAKE_FAIL_AFTER")
-            .env_remove("PGG_GATE_FAKE_HOLD")
-            .env_remove("PGG_GATE_SKIP")
+            .env("PGGDEV_GATE_FAKE_LOG", &self.fake_log)
+            .env_remove("PGGDEV_GATE_FAKE_FAIL")
+            .env_remove("PGGDEV_GATE_FAKE_FAIL_AFTER")
+            .env_remove("PGGDEV_GATE_FAKE_HOLD")
+            .env_remove("PGGDEV_GATE_SKIP")
             // A gate running this suite marks its children as under its
             // ticket; the runners here must not inherit that. Spelled out
             // (this crate cannot read the runner's modules); `budget::tests`
             // holds the spellings equal.
-            .env_remove("PGG_BUDGET_HELD")
+            .env_remove("PGGDEV_BUDGET_HELD")
             // The gate answers only for a session's git, so the sandbox is
             // a session's whether or not the run that started it is.
             .env("CLAUDECODE", "1")
@@ -246,7 +246,7 @@ impl Sandbox {
     }
 
     /// The same, with `extra` in the landing's environment — the gate's
-    /// fakes (`PGG_GATE_FAKE_FAIL`), for a landing that has to go red.
+    /// fakes (`PGGDEV_GATE_FAKE_FAIL`), for a landing that has to go red.
     pub fn land_as_with(
         &self,
         branch: &str,
@@ -488,7 +488,7 @@ impl Sandbox {
             )
             .expect("chmod");
         }
-        self.commit_all(&self.repo, "seed", &[("PGG_GATE_SKIP", "1")]);
+        self.commit_all(&self.repo, "seed", &[("PGGDEV_GATE_SKIP", "1")]);
         self.install_and_seat();
     }
 

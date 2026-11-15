@@ -115,7 +115,7 @@ Item {
     }
 
     // Only the picker's own failures come here, and the way on is the picker again. Every other failed open (a
-    // restored tab, a worktree row, PGG_AUTO_OPEN) keeps its tab and its failure screen — a modal on startup is
+    // restored tab, a worktree row, _PGG_AUTO_OPEN) keeps its tab and its failure screen — a modal on startup is
     // answered before it can be read.
     Loader {
         id: openFailedLoader

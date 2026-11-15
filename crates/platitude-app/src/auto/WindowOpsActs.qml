@@ -15,7 +15,7 @@ Item {
     required property Repeater pageRepeater
     required property TopBar topBar
 
-    // PGG_AUTO_ACT=ops-branch-pick <branch> / ops-worktree-pick <folder> / ops-repo-pick: the card opened the way a
+    // _PGG_AUTO_ACT=ops-branch-pick <branch> / ops-worktree-pick <folder> / ops-repo-pick: the card opened the way a
     // press on its name opens it, the row pressed, and the window read where the press put it. The branch's card holds
     // its rows; the repository's two hang off a tier of the name's card.
     // No order: the repository door with one tab says so and ends before any card (a precondition missing).

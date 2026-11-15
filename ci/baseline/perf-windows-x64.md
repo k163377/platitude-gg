@@ -25,7 +25,7 @@
 
 ```
 cargo xtask corpus
-PGG_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印刷した path> --runs 5
+PGGDEV_ALLOW_GUI=1 cargo xtask perf --at <測る commit> --repo <上の 1 行が印刷した path> --runs 5
 ```
 
 段ごとの表は 2 行目にフラグを足しただけで、**撃ち方は各節が持つ**。既定で最初に較正 run (`run-font-walk`)が走り、report

@@ -198,7 +198,7 @@ Item {
         }
         return true
     }
-    /// PGG_AUTO_ACT=push-default: stops with the sidebar showing the mark (the push destination and
+    /// _PGG_AUTO_ACT=push-default: stops with the sidebar showing the mark (the push destination and
     /// `checkout.defaultRemote`). `markedOrigin` names it only once both `git config` writes ran and the refresh behind
     /// them republished, so the picture is of a marked repository. Run on `--preset unpublished`, with two remotes:
     /// with one, the marked row and an unmarked one frame the same, and the mark is one badge at the row's end, which
@@ -217,7 +217,7 @@ Item {
                             + " target=" + repoTab.defaultRemote
                             + " remotes=" + repoTab.remoteCount })
     }
-    /// PGG_AUTO_ACT=publish-upstream. The barrier is the status read after the write (`branch.upstream`): only then
+    /// _PGG_AUTO_ACT=publish-upstream. The barrier is the status read after the write (`branch.upstream`): only then
     /// does the button have the destination to open on. `tracked=` says the far side lacks it; `remote=` / `branch=`
     /// are what the question opened on, which a picture of two boxes cannot say.
     PageStage {
@@ -249,7 +249,7 @@ Item {
                                 + " branch=" + publishFlow.publishBranch })
         }
     }
-    /// PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
+    /// _PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
     /// (`RepoPage.pushTargetLabel` / `pushState`), with the marks that decided it — the label cannot say which one git
     /// followed. `worktree.loaded` is the barrier: before the first status every mark reads unset.
     PageStage {
@@ -267,7 +267,7 @@ Item {
                             + " repo_mark=" + repoTab.pushDefault
                             + " tracks=" + worktree.upstream })
     }
-    /// PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an
+    /// _PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an
     /// overwrite drops) is said. The opening's fetch is waited out first: the shared tooltip takes the words once as
     /// it opens, so a count that moved later would be photographed stale. The words are overlay.png's / scene.png's.
     /// The overwrite it describes on `--preset forkdiverged` is pressed by `force-push` on the same preset, leased on
@@ -302,7 +302,7 @@ Item {
                                 + " behind=" + page.pushBehind })
         }
     }
-    /// PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
+    /// _PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is
     /// waited out first — the question reads the marked remote as it opens — and the list opened, as `publish-remotes`
     /// opens it, only once the question is dressed and the bar is all the way down. The list is asked for each beat
     /// until it is up: the form is created asynchronously with the ask bar. `marked=` is the field the rows read
@@ -341,7 +341,7 @@ Item {
                                 + " name=" + repoTab.pushDefault })
         }
     }
-    /// PGG_AUTO_ACT=remote-menu: the menu a remote's own row (its folder row: the repository's settings) raises, left
+    /// _PGG_AUTO_ACT=remote-menu: the menu a remote's own row (its folder row: the repository's settings) raises, left
     /// standing (overlay.png). `rows=`: two on a remote that is not origin, one on the remote both keys already name
     /// (`markedOrigin`), whose `Mark as origin (default remote)` row goes (デザイン規約 §メニュー). Raised each beat
     /// until it is up.
@@ -369,8 +369,8 @@ Item {
                                 + " marked=" + repoTab.pushDefault })
         }
     }
-    /// PGG_AUTO_ACT=remote-url: the form that holds a remote's URL (`Where <remote> is`), left standing (overlay.png) —
-    /// the other way to the mark. `box=` is whether the line is checked as the form opened, which a picture of a form
+    /// _PGG_AUTO_ACT=remote-url: the form that holds a remote's URL (`Where <remote> is`), left standing (overlay.png)
+    /// — the other way to the mark. `box=` is whether the line is checked as the form opened, which a picture of a form
     /// cannot be trusted for. The form with the box out (a mark from global config) is beyond this verb: checked by eye
     /// on a real machine. Asked for each beat until it is up.
     PageStage {
@@ -699,7 +699,7 @@ Item {
                                                         + " lease=" + (publishFlow.publishLease !== "")
                                                         + " theirs=" + repoTab.remoteBranchTheirs]) })
     }
-    /// PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill — the tip is the only
+    /// _PGG_AUTO_ACT=publish-tip: the question `publish-taken` stops at, with a hand on its pill — the tip is the only
     /// place that says what an overwrite would drop. The hand goes on once the bar has stopped moving: the tooltip
     /// places itself against the pill as it opens, and would stand where a travelling pill was. `carried` has nothing
     /// to say on its pill, so no tip stands and that run waits out its watchdog.

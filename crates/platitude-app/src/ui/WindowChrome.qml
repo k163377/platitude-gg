@@ -41,7 +41,7 @@ Item {
     readonly property bool frameYielded: OutsidePress.any
     onFrameYieldedChanged: AppBackend.setFrameYielded(chrome.frameYielded)
 
-    /// Automation (`PGG_AUTO_ACT=app-menu`): the run past the tabs as last sent, `none` before the first — no
+    /// Automation (`_PGG_AUTO_ACT=app-menu`): the run past the tabs as last sent, `none` before the first — no
     /// screenshot shows where the hit test was told it is. It stands for both runs, which move together.
     property string sentStrip: "none"
 

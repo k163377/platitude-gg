@@ -29,8 +29,8 @@ impl TabsModel {
     /// Only the same folder is answered without git: a folder deeper in a
     /// tree or a linked worktree looks like nothing in the strip until git has
     /// placed it. Every road in comes through here and waits — the picker, a
-    /// WORKTREES row, another worktree's pill, `PGG_AUTO_OPEN` — and the
-    /// queue (`asking`) is all that keeps `PGG_AUTO_OPEN=a;b;c` in its order.
+    /// WORKTREES row, another worktree's pill, `_PGG_AUTO_OPEN` — and the
+    /// queue (`asking`) is all that keeps `_PGG_AUTO_OPEN=a;b;c` in its order.
     pub(super) fn ask(&mut self, path: String, picked: bool) {
         // Trimmed and spelled once here, so the tab keeps the string it was
         // compared by and the hover reads (デザイン規約 §パスの区切り).

@@ -44,7 +44,7 @@ Item {
     /// line alone (`nameRested`) — not on these lines, which keep notes of their own. Empty where it wears none.
     property string nameNote: ""
     property bool nameRested: false
-    /// Stands in for that rest where headless cannot put a hand (PGG_AUTO_ACT=nav-open-tag `:name`).
+    /// Stands in for that rest where headless cannot put a hand (_PGG_AUTO_ACT=nav-open-tag `:name`).
     property bool nameTipPointed: false
     function pointNameTip(on) {
         facts.nameTipPointed = on
@@ -82,7 +82,7 @@ Item {
     function sweptText() {
         return pad.sweptText()
     }
-    /// PGG_AUTO_ACT=nav-open-tag `:tip`: a rest on one line, entered at that line's own stand-in so what answers is
+    /// _PGG_AUTO_ACT=nav-open-tag `:tip`: a rest on one line, entered at that line's own stand-in so what answers is
     /// the real wiring. False where the lines have not been built.
     function pointLineTip(row, on) {
         const line = lineSeats.itemAt(row)
@@ -137,7 +137,7 @@ Item {
         }
         return -1
     }
-    /// Stands in for the pointer on one line's band where headless cannot put one (PGG_AUTO_ACT=nav-follow-lit), -1
+    /// Stands in for the pointer on one line's band where headless cannot put one (_PGG_AUTO_ACT=nav-follow-lit), -1
     /// for none.
     property int pointedRow: -1
     /// The line the hand is on, of those that go somewhere, or -1 — the one wearing the band and the underline, and
@@ -157,7 +157,7 @@ Item {
         const row = facts.goingAt(position)
         return row < 0 ? null : facts.lines[row].to
     }
-    /// The first line that goes somewhere, or -1 — the one a run presses (PGG_AUTO_ACT=nav-follow).
+    /// The first line that goes somewhere, or -1 — the one a run presses (_PGG_AUTO_ACT=nav-follow).
     function firstGoing() {
         for (let i = 0; i < facts.lines.length; i++)
             if (facts.lines[i].to)
@@ -172,7 +172,7 @@ Item {
         const line = lineSeats.itemAt(row)
         return line === null ? Qt.point(-1, -1) : line.wordsMiddle(facts)
     }
-    /// PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line's band, where it cannot be put. False where the
+    /// _PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line's band, where it cannot be put. False where the
     /// line has not been built.
     function pointLineWords(row, on) {
         if (lineSeats.itemAt(row) === null)
@@ -226,7 +226,7 @@ Item {
     /// The menu asked for on line `row` (-1 for none of them). It is the row's, which keeps these lines up as it does
     /// for its own line: they are what it is about (`NavItemDelegate.rowPressed`). A line naming a remote on its own
     /// — a TAGS row's carrier (`NavFacts.carrierLine`'s `aim`) — hands that remote to the menu to act on. What a
-    /// right-click calls, and the one way in for a run (PGG_AUTO_ACT=tag-line-menu).
+    /// right-click calls, and the one way in for a run (_PGG_AUTO_ACT=tag-line-menu).
     function lineMenu(row, modifiers) {
         const aim = row >= 0 && row < facts.lines.length ? (facts.lines[row].aim || "") : ""
         facts.row.rowPressed(Qt.RightButton, modifiers === undefined ? Qt.NoModifier : modifiers, aim)

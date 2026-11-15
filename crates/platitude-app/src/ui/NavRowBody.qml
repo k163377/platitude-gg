@@ -149,7 +149,7 @@ RowLayout {
             behind: trackSeat.behind
         }
     }
-    // Nothing = local only, cloud = on a remote, PR mark = has a PR (fake until Phase 4: PGG_FAKE_PR). Tags too
+    // Nothing = local only, cloud = on a remote, PR mark = has a PR (fake until Phase 4: _PGG_FAKE_PR). Tags too
     // (`ls-remote --tags`); remote-branch and worktree rows show only the PR. One colour for both
     // (デザイン規約 §ref の種別).
     Loader {

@@ -273,7 +273,7 @@ Rectangle {
         visible: sidebar.commandsPage !== null && !commandsSeat.open
         curPage: sidebar.commandsPage
     }
-    /// Automation: the colour the `>_` painted while the panel is down (`PGG_AUTO_ACT=commands-clear`).
+    /// Automation: the colour the `>_` painted while the panel is down (`_PGG_AUTO_ACT=commands-clear`).
     readonly property alias commandsMarkColor: commandsSeat.markColor
     readonly property real commandsRoom: commandsSeat.visible ? commandsSeat.height : 0
 
@@ -309,23 +309,23 @@ Rectangle {
     /// pane, since only one pointer is ever resting (`SidebarRowGestures.openKey`).
     property alias openKey: rowGestures.openKey
     /// Automation: whether a row is open, and what it says — read off the row itself, so a run cannot go green with
-    /// the wiring cut (PGG_AUTO_ACT=nav-open).
+    /// the wiring cut (_PGG_AUTO_ACT=nav-open).
     readonly property bool rowFactsOpen: sidebar.openKey !== ""
     function rowFactsWords() {
         const said = sections.openWords()
         return said !== "" || sidebar.peekSection === null ? said : sidebar.peekSection.openWords()
     }
     /// Where the open row and its lines landed, so a run reads the list having made room rather than the layout's
-    /// word for it (PGG_AUTO_ACT=nav-open).
+    /// word for it (_PGG_AUTO_ACT=nav-open).
     function rowFactsGeom() {
         return sections.openGeom()
     }
-    /// Whether the open row shows whole, its lines included (PGG_AUTO_ACT=nav-open-foot).
+    /// Whether the open row shows whole, its lines included (_PGG_AUTO_ACT=nav-open-foot).
     function rowFactsShown() {
         return sections.openFactsItem() !== null ? sections.openShown()
              : sidebar.peekSection !== null && sidebar.peekSection.openShown()
     }
-    /// For the runs that read what the hand did next (PGG_AUTO_ACT=nav-open-then).
+    /// For the runs that read what the hand did next (_PGG_AUTO_ACT=nav-open-then).
     function openFactsItem() {
         const lines = sections.openFactsItem()
         return lines !== null || sidebar.peekSection === null ? lines : sidebar.peekSection.openFactsItem()
@@ -392,7 +392,7 @@ Rectangle {
     // closed and of no section.
     readonly property string peekKind: sidebar.peekSection !== null ? sidebar.peekSection.kind : ""
     readonly property real peekTop: sidebar.peekSection !== null ? sidebar.peekSection.top : 0
-    /// For the smoke hooks alone (like `GraphPane.view`): PGG_AUTO_ACT=nav-reclick clicks a row in here. Null until
+    /// For the smoke hooks alone (like `GraphPane.view`): _PGG_AUTO_ACT=nav-reclick clicks a row in here. Null until
     /// built, or up front with [`keepBuilt`].
     readonly property var peekSection: peekSeat.item
     /// The open section built up front, for a caller that reads it before it opens (the harness,
@@ -437,7 +437,7 @@ Rectangle {
             curPage: sidebar.recoverPage
         }
     }
-    /// Automation: the discard log, whose filter a run types into (PGG_AUTO_ACT=recover-open `filter:`); null until
+    /// Automation: the discard log, whose filter a run types into (_PGG_AUTO_ACT=recover-open `filter:`); null until
     /// it first stands.
     readonly property var autoRecover: recoverLog.item
     /// The keyboard comes to the discard log (`RepoPage.escapePressed`).

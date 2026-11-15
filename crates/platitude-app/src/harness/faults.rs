@@ -216,10 +216,10 @@ pub(crate) fn fail_graph_pass(tab_id: i32, step: &str) {
 #[cfg(not(feature = "automation"))]
 pub(crate) fn fail_graph_pass(_tab_id: i32, _step: &str) {}
 
-/// The configuration saves a run asked to be held (`PGG_FAULT_HOLD_SAVE`):
+/// The configuration saves a run asked to be held (`_PGG_FAULT_HOLD_SAVE`):
 /// every save the hub spawns waits here until the named station, and QML
 /// reads the waiting count to know the save a close lands on is out
-/// (`PGG_AUTO_ACT=quit-save-held`).
+/// (`_PGG_AUTO_ACT=quit-save-held`).
 #[cfg(feature = "automation")]
 mod held_saves {
     use std::sync::OnceLock;

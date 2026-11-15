@@ -26,7 +26,7 @@
 - **操作 1 つぶんを寄せる形は「要求・保留・完了を 1 人の持ち主へ、`OperationId` で」** — `crates/platitude-app/src/ops/`。寄せ方の 3 点・土台(`Press`)・QML 側に残る物は `ops/mod.rs` のコメント。残りの候補は P3-確認事項 の write group の項
 - **page の状態を書く子は「書く先を `required property Item page` で受けて、自分だけが書く状態だけを書く」形なら出せる** — 跨ぐのは同じ状態を複数の子が書く時で、そこから先が再設計の領分(実例 `PageLayout`)
 - **dispatcher が id で start する切片は独立ファイルにできない** — QML の id はファイルを跨がないので、出した先は全メンバを `readonly property alias` で再公開し、親はそれをまた別名で読み戻すことになる。その切れ目は閾値まで 1 ファイルで持つ
-- **自動化の切片は「動詞の dispatch」か「計測の因果」かで宿主が決まる** — 前者は `AutoActDriver` / `WindowAutoActDriver`(`PGG_AUTO_ACT` gate)、後者は `PagePerfDriver` / `WindowPerfDriver`(`PGG_AUTO_PERF` gate)。**動かすのはこの境界の内側**。移す前に、その Loader の `active` が動かす側の起動条件を全部含むかを確かめる(フラグは動詞無しでも立つ — 実例 `PageAutoStart`)
+- **自動化の切片は「動詞の dispatch」か「計測の因果」かで宿主が決まる** — 前者は `AutoActDriver` / `WindowAutoActDriver`(`_PGG_AUTO_ACT` gate)、後者は `PagePerfDriver` / `WindowPerfDriver`(`_PGG_AUTO_PERF` gate)。**動かすのはこの境界の内側**。移す前に、その Loader の `active` が動かす側の起動条件を全部含むかを確かめる(フラグは動詞無しでも立つ — 実例 `PageAutoStart`)
 - **性能敏感な QML(行デリゲート)は「切り出す部品の root を、置き換える当のアイテムにする」** — `Layout.*` / `anchors` / `visible` は使用側に残るので、アイテム木は分割前と同じ本数のまま。`GraphRowDelegate` → `GraphLaneCell` と `DiffPane` の行がこの形
 - **`ListView.view` 直読を in-property 化しても、`ListView.onReused` だけはデリゲート root から動かせない** — attached `ListView` は root にしか生えない。切り出した子の再描画はデリゲートから子のメソッドを呼ぶ(`GraphLaneCell.loadFace` / `repaintLanes`)
 - **リスト自体を切り出す時は root をその `ListView` にする** — デリゲートが `ListView.view` 越しにしか読めない状態はリストに載っているので、リストと一緒に動く。root がリストそのものなら、外からリストを指す参照(`ListView.view` 経由を含む)は 1 つも書き換えずに済む。**`Keys.on*Pressed` は attached property なので使用側に残せる**(実例 `GraphList`。キーを使用側に残した理由は `GraphPane.qml` のコメント)

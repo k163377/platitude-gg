@@ -15,7 +15,7 @@ K(`Limits::shared()`)— を決めるための実測。
 - 撃ち方(1 変種 1 行。下の 3 つの表はどれも同じ exe — 予約の分け方の A/B だけが 2 本を交互に撃つ):
 
   ```
-  PGG_ALLOW_GUI=1 cargo xtask perf --repo <corpus> --corpus fb3d090c… --at <commit> --runs 3 --no-font-walk --allow-noisy --cases <cases.tsv> --cycles 12 --setting git_concurrency=<N> --setting worktrees_interval_secs=<秒> --label slots-quiet-<N>
+  PGGDEV_ALLOW_GUI=1 cargo xtask perf --repo <corpus> --corpus fb3d090c… --at <commit> --runs 3 --no-font-walk --allow-noisy --cases <cases.tsv> --cycles 12 --setting git_concurrency=<N> --setting worktrees_interval_secs=<秒> --label slots-quiet-<N>
   ```
 
   `cases.tsv` は `cargo xtask corpus` が印刷する 2 行(`newest` = HEAD `e512482e`、76 ファイル変更・開くのは 34,059 バイ

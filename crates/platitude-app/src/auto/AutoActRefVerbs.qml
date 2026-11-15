@@ -393,7 +393,7 @@ Item {
             writeBarrier.start()
         }
     }
-    // PGG_AUTO_ACT=tag-chip-menu: once this run's fetch is read through, the graph row's menu on that tag's chip, its
+    // _PGG_AUTO_ACT=tag-chip-menu: once this run's fetch is read through, the graph row's menu on that tag's chip, its
     // TAG card open.
     PageStage {
         id: tagChipTimer
@@ -415,7 +415,7 @@ Item {
             tagChipTimer.complete({ "when": () => ({}), "report": () => acts.reachWords(commitTagCard) })
         }
     }
-    // PGG_AUTO_ACT=create-tag `<name>:box`: the box the row opened, holding the name, read where the dispatch left it.
+    // _PGG_AUTO_ACT=create-tag `<name>:box`: the box the row opened, holding the name, read where the dispatch left it.
     PageStage {
         id: createTagBoxTimer
         name: "create_tag_box"

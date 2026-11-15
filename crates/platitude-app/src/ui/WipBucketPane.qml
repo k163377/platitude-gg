@@ -21,7 +21,7 @@ ColumnLayout {
     required property var worktree
     /// This bucket's rows (`NavSectionModel` attached to this run).
     required property var model
-    /// Automation's stand-in pointer row (PGG_AUTO_ACT=path-tip): the pane's row less the rows above this bucket, so
+    /// Automation's stand-in pointer row (_PGG_AUTO_ACT=path-tip): the pane's row less the rows above this bucket, so
     /// out of range in every other bucket.
     required property int tipRow
     /// The hand over the pane's file rows (`WipPane`), which the rows read by geometry (`NavItemDelegate.syncHand`).

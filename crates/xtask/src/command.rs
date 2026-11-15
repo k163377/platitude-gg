@@ -123,13 +123,13 @@ mod tests {
         purpose: "a real window",
         run_in: Where::Seat,
         needs: &[],
-        permission: Permission::Escape("PGG_ALLOW_GUI"),
+        permission: Permission::Escape("PGGDEV_ALLOW_GUI"),
     };
 
     #[test]
     fn the_line_carries_the_runner_and_the_escape() {
         assert_eq!(PLAIN.line(), "cargo xtask gate --host-only");
-        assert_eq!(ESCAPED.line(), "PGG_ALLOW_GUI=1 cargo xtask launch");
+        assert_eq!(ESCAPED.line(), "PGGDEV_ALLOW_GUI=1 cargo xtask launch");
     }
 
     #[test]

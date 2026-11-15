@@ -108,7 +108,7 @@ impl Spoiled {
 
 /// The process this run measures, and everything it is told.
 ///
-/// A build with no harness answers no `PGG_AUTO_*` knob: the repository
+/// A build with no harness answers no `_PGG_AUTO_*` knob: the repository
 /// it opens comes from the `state.toml` in its config directory
 /// (`artifacts::state_file`).
 fn command(
@@ -146,32 +146,32 @@ fn command(
     // The app says `perf_done` once every requested measurement has
     // answered; the parent, not the app, ends the process, so it takes the
     // last memory sample and reaps exactly the child it started.
-    cmd.env("PGG_AUTO_PERF", "1")
-        .env("PGG_PERF_SELECTION", &opts.selection)
-        .env("PGG_PERF_OID", &opts.oid)
-        .env("PGG_PERF_FILE", &opts.file)
-        .env("PGG_PERF_CASES", super::cases::encode(&opts.cases))
-        .env("PGG_PERF_CYCLES", opts.cycles.to_string())
-        .env("PGG_PERF_COMPLETION", &opts.completion)
+    cmd.env("_PGG_AUTO_PERF", "1")
+        .env("_PGG_PERF_SELECTION", &opts.selection)
+        .env("_PGG_PERF_OID", &opts.oid)
+        .env("_PGG_PERF_FILE", &opts.file)
+        .env("_PGG_PERF_CASES", super::cases::encode(&opts.cases))
+        .env("_PGG_PERF_CYCLES", opts.cycles.to_string())
+        .env("_PGG_PERF_COMPLETION", &opts.completion)
         .env(
-            "PGG_PERF_DIFF_SCROLL",
+            "_PGG_PERF_DIFF_SCROLL",
             if opts.diff_scroll { "1" } else { "0" },
         )
         .env(
-            "PGG_PERF_BACK_TO_BACK",
+            "_PGG_PERF_BACK_TO_BACK",
             if opts.back_to_back { "1" } else { "0" },
         )
-        .env("PGG_PERF_DIFF", if opts.diff { "1" } else { "0" })
+        .env("_PGG_PERF_DIFF", if opts.diff { "1" } else { "0" })
         .env(
-            "PGG_PERF_TRACE_FRAMES",
+            "_PGG_PERF_TRACE_FRAMES",
             if opts.trace_frames { "1" } else { "0" },
         );
     for (asked, name, value) in [
-        (opts.open, "PGG_AUTO_OPEN", opts.repo.display().to_string()),
-        (opts.select, "PGG_AUTO_SELECT", "1".to_string()),
-        (opts.scroll, "PGG_AUTO_SCROLL", "1".to_string()),
-        (opts.breakdown, "PGG_MEM_REPORT", "1".to_string()),
-        (opts.font_walk, "PGG_PERF_FONT_WALK", "1".to_string()),
+        (opts.open, "_PGG_AUTO_OPEN", opts.repo.display().to_string()),
+        (opts.select, "_PGG_AUTO_SELECT", "1".to_string()),
+        (opts.scroll, "_PGG_AUTO_SCROLL", "1".to_string()),
+        (opts.breakdown, "_PGG_MEM_REPORT", "1".to_string()),
+        (opts.font_walk, "_PGG_PERF_FONT_WALK", "1".to_string()),
     ] {
         if asked {
             cmd.env(name, value);

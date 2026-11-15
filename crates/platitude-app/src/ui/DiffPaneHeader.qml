@@ -33,7 +33,7 @@ Rectangle {
 
     /// The band's sweep hand, named so a run can enter it (as a card's is at `<card>.background.pad`).
     property alias pad: headerHand
-    /// Automation: the toggle itself, so a run flips the view where a press does (`PGG_AUTO_ACT=diff-split`).
+    /// Automation: the toggle itself, so a run flips the view where a press does (`_PGG_AUTO_ACT=diff-split`).
     readonly property alias viewToggle: viewToggle
     /// Whether the path is cut — the output side, which a picture of a wide pane cannot answer.
     readonly property alias cut: titleField.clipped

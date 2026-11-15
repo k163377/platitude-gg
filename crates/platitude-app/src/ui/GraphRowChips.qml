@@ -54,12 +54,12 @@ Item {
     /// shows.
     readonly property alias chipWaiting: rowStack.chipWaiting
     /// The name box's left edge and width in this column's frame; 0 without a box. Read by the row, whose presses stop
-    /// at the box, and by `PGG_AUTO_ACT=name-box` / `graph-rename-fit`.
+    /// at the box, and by `_PGG_AUTO_ACT=name-box` / `graph-rename-fit`.
     readonly property real nameBoxX: nameSeat.item ? nameSeat.x : 0
     readonly property real nameBoxWidth: nameSeat.item ? nameSeat.item.width : 0
-    /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box).
+    /// What the box says it takes, rubbed out (_PGG_AUTO_ACT=worktree-rename-box).
     readonly property string nameBoxPlaceholder: nameSeat.item ? nameSeat.item.placeholderText : ""
-    /// Whether the box holds any of its words selected (PGG_AUTO_ACT=graph-rename-fit).
+    /// Whether the box holds any of its words selected (_PGG_AUTO_ACT=graph-rename-fit).
     readonly property bool nameBoxSelected: nameSeat.item ? nameSeat.item.selectedText !== "" : false
     /// The column's room for the box: its width less the `spaceXs` the chip keeps off each side.
     readonly property real boxRoom: chipColumn.columnWidth - 2 * Theme.spaceXs

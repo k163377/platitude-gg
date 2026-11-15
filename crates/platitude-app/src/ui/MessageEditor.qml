@@ -113,7 +113,7 @@ ColumnLayout {
     readonly property int descListRows:
         Math.round(editor.listHeight / Theme.rowHeight)
     /// Whether the block is taller than the room it was given — which is also "has the box given back what it owes".
-    /// A readout: a headless run cannot see a scroll bar (`PGG_AUTO_ACT=window-floor wip`).
+    /// A readout: a headless run cannot see a scroll bar (`_PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls:
         editor.blockHeight > editor.blockRoom + 1
     readonly property bool descKeeps: !editor.blockScrolls

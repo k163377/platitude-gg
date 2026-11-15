@@ -32,7 +32,7 @@ use crate::subprocess::git_query;
 /// The user's own way past the gate, by name. Claude's pre-shell hook and
 /// Codex's PreToolUse (`hook::codex_git`) refuse a session's command that
 /// spells it.
-pub(crate) const SKIP: &str = "PGG_GATE_SKIP";
+pub(crate) const SKIP: &str = "PGGDEV_GATE_SKIP";
 
 /// The mark Claude Code leaves in the environment of everything it runs,
 /// and so in every git a Claude session starts: it tells that session's

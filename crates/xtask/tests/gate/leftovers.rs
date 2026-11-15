@@ -300,7 +300,7 @@ fn a_landing_clears_the_branches_its_session_made_and_no_others() {
     branch_by(&sb, "users-own", "main", None);
     // Main moves on, so the landing rebases what it lands.
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
-    sb.commit_all(&sb.repo, "docs: main moved", &[("PGG_GATE_SKIP", "1")]);
+    sb.commit_all(&sb.repo, "docs: main moved", &[("PGGDEV_GATE_SKIP", "1")]);
 
     let (ok, text) = sb.land_as("worktree-a", "mine");
     assert!(ok && text.contains("rebasing"), "{text}");

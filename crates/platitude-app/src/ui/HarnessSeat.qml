@@ -43,7 +43,7 @@ Item {
                                              Component.PreferSynchronous, seat)
         if (component.status !== Component.Ready) {
             // Unreachable: [`wanted`] and the module come from the same Cargo feature. A `wanted` read off the
-            // environment would bring a shipped window here on a stray `PGG_*`.
+            // environment would bring a shipped window here on a stray `_PGG_*`.
             console.warn("harness part " + seat.part + " did not load: " + component.errorString())
             return null
         }

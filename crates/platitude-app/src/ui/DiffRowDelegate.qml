@@ -177,7 +177,7 @@ Rectangle {
     readonly property bool codeBold: !diffRow.fence && (diffRow.kind === "add" || diffRow.kind === "del")
     readonly property bool pairBold: !diffRow.pairFence && diffRow.pair_kind === "add"
     /// Automation: how far this row's own line is drawn — where the blank right of it begins
-    /// (`PGG_AUTO_ACT=diff-blank`).
+    /// (`_PGG_AUTO_ACT=diff-blank`).
     readonly property real codeInk: diffRow.twoColumns
                                     ? (splitBody.item ? splitBody.item.ownInk : 0)
                                     : (oneBody.item ? oneBody.item.lineCell.inkWidth : 0)
@@ -188,7 +188,7 @@ Rectangle {
     function textOf(side) { return side === 1 ? diffRow.pair_text : diffRow.text }
     function boldOf(side) { return side === 1 ? diffRow.pairBold : diffRow.codeBold }
     function kindOf(side) { return side === 1 ? diffRow.pair_kind : diffRow.kind }
-    /// Automation: whether one side's mark is out, read off the mark itself (`PGG_AUTO_ACT=split-tools`). As one
+    /// Automation: whether one side's mark is out, read off the mark itself (`_PGG_AUTO_ACT=split-tools`). As one
     /// column only side 0 has one.
     function markShown(side) {
         if (diffRow.twoColumns)
@@ -498,7 +498,7 @@ Rectangle {
         z: 2
         sourceComponent: Row {
             readonly property alias discardButton: discardHunkButton
-            /// Automation: how far apart the two words stand, baseline to baseline (`PGG_AUTO_ACT=hunk-tools`) — the
+            /// Automation: how far apart the two words stand, baseline to baseline (`_PGG_AUTO_ACT=hunk-tools`) — the
             /// hold mark makes one button deeper than the other, by an amount the face decides. Nothing on the staged
             /// side, which has the one word.
             function wordsApart() {

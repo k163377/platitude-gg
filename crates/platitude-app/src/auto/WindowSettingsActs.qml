@@ -4,7 +4,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The settings screen's half of the window's PGG_AUTO_ACT harness: the verbs that reach into `settingsDialog` and
+/// The settings screen's half of the window's _PGG_AUTO_ACT harness: the verbs that reach into `settingsDialog` and
 /// nothing else (no tab, page or band). The rest of the window's dialog verbs are `WindowDialogActs`.
 ///
 /// A verb that opens the screen itself does so as its first stage, `opened` (`openOn`): an idempotent ask, pressed
@@ -113,7 +113,7 @@ Item {
                + " bar=" + settingsDialog.chaptersBarShown
     }
 
-    // PGG_AUTO_ACT=settings-tools / settings-tools-loading: two separately latched outputs, the real loading edge and
+    // _PGG_AUTO_ACT=settings-tools / settings-tools-loading: two separately latched outputs, the real loading edge and
     // the settled choices. Opened on the git category by the menu entry's door, told to bring the list down with it.
     // The first wave is xtask's own row (`verify::repos::seed_merge_tool`); the second is this machine's stock-take
     // (`--tool-help`, seconds), so the rows differ by OS and the PNG is read on each (the container lists the seeded
@@ -160,7 +160,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, with the
+    // _PGG_AUTO_ACT=settings-repo / settings-repo-pick: the git category's `REPOSITORY OVERRIDE` group, with the
     // chooser's list down for `-pick`. The argument picks a strip row other than the front one, through the same call
     // a pick from the list makes (verify-ui implement.md §壊れない動詞の実装と反復).
     //
@@ -210,7 +210,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
+    // _PGG_AUTO_ACT=settings-git-path: the application category's `GIT EXECUTABLE` chapter, with the git at the path
     // having answered. The argument is the path to put in the box, or none for the resting (empty) box. A path goes in
     // whole: one with no root makes an empty URL, which is the empty box. The keywords keep each OS's paths out of the
     // argument: `in-use`, `other` (below), and `stored-missing` — a stored git this machine lacks, a state the app
@@ -277,7 +277,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-processes <commands>: the application category's `GIT PROCESSES` chapter, its box typed
+    // _PGG_AUTO_ACT=settings-processes <commands>: the application category's `GIT PROCESSES` chapter, its box typed
     // through the pane's own door (`SettingsAppPane.autoTypeProcesses`); an empty argument is an emptied box (the
     // default). An unapplied edit frames the same, so the store's own answer is the line judged.
     WindowStage {
@@ -306,7 +306,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-refresh <floor>:<ceiling>:<reading>:<first>:<second>: the application category's `REFRESH`
+    // _PGG_AUTO_ACT=settings-refresh <floor>:<ceiling>:<reading>:<first>:<second>: the application category's `REFRESH`
     // chapter worked through the pane's own doors (`SettingsAppPane.autoTypeRefresh`) — this repository's two boxes, the
     // other worktrees' chooser (`auto` / `fixed` / `off`), then the boxes that reading shows (`first` and `second` are
     // the two bounds, or `first` the one interval). An empty part is left as it is. The store's own answer is the line
@@ -340,7 +340,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-refresh-leave <floor>:<ceiling>:<first>:<second>: the way out taken with the `REFRESH`
+    // _PGG_AUTO_ACT=settings-refresh-leave <floor>:<ceiling>:<first>:<second>: the way out taken with the `REFRESH`
     // chapter's four bound boxes holding these texts, never finished (`SettingsAppPane.autoLeaveBounds`) — an empty part
     // is an emptied box, which only the way out writes. Both pairs are first set off their defaults through the
     // chapter's own door, so an emptied box has a default to go back to. The store's answer after the close is judged.
@@ -382,7 +382,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied (`--other-git`), and
+    // _PGG_AUTO_ACT=settings-git-leave: the way out taken over a git waiting to be applied (`--other-git`), and
     // turned down. A screen that stayed frames like one nobody asked to close, so the line says the way out was taken,
     // the screen is still up, and the offer is what holds it.
     WindowStage {
@@ -421,7 +421,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-eol <true|input|false|inherited>: the `REPOSITORY OVERRIDE` group's line-ending chapter,
+    // _PGG_AUTO_ACT=settings-eol <true|input|false|inherited>: the `REPOSITORY OVERRIDE` group's line-ending chapter,
     // picked (`inherited` writes nothing). `core.autocrlf` is written only into the picked repository
     // (`LineEndingField`), the only file a run may write anyway. The argument is required: none picks the same row as
     // `inherited` and frames alike, with nothing in the run's output saying which was asked. One tab is enough.
@@ -470,7 +470,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-switch: the rail, pressed from the application category onto git through the row's own
+    // _PGG_AUTO_ACT=settings-switch: the rail, pressed from the application category onto git through the row's own
     // handler (`SettingsDialog.autoTapCategory`) — every other settings verb sets the category before the screen is
     // up and would leave a dead rail green. The report reads the panes, not `category` (that is the press itself).
     WindowStage {
@@ -506,7 +506,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-escape: the way out, through the function the `✕` and the Escape shortcut both call
+    // _PGG_AUTO_ACT=settings-escape: the way out, through the function the `✕` and the Escape shortcut both call
     // (`SettingsDialog.escapeOut`). A closed screen frames like one that never opened, so the report's pair of states
     // is judged. The key reaching the shortcut is beyond a harness with no keyboard.
     WindowStage {
@@ -547,7 +547,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-leave: the way out taken while an identity chapter holds an edit git has not been given;
+    // _PGG_AUTO_ACT=settings-leave: the way out taken while an identity chapter holds an edit git has not been given;
     // the screen must still be there, sent to that chapter with its `✕` armed (the screen has no foot to ask in).
     // Both halves are said: a screen that stayed frames like one never asked to go.
     WindowStage {
@@ -591,7 +591,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-sweep [app|git]: this screen's words, taken from the air around them
+    // _PGG_AUTO_ACT=settings-sweep [app|git]: this screen's words, taken from the air around them
     // (規約 §右のペインの字は掴める); one category per run, as only one is on screen. Waited on the category's own git
     // reads, not the screen opening: sampled before them, the column is about to grow lines. The hand lies inside the
     // chapters' `Flickable` (rules-refs/app-ui.md), so this run also says where `SweepPad` sits.
@@ -641,7 +641,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-tools-enter: Enter in the merge editor's box on each side of its list
+    // _PGG_AUTO_ACT=settings-tools-enter: Enter in the merge editor's box on each side of its list
     // (デザイン規約 §選ぶ欄と打つ欄「ただし一覧が降りている間の Enter は一覧のもの」): under the list the screen stands,
     // with the list shut it goes. Both in one run — either alone passes a build that never or always leaves.
     WindowStage {
@@ -696,7 +696,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=avatar-enter: Enter in the candidate box opens the file picker (`SettingsAppPane`'s `avatarWho`).
+    // _PGG_AUTO_ACT=avatar-enter: Enter in the candidate box opens the file picker (`SettingsAppPane`'s `avatarWho`).
     // The picker is the platform's window and in neither PNG, so the report line is the whole verdict. The screen is
     // the page's dispatch's to open (`AutoActFindVerbs`), so the typing joins it.
     WindowStage {
@@ -827,8 +827,8 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the chapters or the merge editor's card,
-    // pressed and left drifting for the shot (the page's `middle-hand` on this screen); waited for is the surface
+    // _PGG_AUTO_ACT=settings-hand <chapters|tools>: the middle button's hand on the chapters or the merge editor's
+    // card, pressed and left drifting for the shot (the page's `middle-hand` on this screen); waited for is the surface
     // having gone. `tools` wants `--preset mergetools`: most machines name fewer editors than the card's eight rows,
     // and a card that does not overflow stands no hand — the run waits to the ceiling on
     // `waiting=more candidates than room`. Read as `middle-hand`'s line is; the picture is scene.png, the screen being

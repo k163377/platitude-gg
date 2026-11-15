@@ -136,7 +136,7 @@ fn letter_carrying_work(sb: &Sandbox, name: &str) -> PathBuf {
     sb.commit_all(
         &path,
         "docs: the work in this letter",
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     );
     path
 }
@@ -327,7 +327,7 @@ fn a_claim_with_a_dead_number_is_still_a_claim() {
         "{text}"
     );
     assert!(
-        text.contains("PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover"),
+        text.contains("PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover"),
         "the refusal names the one thing that moves a letter: {text}"
     );
     assert_eq!(lock_on(&sb, "b"), claim, "the claim stood");
@@ -700,7 +700,7 @@ fn the_hooks_hold_every_door_a_seat_has() {
         refusal.contains("\"deny\"") && refusal.contains("held by session theirs"),
         "{refusal}"
     );
-    assert!(refusal.contains("PGG_ALLOW_TAKEOVER=1"), "{refusal}");
+    assert!(refusal.contains("PGGDEV_ALLOW_TAKEOVER=1"), "{refusal}");
     let refusal = enter(&sb, &sb.repo, "mine", &free);
     assert!(
         refusal.contains("\"deny\"") && refusal.contains("carries no claim"),
@@ -724,11 +724,11 @@ fn the_hooks_hold_every_door_a_seat_has() {
 
     let refusal = shell(&sb, &sb.repo, "mine", "cargo xtask seat takeover c");
     assert!(
-        refusal.contains("\"deny\"") && refusal.contains("PGG_ALLOW_TAKEOVER=1"),
+        refusal.contains("\"deny\"") && refusal.contains("PGGDEV_ALLOW_TAKEOVER=1"),
         "{refusal}"
     );
     for command in [
-        "PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover c",
+        "PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover c",
         "cargo xtask seat",
         "cargo xtask seat release",
         "cargo xtask seats",

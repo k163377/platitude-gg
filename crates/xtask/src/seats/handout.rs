@@ -736,7 +736,7 @@ mod tests {
         let text = super::how_claims_move();
         assert!(text.contains("cargo xtask seat release"), "{text}");
         assert!(
-            text.contains("PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>"),
+            text.contains("PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>"),
             "{text}"
         );
         assert!(text.contains("no process is asked"), "{text}");

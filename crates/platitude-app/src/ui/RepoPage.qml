@@ -40,13 +40,13 @@ FocusScope {
     /// A worktree asked for by path (a WORKTREES row, `openHolder`): a worktree of this repository stands this tab
     /// in it (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     signal openRepositoryPathRequested(string path)
-    /// PGG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
+    /// _PGG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
     /// A conflicted file has nowhere to be opened: the git settings screen is where the merge editor is named.
     signal gitSettingsRequested()
     /// The settings card, opened from an avatar and carrying whom it was opened on.
     signal avatarSettingsRequested(string name, string email)
-    /// PGG_AUTO_PERF completion after every requested measurement output.
+    /// _PGG_AUTO_PERF completion after every requested measurement output.
     signal perfFinished()
     /// The failed-open screen's "Close tab" button.
     signal closeTabRequested()
@@ -92,7 +92,7 @@ FocusScope {
     property bool planRunOut: false
     readonly property bool replayRunning: repoTab.replaying || page.autoReplayHeld
     onReplayRunningChanged: if (page.replayRunning) page.planRunOut = false
-    /// Automation (`AutoActNavVerbs`, PGG_AUTO_ACT=doors-held): a replay this run really started, held until its
+    /// Automation (`AutoActNavVerbs`, _PGG_AUTO_ACT=doors-held): a replay this run really started, held until its
     /// picture is taken (rules-refs/app-ui.md「一瞬だけ立つ状態は signal で観測して latch する」).
     property bool autoReplayHeld: false
     /// **The left pane is out two different ways** (デザイン規約 §フル interactive rebase). This one is the plan's: the
@@ -382,7 +382,7 @@ FocusScope {
 
     // A tab whose repository would not open: the screen takes the panes' seat (`OpenFailedScreen`).
     readonly property bool openFailed: !page.blank && repoTab.state === "error"
-    /// Automation (`PGG_AUTO_ACT=open-fail-sweep`): that screen's hand, which its three lines are dragged over from;
+    /// Automation (`_PGG_AUTO_ACT=open-fail-sweep`): that screen's hand, which its three lines are dragged over from;
     /// null while the screen is not up (`failedSeat`).
     readonly property var openFailedHand: failedSeat.item !== null ? failedSeat.item.pad : null
 
@@ -790,7 +790,7 @@ FocusScope {
     /// screen, so freezing its button alone would lie. The freeze starts at the press too (user decision — ask before
     /// changing). Only what needs a draft waits for `planActive`.
     readonly property bool planShown: planModel.active || planModel.loading
-    /// Automation (`PGG_AUTO_ACT=plan-loading`): the opening face, held from the real edge
+    /// Automation (`_PGG_AUTO_ACT=plan-loading`): the opening face, held from the real edge
     /// (verify-ui implement.md「中間状態は実 edge を latch する」). It holds the *whole* face: holding only the pane would
     /// photograph a run bar and a frozen menu over a centre still waiting, a screen the app never puts up.
     property bool planLoadHeld: false
@@ -4139,7 +4139,7 @@ FocusScope {
     }
 
     /// Automation: the drag past whichever boundary `which` names, and whether that boundary is still drawn
-    /// (`PGG_AUTO_ACT=divider-refuse`; AutoActDriver calls through the page).
+    /// (`_PGG_AUTO_ACT=divider-refuse`; AutoActDriver calls through the page).
     function dragDividerPast(which) {
         splitWatch.dragPast(which)
     }

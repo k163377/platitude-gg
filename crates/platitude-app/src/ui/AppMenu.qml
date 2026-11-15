@@ -153,7 +153,7 @@ Menu {
     }
 
     /// Automation (hover cannot be injected): lights the row carrying `sub` and opens it through `sub.offer()`. Says
-    /// whether it opened (PGG_AUTO_ACT=branch-card / tag-card).
+    /// whether it opened (_PGG_AUTO_ACT=branch-card / tag-card).
     function openSub(sub) {
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)

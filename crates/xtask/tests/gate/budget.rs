@@ -393,7 +393,7 @@ fn a_child_under_its_parent_s_ticket_is_admitted_though_the_machine_is_full() {
         .stderr(Stdio::null());
     sandbox.env(&mut command);
     // After `sandbox.env`, which clears this mark.
-    command.env("PGG_BUDGET_HELD", "1");
+    command.env("PGGDEV_BUDGET_HELD", "1");
     let mut child = Holder {
         child: command.spawn().expect("spawn the child"),
         queued,

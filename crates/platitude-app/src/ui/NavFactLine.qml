@@ -27,7 +27,7 @@ RowLayout {
     /// Whether a rest on this line opens a supplement — why it wears its colour (デザイン規約 §hover のツールチップ).
     /// The block raises the words, so one pointer opens one thing (`NavRowFacts`); this only says the hand is here.
     property bool noted: false
-    /// Stands in for the pointer headless cannot put (PGG_AUTO_ACT=nav-open-tag `:tip`).
+    /// Stands in for the pointer headless cannot put (_PGG_AUTO_ACT=nav-open-tag `:tip`).
     property bool tipPointed: false
     readonly property bool pointed: lineHover.hovered || line.tipPointed
     /// The hand arrived at this line, or left it.
@@ -41,7 +41,7 @@ RowLayout {
     /// How far the words run across the field: the field fills the line, and a short name is a sliver of it.
     readonly property real wordsWidth: Math.min(words.implicitWidth, words.width)
     /// The middle of the words in another item's coordinates, where a run puts the press it cannot make with a hand
-    /// (PGG_AUTO_ACT=nav-follow).
+    /// (_PGG_AUTO_ACT=nav-follow).
     function wordsMiddle(item) {
         return line.mapToItem(item, Qt.point(words.x + line.wordsWidth / 2, words.y + words.height / 2))
     }

@@ -346,7 +346,7 @@ public static class PggThreads {
     }
 }
 '@
-$process = Get-Process -Id PGG_PID
+$process = Get-Process -Id PGGDEV_PID
 $modules = @()
 try { foreach ($module in $process.Modules) { $modules += [pscustomobject]@{ Name = $module.ModuleName; Base = $module.BaseAddress.ToInt64(); End = $module.BaseAddress.ToInt64() + $module.ModuleMemorySize } } } catch {}
 foreach ($thread in $process.Threads) {
@@ -357,8 +357,8 @@ foreach ($thread in $process.Threads) {
     $waiting = ''; if ($thread.ThreadState -eq 'Wait') { $waiting = $thread.WaitReason }
     '{0} {1} {2} {3}@{4} cpu={5}ms' -f $thread.Id, $thread.ThreadState, $waiting, $name, $in, [int]$thread.TotalProcessorTime.TotalMilliseconds
 }
-if (PGG_WALK -eq 1) {
-    $began = [PggThreads]::Begin([uint32]PGG_PID)
+if (PGGDEV_WALK -eq 1) {
+    $began = [PggThreads]::Begin([uint32]PGGDEV_PID)
     foreach ($thread in $process.Threads) {
         if ($began -ne '') { $walked = $began } else { $walked = [PggThreads]::Walk([uint32]$thread.Id) }
         'stack {0} {1}' -f $thread.Id, $walked
@@ -419,8 +419,11 @@ fn threads_of(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String
 /// suspends each thread.
 fn off_powershell(pid: u32, shot_dir: &Path, after: After) -> Result<Threads, String> {
     let script = LISTING_SCRIPT
-        .replace("PGG_PID", &pid.to_string())
-        .replace("PGG_WALK", if after == After::Reaped { "1" } else { "0" });
+        .replace("PGGDEV_PID", &pid.to_string())
+        .replace(
+            "PGGDEV_WALK",
+            if after == After::Reaped { "1" } else { "0" },
+        );
     let mut command = Command::new("powershell");
     command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
     listing(bounded(
@@ -490,7 +493,7 @@ fn off_ps(pid: u32, shot_dir: &Path) -> Result<Threads, String> {
 /// ACL admits only SYSTEM / Administrators, so its own taker cannot open
 /// it.
 ///
-/// `PGG_PID`, `PGG_PATH`, `PGG_KIND` and `PGG_WRITE` are filled in by
+/// `PGGDEV_PID`, `PGGDEV_PATH`, `PGGDEV_KIND` and `PGGDEV_WRITE` are filled in by
 /// [`dump_of`]; the path sits in a single-quoted literal, which a temp
 /// path has no quote to break. Exits with the call's Win32 error, zero
 /// for a dump written.
@@ -552,7 +555,7 @@ public static class PggDump {
     }
 }
 '@
-exit [PggDump]::PGG_WRITE(PGG_PID, 'PGG_PATH', PGG_KIND)";
+exit [PggDump]::PGGDEV_WRITE(PGGDEV_PID, 'PGGDEV_PATH', PGGDEV_KIND)";
 
 /// `MINIDUMP_TYPE` (minidumpapiset.h): `MiniDumpWithFullMemory` |
 /// `MiniDumpWithHandleData` | `MiniDumpWithThreadInfo`.
@@ -565,11 +568,11 @@ const DUMP_KIND: u32 = 0x2 | 0x4 | 0x1000;
 fn dump_of(pid: u32, whose: &str, shot_dir: &Path, after: After) -> String {
     let path = shot_dir.join(DUMP_FILE);
     let script = DUMP_SCRIPT
-        .replace("PGG_PID", &pid.to_string())
-        .replace("PGG_PATH", &path.to_string_lossy())
-        .replace("PGG_KIND", &DUMP_KIND.to_string())
+        .replace("PGGDEV_PID", &pid.to_string())
+        .replace("PGGDEV_PATH", &path.to_string_lossy())
+        .replace("PGGDEV_KIND", &DUMP_KIND.to_string())
         .replace(
-            "PGG_WRITE",
+            "PGGDEV_WRITE",
             match after {
                 After::Reaped => "Write",
                 After::GoesOn => "WriteOfASnapshot",

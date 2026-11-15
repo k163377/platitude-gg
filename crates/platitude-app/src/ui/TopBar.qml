@@ -81,7 +81,7 @@ Rectangle {
     readonly property real stateBadgeMinW: stateGroup.stateBadgeMinW
 
     /// Automation: which of the group's three shapes is on screen, what the badges were narrowed to, and what the card
-    /// came back with (`PGG_AUTO_ACT=badges` / `badges-hover`).
+    /// came back with (`_PGG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: stateGroup.stateWordsShown
     readonly property bool stateMarkShown: stateGroup.stateMarkShown
     readonly property color stateMarkColor: stateGroup.stateMarkColor
@@ -242,7 +242,7 @@ Rectangle {
     /// The two runs themselves, for `Main` to measure in scene coordinates.
     readonly property Item grabRunItem: tabStrip.grabRunItem
     readonly property Item seamRunItem: seamRun
-    /// Whether the ☰'s card is standing (`TabStrip`), for automation (`PGG_AUTO_ACT=app-menu`).
+    /// Whether the ☰'s card is standing (`TabStrip`), for automation (`_PGG_AUTO_ACT=app-menu`).
     readonly property bool appMenuOpen: tabStrip.appMenuOpen
 
     /// The narrowest this chrome can be laid out at — one of the two numbers the window's floor is the larger of
@@ -294,7 +294,7 @@ Rectangle {
     /// colour the button hands it (`BandFetchButton.frameColor`).
     readonly property int fetchFails: fetchButton.fails
     readonly property bool fetchFrameTurned: Qt.colorEqual(fetchButton.frameColor, Theme.warning)
-    /// Automation: the Stash button, pressed at the button so the real wiring answers (`PGG_AUTO_ACT=stash`).
+    /// Automation: the Stash button, pressed at the button so the real wiring answers (`_PGG_AUTO_ACT=stash`).
     /// **Answers whether the press went in**: it is refused while the tab is busy (the fetch on opening is one), so the
     /// caller keeps offering it.
     function stashNow() {
@@ -303,16 +303,16 @@ Rectangle {
         stashButton.clicked()
         return true
     }
-    /// Automation: the Fetch button, pressed at the button (`PGG_AUTO_ACT=fetch-resume`): the stopped button is the one
-    /// place that asks for the timer back, so calling the slot behind it would pass a build where the press no longer
-    /// reaches it. Answers whether the press went in.
+    /// Automation: the Fetch button, pressed at the button (`_PGG_AUTO_ACT=fetch-resume`): the stopped button is the
+    /// one place that asks for the timer back, so calling the slot behind it would pass a build where the press no
+    /// longer reaches it. Answers whether the press went in.
     function fetchNow() {
         if (!fetchButton.enabled)
             return false
         fetchButton.clicked()
         return true
     }
-    /// Automation: the panel's Find mark, pressed at the button (`PGG_AUTO_ACT=band-find`): the mark and the key meet
+    /// Automation: the panel's Find mark, pressed at the button (`_PGG_AUTO_ACT=band-find`): the mark and the key meet
     /// inside the page, so calling that would pass a build where the mark reaches nothing. Answers whether the press
     /// went in — it is down while a plan holds the graph's seat, loading included (`RepoPage.planShown`).
     function findNow() {
@@ -321,7 +321,7 @@ Rectangle {
         findButton.clicked()
         return true
     }
-    /// Automation: the push held to its end (`PGG_AUTO_ACT=force-push-hold`). Answers whether the press went in — none
+    /// Automation: the push held to its end (`_PGG_AUTO_ACT=force-push-hold`). Answers whether the press went in — none
     /// does while git has the tab (`ActionButton.completeHold`).
     function completePushHold() {
         return pushButton.completeHold()
@@ -433,7 +433,7 @@ Rectangle {
     }
 
     /// Automation: what the strip made of the run it was handed, and the two ends it was settled between
-    /// (`PGG_AUTO_ACT=tab-widths` / `badges`).
+    /// (`_PGG_AUTO_ACT=tab-widths` / `badges`).
     readonly property real tabTitleCap: tabStrip.tabTitleCap
     readonly property int tabTitleMinW: tabStrip.tabTitleMinW
     readonly property real tabTitleEaseW: tabStrip.tabTitleEaseW

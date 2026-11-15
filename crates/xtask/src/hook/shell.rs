@@ -158,7 +158,7 @@ mod tests {
 
     #[test]
     fn a_segments_program_is_found_past_what_it_runs_through() {
-        let (tokens, at) = program_at("PGG_X=1 env time cargo -q test").expect("a program");
+        let (tokens, at) = program_at("PGGDEV_X=1 env time cargo -q test").expect("a program");
         assert_eq!(tokens[at], "cargo");
         let (tokens, at) = program_at("  cat -n notes/day.md").expect("a program");
         assert_eq!(tokens[at], "cat");

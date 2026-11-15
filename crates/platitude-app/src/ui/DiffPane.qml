@@ -382,7 +382,7 @@ Rectangle {
     /// Automation: whether that band ran out of room for the path — the half a picture of a wide pane cannot answer.
     readonly property alias headerCut: paneHeader.cut
     /// Automation: how far apart the band's caption and its path stand, baseline to baseline, and the same for the
-    /// first heading's two words (-1 until that row is built) — `PGG_AUTO_ACT=hunk-tools`.
+    /// first heading's two words (-1 until that row is built) — `_PGG_AUTO_ACT=hunk-tools`.
     function captionApart() { return paneHeader.captionApart() }
     function hunkWordsApart() {
         const row = diffList.itemAtIndex(0)

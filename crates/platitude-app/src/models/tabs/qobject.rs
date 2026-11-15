@@ -120,7 +120,7 @@ impl TabsModel {
     }
 
     /// Opens a plain filesystem path (a worktree row, the pill naming the
-    /// worktree holding a branch, `PGG_AUTO_OPEN`); a refusal shows on the
+    /// worktree holding a branch, `_PGG_AUTO_OPEN`); a refusal shows on the
     /// tab's failure screen (`Ask::picked`).
     #[qslot]
     fn open_repository_path(&mut self, path: String) {

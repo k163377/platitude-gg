@@ -20,7 +20,7 @@
 //!
 //! Eight other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), the app's
-//! Rust may not look a `PGG_*` variable up outside the module that owns
+//! Rust may not look a `_PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
 //! ([`popups`]), QML asks the graph, not a row's id, which row is this
 //! window's worktree ([`wiprow`]), every text box the product declares

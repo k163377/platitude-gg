@@ -2,7 +2,7 @@
 //   S1: Rust structs / list models in QML   S2: Japanese IME (manual)
 //   S3: 100k-row graph at ~60 fps           S4: worker -> UI via QmlMethodInvoker
 //   S5: streaming `git log` of JetBrains/kotlin, first chunk < 3s
-// PGG_SPIKE_AUTOBENCH=items|canvas|shape|all / PGG_SPIKE_AUTOLOG=<repo> run
+// _PGG_SPIKE_AUTOBENCH=items|canvas|shape|all / _PGG_SPIKE_AUTOLOG=<repo> run
 // one check, print the result and quit.
 
 // The QModelItem derive names `HashMap` unhygienically.
@@ -32,21 +32,21 @@ impl Default for SpikeConfig {
     fn default() -> Self {
         let home = std::env::var("USERPROFILE").unwrap_or_default();
         Self {
-            auto_bench: std::env::var("PGG_SPIKE_AUTOBENCH").unwrap_or_default(),
-            auto_log: std::env::var("PGG_SPIKE_AUTOLOG").unwrap_or_default(),
-            log_topo: std::env::var("PGG_SPIKE_TOPO")
+            auto_bench: std::env::var("_PGG_SPIKE_AUTOBENCH").unwrap_or_default(),
+            auto_log: std::env::var("_PGG_SPIKE_AUTOLOG").unwrap_or_default(),
+            log_topo: std::env::var("_PGG_SPIKE_TOPO")
                 .map(|v| v != "0")
                 .unwrap_or(true),
-            default_repo: std::env::var("PGG_SPIKE_REPO")
+            default_repo: std::env::var("_PGG_SPIKE_REPO")
                 .unwrap_or_else(|_| format!("{}/IdeaProjects/kotlin", home.replace('\\', "/"))),
-            start_tab: std::env::var("PGG_SPIKE_TAB")
+            start_tab: std::env::var("_PGG_SPIKE_TAB")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(-1),
-            stay: std::env::var("PGG_SPIKE_STAY")
+            stay: std::env::var("_PGG_SPIKE_STAY")
                 .map(|v| v == "1")
                 .unwrap_or(false),
-            shot_dir: std::env::var("PGG_SPIKE_SHOTDIR")
+            shot_dir: std::env::var("_PGG_SPIKE_SHOTDIR")
                 .unwrap_or_default()
                 .replace('\\', "/"),
         }

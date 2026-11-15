@@ -35,7 +35,7 @@ Rectangle {
     property string detailHref: ""
     /// That word was pressed; the page goes there (`RepoPage.tipLinkAsked`).
     signal linkAsked(string href)
-    /// Automation (`PGG_AUTO_ACT=notice-link`): presses the place word at its own signal — the glyphs are the one part
+    /// Automation (`_PGG_AUTO_ACT=notice-link`): presses the place word at its own signal — the glyphs are the one part
     /// a run cannot press (`Main.pressTipLink`). Answers whether there was one to press.
     function pressDetailLink() {
         // Only a line that drew its link has one to press: the place word missing from the sentence leaves it plain.

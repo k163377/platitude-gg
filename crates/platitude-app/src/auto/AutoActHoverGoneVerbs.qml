@@ -81,7 +81,7 @@ Item {
         return true
     }
 
-    // PGG_AUTO_ACT=list-reread. The list out of a chip with the hand inside it (or still on the chip), and what it
+    // _PGG_AUTO_ACT=list-reread. The list out of a chip with the hand inside it (or still on the chip), and what it
     // stands for changed by one of this tab's own writes landing — the path a change from outside comes in by as well,
     // the graph read again: a row rewritten to another commit, the stand-in standing for another, the chip's names
     // changed. None of it is the reader's doing (デザイン規約 §hover のツールチップ「外乱では閉じない」): the list stays
@@ -227,7 +227,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=eol-change. The line-ending card held by the hand inside it, and the file under it changed so that
+    // _PGG_AUTO_ACT=eol-change. The line-ending card held by the hand inside it, and the file under it changed so that
     // it stays marked in that bucket and its mark says another count — the card says the new sentence, or goes; never
     // the old one (`WipPane.weighEol`). `unstaged`: `src/mixed.kt` (one added line with the other ending), saved over
     // from outside with a second such line — the app hears it by reading the tree again (`RepoTab.pollNow`, as the poll
@@ -352,8 +352,8 @@ Item {
             acts.unstagedReads++
         }
     }
-    // PGG_AUTO_ACT=wip-reread. The pane's hand on a marked row of the worktree's lists, its line-ending card out, and a
-    // file written from outside — the poll reads the tree again and the lists are told the rows that went, came or
+    // _PGG_AUTO_ACT=wip-reread. The pane's hand on a marked row of the worktree's lists, its line-ending card out, and
+    // a file written from outside — the poll reads the tree again and the lists are told the rows that went, came or
     // changed (`NavSectionModel.reshape`): the row under the hand keeps its delegate, and the pane puts it back under
     // the hand as far as its list scrolls (`WipPane.rowKeep`). Where the rows land decides:
     //   `same`   — `src/mixed.kt` saved over in place: the row stays under the hand — lit, its card up with the new
@@ -533,7 +533,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tip-slide. A changed file's tip out on a row with the pane's hand still on that row, then a folder
+    // _PGG_AUTO_ACT=tip-slide. A changed file's tip out on a row with the pane's hand still on that row, then a folder
     // above it shut — the rows below slide up under the hand (`AppListView.rowsHand` told by the list's count) — read
     // stage by stage:
     //   `shown` — the tip out;

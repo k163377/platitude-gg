@@ -1,31 +1,28 @@
-//! Which of the app's files may look a `PGG_*` variable up, counted by
-//! machine (.claude/rules/app-ui.md「Rust 側で `PGG_*` を読むのは
-//! `harness::knobs` だけ」). `harness::knobs` is behind the harness
-//! feature, so a shipped window reads no exported variable; a stray lookup
-//! shows nothing at run time, where the variable is simply not set.
+//! Which of the app's files may look a harness knob (`_PGG_*`) up,
+//! counted by machine (.claude/rules/app-ui.md「Rust 側で `_PGG_*` を読む
+//! のは `harness::knobs` だけ」). `harness::knobs` is behind the harness
+//! feature, so a shipped window reads no knob; a stray lookup shows
+//! nothing at run time, where the variable is simply not set.
 //!
-//! `PGG_LOG` (`settings::NOT_AUTOMATION`) is read in `main.rs`, before
-//! there is a harness to ask.
+//! The product's own variables spell `PGG_` (`main.rs` reads `PGG_LOG`
+//! before there is a harness to ask), so the prefix alone tells a knob.
 //!
-//! The core's `settings::Env` reads the same set without a `PGG_` literal
+//! The core's `settings::Env` reads the knobs without a `_PGG_` literal
 //! (`Env::system().automated()`), so it is held to the same module.
 
 use std::path::Path;
 
 /// The crate whose Rust this covers.
 const APP: &str = "crates/platitude-app/src";
-/// The one module that may look one up, and the entry point with the one
-/// variable it may name. Spelled from inside the crate, because a literal
-/// naming a crate root would read as this file depending on it
-/// (`gate::graph`).
+/// The one module that may look one up. Spelled from inside the crate,
+/// because a literal naming a crate root would read as this file depending
+/// on it (`gate::graph`).
 const READER: &str = "harness/knobs.rs";
-const ENTRY: &str = "main.rs";
-const LOGGING: &str = "PGG_LOG";
 /// The core's own reader over the same variables, held to the same module.
 const READER_TYPE: &str = "settings::Env";
 
-/// One failure per file naming a `PGG_*` variable it may not, and how many
-/// files were read for them.
+/// One failure per file naming a `_PGG_*` variable it may not, and how
+/// many files were read for them.
 pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let app = root.join(APP);
     let mut files = Vec::new();
@@ -50,15 +47,10 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
                 ));
             }
             for name in named(line) {
-                if shown == ENTRY && name == LOGGING {
-                    continue;
-                }
                 failures.push(format!(
                     "{APP}/{shown}:{}: names {name} — the only place in this crate that looks \
-                     a `PGG_*` variable up is `{READER}` (and `{ENTRY}` for `{LOGGING}`, which \
-                     says how loud to be). Put the knob on \
-                     `Knobs`, so a build without the harness reads no environment \
-                     at all (.claude/rules/app-ui.md)",
+                     a `_PGG_*` knob up is `{READER}`. Put the knob on `Knobs`, so a build \
+                     without the harness reads no knob at all (.claude/rules/app-ui.md)",
                     number + 1
                 ));
             }
@@ -67,8 +59,8 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     Ok((failures, files.len()))
 }
 
-/// The `PGG_*` variables one line of Rust names as a string literal; none
-/// on a comment line, where a name is a reference and not a lookup. Holds
+/// The `_PGG_*` knobs one line of Rust names as a string literal; none on
+/// a comment line, where a name is a reference and not a lookup. Holds
 /// while nothing in the crate pastes a name together from halves.
 fn named(line: &str) -> Vec<&str> {
     let code = line.trim_start();
@@ -77,7 +69,7 @@ fn named(line: &str) -> Vec<&str> {
     }
     let mut found = Vec::new();
     let mut rest = code;
-    while let Some(at) = rest.find("\"PGG_") {
+    while let Some(at) = rest.find("\"_PGG_") {
         rest = &rest[at + 1..];
         let end = rest.find('"').unwrap_or(rest.len());
         found.push(&rest[..end]);
@@ -111,14 +103,21 @@ mod tests {
 
     #[test]
     fn a_literal_is_a_lookup_and_a_comment_is_a_reference() {
-        assert_eq!(named("    act: text(\"PGG_AUTO_ACT\"),"), ["PGG_AUTO_ACT"]);
         assert_eq!(
-            named("        .env(\"PGG_PERF_OID\", \"PGG_PERF_FILE\")"),
-            ["PGG_PERF_OID", "PGG_PERF_FILE"]
+            named("    act: text(\"_PGG_AUTO_ACT\"),"),
+            ["_PGG_AUTO_ACT"]
         );
-        assert!(named("    /// `PGG_MEM_REPORT=1`: the window drives it").is_empty());
-        assert!(named("    // PGG_AUTO_ACT is read in knobs.rs").is_empty());
+        assert_eq!(
+            named("        .env(\"_PGG_PERF_OID\", \"_PGG_PERF_FILE\")"),
+            ["_PGG_PERF_OID", "_PGG_PERF_FILE"]
+        );
+        assert!(named("    /// `_PGG_MEM_REPORT=1`: the window drives it").is_empty());
+        assert!(named("    // _PGG_AUTO_ACT is read in knobs.rs").is_empty());
         assert!(named("    let on = knobs().mem_report;").is_empty());
+        assert!(
+            named("    std::env::var(\"PGG_LOG\")").is_empty(),
+            "the product's own variable is not a knob"
+        );
     }
 
     /// The rule the count is for: the tree it runs on passes it.

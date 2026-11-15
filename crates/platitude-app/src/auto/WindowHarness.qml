@@ -84,7 +84,7 @@ Item {
         property: "selfCloses"
         value: Harness.autoAct === ""
     }
-    // PGG_AUTO_OPEN: ';'-separated repositories are the tabs, opened in order.
+    // _PGG_AUTO_OPEN: ';'-separated repositories are the tabs, opened in order.
     Connections {
         target: harness.window
         function onStartingTabs() {
@@ -218,7 +218,7 @@ Item {
             && waited.every(term => harness.ambientTerms.indexOf(term) >= 0 || Awaited.expects(term))
     }
     /// The page as the shot driver reads it for a picture (`AutoShotDriver.pageOwed`), and the one fault injected
-    /// there: `PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]` has that picture's readings say a read is on its
+    /// there: `_PGG_FAULT_OWED_AT_SHOT=<artifact>-<when>[-<read>]` has that picture's readings say a read is on its
     /// way at its first reading (`before`: the page not settled as the picture is called for) or at the reading its
     /// grab answers in (`during`: a read landing as the grab answers), and stands a mark in the content (`faultMark`)
     /// from the first reading until the one after the fault — the readings a careless driver's texture would be drawn
@@ -276,7 +276,7 @@ Item {
         harnessBranch: harness
     }
 
-    // The command log's records held back (`PGG_FAULT_HOLD_RECORDS`; `xtask::verify::records_check`) are let through
+    // The command log's records held back (`_PGG_FAULT_HOLD_RECORDS`; `xtask::verify::records_check`) are let through
     // once a wait stands on them alone: a sampler's whole wait the page, and the page owing nothing but them — the
     // proof that the completion waited for the record and nothing else. A completion that never waited on them lets
     // them in at its walk (`finish`), and the picture after it says what it gained.

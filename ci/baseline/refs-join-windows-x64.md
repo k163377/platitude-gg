@@ -6,7 +6,7 @@
 - リモートのタグは **fetch 済みの定常状態**を置く(`ls-remote --tags` が手元のタグを全部返した状態 = `origin` が 46,377
   件を名乗る)
 - 再現:
-  `PGG_PERF_REPO=<repo> cargo test -p platitude-core --release refs_join_at_scale -- --ignored --nocapture`(`session::join_tests`)
+  `_PGG_PERF_REPO=<repo> cargo test -p platitude-core --release refs_join_at_scale -- --ignored --nocapture`(`session::join_tests`)
 - release ビルド、ウォームキャッシュ、3 回の範囲
 
 | 処理 | 1 join |

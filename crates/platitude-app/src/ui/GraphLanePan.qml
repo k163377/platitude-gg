@@ -55,7 +55,7 @@ MouseArea {
         if (pan.panning)
             pan.columns.graphX = Math.max(0, Math.min(pan.startGX - (mouse.x - pan.pressX), pan.columns.graphXMax))
     }
-    /// Automation (PGG_AUTO_ACT=graph-reclick-lanes): a press at a point in this strip's own frame, entering the
+    /// Automation (_PGG_AUTO_ACT=graph-reclick-lanes): a press at a point in this strip's own frame, entering the
     /// handler's own body (`pressLanded`) so the point-to-row mapping is proven too. False where no row is hit.
     function clickAt(position, modifiers) {
         return pan.pressLanded(position, modifiers === undefined ? Qt.NoModifier : modifiers)

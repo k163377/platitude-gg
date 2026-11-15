@@ -630,7 +630,7 @@ mod tests {
         for command in [
             "cargo xtask land",
             "cargo xtask land worktree-a",
-            "PGG_ALLOW_MAIN=1 cargo xtask land worktree-a",
+            "PGGDEV_ALLOW_MAIN=1 cargo xtask land worktree-a",
             "cargo run --quiet -p xtask -- land worktree-a",
             "cargo build -p xtask && cargo xtask land worktree-a",
             // A landing chained with a line verb is a landing.

@@ -246,7 +246,7 @@ impl CommandsModel {
     }
 
     /// How many rows the log holds, for the automation
-    /// (`PGG_AUTO_ACT=commands-copy`): `ListView.count` lags the model in
+    /// (`_PGG_AUTO_ACT=commands-copy`): `ListView.count` lags the model in
     /// the frame a press lands in.
     #[qslot]
     fn rows_held(&self) -> i32 {
@@ -332,7 +332,7 @@ impl CommandsModel {
     }
 
     /// Automation: lowers the harness's hold on the log's records
-    /// (`PGG_FAULT_HOLD_RECORDS`) and takes in what it held, answering how
+    /// (`_PGG_FAULT_HOLD_RECORDS`) and takes in what it held, answering how
     /// many messages that was, or -1 where no hold stood.
     #[qslot]
     fn let_records_through(&mut self) -> i32 {

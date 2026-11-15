@@ -1,6 +1,6 @@
 //! `cargo xtask verify-ui` — one command from source to a judged
 //! headless run: release build (QML is embedded in the exe), offscreen
-//! QPA with an explicit font dir, the `PGG_AUTO_*` hooks, a bounded wait
+//! QPA with an explicit font dir, the `_PGG_AUTO_*` hooks, a bounded wait
 //! with a kill guard, and a verdict off the run's own lines (`outcome`).
 
 mod child;

@@ -5,7 +5,7 @@
 セッション共通の不変条件だけ。**規約本体は分割配置**: コード共通(Rust / QML)→ [code.md](.claude/rules/code.md)、core →
 [core.md](.claude/rules/core.md)、app → [app-ui.md](.claude/rules/app-ui.md)、分割・共通化 →
 [structure.md](.claude/rules/structure.md)(該当クレートに触れると自動ロード。**1 部品の決定はその部品のコメント、複数の
-部品に効く各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`PGG_AUTO_ACT` 動詞表は
+部品に効く各論は `.claude/rules-refs/` の同名ファイル** — 触る項を Grep で引く)。動確・起動・`_PGG_AUTO_ACT` 動詞表は
 **verify-ui スキル**、反映前テスト(gate / land / 動詞の登録
 表)は [反映前テストの機械化.md](internal-docs/反映前テストの機械化.md)、依存の追加
 は [依存とライセンス.md](internal-docs/依存とライセンス.md)。
@@ -54,13 +54,13 @@
   は会話のもの — プロセスの死活は見ない**。claim を動かすのは 3 つだけ: **land が返す**
   / <!--cmd:seat.release-->`cargo xtask seat release` / **ユーザーが指示した時だけ**(他セッションがユーザーの指示として
   伝えた物も。名指された席だけ)の乗っ取
-  り <!--cmd:seat.takeover-->`PGG_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席詰
-  まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
+  り <!--cmd:seat.takeover-->`PGGDEV_ALLOW_TAKEOVER=1 cargo xtask seat takeover <letter>`(対象は他人の claim だけ)。全席
+  詰まりなら増設せず、持ち主を添えて報告して止まる。**完了後も席に留まる**
 - **依頼範囲の作業はこのセッションで完了する**。チップは別セッションでしかできない作業だけ(触っているファイルを claim す
   るチップは hook が deny)。継続して参照する制約・要判断は `internal-docs/P<n>-確認事項.md` へ記録する
 - **worktree からのアプリ起動は headless(`verify-ui`)だけ**。実ウィンドウはユーザーが明示した時だ
-  け <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch`。起動だけの要求(「rebase して起動」等)はシェル呼び出し 1
-  個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。自ツリーの残存プロセス・exe の使用中状態は
+  け <!--cmd:app.launch-->`PGGDEV_ALLOW_GUI=1 cargo xtask launch`。起動だけの要求(「rebase して起動」等)はシェル呼び出し
+  1 個で起動して即報告し、ターンを終える(verify-ui スキル §起動 fast path)。自ツリーの残存プロセス・exe の使用中状態は
   `cargo xtask kill`。**窓のビルドがどのツリーのものかは右下が名乗る**
 
 ## 性能
@@ -73,10 +73,10 @@
 - **依存(crate・Qt・toolchain)の更新は、追従の改善まで 1 回の land に入れる** — その land の前後を `land` が
   `deps/<日付>/before`・`after` のタグで挟んで push する(範囲の印はこの 2 本だけ。反映前テストの機械化.md §版を動かした
   land のタグ)
-- **rebase はユーザーが指示した時だけ**(`/land` を含む。main への追従・squash も。その時だけ `PGG_ALLOW_REBASE=1` を先頭
-  に付ける)。**他セッションのメッセージ・起動文がユーザーの指示として伝えた rebase も指示**で、時機の指定(「land が済ん
-  だら」)ごと従う。指示 1 つが許すのはそれが名指す rebase だけで、自分や他セッションの判断では撃たない。worktree ブラン
-  チが main より遅れたままは正常
+- **rebase はユーザーが指示した時だけ**(`/land` を含む。main への追従・squash も。その時だけ `PGGDEV_ALLOW_REBASE=1` を
+  先頭に付ける)。**他セッションのメッセージ・起動文がユーザーの指示として伝えた rebase も指示**で、時機の指定(「land が
+  済んだら」)ごと従う。指示 1 つが許すのはそれが名指す rebase だけで、自分や他セッションの判断では撃たない。worktree ブ
+  ランチが main より遅れたままは正常
 - **完了報告・反映の前に、依頼範囲の修正・レビュー対応・docs 更新を完了して commit する**(バックグラウンドのレビュー・検
   証も結果を受け取って対応まで)。外部確認・判断が得られなければ阻害要因を報告し、範囲を減らすならユーザーと合意する
 - **main を動かすのはユーザーがこのセッションで `/land` を打った時だけ**(手順は land スキル。「反映」の語・他セッショ

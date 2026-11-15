@@ -602,7 +602,7 @@ Item {
                                 + " at=" + Math.round(detailsPane.descriptionAt) })
         }
     }
-    // PGG_AUTO_ACT=middle-scroll-exit: the two ways a middle-click gesture ends (`MiddleAutoScroll`), put in at
+    // _PGG_AUTO_ACT=middle-scroll-exit: the two ways a middle-click gesture ends (`MiddleAutoScroll`), put in at
     // the pane's own press / move / release. `held` leaves the dead zone before letting go (the drift ends with the
     // hand); `click` never leaves it (the drift stays for the next press). The ticker has to have run before either
     // is read — no movement cannot say whether anything asked. The dead zone is proved by `travelled=false`, not
@@ -663,7 +663,7 @@ Item {
                                 + " max=" + Math.round(graphPane.graphXMax) })
         }
     }
-    // PGG_AUTO_ACT=bar-track: the track of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの
+    // _PGG_AUTO_ACT=bar-track: the track of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの
     // 矢印), pressed through the functions its handler calls. A click below the thumb sends one page; a hold runs on and
     // stops with the thumb's far end on the hand; a hand slid off before the pause ends keeps the run from starting;
     // letting go gives the bar back. Each stage waits on the view or the bar's own state, never on a clock; what each
@@ -738,7 +738,7 @@ Item {
                                 + " at=" + Math.round(detailsPane.filesWalk.view.contentY) })
         }
     }
-    // PGG_AUTO_ACT=bar-arrow: the arrows of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの矢印),
+    // _PGG_AUTO_ACT=bar-arrow: the arrows of the right panel's file list (`PaneScrollBar`; デザイン規約 §スクロールバーの矢印),
     // pressed through the functions their handlers call. A click sends one step; a hold runs on past it; sliding off
     // stops the run with the hand still down; letting go stops it and gives the bar back. No clock is read: a run's
     // start is waited for on the view having gone past the press's step, its stop read off the bar's own state (only a

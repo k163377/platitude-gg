@@ -20,7 +20,7 @@ Item {
     /// Whom the badge would be about; "" (no author — the worktree's row, a commit not read yet) disables it.
     property string email: ""
     /// Stands in for the pointer where headless cannot put one, so the badge can be photographed
-    /// (PGG_AUTO_ACT=avatar-hover).
+    /// (_PGG_AUTO_ACT=avatar-hover).
     property bool pointedAt: false
     /// The top-right mark (`SignatureMark`); an empty `signatureKind` puts nothing there.
     property string signatureKind: ""

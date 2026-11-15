@@ -147,7 +147,7 @@ Item {
                                 + " says=" + page.noticeCard.detail })
         }
     }
-    // PGG_AUTO_ACT=rename-tag-box / rename-branch-box: the box on the first tag or on the branch HEAD is on, the
+    // _PGG_AUTO_ACT=rename-tag-box / rename-branch-box: the box on the first tag or on the branch HEAD is on, the
     // argument typed in, and whether the reason for refusing the name reached the reader. A branch's argument may name
     // the row too, `<branch>:<typed>` (a branch name holds no `:`) — a branch a stopped rebase holds is never HEAD's.
     //
@@ -212,8 +212,8 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=nav-rename-far. Each stage waits for the one before to land — a list still building has no height to
-    // scroll by.
+    // _PGG_AUTO_ACT=nav-rename-far. Each stage waits for the one before to land — a list still building has no height
+    // to scroll by.
     PageStage {
         id: farTimer
         name: "nav_far"
@@ -286,7 +286,7 @@ Item {
                                 + (replaceAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : "") })
         }
     }
-    // PGG_AUTO_ACT=rename-tag-remote / -go / -tip: the question that carries a tag's new name over to the remote
+    // _PGG_AUTO_ACT=rename-tag-remote / -go / -tip: the question that carries a tag's new name over to the remote
     // holding the old one.
     //
     // The rename waits for this run's fetch (`nav-open-tag` の同じ待ち): renamed before `ls-remote` answered, it arms
@@ -412,7 +412,7 @@ Item {
             writeBarrier.start()
         }
     }
-    // PGG_AUTO_ACT=nav-branch-box / nav-rename-box / nav-tag-box: how wide the box comes out on a row of that depth in
+    // _PGG_AUTO_ACT=nav-branch-box / nav-rename-box / nav-tag-box: how wide the box comes out on a row of that depth in
     // a pane of that width — one question, so one timer for all of them. The field's modes (`NavNameBox`) are read side
     // by side: `Branch name` for a new branch, `Tag name` for a new tag, the rename (emptied, it shows its kind's
     // placeholder). A width under the floor (180) is taken at the floor by the splitter; none keeps the width it opened
@@ -537,7 +537,7 @@ Item {
                 "report": () => op.line() })
         }
     }
-    // PGG_AUTO_ACT=rename-box-out: one way out of the name box per run. The claim is what the box and the gesture are
+    // _PGG_AUTO_ACT=rename-box-out: one way out of the name box per run. The claim is what the box and the gesture are
     // left holding: a wait still running is how a box comes back by itself, so `armed=false` says it will not — the
     // picture cannot tell.
     PageStage {

@@ -47,13 +47,13 @@ Rectangle {
     /// follow it.
     readonly property real capsLift: -WordFace.capitalDrop(captionLabel)
 
-    /// A click landed on the band; PGG_AUTO_ACT=nav-close comes in here too, so it meets the same refusal.
+    /// A click landed on the band; _PGG_AUTO_ACT=nav-close comes in here too, so it meets the same refusal.
     function tap() {
         if (header.takesClick)
             header.toggled()
     }
 
-    /// The eye pressed (PGG_AUTO_ACT=tags-eye), through the button's own wiring: `toggle()` flips the tick without
+    /// The eye pressed (_PGG_AUTO_ACT=tags-eye), through the button's own wiring: `toggle()` flips the tick without
     /// raising `toggled`, so both are called. Refused where there is no eye to press (zero tags).
     function tapTags() {
         if (header.showTagToggle && !header.empty) {

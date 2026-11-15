@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The band's half of the window's PGG_AUTO_ACT harness: the row itself, the ☰ menu, and the three actions giving
+/// The band's half of the window's _PGG_AUTO_ACT harness: the row itself, the ☰ menu, and the three actions giving
 /// their words up as the window narrows. The state badges are the other half (`WindowBadgeActs`).
 // An `Item` only because `QtObject` has no default property to hold the timers; it is sizeless.
 Item {
@@ -50,7 +50,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=force-push-hold: the push's hold run out on a diverged branch, and the ring latched on the push.
+    // _PGG_AUTO_ACT=force-push-hold: the push's hold run out on a diverged branch, and the ring latched on the push.
     WindowStage {
         id: pushHoldTimer
         name: "force_push_hold"
@@ -80,7 +80,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the latch.
+    // _PGG_AUTO_ACT=fetch-busy: the same latch on fetch. The page's driver fires the fetch; this waits for the latch.
     // Only the unturned frame's wait can be pictured here: the ring turns in the seat and the word stays `textMuted`.
     // The yellow frame's wait is `force-push-hold`'s.
     WindowStage {
@@ -94,7 +94,7 @@ Item {
                             + " fails=" + topBar.fetchFails + " turned=" + topBar.fetchFrameTurned })
     }
 
-    // PGG_AUTO_ACT=fetch-tip on|off: the fetch button's tip with and without a remote (`off` = `--preset noremote`).
+    // _PGG_AUTO_ACT=fetch-tip on|off: the fetch button's tip with and without a remote (`off` = `--preset noremote`).
     // The dim side waits for a landed, idle repository rather than the button, so a band read before the remotes
     // arrived cannot pass for either. `on` runs on the default preset; the pair's pictures differ in REMOTES' count
     // (0 / 3) and the button's brightness.
@@ -119,7 +119,7 @@ Item {
                             + " remotes=" + (topBar.curPage !== null ? topBar.curPage.pageTab.remoteCount : -1) })
     }
 
-    // PGG_AUTO_ACT=stash-state ready|clean|conflicts|unborn: waits for the Stash button to say the argument — its
+    // _PGG_AUTO_ACT=stash-state ready|clean|conflicts|unborn: waits for the Stash button to say the argument — its
     // reading lands over several drains, and read early it is `unborn` everywhere (デザイン規約 §変更を退避する).
     // Four runs, read as a set: `ready` on the default (dirty) preset, `clean` on a clean tree (`--preset tags`),
     // `conflicts` on `--preset conflict-kinds`, `unborn` on `--preset empty` — `unborn` even where that tree is dirty.
@@ -142,7 +142,7 @@ Item {
                             + " tip=" + topBar.stashTipShown })
     }
 
-    // PGG_AUTO_ACT=band: numbers, because the headless platform draws no window buttons — a band that lost its grab
+    // _PGG_AUTO_ACT=band: numbers, because the headless platform draws no window buttons — a band that lost its grab
     // run or pushed its buttons off the end looks fine in the picture. A window verb that still reports only once every
     // page read has landed (`PageSettled.windowSettled`), so the graph in the picture is loaded.
     //
@@ -172,7 +172,7 @@ Item {
                 + " names=" + topBar.opsNames + " upstream=" + topBar.branchUpstream })
     }
 
-    // PGG_AUTO_ACT=ops-panel [<width>]: the panel once its repository has landed (the state matrix's verb). The floor
+    // _PGG_AUTO_ACT=ops-panel [<width>]: the panel once its repository has landed (the state matrix's verb). The floor
     // may refuse the width, so the width the run came out at rides back in the line, with everything else a picture
     // cannot be read for.
     WindowStage {
@@ -274,7 +274,7 @@ Item {
                             topBar.staleBadgeShown, topBar.lfsBadgeShown].join(",")
     }
 
-    // PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-worktrees [<filter>] / ops-branch /
+    // _PGG_AUTO_ACT=ops-stand / ops-stand-repos / ops-stand-worktrees [<filter>] / ops-branch /
     // ops-branch-folder <path>: the cards the repository's and the branch's names open. Rows are counted, since an
     // empty card looks like one whose rows were all left out (`AppMenu.offeredRows`), and the opening name's lit /
     // turned is read, since under the hand that pressed it the name looks the same whether or not the card keeps it
@@ -369,7 +369,7 @@ Item {
     readonly property bool opsDoorTier: Harness.autoAct === "ops-stand-repos"
                                         || Harness.autoAct === "ops-stand-worktrees"
 
-    // PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice. Numbers too:
+    // _PGG_AUTO_ACT=app-menu / app-menu-reclick: the ☰ pressed once and left standing, or pressed twice. Numbers too:
     // a reopened card frames like one never closed, and who owns the grab run is not drawn. `yield=true` is the frame
     // handed back to the scene (`WindowChrome.frameYielded`); `strip=` is where the run stands for when it is not,
     // `none` with no merged title bar. The second press lands only on a card observed standing, as a hand's would.
@@ -454,7 +454,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-tip-link: the link in the fetch button's tip pressed, and the panel it names coming up marked
+    // _PGG_AUTO_ACT=fetch-tip-link: the link in the fetch button's tip pressed, and the panel it names coming up marked
     // (デザイン規約 §hover のツールチップ「送った先は名乗る」). The failures raised the panel (デザイン規約 §git が言った
     // ことを読む場所), and a press that finds it up proves half the verb, so it is shut first (`shut`); then the
     // stand-in pointer put on the button, once the failures are over, until its tip stands (`pointed`); then the link
@@ -524,7 +524,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=band-actions*: the panel's four buttons giving their words up as the window narrows (`TopBar`'s
+    // _PGG_AUTO_ACT=band-actions*: the panel's four buttons giving their words up as the window narrows (`TopBar`'s
     // header).
     // The run asks for a *shape* and the panel's own arithmetic names its width — which pixel is which shape depends on
     // the installed fonts.

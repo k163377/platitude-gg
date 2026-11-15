@@ -20,7 +20,7 @@ Item {
     readonly property var detailsModel: driver.detailsModel
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
-    // The command log's ground under its last row (`PGG_AUTO_ACT=commands-sweep`), read off the panel while it is up.
+    // The command log's ground under its last row (`_PGG_AUTO_ACT=commands-sweep`), read off the panel while it is up.
     readonly property bool commandsHasGround: page.commandsPane !== null && page.commandsPane.hasGround
     readonly property real commandsGroundTop: page.commandsPane !== null ? page.commandsPane.groundTop : 0
 
@@ -168,12 +168,12 @@ Item {
         return true
     }
     /// The hand that drags over the log, and the key that takes what it picked
-    /// (`PGG_AUTO_ACT=commands-select` / `commands-copy`).
+    /// (`_PGG_AUTO_ACT=commands-select` / `commands-copy`).
     function pickCommandText(fromRow, fromAt, toRow, toAt) {
         if (page.commandsPane !== null)
             page.commandsPane.pickText(fromRow, fromAt, toRow, toAt)
     }
-    /// ...and the same hand started on the ground under the last row (`PGG_AUTO_ACT=commands-sweep`).
+    /// ...and the same hand started on the ground under the last row (`_PGG_AUTO_ACT=commands-sweep`).
     function sweepCommandGround(fx, fy) {
         return page.commandsPane !== null && page.commandsPane.sweepGround(fx, fy)
     }
@@ -299,7 +299,7 @@ Item {
                     + " pin=" + (!pin.visible ? "none" : pin.wordsOpacity < 1 ? "dim" : "lit")])
             } })
     }
-    // PGG_AUTO_ACT=find-scroll: the scroll waits for the grab callback of the frame that drew the search
+    // _PGG_AUTO_ACT=find-scroll: the scroll waits for the grab callback of the frame that drew the search
     // (rules/app-ui.md §UI 自動化). `grabbed=` says it did — otherwise the scroll lands in the same turn as the query
     // and the run is `find` again. Two screens: a jump builds the incoming rows before letting go of the outgoing
     // ones, so drawn delegates are handed on only on the second. Registered as `5 --preset deep`. The picture is read
@@ -348,7 +348,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=find-hint / find-hint-key: waits on the card's own word that the typing stopped (`typingStopped`),
+    // _PGG_AUTO_ACT=find-hint / find-hint-key: waits on the card's own word that the typing stopped (`typingStopped`),
     // which a line with no note reaches all the same. `-key` then presses the held-back character and is shot on the
     // next frame — the one that keystroke took the note down in (規約 §コミットを探す). Its line is read in the turn of
     // the keystroke, as it went in (`witness`): once the typing stops again, the note comes back. `note=` is
@@ -396,7 +396,7 @@ Item {
                           "report": () => op.keyLine() })
         }
     }
-    // PGG_AUTO_ACT=find-further: the press waits for the note to stand with its acting words, then for the step it
+    // _PGG_AUTO_ACT=find-further: the press waits for the note to stand with its acting words, then for the step it
     // asked for to land and the search to run again (`GraphFind.furtherFrom` going down). `before=` / `after=` are the
     // rows loaded either side of it — `before` witnessed as the press went in.
     PageStage {
@@ -466,7 +466,7 @@ Item {
             avatarSeedTimer.stop()
         }
     }
-    // PGG_AUTO_ACT=commands-fail-shut: the red mark with the panel out of the way, which no other verb photographs.
+    // _PGG_AUTO_ACT=commands-fail-shut: the red mark with the panel out of the way, which no other verb photographs.
     // Pressed at the `>_`'s own function, so a build where that press stopped reaching the page waits here.
     PageStage {
         id: commandsShutTimer
@@ -489,7 +489,7 @@ Item {
                                                          + " mark=" + page.commandsMarkColor })
         }
     }
-    // PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (its fourth way out, `RepoPage.escapePressed`),
+    // _PGG_AUTO_ACT=commands-escape: Esc on the panel a refusal raised (its fourth way out, `RepoPage.escapePressed`),
     // entered at `escapePressed` where `Keys.onEscapePressed` enters. **`took=` is the claim**: a key that fell
     // through to nobody would frame exactly like this — witnessed as the key went in.
     PageStage {
@@ -516,8 +516,8 @@ Item {
                                 + " mark=" + page.commandsMarkColor })
         }
     }
-    // PGG_AUTO_ACT=commands / commands-select / commands-copy / commands-sweep: the log filled as a hand fills it — the
-    // unstaged heading's `Stage all`, then, once that press is through and the status after it drawn, the staged
+    // _PGG_AUTO_ACT=commands / commands-select / commands-copy / commands-sweep: the log filled as a hand fills it —
+    // the unstaged heading's `Stage all`, then, once that press is through and the status after it drawn, the staged
     // heading's `Unstage all` (`WipPane.moveBucket`, the bands themselves: one a standing press holds down takes no
     // press). `commands` is pictured once both are in.
     PageStage {
@@ -554,7 +554,7 @@ Item {
             commandsPickTimer.start()
         }
     }
-    // PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
+    // _PGG_AUTO_ACT=commands-select / commands-copy: a drag from the head of the first row to the end of the last —
     // all three columns and more than one row — then, for `-copy`, Ctrl+C. The picture after the press is the one
     // before it, so the report line is the whole judgment. **`perRow=` is the claim**: one clipboard
     // line per row. Tab-led lines are not counted: they are git's words under a failure, and which commands fail is
@@ -617,7 +617,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=commands-sweep: the same drag, started on the ground under the last row
+    // _PGG_AUTO_ACT=commands-sweep: the same drag, started on the ground under the last row
     // (`CommandsTextSelect`). Nine starts, each judged over a cleared selection: a reach that works from one
     // spot hides at the middle, and one read at the end would report only the last try. `reach` / `tries`: how many of
     // the starts reached a row, and of how many, counted at the sweep. Set up as `commands-select` without the stash;

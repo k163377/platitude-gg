@@ -3,4 +3,4 @@
 
 /// Set for everything the container runs, and by nothing else: the mark a
 /// run reads to know it is not on the machine whose checkout it is writing.
-pub(crate) const IN_CONTAINER: &str = "PGG_IN_CONTAINER";
+pub(crate) const IN_CONTAINER: &str = "PGGDEV_IN_CONTAINER";

@@ -74,13 +74,13 @@ Item {
         return asked > ceiling + Theme.splitterWidth || asked < floor - Theme.splitterWidth
     }
     /// Automation: the pointer resting on the graph divider at `y`, in this item's coordinates
-    /// (`PGG_AUTO_ACT=graph-divider`).
+    /// (`_PGG_AUTO_ACT=graph-divider`).
     function restDividerPointer(inside, y) {
         dividers.dividerPointed = inside
         if (inside)
             dividers.dividerPoint = graphDivider.mapToItem(null, Qt.point(graphDivider.width / 2, y))
     }
-    /// Automation: a drag carried past one of the four bounds (`PGG_AUTO_ACT=divider-refuse`, whose argument names
+    /// Automation: a drag carried past one of the four bounds (`_PGG_AUTO_ACT=divider-refuse`, whose argument names
     /// which), walking the road the handler walks.
     function dragDividerPast(which) {
         const over = 2 * Theme.splitterWidth

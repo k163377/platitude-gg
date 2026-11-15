@@ -5,7 +5,7 @@
 //! The record in `ci/baseline/perf-windows-x64.md` is only worth anything
 //! if the run behind it can be repeated exactly, so the conditions live
 //! here: release build, a real window (offscreen reports neither memory
-//! nor fps honestly) on one named screen, warm cache, the `PGG_AUTO_*`
+//! nor fps honestly) on one named screen, warm cache, the `_PGG_AUTO_*`
 //! hooks, WorkingSet sampled every 100ms for its maximum, causal
 //! `perf_done`, and an outer kill guard.
 //!
@@ -561,20 +561,20 @@ fn say(run: &str, note: &str, reading: &Reading) {
 }
 
 /// `cargo xtask hook pre-shell` cannot see this command (it names no app
-/// binary), so `PGG_ALLOW_GUI=1` is checked here: a worktree window can
+/// binary), so `PGGDEV_ALLOW_GUI=1` is checked here: a worktree window can
 /// overlap another session's screenshot.
 fn guard_the_window(root: &std::path::Path) -> Result<(), String> {
     let in_worktree = root
         .to_string_lossy()
         .replace('\\', "/")
         .contains("/.claude/worktrees/");
-    if !in_worktree || std::env::var("PGG_ALLOW_GUI").as_deref() == Ok("1") {
+    if !in_worktree || std::env::var("PGGDEV_ALLOW_GUI").as_deref() == Ok("1") {
         return Ok(());
     }
     Err(
         "this measurement needs a real window, and a worktree may not put one up on its own \
          (offscreen reports neither memory nor fps honestly, so there is no headless form of \
-         it). Run it again with PGG_ALLOW_GUI=1 when the window was asked for."
+         it). Run it again with PGGDEV_ALLOW_GUI=1 when the window was asked for."
             .into(),
     )
 }

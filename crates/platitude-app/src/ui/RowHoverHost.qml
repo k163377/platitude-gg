@@ -54,7 +54,7 @@ Item {
     /// The hand is on what the card / the list hangs off (the seats' own answer).
     readonly property bool cardPointed: cardSeat.pointed || chosenSeat.pointed
     readonly property bool listPointed: listSeat.pointed
-    /// Automation only: the list's beat after a leave is still counting (PGG_AUTO_ACT=menu-list own).
+    /// Automation only: the list's beat after a leave is still counting (_PGG_AUTO_ACT=menu-list own).
     readonly property bool listSettling: listSeat.leaving
     /// Automation only: the card's seat as it stands — its state, the target it latched against, whether an ask is
     /// kept (`tst_graphhover`).

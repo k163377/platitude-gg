@@ -6,7 +6,7 @@
 //! Which one drained first cannot be told from a run that passed: the
 //! order is the event loop's. So the order the completion has to survive
 //! is made the run's own. The log's records are held back from the
-//! write's first asked command on (`PGG_FAULT_HOLD_RECORDS`,
+//! write's first asked command on (`_PGG_FAULT_HOLD_RECORDS`,
 //! `harness::held_records`), and let through only once a wait stands on
 //! them alone: a sampler held by the page, and the page owing nothing but
 //! the records (`WindowHarness`). A completion that never waited for them

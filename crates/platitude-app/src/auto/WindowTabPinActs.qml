@@ -85,7 +85,7 @@ Item {
                  "page": PageSettled.windowSettled(window) }
     }
 
-    // PGG_AUTO_ACT=tab-pin: the stand-in at the edge the tab in front went out of. The argument is that tab's index —
+    // _PGG_AUTO_ACT=tab-pin: the stand-in at the edge the tab in front went out of. The argument is that tab's index —
     // the first (default) rides the left edge, the last the right. `onScreen=false` is said because a front tab
     // genuinely at the edge frames the same.
     WindowStage {
@@ -117,7 +117,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-pin-go: the stand-in pressed; the strip travels until its row is whole and the stand-in steps
+    // _PGG_AUTO_ACT=tab-pin-go: the stand-in pressed; the strip travels until its row is whole and the stand-in steps
     // aside. `travelled=` (`from=` → `run=`) is said because a strip that was never sent away frames the same.
     WindowStage {
         id: tabPinGoTimer
@@ -161,7 +161,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-open-go: a repository opened into a crowded strip standing away from where the new tab lands;
+    // _PGG_AUTO_ACT=tab-open-go: a repository opened into a crowded strip standing away from where the new tab lands;
     // the band travels to it and the stand-in steps aside (デザイン規約 §タブの所作). Staged as above with the first
     // tab in front, so the run is at the far end the new tab arrives at. The argument is a repository the strip has
     // not got — everything handed to the run at startup is already in it. `travelled=` is said because a strip
@@ -202,7 +202,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-open-moved-on: the same arrival, then a press anywhere (`Main.pressLandedAnywhere`, the
+    // _PGG_AUTO_ACT=tab-open-moved-on: the same arrival, then a press anywhere (`Main.pressLandedAnywhere`, the
     // handler's own body), then the run narrowing under the new tab. The press ends the ask, so the strip stays put
     // and the stand-in comes up for the cut tab (`TabStrip.takeRun` / `pressLanded`). Narrowed by
     // widening the window off its floor and giving the width back, so the run ends as the staging's own.

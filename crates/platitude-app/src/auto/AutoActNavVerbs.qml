@@ -328,7 +328,7 @@ Item {
                                 + " says=" + navProbe.rowFactsWords() })
         }
     }
-    // PGG_AUTO_ACT=menu-peek. Each stage waits for the one before to land: the rail and the sections with rows to open
+    // _PGG_AUTO_ACT=menu-peek. Each stage waits for the one before to land: the rail and the sections with rows to open
     // (else a cell refuses for want of rows, not for the menu), the section or the menu up, then — for those that walk
     // the hand off — the beat that closes a section left alone, run out.
     PageStage {
@@ -420,7 +420,7 @@ Item {
     /// and holds it open for the box.
     readonly property bool peekGoneWanted: Harness.autoAct === "nav-peek-away" || Harness.autoAct === "nav-peek-out"
                                            || Harness.autoAct === "nav-peek-shut"
-    // PGG_AUTO_ACT=nav-peek-again: rest on the cell, click it shut, click it again. Each click waits for the one
+    // _PGG_AUTO_ACT=nav-peek-again: rest on the cell, click it shut, click it again. Each click waits for the one
     // before to land — the section gone, then standing — and the rail's answer is read as `nav-peek`'s is.
     PageStage {
         id: peekAgainTimer
@@ -500,7 +500,7 @@ Item {
                 "report": () => navRailTimer.line() })
         }
     }
-    /// PGG_AUTO_ACT=doors-held: the branch rebased onto and right-clicked, the argument. Not the current one —
+    /// _PGG_AUTO_ACT=doors-held: the branch rebased onto and right-clicked, the argument. Not the current one —
     /// `switch` is only offered elsewhere, and that row is the point of the hold.
     readonly property string heldBranch: Harness.autoActArg
     /// The replay's rising edge, latched (`RepoPage.autoReplayHeld`): on a demo repository the write starts and ends
@@ -574,7 +574,7 @@ Item {
                + " switchrow=" + refSwitchItem.blocked
                + " why=" + (refSwitchItem.blockedWhy !== "")
     }
-    // PGG_AUTO_ACT=tags-eye: the eye moves the walk, so the answer is the named tag's commit's row (a tag whose
+    // _PGG_AUTO_ACT=tags-eye: the eye moves the walk, so the answer is the named tag's commit's row (a tag whose
     // commit a branch also reaches keeps its row, and frames like a switch that did nothing). The eye takes every tag
     // off the graph, walk and chips; the left menu's TAGS stays — the way back. So the argument must be a tag only it
     // reaches: `--preset tagonly`'s `v1.1-kept`, the one such commit (its `v1.0` is on the trunk, and a run on it
@@ -645,7 +645,7 @@ Item {
         const cut = arg.indexOf(":")
         return cut < 0 ? 0 : Number(arg.substring(cut + 1))
     }
-    // PGG_AUTO_ACT=nav-jump: the claim is read off the graph's row for the commit, lit and laid out
+    // _PGG_AUTO_ACT=nav-jump: the claim is read off the graph's row for the commit, lit and laid out
     // (`GraphRowDelegate.selected`) — the page's selection is the click's own bookkeeping, true of the opening
     // selection even with the wiring dead. So the rows pictured are ones whose commit is not the one the window opened
     // on (a jump to that row draws the same with the wiring cut): `--preset worktrees`' `worktree:1` (detached at
@@ -709,7 +709,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=nav-reclick / nav-reclick-away: every stage waits for its own answer — the row existing, the first
+    // _PGG_AUTO_ACT=nav-reclick / nav-reclick-away: every stage waits for its own answer — the row existing, the first
     // click's double-click window passing (`rowGuarded`), and for "-away" the section having gone. Read as a pair:
     // `armed=false` alone passes a gesture that is dead. The plain form opens the box; under "-away" nothing may
     // happen — a peek's next first click taken for a second would put the list back and close the diff of a click
@@ -788,7 +788,7 @@ Item {
                                 + " editing=" + sidebarPane.editKey })
         }
     }
-    // PGG_AUTO_ACT=nav-reclick-elsewhere: a click is two beats, as a hand's is — the press (the window's watcher, then
+    // _PGG_AUTO_ACT=nav-reclick-elsewhere: a click is two beats, as a hand's is — the press (the window's watcher, then
     // the row's own handler) and then the release the row answers at; the gesture settles the press in between. The
     // first click, a press on the details pane, the click back (`pane=`: no box), and the next one (`armed=`, `box=`).
     PageStage {
@@ -859,7 +859,7 @@ Item {
             })
         }
     }
-    /// PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `collapsed=` says which door it came
+    /// _PGG_AUTO_ACT=nav-add-remote: the run stops with the real dialog on screen. `collapsed=` says which door it came
     /// through, and that the folded one left the list folded (`NavRail.addableAt`) — putting it back would close a
     /// diff being read. `name=` is `origin` only where there is no remote yet (`RemoteDialog`).
     PageStage {

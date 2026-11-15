@@ -557,7 +557,7 @@ Item {
                 "report": () => carriedStandTimer.line() })
         }
     }
-    // PGG_AUTO_ACT=notice-link: the notice bar's place word pressed, and the panel it names coming up marked
+    // _PGG_AUTO_ACT=notice-link: the notice bar's place word pressed, and the panel it names coming up marked
     // (デザイン規約 §hover のツールチップ「送った先は名乗る」) — as `fetch-tip-link` presses a tip's. Nothing ran, so
     // the panel is down before the press, and `open=` is the press's own doing.
     PageStage {

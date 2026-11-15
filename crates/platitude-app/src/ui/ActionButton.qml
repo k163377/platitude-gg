@@ -160,7 +160,7 @@ HoverToolButton {
     /// (`TopBar.actionFold`).
     readonly property real foldWidth:
         2 * actionBtn.padding + actionBtn.lineSeatWidth + actionBtn.lineStep + actionBtn.wordWant
-    /// Automation: the ink the word takes (`PGG_AUTO_ACT=band-actions`).
+    /// Automation: the ink the word takes (`_PGG_AUTO_ACT=band-actions`).
     readonly property real wordInk: actionBtn.lineWord ? actionBtn.lineWord.inkWidth : 0
     /// …and the width this state's wording wants, whole: what the set folds against (`foldWidth`).
     readonly property real wordWant: actionBtn.lineWord ? actionBtn.lineWord.wantWidth : 0

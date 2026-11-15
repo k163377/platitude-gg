@@ -45,7 +45,7 @@ Rectangle {
     readonly property bool wrong: toggle.curPage !== null && toggle.curPage.commandsWrong
     readonly property bool open: toggle.curPage !== null && toggle.curPage.commandsOpen
     /// Automation: the colour the mark actually painted — proof the page's state reached it
-    /// (`PGG_AUTO_ACT=commands-clear`).
+    /// (`_PGG_AUTO_ACT=commands-clear`).
     readonly property alias markColor: commandsMark.tint
 
     /// Where the mark stands and the name begins: a section's row without the fold arrow's column. Written as the sum

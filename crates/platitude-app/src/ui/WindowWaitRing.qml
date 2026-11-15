@@ -30,7 +30,7 @@ Item {
     /// The ring's own `spinning`: `visible` read from another file is stale (as with `RefusalBadge`).
     readonly property bool ringShown: waitRing.spinning
 
-    /// Automation (`PGG_AUTO_ACT=replay-running`): stands a hand at a scene point and leaves it there. A function, so
+    /// Automation (`_PGG_AUTO_ACT=replay-running`): stands a hand at a scene point and leaves it there. A function, so
     /// the map runs once against the geometry it is looking at (rules/app-ui.md: a method takes no binding dependency).
     function holdWaitHand(position) {
         waitSeat.handStandIn = waitSeat.mapFromItem(null, position)

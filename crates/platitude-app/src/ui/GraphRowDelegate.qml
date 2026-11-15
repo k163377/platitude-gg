@@ -175,7 +175,7 @@ Item {
             ? rowItem.labelRecords[0] : null
     // The chip, sheets and all — what the card it unfolds into stands on (`GraphRowChips.chipItem`).
     readonly property alias chipItem: chipColumn.chipItem
-    // The mark the chip wears while a second click waits out its window, as drawn (PGG_AUTO_ACT=graph-reclick-mark).
+    // The mark the chip wears while a second click waits out its window, as drawn (_PGG_AUTO_ACT=graph-reclick-mark).
     readonly property alias chipWaiting: chipColumn.chipWaiting
     // What the name box on this row came out to (see the column — a headless run reads it off here).
     readonly property alias nameBoxX: chipColumn.nameBoxX
@@ -183,10 +183,10 @@ Item {
     readonly property alias nameBoxPlaceholder: chipColumn.nameBoxPlaceholder
     readonly property alias nameBoxSelected: chipColumn.nameBoxSelected
     /// The row's press area — automation-only exposure, like `GraphPane.view`: a run asks it where along the row a
-    /// press lands while a name box stands (PGG_AUTO_ACT=graph-rename-fit).
+    /// press lands while a name box stands (_PGG_AUTO_ACT=graph-rename-fit).
     readonly property alias pressArea: rowMouse
     /// Automation: the boundaries' lines this row draws over its highlight ground, `null` while it draws none
-    /// (PGG_AUTO_ACT=graph-divider).
+    /// (_PGG_AUTO_ACT=graph-divider).
     readonly property var groundLines: lineSeat.item
     // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
@@ -577,7 +577,7 @@ Item {
 
     /// Whether this row is holding the wait the name box opens after, and whether a click landing now would still be
     /// counted as the other half of a double-click — what a headless run reads to time its second click
-    /// (PGG_AUTO_ACT=graph-reclick). Both are the list's answer: this delegate is pooled when its row scrolls off.
+    /// (_PGG_AUTO_ACT=graph-reclick). Both are the list's answer: this delegate is pooled when its row scrolls off.
     readonly property bool renameArmed:
         rowItem.ListView.view ? rowItem.ListView.view.renameArmed(rowItem.nameChip) : false
     readonly property bool clickGuarded: rowItem.ListView.view ? rowItem.ListView.view.clickGuarded : false

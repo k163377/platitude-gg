@@ -38,7 +38,7 @@ pub(super) const ENTRIES: &str =
   perf --repo <path> [--at <rev>] [--label <name>] [--runs <n>] [--breakdown] [--shipped]
       The measurement behind ci/baseline/perf-windows-x64.md, run the same
       way every time: release build, a real window (offscreen reports
-      neither memory nor fps honestly) on one named screen, the PGG_AUTO_*
+      neither memory nor fps honestly) on one named screen, the _PGG_AUTO_*
       hooks, WorkingSet and private bytes sampled every 100ms for their
       maximum, and a deadline with a kill guard. The first run is
       discarded — the record is a warm-cache number — unless an invocation
@@ -56,7 +56,7 @@ pub(super) const ENTRIES: &str =
       screen that went dark between two runs is as unmeasurable as one
       that went dark during one.
       --breakdown builds with the `memprobe` feature and adds
-      PGG_MEM_REPORT=1, then prints the largest `mem report` line the run
+      _PGG_MEM_REPORT=1, then prints the largest `mem report` line the run
       produced: live Rust heap, the models and the session parts holding
       it, and what none of them account for. Process memory minus Rust
       live bytes is not a measurement of Qt's live heap.

@@ -118,7 +118,7 @@ SlimField {
     /// `GraphRowChips.nameField` stays put and asks `activeFocus`); the box on screen is the one typed into.
     readonly property bool tipTyped: box.refused && box.visible && box.refusedWhy !== ""
 
-    /// Where the box came out (PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is
+    /// Where the box came out (_PGG_AUTO_ACT=nav-branch-box / nav-rename-box): a clipped or scrolled-away box is
     /// nothing a picture answers.
     readonly property string cameOut:
         Math.round(box.x) + "," + Math.round(box.y)

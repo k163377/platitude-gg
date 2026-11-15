@@ -779,7 +779,7 @@ Item {
                 } })
         }
     }
-    // PGG_AUTO_ACT=ref-list-leave. Each stage goes in once the one before has landed, and the last waits out the beat
+    // _PGG_AUTO_ACT=ref-list-leave. Each stage goes in once the one before has landed, and the last waits out the beat
     // the leave started (`RowHoverHost.listSettling`) — a leave that starts none is read at once, which is the list
     // left standing with no hand near it. No `order`: a row whose chip leaves no bare stretch ends once it is in view.
     // What is right per end: `off` (a place with no row — the pane's heading, the left menu, outside the window) the

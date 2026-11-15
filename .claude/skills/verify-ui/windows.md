@@ -29,8 +29,8 @@
   ダッシュ)で描く。実窓の `Yu Gothic UI` は欧文字形のまま(`FontLoader` に `C:/Windows/Fonts/YuGothR.ttc` を読ませれば
   offscreen でも両方を並べて描ける — FONTDIR の走査が拾わないだけ)。`Text.elide` の印も英文に続く字なので同じく変わる。
   単独で置いた `…`(`CutName` の印)は `Noto Sans JP` では Qt の版によらず和文字形、`Yu Gothic UI` では欧文字形
-- fps 計測(PGG_AUTO_SCROLL)は offscreen でも完走するが、値は疑似フレームループの上限 — **判定に使う性能実測はアンロック
-  状態・点灯した D3D の通常起動でのみ行う**(`perf --software` は表示に依らず撮れるがメモリだけが読める別の量)
+- fps 計測(`_PGG_AUTO_SCROLL`)は offscreen でも完走するが、値は疑似フレームループの上限 — **判定に使う性能実測はアンロッ
+  ク状態・点灯した D3D の通常起動でのみ行う**(`perf --software` は表示に依らず撮れるがメモリだけが読める別の量)
 - **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — 撮影は overlay.png で足りる。実ウィンドウが要る検
   証は OS 側から `PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT=2)` で撮る(GPU 描画のため flags 必須)。キー入力の注入は
   `SendKeys` が届かない(ユーザーの操作中ウィンドウへ飛ぶ危険もある)。`PostMessage(hwnd, WM_KEYDOWN/UP)` を使う。クリック

@@ -11,11 +11,11 @@ use super::plan::Required;
 use super::sides::rank;
 
 /// The tests' switch: with it set no step runs at all (`execute_step`).
-pub(super) const FAKE_LOG: &str = "PGG_GATE_FAKE_LOG";
+pub(super) const FAKE_LOG: &str = "PGGDEV_GATE_FAKE_LOG";
 
 /// The tests' switch for a step another tree stamped while this one
 /// waited for room ([`run_one`](super::step::run_one)).
-pub(super) const FAKE_STAMP: &str = "PGG_GATE_FAKE_STAMP";
+pub(super) const FAKE_STAMP: &str = "PGGDEV_GATE_FAKE_STAMP";
 
 /// Where a faked run records the steps it was handed `--no-build`
 /// ([`super::sides::verbs`]). A file of its own: every test reads the
@@ -27,12 +27,12 @@ fn no_build_log(fake: &str) -> String {
 /// The tests' switch for a step still running when the run goes red
 /// elsewhere: a faked step it names holds until the halt reaches it
 /// ([`faked`]); faked steps otherwise end the instant they start.
-pub(super) const FAKE_HOLD: &str = "PGG_GATE_FAKE_HOLD";
+pub(super) const FAKE_HOLD: &str = "PGGDEV_GATE_FAKE_HOLD";
 
-/// A step `PGG_GATE_FAKE_FAIL` names goes red only once the step this
+/// A step `PGGDEV_GATE_FAKE_FAIL` names goes red only once the step this
 /// names has started ([`faked`]): the sides are two threads, and the red
 /// could otherwise end the held step at its door.
-pub(super) const FAKE_FAIL_AFTER: &str = "PGG_GATE_FAKE_FAIL_AFTER";
+pub(super) const FAKE_FAIL_AFTER: &str = "PGGDEV_GATE_FAKE_FAIL_AFTER";
 
 /// How a step that was started came back, short of red.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,7 +44,7 @@ pub(super) enum Finished {
 
 /// One step, through the watched runner (`watched::run_step`), its xtask
 /// launcher swapped for the runner copy ([`launched`]). With
-/// `PGG_GATE_FAKE_LOG` set the step is not run at all ([`faked`]).
+/// `PGGDEV_GATE_FAKE_LOG` set the step is not run at all ([`faked`]).
 pub(super) fn execute_step(
     ground: &Ground<'_>,
     id: &str,
@@ -110,7 +110,7 @@ pub(super) fn execute_step(
 }
 
 /// A step of the tests' faked runs ([`FAKE_LOG`]): its id appended to
-/// that file, and then green — or red where `PGG_GATE_FAKE_FAIL` names
+/// that file, and then green — or red where `PGGDEV_GATE_FAKE_FAIL` names
 /// it, held where [`FAKE_HOLD`] does.
 fn faked(
     ground: &Ground<'_>,
@@ -142,7 +142,7 @@ fn faked(
                 .map_err(|e| e.to_string())?;
         }
     }
-    let failing = std::env::var("PGG_GATE_FAKE_FAIL").unwrap_or_default();
+    let failing = std::env::var("PGGDEV_GATE_FAKE_FAIL").unwrap_or_default();
     if failing.split(',').any(|f| f == id) {
         if let Ok(after) = std::env::var(FAKE_FAIL_AFTER) {
             let mut wait = crate::wait::Wait::new(
@@ -159,7 +159,7 @@ fn faked(
                     .map_err(|expired| expired.to_string())?;
             }
         }
-        return Err("failed on purpose (PGG_GATE_FAKE_FAIL)".into());
+        return Err("failed on purpose (PGGDEV_GATE_FAKE_FAIL)".into());
     }
     if std::env::var(FAKE_HOLD).is_ok_and(|held| held == id) {
         let mut wait = crate::wait::Wait::new(

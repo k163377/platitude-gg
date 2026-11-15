@@ -38,9 +38,9 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     sb.git(
         &sb.repo,
         &["commit", "-q", "-m", "docs: skipped"],
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     )
-    .expect("PGG_GATE_SKIP lets the user through");
+    .expect("PGGDEV_GATE_SKIP lets the user through");
     let rewind = sb.git(&sb.repo, &["reset", "-q", "--hard", &main_before], &[]);
     assert!(
         rewind.as_ref().is_err_and(|e| e.contains("no gate stamp")),
@@ -49,9 +49,9 @@ fn main_moves_only_onto_a_gated_commit_whatever_moves_it() {
     sb.git(
         &sb.repo,
         &["reset", "-q", "--hard", &main_before],
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     )
-    .expect("PGG_GATE_SKIP rewinds");
+    .expect("PGGDEV_GATE_SKIP rewinds");
 
     sb.gate_ok(&sb.seat, &[]);
     sb.git_ok(&sb.repo, &["merge", "--ff-only", "worktree-a"]);
@@ -177,7 +177,10 @@ fn the_hook_writes_down_which_session_made_a_branch() {
     sb.git(
         &sb.repo,
         &["pack-refs", "--all"],
-        &[("CLAUDE_CODE_SESSION_ID", "theirs"), ("PGG_GATE_SKIP", "1")],
+        &[
+            ("CLAUDE_CODE_SESSION_ID", "theirs"),
+            ("PGGDEV_GATE_SKIP", "1"),
+        ],
     )
     .expect("the refs packed");
     assert!(

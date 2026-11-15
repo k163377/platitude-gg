@@ -135,7 +135,7 @@ Rectangle {
     /// Chromium yields the whole corner square and leaves its arrow floating above the grip; this stops closer (user
     /// decision). Rounded up: an end reaching into the mark would bring the arrow down onto it.
     readonly property int gripYield: Math.ceil(textView.y + textView.height - (grip.y + gripMark.y + gripMark.inkTop))
-    /// Automation: a pull carried past one of the two ends (`PGG_AUTO_ACT=divider-refuse`, cases `desc-max` /
+    /// Automation: a pull carried past one of the two ends (`_PGG_AUTO_ACT=divider-refuse`, cases `desc-max` /
     /// `desc-min`).
     function pullPast(down) {
         const over = 4 * Theme.splitterWidth

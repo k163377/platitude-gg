@@ -421,7 +421,7 @@ Item {
         }
     }
 
-    /// PGG_AUTO_ACT=worktree-rename-box / worktree-rename: the spaced second click on a worktree — its WORKTREES row,
+    /// _PGG_AUTO_ACT=worktree-rename-box / worktree-rename: the spaced second click on a worktree — its WORKTREES row,
     /// or with `@graph` the chip on the row it stands on — through the row's own clicks (`NavList.clickRow` /
     /// `GraphRowDelegate.leftClick`), so the row decides what the click renames. The argument is
     /// `<folder>[=<name>][@graph]`: `-box` stops at the box (holding `<name>` where one is given — the left menu's

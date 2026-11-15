@@ -59,8 +59,8 @@ Item {
         overlay.refuses = Math.abs(gap) > Theme.splitterWidth
     }
 
-    /// Automation (`PGG_AUTO_ACT=divider-refuse`, `sidebar-min` / `details-min` / `log-min`): puts the bar in hand as a
-    /// press would and walks the pointer's road.
+    /// Automation (`_PGG_AUTO_ACT=divider-refuse`, `sidebar-min` / `details-min` / `log-min`): puts the bar in hand as
+    /// a press would and walks the pointer's road.
     function dragSplitPast(which) {
         // Only drawn bars: SplitView also builds handles beside invisible items (the open-failed screen).
         const wanted = watch.splitBars.filter(b => b.visible && (which === "log-min" ? !b.sideways : b.sideways))

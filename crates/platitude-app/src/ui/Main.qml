@@ -22,7 +22,7 @@ ApplicationWindow {
     /// so "try it and see whether it took" is not open, and a window that came up without a way to close it cannot be
     /// taken back. Elsewhere the platform's title bar stands over the chrome's two rows (`TopBar`). The other shape
     /// comes up on this machine with `verify-ui --system-title-bar`, the one headless door: the variable set by hand
-    /// never reaches the run — `app_env::clear_automation` drops the parent shell's `PGG_*` from every run xtask
+    /// never reaches the run — `app_env::clear_automation` drops the parent shell's `_PGG_*` from every run xtask
     /// starts.
     readonly property bool captionMerged: Qt.platform.os === "windows" && !AppBackend.systemTitleBar
 
@@ -163,7 +163,7 @@ ApplicationWindow {
                                      && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden
 
     /// Automation only (rules-refs/app-ui.md「自動化フック専用の露出」): a run presses through `caretHand.pressedAt`,
-    /// the road the hand's own press takes (`PGG_AUTO_ACT=edit-message-away`).
+    /// the road the hand's own press takes (`_PGG_AUTO_ACT=edit-message-away`).
     readonly property alias caretHand: caretHand
     FocusRelease {
         id: caretHand
@@ -198,7 +198,7 @@ ApplicationWindow {
             root.curPage.notePress()
     }
 
-    /// Automation (`PGG_AUTO_ACT=replay-running`), on the window because the harness calls it here.
+    /// Automation (`_PGG_AUTO_ACT=replay-running`), on the window because the harness calls it here.
     function holdWaitHand(position) {
         body.waitRing.holdWaitHand(position)
     }
@@ -363,8 +363,8 @@ ApplicationWindow {
                 root.curPage.tipLinkAsked(href)
         }
     }
-    /// Automation (`PGG_AUTO_ACT=fetch-tip-link`): presses the tip's link word at the tip's own signal — the glyphs are
-    /// the one part a run cannot press (verify-ui スキル). Answers whether there was a link, so a run cannot pass on a
+    /// Automation (`_PGG_AUTO_ACT=fetch-tip-link`): presses the tip's link word at the tip's own signal — the glyphs
+    /// are the one part a run cannot press (verify-ui スキル). Answers whether there was a link, so a run cannot pass on a
     /// tip that offered nothing to press.
     function pressTipLink() {
         const ask = windowTip.current

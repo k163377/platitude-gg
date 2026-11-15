@@ -9,8 +9,8 @@
 | 動いた版 | | rustc 1.99.0 → 1.99.1・`Cargo.lock` の版 29 本(tokio 1.53.2 → 1.54.1・mry 0.16・tree-sitter-php 0.25 ほか。増減は無し) |
 | 共通 | Qt 6.12.0・`--features automation` の release・同じ台・同じコーパス | |
 
-- 撃ち方: `PGG_ALLOW_GUI=1 cargo xtask perf --at 6ec1e2e4d --compare 9a404058a --corpus <token> --runs 3` (ABBA の 3 ブ
-  ロック = 各側 6 回。各回が較正 run と捨て 1 を持つ)
+- 撃ち方: `PGGDEV_ALLOW_GUI=1 cargo xtask perf --at 6ec1e2e4d --compare 9a404058a --corpus <token> --runs 3` (ABBA の 3
+  ブロック = 各側 6 回。各回が較正 run と捨て 1 を持つ)
 - 合成コーパス(token `23da9ebd`)、warm、`\\.\DISPLAY2` 180Hz・D3D11 / RTX 3070、点灯・アンロック、 `--allow-noisy` な
   し(machine の busy 9.9〜13.6%、対象以外 4.9〜8.4%)
 

@@ -25,7 +25,7 @@ const HARNESS: &str = "auto";
 /// and judged by nothing.
 const PRODUCT: &str = "ui";
 
-/// The Rust half of that same harness (the `PGG_*` record, the deadline
+/// The Rust half of that same harness (the `_PGG_*` record, the deadline
 /// thread, the drivers' clock). It is behind the same feature as
 /// [`HARNESS`] and ships in no window, so its body is read the way this
 /// runner's own is.

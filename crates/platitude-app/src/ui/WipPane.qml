@@ -29,7 +29,7 @@ ColumnLayout {
     // Mirrored page state; `headPublished` shows the warning tag.
     property bool amending: false
     property bool headPublished: false
-    /// Stands in for the pointer on a file row, for the cut-down row's tooltip (PGG_AUTO_ACT=path-tip); -1 is none.
+    /// Stands in for the pointer on a file row, for the cut-down row's tooltip (_PGG_AUTO_ACT=path-tip); -1 is none.
     property int pointedTipRow: -1
     /// A page's right-click menu is standing over this pane — the menus are the page's, so only it can say
     /// (デザイン規約 §メニュー).
@@ -808,7 +808,7 @@ ColumnLayout {
     /// Automation only: the block itself, handed whole rather than relayed per hand (as `DetailsPane.messageBlock`).
     readonly property alias commitBlock: commitBlock
     /// Whether anything in the block is below the fold, and its complement, for the headless runs
-    /// (`PGG_AUTO_ACT=window-floor wip`).
+    /// (`_PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls: commitBlock.blockScrolls
     readonly property bool descKeeps: commitBlock.descKeeps
     /// The bare bottom edge the page's corner text steps aside by — none: the commit block is pinned there and never

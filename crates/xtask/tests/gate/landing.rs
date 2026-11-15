@@ -26,7 +26,7 @@ fn land_keeps_the_readers_identity_when_it_leaves_the_build_slot() {
 fn land_rebases_then_gates_then_fast_forwards() {
     let sb = Sandbox::new("land");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
-    let moved = sb.commit_all(&sb.repo, "docs: main moved", &[("PGG_GATE_SKIP", "1")]);
+    let moved = sb.commit_all(&sb.repo, "docs: main moved", &[("PGGDEV_GATE_SKIP", "1")]);
     sb.write_refs(&sb.seat, 8);
     let before = sb.commit_all(&sb.seat, "feat(core): eight", &[]);
     assert!(
@@ -216,7 +216,7 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     sb.commit_all(
         &sb.repo,
         "feat(xtask): main moved",
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     );
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
@@ -319,7 +319,11 @@ fn land_refuses_a_dirty_seat_and_a_rebase_that_stops_is_walked_back() {
     std::fs::remove_file(sb.seat.join("crates/platitude-core/src/extra.rs")).expect("clean");
 
     sb.write_refs(&sb.repo, 13);
-    let main_before = sb.commit_all(&sb.repo, "feat(core): thirteen", &[("PGG_GATE_SKIP", "1")]);
+    let main_before = sb.commit_all(
+        &sb.repo,
+        "feat(core): thirteen",
+        &[("PGGDEV_GATE_SKIP", "1")],
+    );
     let (ok, text) = sb.land("worktree-a");
     assert!(!ok && text.contains("walked back"), "{text}");
     assert_eq!(sb.head(&sb.seat), tip, "the seat stands where it did");

@@ -347,11 +347,11 @@ fn unknown(
     ));
 }
 
-/// A `PGG_ALLOW_*` in a document has to be one the hook reads: the escape
+/// A `PGGDEV_ALLOW_*` in a document has to be one the hook reads: the escape
 /// is the permission, and one spelled wrong gates nothing.
 fn escapes(line: &str, named: &str, number: usize, held: &mut Held) {
     for word in line.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
-        if !word.starts_with("PGG_ALLOW_") {
+        if !word.starts_with("PGGDEV_ALLOW_") {
             continue;
         }
         if crate::hook::approval::APPROVAL_FLAGS.contains(&word) {
@@ -686,7 +686,7 @@ mod tests {
         purpose: "sample",
         run_in: Where::Seat,
         needs: &[],
-        permission: Permission::Escape("PGG_ALLOW_GUI"),
+        permission: Permission::Escape("PGGDEV_ALLOW_GUI"),
     };
 
     fn catalogue() -> Vec<&'static Command> {
@@ -743,9 +743,9 @@ mod tests {
     /// The flag is the permission, so it is the half held in step.
     #[test]
     fn an_escape_in_front_makes_even_a_bare_verb_managed() {
-        assert_eq!(say("PGG_ALLOW_GUI=1 cargo xtask launch"), "managed");
+        assert_eq!(say("PGGDEV_ALLOW_GUI=1 cargo xtask launch"), "managed");
         assert_eq!(say("cargo xtask launch"), "mention");
-        assert_eq!(say("PGG_ALLOW_GUI=0 cargo xtask launch"), "example");
+        assert_eq!(say("PGGDEV_ALLOW_GUI=0 cargo xtask launch"), "example");
     }
 
     #[test]
@@ -864,7 +864,7 @@ mod tests {
 
     #[test]
     fn a_managed_line_written_by_hand_is_named_with_the_marker_to_use() {
-        let held = held_over("just run `PGG_ALLOW_GUI=1 cargo xtask launch` when asked\n");
+        let held = held_over("just run `PGGDEV_ALLOW_GUI=1 cargo xtask launch` when asked\n");
         assert_eq!(held.findings.len(), 1, "{:?}", held.findings);
         assert!(
             held.findings[0].contains("<!--cmd:sample.launch-->"),
@@ -889,15 +889,15 @@ mod tests {
 
     #[test]
     fn an_escape_the_hook_does_not_read_is_a_finding() {
-        let held = held_over("run it with PGG_ALLOW_EVERYTHING=1 in front\n");
+        let held = held_over("run it with PGGDEV_ALLOW_EVERYTHING=1 in front\n");
         assert_eq!(held.findings.len(), 1, "{:?}", held.findings);
         assert!(
-            held.findings[0].contains("PGG_ALLOW_EVERYTHING"),
+            held.findings[0].contains("PGGDEV_ALLOW_EVERYTHING"),
             "{:?}",
             held.findings
         );
         assert!(
-            held_over("with PGG_ALLOW_GUI=1 in front\n")
+            held_over("with PGGDEV_ALLOW_GUI=1 in front\n")
                 .findings
                 .is_empty()
         );

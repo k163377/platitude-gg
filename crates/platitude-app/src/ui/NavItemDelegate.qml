@@ -38,7 +38,7 @@ Item {
     /// and the row's own `bucket` is the change's (an untracked file's is `untracked`), not the list's.
     signal eolPointed(string path, bool on)
     /// Stands in for the pointer where headless cannot put one, so a cut-down row's tooltip can be photographed
-    /// (PGG_AUTO_ACT=path-tip). -1 points at no row.
+    /// (_PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     /// Whether the row is lit: the hand on it (`handOn`), or its own tip or menu standing — the hand walked into them
     /// (デザイン規約 §左メニューの所作).
@@ -409,11 +409,11 @@ Item {
     /// box's own ask, which the seat weighs against the target; the box's own `visible` would answer for anybody's
     /// tip.
     readonly property bool editTipShown: editSeat.item ? editSeat.item.tipShown : false
-    /// What the box says it takes, rubbed out (PGG_AUTO_ACT=worktree-rename-box): a picture of a box holding a name
+    /// What the box says it takes, rubbed out (_PGG_AUTO_ACT=worktree-rename-box): a picture of a box holding a name
     /// does not show it.
     readonly property string editPlaceholder: editSeat.item ? editSeat.item.placeholderText : ""
     /// A left click, as this row answers one. Named so that a run with no pointer to press with puts its click in at
-    /// the row itself (PGG_AUTO_ACT=nav-reclick).
+    /// the row itself (_PGG_AUTO_ACT=nav-reclick).
     function leftClick(modifiers) {
         // A double-click's second click belongs to the double: the first already did what a click does.
         // What a second click would name is read now: by the time the wait runs out this delegate may be showing

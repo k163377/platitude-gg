@@ -3,8 +3,8 @@ import QtQuick.Controls.Fusion
 import platitude.ui
 
 // A tab whose repository would not open, said where the panes would be. The picker's failures go to
-// `OpenFailedDialog`; everything else — a restored tab, a worktree row, PGG_AUTO_OPEN — comes here. Two components, not
-// one with two faces: the seats differ (デザイン規約 §可否・警告の出し場所), and so do the type, the alignment and the
+// `OpenFailedDialog`; everything else — a restored tab, a worktree row, _PGG_AUTO_OPEN — comes here. Two components,
+// not one with two faces: the seats differ (デザイン規約 §可否・警告の出し場所), and so do the type, the alignment and the
 // ways out; they share only the words (`Words.openFailure` / `openFailureNext`) and the width (規約 §レイアウト初期値).
 //
 // The panes' seat, inside `RepoPage`'s vertical `SplitView`: covering the whole page would leave the command log inside

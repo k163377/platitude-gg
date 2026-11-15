@@ -50,7 +50,7 @@ Item {
     /// Automation: the turn this row's fold arrow is drawn at, -1 on a file row (`NameCell.foldTurn`).
     readonly property real foldTurn: nameCell.foldTurn
 
-    /// Stands in for the pointer where headless cannot put one (PGG_AUTO_ACT=path-tip). -1 points at no row.
+    /// Stands in for the pointer where headless cannot put one (_PGG_AUTO_ACT=path-tip). -1 points at no row.
     property int pointedTipRow: -1
     /// **`>= 0` first**: a pooled delegate reports `index` -1 (rules-refs/app-ui.md「プールへ戻された delegate は」).
     readonly property bool tipPointedAt: fileRow.pointedTipRow >= 0

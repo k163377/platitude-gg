@@ -105,7 +105,7 @@ pub(super) const ENTRIES: &str =
       The registered lines (crates/xtask/verb-lines.txt) held against the
       harness, the judgment tables and the sources, before any gate
       chooses off them. Fails on: a verb the harness answers
-      (crates/platitude-app/src/auto, the names it compares PGG_AUTO_ACT
+      (crates/platitude-app/src/auto, the names it compares _PGG_AUTO_ACT
       against) with no registered line — one no change re-photographs; a
       registered line whose verb the harness no longer names anywhere —
       the gate would run it and the app ignore the name; a line spelled

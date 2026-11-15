@@ -10,7 +10,7 @@ import platitude.ui
 /// thread, and the first to arrive after a request is as a rule a frame that was already on its way.
 ///
 /// **An operation starts on a page that owes nothing** (`owed`): timed from a page still arriving, it is timed
-/// against that page's own reads, and one operation's leftovers are the next one's load. `PGG_PERF_BACK_TO_BACK`
+/// against that page's own reads, and one operation's leftovers are the next one's load. `_PGG_PERF_BACK_TO_BACK`
 /// asks for exactly that load instead. What no term here sees is a colouring the product goes on with for a diff
 /// already closed: a file the product colours is measured as a `coloured` case, which stays until the colours land.
 ///

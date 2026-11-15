@@ -6,7 +6,7 @@ import QtQuick.Window
 import platitude
 import platitude.ui
 
-/// The window frame's half of the PGG_AUTO_ACT harness: the width and height it can be taken to, the floor it
+/// The window frame's half of the _PGG_AUTO_ACT harness: the width and height it can be taken to, the floor it
 /// refuses to go under, and the state file it comes back to.
 // An `Item` only because `QtObject` has no default property to hold the timers; it is sizeless.
 Item {
@@ -18,7 +18,7 @@ Item {
     required property TopBar topBar
     required property Item mainUi
 
-    // PGG_AUTO_ACT=window-fill: whether the contents reach all four edges while maximised. Numbers, because a
+    // _PGG_AUTO_ACT=window-fill: whether the contents reach all four edges while maximised. Numbers, because a
     // maximised app leaves no desktop beside it to show a gap against. Windowed again for the shot, as `state minimize`
     // ends: the maximised window is read in the press that puts it back, the one moment it still stands. Offscreen
     // maximises to 800×800, so the right line is `at=0,0 size=800x800` on both OSes (a FAIL still says
@@ -77,7 +77,7 @@ Item {
             + " window=" + window.width + "x" + window.height
     }
 
-    // PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (five forms, the bare one among them). With no argument the
+    // _PGG_AUTO_ACT=window-floor [fold|log|wip|rail] (five forms, the bare one among them). With no argument the
     // saved shape is xtask's 320x240, under every floor (the app cannot make itself smaller than its floor); `fold` /
     // `log` stand the window on its floor, then put the list back / open the log — the width's floor rises under a
     // window already standing on it, the height's holds still, folded or not (デザイン規約 §窓の床). `rail` folds,
@@ -273,7 +273,7 @@ Item {
                                  ? window.floorPage.detailsOverHeight : 0))
     }
 
-    // PGG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
+    // _PGG_AUTO_ACT=state: two runs sharing one --config-dir are what actually tests this — a single run can only ever
     // agree with itself. The second adds `--restore`, the road where the app opens the tabs it remembers; the line
     // agreeing across the two is the round trip. The tabs' lazy load is read off the log instead: three tabs restored,
     // one `opened repository tab` line.

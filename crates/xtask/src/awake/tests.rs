@@ -679,8 +679,8 @@ fn a_claim_is_put_in_place_whole_and_a_dead_writers_leftover_goes() {
 
 /// What turns a run of this test binary into a link of the hook chain: the
 /// directory the claims live in, and the Claude process owning them.
-const CHAIN_DIR: &str = "PGG_AWAKE_DIR";
-const CHAIN_CLAUDE: &str = "PGG_AWAKE_CLAUDE";
+const CHAIN_DIR: &str = "PGGDEV_AWAKE_DIR";
+const CHAIN_CLAUDE: &str = "PGGDEV_AWAKE_CLAUDE";
 
 /// Passed as a filter rather than with `--exact`: the module path is not
 /// these tests' to know.

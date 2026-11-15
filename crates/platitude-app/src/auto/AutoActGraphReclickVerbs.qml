@@ -317,7 +317,7 @@ Item {
             reclickGraphTimer.stop()
         }
     }
-    // PGG_AUTO_ACT=graph-reclick-lanes: the same gesture through the strip over the lane column, which takes presses
+    // _PGG_AUTO_ACT=graph-reclick-lanes: the same gesture through the strip over the lane column, which takes presses
     // of its own wherever the lanes overflow their column (`GraphLanePan`).
     PageStage {
         id: laneClickTimer
@@ -364,7 +364,7 @@ Item {
             }
         }
     }
-    // PGG_AUTO_ACT=graph-reclick-elsewhere: the two clicks with something between them, twice — a press on the details
+    // _PGG_AUTO_ACT=graph-reclick-elsewhere: the two clicks with something between them, twice — a press on the details
     // pane (`pane=`), then a step down the history and back up (`step=`) — each time the click back is a first one;
     // the next one names (`armed=` / `box=`; `ReclickGesture`'s header). Every press goes in as
     // a hand's does, the window's watcher first (`FocusRelease.pressedAt`), and the steps where the arrows enter

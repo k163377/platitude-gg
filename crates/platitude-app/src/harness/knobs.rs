@@ -1,6 +1,6 @@
 //! What is driving this run, read once at startup.
 //!
-//! The only place in the crate that looks up a `PGG_*` automation variable
+//! The only place in the crate that looks up a `_PGG_*` automation variable
 //! (.claude/rules/app-ui.md). Without the `automation` feature the reader
 //! is not compiled and [`knobs`] answers [`Knobs::default`] — every string
 //! empty, every flag off.
@@ -21,50 +21,50 @@ use std::collections::HashSet;
 /// questions however it was compiled.
 #[derive(Default)]
 pub(crate) struct Knobs {
-    /// `PGG_AUTO_ACT` — the one operation to run once the repository is
-    /// loaded, and `PGG_AUTO_ACT_ARG` its argument. A bare verb, so QML
+    /// `_PGG_AUTO_ACT` — the one operation to run once the repository is
+    /// loaded, and `_PGG_AUTO_ACT_ARG` its argument. A bare verb, so QML
     /// dispatches on equality.
     pub act: String,
     pub act_arg: String,
-    /// `PGG_AUTO_OPEN` — `;`-separated repositories, and the whole of
+    /// `_PGG_AUTO_OPEN` — `;`-separated repositories, and the whole of
     /// what this run opens as tabs.
     pub open: String,
-    /// `PGG_SHOT_DIR` — where a headless run leaves its pictures.
+    /// `_PGG_SHOT_DIR` — where a headless run leaves its pictures.
     /// Backslashes forward: QML takes it as a URL.
     pub shot_dir: String,
-    /// `PGG_OTHER_GIT` — a second git staged beside the pictures and
+    /// `_PGG_OTHER_GIT` — a second git staged beside the pictures and
     /// deliberately **not** on PATH (`--other-git`): the settings screen
     /// grows a button only for a git that answers and is not the one
     /// running.
     pub other_git: String,
-    /// `PGG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
+    /// `_PGG_AUTO_WATCHDOG_MS` — the deadline that keeps a broken causal run
     /// bounded.
     pub watchdog_ms: i32,
-    /// `PGG_FAULT_HANG` — the station to hold this run at for good, by its
+    /// `_PGG_FAULT_HANG` — the station to hold this run at for good, by its
     /// trail word (`harness::deadline`), so the parent's reading of a wedge
     /// can be checked (`xtask::verify::faults`).
     pub fault_hang: String,
-    /// `PGG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
+    /// `_PGG_FAULT_NO_DEADLINE` — leave the deadline thread down, so the
     /// run leaves no report however it ends: the shape a wedge past
     /// `exiting` has anyway.
     pub fault_no_deadline: bool,
-    /// `PGG_FAULT_HOLD_ACT` — swallow the verb's completion, so the loop
+    /// `_PGG_FAULT_HOLD_ACT` — swallow the verb's completion, so the loop
     /// keeps turning and nothing says done (`xtask::verify::faults`).
     /// Ordered, not raced: a ceiling short enough to beat a completion on
     /// one machine loses to it on another.
     pub fault_hold_act: bool,
-    /// `PGG_FAULT_HOLD_WIP_ROW` — walk every pass as one that began
+    /// `_PGG_FAULT_HOLD_WIP_ROW` — walk every pass as one that began
     /// before this window's first status did, until the run says
     /// otherwise: an arrangement no repository can be built into
     /// (`platitude_core::session::PassHooks::holds_back_the_worktree_row`).
     pub fault_hold_wip_row: bool,
-    /// `PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
+    /// `_PGG_FAULT_HOLD_SAVE` — hold every configuration save the hub
     /// spawns until the station this names (`harness::deadline`), so a
     /// close lands on a save that is out and the shutdown is read joining
-    /// one (`PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty:
+    /// one (`_PGG_AUTO_ACT=quit-save-held`, `xtask::verify::child`). Empty:
     /// no save is held.
     pub fault_hold_save: String,
-    /// `PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>[-<read>]`:
+    /// `_PGG_FAULT_OWED_AT_SHOT` — `<artifact>-<before|during|shown>[-<read>]`:
     /// have that picture's readings of the page say a read is on its way
     /// at the picture's first reading (`before`), at the one its grab
     /// answers in (`during`), or never (`shown`), with a mark drawn into
@@ -72,40 +72,40 @@ pub(crate) struct Knobs {
     /// goes by `fault`, or by the name given third, after `before` or
     /// `during` (`WindowHarness.owedForPicture`; `xtask::verify::shot_check`).
     pub fault_owed_at_shot: String,
-    /// `PGG_FAULT_HOLD_RECORDS` — hold the command log's records back from
+    /// `_PGG_FAULT_HOLD_RECORDS` — hold the command log's records back from
     /// the first row a reader asked for, until the run lets them through:
     /// a write's answer on the tab ahead of its commands on the log, an
     /// order no contract of the two feeds rules out (`harness::held_records`;
     /// `xtask::verify::records_check`).
     pub fault_hold_records: bool,
-    /// `PGG_AUTO_SELECT` — select the newest commit and open the first
+    /// `_PGG_AUTO_SELECT` — select the newest commit and open the first
     /// changed file, so a picture has something in every pane.
     pub select: bool,
-    /// `PGG_AUTO_SCROLL` — run the scroll benchmark.
+    /// `_PGG_AUTO_SCROLL` — run the scroll benchmark.
     pub scroll: bool,
-    /// `PGG_AUTO_PERF` — take the startup and interaction measurements.
+    /// `_PGG_AUTO_PERF` — take the startup and interaction measurements.
     pub perf: bool,
-    /// `PGG_AUTO_WIP` — open the worktree view once there is something
+    /// `_PGG_AUTO_WIP` — open the worktree view once there is something
     /// uncommitted to show.
     pub wip: bool,
-    /// `PGG_SYSTEM_TITLE_BAR` — take the window shape the two platforms
+    /// `_PGG_SYSTEM_TITLE_BAR` — take the window shape the two platforms
     /// that cannot fold the band into the title bar get, neither of
     /// which can be run here.
     pub system_title_bar: bool,
-    /// `PGG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
-    /// screen, and `PGG_AUTO_IDENTITY_SAVE` submits it once the opened
+    /// `_PGG_AUTO_IDENTITY` — `"<name>|<email>"` prefills the identity
+    /// screen, and `_PGG_AUTO_IDENTITY_SAVE` submits it once the opened
     /// tab has settled (`WindowIdentityActs`).
     pub identity: String,
     pub identity_save: bool,
-    /// `PGG_MEM_REPORT` — file and print the memory breakdown. The walks
+    /// `_PGG_MEM_REPORT` — file and print the memory breakdown. The walks
     /// it turns on are O(rows) per drain, so a run that did not ask for
     /// it pays nothing (`memprobe::enabled`).
     pub mem_report: bool,
-    /// `PGG_PERF_SELECTION` — what the interaction measurement selects
+    /// `_PGG_PERF_SELECTION` — what the interaction measurement selects
     /// (`none` / `first` / `head`). Empty leaves it to [`Knobs::select`].
     #[cfg(feature = "automation")]
     pub perf_selection: String,
-    /// `PGG_PERF_OID` / `PGG_PERF_FILE` — the commit it selects and the
+    /// `_PGG_PERF_OID` / `_PGG_PERF_FILE` — the commit it selects and the
     /// changed file it opens, when the run names them.
     #[cfg(feature = "automation")]
     pub perf_oid: String,
@@ -119,21 +119,21 @@ pub(crate) struct Knobs {
     pub perf_completion: String,
     #[cfg(feature = "automation")]
     pub perf_diff_scroll: bool,
-    /// `PGG_PERF_BACK_TO_BACK` — start each operation the frame after the
+    /// `_PGG_PERF_BACK_TO_BACK` — start each operation the frame after the
     /// last one ended, whatever the page still owes. Off, every operation
     /// starts on a page that owes nothing (`PagePerfDriver.owed`).
     #[cfg(feature = "automation")]
     pub perf_back_to_back: bool,
-    /// `PGG_PERF_DIFF=0` — leave the diff out of the measurement. Negated
+    /// `_PGG_PERF_DIFF=0` — leave the diff out of the measurement. Negated
     /// so the idle, all-off record keeps the diff in.
     #[cfg(feature = "automation")]
     pub perf_no_diff: bool,
-    /// `PGG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
+    /// `_PGG_PERF_TRACE_FRAMES` — log every frame interval of the scroll
     /// benchmark. A diagnostic run only: the flush can move the last
     /// frame it is measuring.
     #[cfg(feature = "automation")]
     pub perf_trace_frames: bool,
-    /// `PGG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
+    /// `_PGG_PERF_FONT_WALK` — before `perf_done`, shape one glyph the UI
     /// family lacks and say when, either side of an idle: the first such
     /// glyph makes Qt populate its whole font database, and
     /// `cargo xtask perf` weighs that where its sampler can see
@@ -144,7 +144,7 @@ pub(crate) struct Knobs {
     /// (`settings::Env::automated`); a driven run gets no settings files
     /// (`settings::Build::driven`).
     pub automated: bool,
-    /// `PGG_FAKE_PR` — branch names wearing the PR badge, so the design can
+    /// `_PGG_FAKE_PR` — branch names wearing the PR badge, so the design can
     /// be reviewed before Phase 4 joins the real thing in. The only knob
     /// that reaches what a row says about a repository; here so a build
     /// without the harness cannot be handed one.
@@ -167,40 +167,40 @@ fn read() -> Knobs {
         std::env::var(name).as_deref() == Ok("1")
     }
     Knobs {
-        act: text("PGG_AUTO_ACT"),
-        act_arg: text("PGG_AUTO_ACT_ARG"),
-        open: text("PGG_AUTO_OPEN"),
-        shot_dir: text("PGG_SHOT_DIR").replace('\\', "/"),
-        other_git: text("PGG_OTHER_GIT"),
-        watchdog_ms: text("PGG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
-        fault_hang: text("PGG_FAULT_HANG"),
-        fault_no_deadline: on("PGG_FAULT_NO_DEADLINE"),
-        fault_hold_act: on("PGG_FAULT_HOLD_ACT"),
-        fault_hold_wip_row: on("PGG_FAULT_HOLD_WIP_ROW"),
-        fault_hold_save: text("PGG_FAULT_HOLD_SAVE"),
-        fault_owed_at_shot: text("PGG_FAULT_OWED_AT_SHOT"),
-        fault_hold_records: on("PGG_FAULT_HOLD_RECORDS"),
-        select: on("PGG_AUTO_SELECT"),
-        scroll: on("PGG_AUTO_SCROLL"),
-        perf: on("PGG_AUTO_PERF"),
-        wip: on("PGG_AUTO_WIP"),
-        system_title_bar: on("PGG_SYSTEM_TITLE_BAR"),
-        identity: text("PGG_AUTO_IDENTITY"),
-        identity_save: on("PGG_AUTO_IDENTITY_SAVE"),
-        mem_report: on("PGG_MEM_REPORT"),
-        perf_selection: text("PGG_PERF_SELECTION"),
-        perf_oid: text("PGG_PERF_OID"),
-        perf_file: text("PGG_PERF_FILE"),
-        perf_cases: text("PGG_PERF_CASES"),
-        perf_cycles: text("PGG_PERF_CYCLES").parse().unwrap_or(1),
-        perf_completion: text("PGG_PERF_COMPLETION"),
-        perf_diff_scroll: on("PGG_PERF_DIFF_SCROLL"),
-        perf_back_to_back: on("PGG_PERF_BACK_TO_BACK"),
-        perf_no_diff: text("PGG_PERF_DIFF") == "0",
-        perf_trace_frames: on("PGG_PERF_TRACE_FRAMES"),
-        perf_font_walk: on("PGG_PERF_FONT_WALK"),
+        act: text("_PGG_AUTO_ACT"),
+        act_arg: text("_PGG_AUTO_ACT_ARG"),
+        open: text("_PGG_AUTO_OPEN"),
+        shot_dir: text("_PGG_SHOT_DIR").replace('\\', "/"),
+        other_git: text("_PGG_OTHER_GIT"),
+        watchdog_ms: text("_PGG_AUTO_WATCHDOG_MS").parse().unwrap_or(0),
+        fault_hang: text("_PGG_FAULT_HANG"),
+        fault_no_deadline: on("_PGG_FAULT_NO_DEADLINE"),
+        fault_hold_act: on("_PGG_FAULT_HOLD_ACT"),
+        fault_hold_wip_row: on("_PGG_FAULT_HOLD_WIP_ROW"),
+        fault_hold_save: text("_PGG_FAULT_HOLD_SAVE"),
+        fault_owed_at_shot: text("_PGG_FAULT_OWED_AT_SHOT"),
+        fault_hold_records: on("_PGG_FAULT_HOLD_RECORDS"),
+        select: on("_PGG_AUTO_SELECT"),
+        scroll: on("_PGG_AUTO_SCROLL"),
+        perf: on("_PGG_AUTO_PERF"),
+        wip: on("_PGG_AUTO_WIP"),
+        system_title_bar: on("_PGG_SYSTEM_TITLE_BAR"),
+        identity: text("_PGG_AUTO_IDENTITY"),
+        identity_save: on("_PGG_AUTO_IDENTITY_SAVE"),
+        mem_report: on("_PGG_MEM_REPORT"),
+        perf_selection: text("_PGG_PERF_SELECTION"),
+        perf_oid: text("_PGG_PERF_OID"),
+        perf_file: text("_PGG_PERF_FILE"),
+        perf_cases: text("_PGG_PERF_CASES"),
+        perf_cycles: text("_PGG_PERF_CYCLES").parse().unwrap_or(1),
+        perf_completion: text("_PGG_PERF_COMPLETION"),
+        perf_diff_scroll: on("_PGG_PERF_DIFF_SCROLL"),
+        perf_back_to_back: on("_PGG_PERF_BACK_TO_BACK"),
+        perf_no_diff: text("_PGG_PERF_DIFF") == "0",
+        perf_trace_frames: on("_PGG_PERF_TRACE_FRAMES"),
+        perf_font_walk: on("_PGG_PERF_FONT_WALK"),
         automated: platitude_core::settings::Env::system().automated(),
-        fake_pr: text("PGG_FAKE_PR")
+        fake_pr: text("_PGG_FAKE_PR")
             .split(',')
             .filter(|name| !name.is_empty())
             .map(str::to_string)

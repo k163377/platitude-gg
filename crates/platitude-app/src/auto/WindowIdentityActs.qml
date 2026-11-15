@@ -4,8 +4,8 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// The two screenshot hooks that hang off `PGG_AUTO_IDENTITY`. A file of its own because they are the only harness
-/// hooks with no `PGG_AUTO_ACT`, so they are built off their own knob (`WindowHarness`).
+/// The two screenshot hooks that hang off `_PGG_AUTO_IDENTITY`. A file of its own because they are the only harness
+/// hooks with no `_PGG_AUTO_ACT`, so they are built off their own knob (`WindowHarness`).
 // An `Item` only because that is what the harness's children are; it is sizeless.
 Item {
     id: hooks
@@ -15,7 +15,7 @@ Item {
     /// The tab in front (`WindowHarness.page`).
     required property var page
 
-    // `"<name>|<email>"` fills the two boxes, `PGG_AUTO_IDENTITY_SAVE=1` submits them, `skip` answers "Not now" to
+    // `"<name>|<email>"` fills the two boxes, `_PGG_AUTO_IDENTITY_SAVE=1` submits them, `skip` answers "Not now" to
     // show the state behind the dialog, and `edit` leaves an identity that is already set as it is.
     //
     // Deferred a turn: the dialog focuses the first box as it opens, and a fill in that turn lands mid-focus.

@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// Owns one automated run from completion through its pictures; idle unless PGG_AUTO_* was supplied.
+/// Owns one automated run from completion through its pictures; idle unless _PGG_AUTO_* was supplied.
 Item {
     id: driver
 
@@ -29,7 +29,7 @@ Item {
     property int shotParts: 0
     /// Marks the picture waited for (0 if the scene was already drawn); reported, so the wait cannot go unwired.
     property int inkWaited: 0
-    // Every PGG_AUTO_ACT run has one explicit completion edge; a verb without one meets the watchdog.
+    // Every _PGG_AUTO_ACT run has one explicit completion edge; a verb without one meets the watchdog.
     readonly property bool causal: Harness.autoAct !== ""
 
     /// A picture is on disk — `app` (the window, whose scene is the settled one: the completion edge often builds

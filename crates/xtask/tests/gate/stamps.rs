@@ -311,7 +311,7 @@ fn a_red_step_leaves_main_where_it_was() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--keep-going"],
-        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
+        &[("PGGDEV_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(
         !ok && text.contains("FAIL   test platitude-core 1") && text.contains("nothing stamped"),
@@ -347,7 +347,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--jobs", "2", "--keep-going"],
-        &[("PGG_GATE_FAKE_FAIL", red)],
+        &[("PGGDEV_GATE_FAKE_FAIL", red)],
     );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();
@@ -365,7 +365,7 @@ fn a_red_verb_stops_no_other_verb_and_the_rerun_owes_it_alone() {
 /// A verb stamped by another tree while this one queued built nothing
 /// here; read as a build, the verbs after it would judge whatever release
 /// lies in this tree — stale or absent. Nothing outside can land in that
-/// window, so the runner's switch stands in (`PGG_GATE_FAKE_STAMP`).
+/// window, so the runner's switch stands in (`PGGDEV_GATE_FAKE_STAMP`).
 #[test]
 fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     let sb = Sandbox::new("stamped-while-queued");
@@ -384,7 +384,7 @@ fn a_verb_stamped_while_it_queued_does_not_earn_the_block_its_no_build() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--jobs", "2"],
-        &[("PGG_GATE_FAKE_STAMP", first)],
+        &[("PGGDEV_GATE_FAKE_STAMP", first)],
     );
     assert!(ok, "{text}");
     assert!(
@@ -431,7 +431,7 @@ fn the_containers_records_check_reuses_the_build_with_bare_in_the_plan() {
 fn a_pseudo_run_off_main_is_reused_after_the_rebase() {
     let sb = Sandbox::new("pseudo");
     sb.write(&sb.repo, "internal-docs/notes.md", "# notes\n\nmoved\n");
-    sb.commit_all(&sb.repo, "docs: main moved", &[("PGG_GATE_SKIP", "1")]);
+    sb.commit_all(&sb.repo, "docs: main moved", &[("PGGDEV_GATE_SKIP", "1")]);
     sb.write_refs(&sb.seat, 9);
     let tip = sb.commit_all(&sb.seat, "feat(core): nine", &[]);
     let text = sb.gate_ok(&sb.seat, &[]);
@@ -460,7 +460,7 @@ fn a_rebase_that_touches_a_step_s_inputs_reruns_that_step_only() {
     sb.commit_all(
         &sb.repo,
         "feat(core): main moved",
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     );
     sb.write_refs(&sb.seat, 11);
     sb.commit_all(&sb.seat, "feat(core): eleven", &[]);
@@ -938,7 +938,7 @@ fn a_red_leaves_the_steps_behind_it_named_rather_than_missing() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--keep-going"],
-        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
+        &[("PGGDEV_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(!ok, "{text}");
     assert!(

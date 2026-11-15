@@ -22,7 +22,7 @@ ColumnLayout {
     required property var gestures
     /// The panel's hand (`HandWatch`), which every row here reads its light and its rest off.
     required property HandWatch paneHand
-    /// Automation (PGG_AUTO_ACT=nav-open): what the open row says under itself, asked of the rows — they are what a
+    /// Automation (_PGG_AUTO_ACT=nav-open): what the open row says under itself, asked of the rows — they are what a
     /// run has to find wired up. One key names the open row (`SidebarRowGestures.openKey`), so these ask each list in
     /// turn; **the stand-in first** — while it is on screen its own row is not (`HeadPinRow`). **A list that opens rows
     /// goes here and into `openGeom`**: one key names the open row, so a list left out still draws its open row but
@@ -98,18 +98,18 @@ ColumnLayout {
     }
     /// What the filter band holds — `NavProbe.typeFilter` writes it, the sections' expansion reads it.
     property alias filterText: refFilter.text
-    /// Where the ground under the last section begins (PGG_AUTO_ACT=nav-close).
+    /// Where the ground under the last section begins (_PGG_AUTO_ACT=nav-close).
     readonly property real groundTop: ground.y
     /// The sticky stand-in, as lit and as worded (`HeadPinRow`).
     readonly property bool headPinLit: headPin.visible && headPin.lit
     readonly property string headPinWords: headPin.tipWords
-    /// Automation (PGG_AUTO_ACT=nav-pin-edge): whether the stand-in is standing, which edge it took, and where that
+    /// Automation (_PGG_AUTO_ACT=nav-pin-edge): whether the stand-in is standing, which edge it took, and where that
     /// edge came out — a number a run can hold, where the pane's height is not.
     readonly property bool headPinShown: headPin.visible
     readonly property bool headPinAbove: headPin.rowAbove
     readonly property real headPinY: headPin.y
     /// The folded row the stand-in is sitting under, or -1 while it is sitting under none
-    /// (PGG_AUTO_ACT=nav-open head).
+    /// (_PGG_AUTO_ACT=nav-open head).
     readonly property int headPinUnder: headPin.seatedUnder ? headPin.underRow : -1
     /// Where that seat came out, **read off the row holding it** — a witness outside the arithmetic the stand-in
     /// placed itself by. -1 while no row holds a seat, or the view has not built it.
@@ -117,7 +117,7 @@ ColumnLayout {
         const row = headPin.seatedUnder ? branchList.itemAtIndex(headPin.underRow) : null
         return row ? row.y + row.height - row.pinSeat - branchList.contentY : -1
     }
-    /// Automation (PGG_AUTO_ACT=nav-pin-edge): scroll the branches list to its end — headless has no other scroll.
+    /// Automation (_PGG_AUTO_ACT=nav-pin-edge): scroll the branches list to its end — headless has no other scroll.
     /// Answers where it came to rest, so a caller can tell a list with nothing to scroll from one still building.
     function scrollBranchesToEnd() {
         branchList.contentY = Math.max(0, branchList.contentHeight - branchList.height)

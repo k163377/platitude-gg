@@ -4,8 +4,8 @@
 //! The record a wedged run leaves ([`super::wedge`]) is only worth what
 //! it says when a run actually stops, and a real stop cannot be arranged
 //! by waiting for one (internal-docs/ハング調査.md). So the stopping is
-//! asked for — the app is held at a station it names (`PGG_FAULT_HANG`),
-//! or started with no deadline thread (`PGG_FAULT_NO_DEADLINE`) — and the
+//! asked for — the app is held at a station it names (`_PGG_FAULT_HANG`),
+//! or started with no deadline thread (`_PGG_FAULT_NO_DEADLINE`) — and the
 //! check is that the words the next occurrence will be read from come
 //! back.
 //!

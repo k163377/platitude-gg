@@ -241,7 +241,7 @@ Item {
     }
     /// Automation: whether the list's own bar is standing — a diff that fits its frame proves nothing about the strip.
     readonly property bool barOut: pick.barRoom > 0
-    /// Automation: whether this hand gives the bar's strip back (`PGG_AUTO_ACT=diff-bar`) — where the hand ends
+    /// Automation: whether this hand gives the bar's strip back (`_PGG_AUTO_ACT=diff-bar`) — where the hand ends
     /// against where the bar begins, and the edge answering beside it. The three judged words lead, since `must_say`
     /// only takes neighbours; the strip's width follows as a diagnostic.
     function barTally() {
@@ -253,7 +253,7 @@ Item {
              + " strip=" + Math.round(pick.barRoom)
     }
     /// Automation: a press on the last pixel this hand covers, on the first row that takes one — an edge that
-    /// answers stops in the right place (`PGG_AUTO_ACT=diff-bar`). A press that never moved leaves nothing selected.
+    /// answers stops in the right place (`_PGG_AUTO_ACT=diff-bar`). A press that never moved leaves nothing selected.
     function pressAtRightEdge() {
         for (let i = 0; i < pick.view.count; i++) {
             const item = pick.view.itemAtIndex(i)

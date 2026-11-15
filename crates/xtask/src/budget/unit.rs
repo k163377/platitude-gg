@@ -195,7 +195,7 @@ pub(crate) fn watched(command: &mut Command) -> std::io::Result<std::process::Ex
 
 /// Set for an admitted unit's children: a nested ask is answered with a
 /// pass ([`under`]).
-pub(crate) const HELD: &str = "PGG_BUDGET_HELD";
+pub(crate) const HELD: &str = "PGGDEV_BUDGET_HELD";
 
 /// The room for a command that is itself one unit (a session's verb, a
 /// container command, `shipped`).

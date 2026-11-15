@@ -14,7 +14,7 @@ pub(crate) const HARNESS_FEATURE: &str = "automation";
 /// its binary sits either way.
 ///
 /// Always with [`HARNESS_FEATURE`], `launch`'s window included: it is
-/// inert without a `PGG_*` variable, and asking every time keeps one
+/// inert without a `_PGG_*` variable, and asking every time keeps one
 /// release binary between `launch` and verify-ui.
 ///
 /// `extra` follows `build --release` (package, further features). `path`

@@ -44,7 +44,7 @@ Rectangle {
     required property int rowInset
     required property int nestStep
 
-    /// The rows' pointer stand-in, for this row (PGG_AUTO_ACT=nav-open head): hover cannot be injected.
+    /// The rows' pointer stand-in, for this row (_PGG_AUTO_ACT=nav-open head): hover cannot be injected.
     property bool pointed: false
 
     signal activated(string oidHex)
@@ -266,7 +266,7 @@ Rectangle {
         if (headPin.gestures !== null)
             headPin.gestures.closeFacts(headPin.factsKey, headPin.slid)
     }
-    /// For the runs (PGG_AUTO_ACT=nav-open `head:…`): what is open, and the lines. Empty / null while closed, so the
+    /// For the runs (_PGG_AUTO_ACT=nav-open `head:…`): what is open, and the lines. Empty / null while closed, so the
     /// sections can ask it first.
     function openWords() {
         return headPin.factsOpen

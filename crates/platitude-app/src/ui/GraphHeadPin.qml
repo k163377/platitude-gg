@@ -284,7 +284,7 @@ Rectangle {
     /// The area a press lands in — what the rows under the stand-in are shielded by (`AppListView.shield`), as a row's
     /// own (`GraphRowDelegate.pressArea`).
     readonly property alias pressArea: pinMouse
-    /// The boundaries' lines over the row's grounds, for the headless run (PGG_AUTO_ACT=graph-divider).
+    /// The boundaries' lines over the row's grounds, for the headless run (_PGG_AUTO_ACT=graph-divider).
     readonly property alias lines: pinLines
 
     // Laid out as a row's chip column is (`GraphRowChips`).

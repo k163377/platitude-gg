@@ -1,6 +1,6 @@
 ---
 name: verify-ui
-description: platitude-gg の UI 動作確認・スクリーンショット検証・アプリ起動(「rebase して起動」含む)の前に必ず読む。verify-ui の使い方・PGG_AUTO_ACT 動詞表(verbs.md を Grep)・Windows / Linux の検証の罠は全部ここ。
+description: platitude-gg の UI 動作確認・スクリーンショット検証・アプリ起動(「rebase して起動」含む)の前に必ず読む。verify-ui の使い方・_PGG_AUTO_ACT 動詞表(verbs.md を Grep)・Windows / Linux の検証の罠は全部ここ。
 ---
 
 # UI 動作確認(ヘッドレス検証)
@@ -86,13 +86,13 @@ test / verify-ui / linux 系は段 2 で)。
    マンド置換は下記の罠、hook が deny):
 
    ```bash
-   PGG_ALLOW_REBASE=1 git rebase main && PGG_ALLOW_GUI=1 cargo xtask launch
+   PGGDEV_ALLOW_REBASE=1 git rebase main && PGGDEV_ALLOW_GUI=1 cargo xtask launch
    ```
 
    `launch` が自ツリーの居残りプロセス回収(`cargo xtask kill` 相当)→ release ビルド → 切り離し起動 → 生存確認まで行
-   い、Qt の PATH も自分で解決する。rebase 不要の要求なら <!--cmd:app.launch-->`PGG_ALLOW_GUI=1 cargo xtask launch` だ
-   け。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(理由は下の 3)。**落とす
-   のは自ツリーの居残りだけ** — `kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
+   い、Qt の PATH も自分で解決する。rebase 不要の要求なら <!--cmd:app.launch-->`PGGDEV_ALLOW_GUI=1 cargo xtask launch`
+   だけ。冷えたツリーの release ビルドは既定の 2 分を超えうるので、**前景のまま timeout を上げる**(理由は下の 3)。**落と
+   すのは自ツリーの居残りだけ** — `kill` / `launch` がそれだけを落とす(画像名 kill は hook が deny)。
 2. **`launch` の行が最後のツール呼び出し**。窓が出たら報告してターンを終える。起動を待たせてよいのは rebase の衝突と
    build エラーだけ(衝突を解決したら、この fast path の続きで起動まで行く)。
 3. **起動の報告がターンの終わり** — **ターンが終わらない間ユーザーの次の指示はキューに載ったまま届かない**。以下はどれも
@@ -108,7 +108,7 @@ test / verify-ui / linux 系は段 2 で)。
 プの書き込み端を掴んだまま生き続け、読み手が EOF を見ない(`Stdio::null()` も `DETACHED_PROCESS` も `cmd /c start` も外れ
 ない)。**パイプを書かなければ掴まれない**(`2>&1` だけ・ファイルへの `>` は読み手が居ないので無害)。
 
-## PGG_AUTO_ACT 動詞表
+## _PGG_AUTO_ACT 動詞表
 
 **[verbs.md](verbs.md) は索引**(1 動詞 1 行 = 名前・引数 / preset・何を見せるか)— 動確の前に、使う動詞を動詞名で Grep し
 て必ず読む(引数・preset を省くと何も撮れない動詞がある)。**報告行の読み方・待ち・罠は各動詞のドライバのコメントが正本**

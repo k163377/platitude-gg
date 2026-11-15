@@ -41,7 +41,7 @@ AppListView {
     /// The row holding a seat under itself for the current branch's stand-in — the folded folder it is behind
     /// (`HeadPinRow.seatedUnder`) — or -1. BRANCHES only.
     property int pinSeatRow: -1
-    /// The pointer's stand-in for headless (PGG_AUTO_ACT=nav-tip); -1 points at no row.
+    /// The pointer's stand-in for headless (_PGG_AUTO_ACT=nav-tip); -1 points at no row.
     property int pointedTipRow: -1
     /// Where a row's open name box is drawn: outside this list, which clips, so the box can pass the pane's edge.
     /// Two out, not one — the sections' column is a layout and would give a box parented into it a row of its own.
@@ -265,7 +265,7 @@ AppListView {
     onOpenRoomChanged: navList.revealOpenRow()
     onHeightChanged: navList.revealOpenRow()
 
-    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. `clickRow` is
+    /// Smoke hooks (_PGG_AUTO_ACT=nav-reclick): a left click on one row, and what that row made of it. `clickRow` is
     /// false while the view has not built the row, so a run does not count the miss as a press.
     function clickRow(index) {
         const row = navList.itemAtIndex(index)
@@ -275,7 +275,7 @@ AppListView {
         row.leftClick(Qt.NoModifier)
         return true
     }
-    /// Smoke hook (PGG_AUTO_ACT=worktree-menu): a right-click on a row, through the row's own press
+    /// Smoke hook (_PGG_AUTO_ACT=worktree-menu): a right-click on a row, through the row's own press
     /// (`NavItemDelegate.rowPressed`), so the menu it opens is routed the way a hand's is. False as `clickRow`.
     function rightClickRow(index) {
         const row = navList.itemAtIndex(index)
@@ -289,7 +289,7 @@ AppListView {
     function runPressAt() {
         return Qt.point(0, Theme.rowHeight / 2)
     }
-    /// Smoke hook (PGG_AUTO_ACT=nav-drag-open): press a closed row's line and drag along it to the far side, through
+    /// Smoke hook (_PGG_AUTO_ACT=nav-drag-open): press a closed row's line and drag along it to the far side, through
     /// the row's own handlers (verify-ui implement.md「注入はハンドラ本体そのものへ入れる」). False as `clickRow`.
     function dragRow(index) {
         const row = navList.itemAtIndex(index)
@@ -302,7 +302,7 @@ AppListView {
         row.lineClicked(Qt.LeftButton, Qt.NoModifier)
         return true
     }
-    /// Smoke hooks (PGG_AUTO_ACT=nav-reclick-elsewhere): a hand's left click on a row in its two halves, through the
+    /// Smoke hooks (_PGG_AUTO_ACT=nav-reclick-elsewhere): a hand's left click on a row in its two halves, through the
     /// row's own handlers — the press, and on a later beat the release that makes it a click, which is where the row
     /// answers. `rowPoint` is where that hand goes down, in the scene, for a run that presses through the window's
     /// watcher first as a hand does. False / null as `clickRow`.
@@ -325,7 +325,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.mapToItem(null, navList.runPressAt()) : null
     }
-    /// What a drag over the open row's name took, and whether the keyboard went with it (PGG_AUTO_ACT=nav-drag-open).
+    /// What a drag over the open row's name took, and whether the keyboard went with it (_PGG_AUTO_ACT=nav-drag-open).
     function rowNameTook(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.nameTook : ""
@@ -346,7 +346,7 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editFocused : false
     }
-    /// The box on one row, as drawn and as its placeholder and opened name want (PGG_AUTO_ACT=nav-branch-box) — a
+    /// The box on one row, as drawn and as its placeholder and opened name want (_PGG_AUTO_ACT=nav-branch-box) — a
     /// picture cannot tell an elided word from a shorter one. 0 on an unbuilt row.
     function rowBoxWidth(index) {
         const row = navList.itemAtIndex(index)
@@ -368,17 +368,17 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.editBoxAt : ""
     }
-    /// Whether the window's tip stands on that row's box (PGG_AUTO_ACT=rename-tag-box).
+    /// Whether the window's tip stands on that row's box (_PGG_AUTO_ACT=rename-tag-box).
     function rowTipShown(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editTipShown : false
     }
-    /// What the box on that row says it takes (PGG_AUTO_ACT=worktree-rename-box). Empty on an unbuilt row.
+    /// What the box on that row says it takes (_PGG_AUTO_ACT=worktree-rename-box). Empty on an unbuilt row.
     function rowBoxPlaceholder(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.editPlaceholder : ""
     }
-    /// What the pointed row would say, and its name (PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the row's
+    /// What the pointed row would say, and its name (_PGG_AUTO_ACT=nav-tip). Read off `hoverText`: the row's
     /// `tipShown` is the window's seat's answer, false during the rest. An empty name: the row is unbuilt.
     function rowTipWords(index) {
         const row = navList.itemAtIndex(index)
@@ -388,19 +388,19 @@ AppListView {
         const row = navList.itemAtIndex(index)
         return row ? row.name : ""
     }
-    /// What that row draws as its name (PGG_AUTO_ACT=rebase-edit-stop) — the main worktree's row draws its branch in
+    /// What that row draws as its name (_PGG_AUTO_ACT=rebase-edit-stop) — the main worktree's row draws its branch in
     /// place of `name` where it has one (`NavRowBody.shownName`). Empty on an unbuilt row.
     function rowShownNameAt(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.shownName : ""
     }
-    /// The commit a click on that row leads to, read off the row rather than the model (PGG_AUTO_ACT=nav-jump).
+    /// The commit a click on that row leads to, read off the row rather than the model (_PGG_AUTO_ACT=nav-jump).
     /// Empty on an unbuilt row, a folder, and a bare worktree entry.
     function rowOidAt(index) {
         const row = navList.itemAtIndex(index)
         return row ? row.oid_hex : ""
     }
-    /// The row with its facts open in this list, and what they say (PGG_AUTO_ACT=nav-open); null / empty when the
+    /// The row with its facts open in this list, and what they say (_PGG_AUTO_ACT=nav-open); null / empty when the
     /// open row is elsewhere.
     function openRow() {
         // No section: the rail's peek has closed (`SectionPeekPopup`).
@@ -435,7 +435,7 @@ AppListView {
                + " here_apart=" + row.factsHereApart + " by=" + row.factsBy
                + " why=" + row.factsWhy + " path=" + row.factsPath
     }
-    /// Where the open row and its lines landed (PGG_AUTO_ACT=nav-open); `view=` is the list's visible span.
+    /// Where the open row and its lines landed (_PGG_AUTO_ACT=nav-open); `view=` is the list's visible span.
     function openGeom() {
         const row = navList.openRow()
         if (row === null)
@@ -447,7 +447,7 @@ AppListView {
              + " view=" + Math.round(navList.contentY) + "+" + Math.round(navList.height)
              + " room=" + Math.round(navList.openRoom)
     }
-    /// Whether the whole open row is inside what the list shows (PGG_AUTO_ACT=nav-open-foot) — read off geometry,
+    /// Whether the whole open row is inside what the list shows (_PGG_AUTO_ACT=nav-open-foot) — read off geometry,
     /// not the scroll asked for.
     function openShown() {
         const row = navList.openRow()
@@ -456,12 +456,12 @@ AppListView {
         return Math.round(row.y) >= Math.round(navList.contentY)
             && Math.round(row.y + row.height) <= Math.round(navList.contentY + navList.height)
     }
-    /// The open lines (`NavRowFacts`) a run drives the hand into (PGG_AUTO_ACT=nav-open-then).
+    /// The open lines (`NavRowFacts`) a run drives the hand into (_PGG_AUTO_ACT=nav-open-then).
     function openFactsItem() {
         const row = navList.openRow()
         return row === null ? null : row.factsItem
     }
-    /// Whether a row wears the hover wash (PGG_AUTO_ACT=nav-open-then; `NavItemDelegate.washLit`).
+    /// Whether a row wears the hover wash (_PGG_AUTO_ACT=nav-open-then; `NavItemDelegate.washLit`).
     function rowWashLit(index) {
         const row = navList.itemAtIndex(index)
         return !!row && row.washLit
@@ -476,7 +476,7 @@ AppListView {
     function scrollToEnd() {
         navList.contentY = Math.max(0, navList.contentHeight - navList.height)
     }
-    /// The row at `index` scrolled just out of the view's top, from where it stands (PGG_AUTO_ACT=nav-*-box:away):
+    /// The row at `index` scrolled just out of the view's top, from where it stands (_PGG_AUTO_ACT=nav-*-box:away):
     /// answers whether the list is long enough for that — a list the view holds whole moves nothing, and the row
     /// stays in sight whatever is asked.
     function scrollRowOut(index) {

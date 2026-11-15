@@ -1,4 +1,4 @@
-//! Fault injection for one command log's feed (`PGG_FAULT_HOLD_RECORDS`): the records the log's model holds back
+//! Fault injection for one command log's feed (`_PGG_FAULT_HOLD_RECORDS`): the records the log's model holds back
 //! until the run lets them through (`CommandsModel.letRecordsThrough`), so a write's answer reaches the tab ahead
 //! of its commands reaching the log — an order no contract of the two feeds (`hub::Feeds`) rules out, made the
 //! run's own (`xtask::verify::records_check`). The model owns the withheld records and the release: another tab

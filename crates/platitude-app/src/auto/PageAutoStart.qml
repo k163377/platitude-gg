@@ -4,8 +4,8 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// What a run can be told to do to a page as it opens, without a verb: show the worktree (`PGG_AUTO_WIP=1`), or
-/// pick the newest commit and open its first changed file (`PGG_AUTO_SELECT=1`). Both go through the page's own
+/// What a run can be told to do to a page as it opens, without a verb: show the worktree (`_PGG_AUTO_WIP=1`), or
+/// pick the newest commit and open its first changed file (`_PGG_AUTO_SELECT=1`). Both go through the page's own
 /// `showWip` / `activateRow` / `toggleDiff`.
 ///
 /// Not on the verb side (`AutoActDriver`): its `Loader` is active only when a verb was given, and these flags stand
@@ -29,7 +29,7 @@ Item {
         value: Harness.autoSelect || Harness.autoPerf || Harness.autoWip
     }
 
-    // PGG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
+    // _PGG_AUTO_WIP=1: open the WIP view once uncommitted changes are known.
     Connections {
         target: start.unstagedModel
         enabled: Harness.autoWip
@@ -41,7 +41,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_SELECT=1: select the newest commit, then open its first changed file's diff.
+    // _PGG_AUTO_SELECT=1: select the newest commit, then open its first changed file's diff.
     property bool selected: false
     Connections {
         target: start.graphModel

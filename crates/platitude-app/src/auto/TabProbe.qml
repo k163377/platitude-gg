@@ -73,7 +73,7 @@ QtObject {
         return widths.join(",")
     }
 
-    /// The name each tab came out with, in strip order (`PGG_AUTO_ACT=tab-name`).
+    /// The name each tab came out with, in strip order (`_PGG_AUTO_ACT=tab-name`).
     function tabTitles() {
         let names = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -83,13 +83,13 @@ QtObject {
         return names.join(",")
     }
 
-    /// The path a tab was opened with, spelled the way the strip has it (`PGG_AUTO_ACT=open-again`).
+    /// The path a tab was opened with, spelled the way the strip has it (`_PGG_AUTO_ACT=open-again`).
     function tabPathAt(index) {
         const tab = probe.view.itemAtIndex(index)
         return tab ? tab.worktree_path : ""
     }
 
-    /// Every tab's width, in strip order (`PGG_AUTO_ACT=tab-widths`).
+    /// Every tab's width, in strip order (`_PGG_AUTO_ACT=tab-widths`).
     function tabWidths() {
         let widths = []
         for (let i = 0; i < probe.view.count; i++) {
@@ -112,7 +112,7 @@ QtObject {
         return n
     }
 
-    /// The pointer, set down on the tab at `index` (`PGG_AUTO_ACT=tab-mark`).
+    /// The pointer, set down on the tab at `index` (`_PGG_AUTO_ACT=tab-mark`).
     function pointAtTab(index) {
         const tab = probe.view.itemAtIndex(index)
         if (tab)

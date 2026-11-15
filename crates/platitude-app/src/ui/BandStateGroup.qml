@@ -133,7 +133,7 @@ Item {
     readonly property int lfsBadgeW: badgeMetrics.lfsW
 
     /// Automation: which of the three shapes is on screen, what the badges were narrowed to, and the card — what the
-    /// band made of the state (`PGG_AUTO_ACT=badges` / `badges-hover`).
+    /// band made of the state (`_PGG_AUTO_ACT=badges` / `badges-hover`).
     readonly property bool stateWordsShown: badgeRow.visible
     readonly property bool stateMarkShown: stateToggle.visible
     /// The colour the mark was painted with, read off the paint so a check sees the rule reach it (as

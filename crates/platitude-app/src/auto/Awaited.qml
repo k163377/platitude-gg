@@ -115,7 +115,7 @@ QtObject {
     property var beating: null
     property var observed: null
     /// An observation that did not hold, with the terms it is waiting for — what a fault that holds a read back lets
-    /// it through on (`WindowHarness`, `PGG_FAULT_HOLD_RECORDS`).
+    /// it through on (`WindowHarness`, `_PGG_FAULT_HOLD_RECORDS`).
     signal waited(string name, var missing)
 
     /// Whether every term has come. `terms` maps a name to whether it is there; the missing names are said under

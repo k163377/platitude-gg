@@ -47,7 +47,7 @@ fn codex_is_refused_a_hand_written_main_and_a_line_that_unmarks_its_git() {
     }
     for command in [
         "CODEX_THREAD_ID= git merge --ff-only worktree-a",
-        "PGG_GATE_SKIP=1 git commit -m x",
+        "PGGDEV_GATE_SKIP=1 git commit -m x",
     ] {
         assert!(
             refused(command).contains("answers to the gate"),
@@ -96,7 +96,7 @@ fn claude_is_refused_main_wherever_the_line_writes_it() {
     let sb = Sandbox::new("shell-claude-main");
     for command in [
         "git merge --ff-only worktree-b && git push origin HEAD:main",
-        "PGG_ALLOW_REBASE=1 git rebase main && git push origin HEAD:main",
+        "PGGDEV_ALLOW_REBASE=1 git rebase main && git push origin HEAD:main",
     ] {
         let answer = pre_shell(&sb, &sb.seat, "claude", command);
         assert!(
@@ -105,7 +105,7 @@ fn claude_is_refused_main_wherever_the_line_writes_it() {
         );
     }
     for command in [
-        "$env:pgg_gate_skip='1'; git reset --hard HEAD~1",
+        "$env:pggdev_gate_skip='1'; git reset --hard HEAD~1",
         "$env:claudecode=''",
     ] {
         let answer = pre_shell(&sb, &sb.seat, "claude", command);

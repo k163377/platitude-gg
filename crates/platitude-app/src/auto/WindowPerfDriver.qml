@@ -2,7 +2,7 @@ import QtQuick
 import platitude
 import platitude.ui
 
-/// Owns the process-level end of a PGG_AUTO_PERF run. The page supplies the repository half; without a repository, the
+/// Owns the process-level end of a _PGG_AUTO_PERF run. The page supplies the repository half; without a repository, the
 /// next rendered frame is the measurement's only observable completion point.
 Item {
     id: driver
@@ -111,7 +111,7 @@ Item {
         function onPerfFinished() { driver.finish() }
     }
 
-    /// The font database's population, paid at a moment the memory sampler can see (`PGG_PERF_FONT_WALK=1`, the
+    /// The font database's population, paid at a moment the memory sampler can see (`_PGG_PERF_FONT_WALK=1`, the
     /// calibration run of `cargo xtask perf`; internal-docs/性能.md「perf の判定行は net で読む」). The walk is the
     /// product's own — the glyph question a gitmoji subject asks — only the moment is chosen: before `perf_done`,
     /// idle either side, so the parent's sampler weighs it between the first mark and the last.

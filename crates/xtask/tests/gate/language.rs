@@ -164,7 +164,7 @@ fn a_turn_sent_back_shows_its_notice_once_at_its_end() {
     sb.commit_all(
         &seat,
         "docs: the work in this seat",
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     );
     let stop = |active: &str, message: &str| {
         sb.hook(

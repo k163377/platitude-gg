@@ -382,7 +382,7 @@ mod tests {
 
     /// What turns a run of this test binary into the claim holder: the
     /// path to hold, and the line it says once it holds it.
-    const HELD_FOR: &str = "PGG_OWNERSHIP_HOLD";
+    const HELD_FOR: &str = "PGGDEV_OWNERSHIP_HOLD";
     const HELD: &str = "claim held";
 
     /// Passed as a filter rather than with `--exact`: the module path is

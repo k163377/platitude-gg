@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The window's half of the PGG_AUTO_ACT harness: the verbs that answer for the window itself — its frame, its band,
+/// The window's half of the _PGG_AUTO_ACT harness: the verbs that answer for the window itself — its frame, its band,
 /// its tab strip, the state file it comes back to — and for the picker, which is the platform's own window and can
 /// only be entered where its answer lands.
 ///
@@ -60,13 +60,13 @@ Item {
     /// starts itself off its own `running:`, and this has nothing to do.
     function begin() {
     }
-    /// The log header's `Clear` on `page`, pressed from outside the panel (`PGG_AUTO_ACT=commands-clear`).
+    /// The log header's `Clear` on `page`, pressed from outside the panel (`_PGG_AUTO_ACT=commands-clear`).
     function clearCommandLog(page) {
         if (page.commandsPane !== null)
             page.commandsPane.clearPanel()
     }
 
-    // PGG_AUTO_ACT=commands-clear. Answered at the band: the rows and the line both feed one mark, read on both sides
+    // _PGG_AUTO_ACT=commands-clear. Answered at the band: the rows and the line both feed one mark, read on both sides
     // of the press (`was=` is the half the picture cannot hold). The standing panel is a precondition read only in
     // the stage that presses (rules-refs/app-ui.md「動詞の前提条件は入力を出す枝で読む」): the press takes it down.
     // The failing command is the page's dispatch (`AutoActFindVerbs`), so the press joins it: a failure latched before
@@ -103,7 +103,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=fetch-recover: recovery is what retires fetch news. Waits for the refusal to raise the panel, reads
+    // _PGG_AUTO_ACT=fetch-recover: recovery is what retires fetch news. Waits for the refusal to raise the panel, reads
     // the mark, fires a fetch that can land, and reads both again — the picture only holds the quiet half.
     //
     // `-held` is the same run over a panel the reader put up first; the two part only on the last `open=` (down for

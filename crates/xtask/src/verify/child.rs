@@ -209,24 +209,24 @@ fn ordered_hold(opts: &Options) -> Option<&str> {
     (opts.fault_no_deadline && !opts.fault_hang.is_empty()).then_some(opts.fault_hang.as_str())
 }
 
-/// The faults a run asks for, as the app's `PGG_FAULT_*` knobs
+/// The faults a run asks for, as the app's `_PGG_FAULT_*` knobs
 /// (`super::faults`). `clear_automation` already dropped what the parent
 /// shell carried, so an unset knob means no fault.
 fn fault_knobs(cmd: &mut Command, opts: &Options) {
     if !opts.fault_hang.is_empty() {
-        cmd.env("PGG_FAULT_HANG", &opts.fault_hang);
+        cmd.env("_PGG_FAULT_HANG", &opts.fault_hang);
     }
     if opts.fault_no_deadline {
-        cmd.env("PGG_FAULT_NO_DEADLINE", "1");
+        cmd.env("_PGG_FAULT_NO_DEADLINE", "1");
     }
     if opts.fault_hold_act {
-        cmd.env("PGG_FAULT_HOLD_ACT", "1");
+        cmd.env("_PGG_FAULT_HOLD_ACT", "1");
     }
     if !opts.fault_owed_at_shot.is_empty() {
-        cmd.env("PGG_FAULT_OWED_AT_SHOT", &opts.fault_owed_at_shot);
+        cmd.env("_PGG_FAULT_OWED_AT_SHOT", &opts.fault_owed_at_shot);
     }
     if opts.fault_hold_records {
-        cmd.env("PGG_FAULT_HOLD_RECORDS", "1");
+        cmd.env("_PGG_FAULT_HOLD_RECORDS", "1");
     }
     // Raised by verb name: a run that needed a hand-typed flag is one no
     // registered line could spell (`super::verbs::window`). `card-latch`'s
@@ -235,7 +235,7 @@ fn fault_knobs(cmd: &mut Command, opts: &Options) {
     if HELD_WIP_ROW_VERBS.contains(&opts.verb.as_str())
         || (opts.verb == "card-latch" && opts.arg.ends_with(":row-late"))
     {
-        cmd.env("PGG_FAULT_HOLD_WIP_ROW", "1");
+        cmd.env("_PGG_FAULT_HOLD_WIP_ROW", "1");
     }
     // The save hold: where a run asked for it, and unasked for
     // `HELD_SAVE_VERB` (`super::verbs::window`).
@@ -245,12 +245,12 @@ fn fault_knobs(cmd: &mut Command, opts: &Options) {
         opts.fault_hold_save.as_str()
     };
     if !hold_save.is_empty() {
-        cmd.env("PGG_FAULT_HOLD_SAVE", hold_save);
+        cmd.env("_PGG_FAULT_HOLD_SAVE", hold_save);
     }
 }
 
 /// The environment one run hands the app: where it reads its git identity
-/// and its settings from, and every `PGG_*` knob the verb asked for.
+/// and its settings from, and every `_PGG_*` knob the verb asked for.
 fn compose(start: &Start<'_>) -> Result<Command, String> {
     let Start {
         exe,
@@ -281,10 +281,10 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
         .env("QT_QPA_PLATFORM", "offscreen")
         .env("QT_FORCE_STDERR_LOGGING", "1")
         .env("PGG_CONFIG_DIR", config_dir)
-        .env("PGG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
-        .env("PGG_SHOT_DIR", shot_dir)
-        .env("PGG_AUTO_ACT", &opts.verb)
-        .env("PGG_AUTO_ACT_ARG", arg)
+        .env("_PGG_AUTO_WATCHDOG_MS", opts.watchdog_ms.to_string())
+        .env("_PGG_SHOT_DIR", shot_dir)
+        .env("_PGG_AUTO_ACT", &opts.verb)
+        .env("_PGG_AUTO_ACT_ARG", arg)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::qt::offscreen_fonts(&mut cmd);
@@ -329,26 +329,26 @@ fn compose(start: &Start<'_>) -> Result<Command, String> {
             }
             open.push(repo);
         }
-        cmd.env("PGG_AUTO_OPEN", &open);
+        cmd.env("_PGG_AUTO_OPEN", &open);
     }
     if opts.select {
-        cmd.env("PGG_AUTO_SELECT", "1");
+        cmd.env("_PGG_AUTO_SELECT", "1");
     }
     if !opts.scroll_to.is_empty() {
-        cmd.env("PGG_SCROLL_TO", &opts.scroll_to);
+        cmd.env("_PGG_SCROLL_TO", &opts.scroll_to);
     }
     if opts.system_title_bar {
-        cmd.env("PGG_SYSTEM_TITLE_BAR", "1");
+        cmd.env("_PGG_SYSTEM_TITLE_BAR", "1");
     }
     super::perf::configure(&mut cmd, &opts.verb, arg)?;
     // What the identity verbs' dialog is told to do over their seed.
     if identity_seed(&opts.verb).is_some() {
-        cmd.env("PGG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
+        cmd.env("_PGG_AUTO_IDENTITY", identity_answer(&opts.verb, &opts.arg));
         if opts.verb == "identity-half"
             || opts.verb == "identity-tip"
             || opts.verb == HELD_SAVE_VERB
         {
-            cmd.env("PGG_AUTO_IDENTITY_SAVE", "1");
+            cmd.env("_PGG_AUTO_IDENTITY_SAVE", "1");
         }
     }
 

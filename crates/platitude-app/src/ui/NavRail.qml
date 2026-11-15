@@ -77,7 +77,7 @@ Rectangle {
     }
 
     /// A cell's whole answer to arrival, leaving and a click. The handlers call only these, so the smoke hooks
-    /// (PGG_AUTO_ACT=nav-peek / nav-peek-away / nav-peek-shut) reach the real answer; they get `top` from `topOf`.
+    /// (_PGG_AUTO_ACT=nav-peek / nav-peek-away / nav-peek-shut) reach the real answer; they get `top` from `topOf`.
     function enterAt(kind, top) {
         // Empty: open nothing, and shut the last cell's section rather than leave it beside the wrong cell.
         if (rail.countOf(kind) === 0)
@@ -152,7 +152,7 @@ Rectangle {
     readonly property int wholeHeight: Theme.headerHeight + rail.sections.length * rail.cellHeight + rail.tailRoom
 
     /// Automation-only, like `GraphPane.view` (rules-refs/app-ui.md): the cells, each handing over its mark and its
-    /// count (PGG_AUTO_ACT=nav-fold).
+    /// count (_PGG_AUTO_ACT=nav-fold).
     readonly property alias autoCells: cells
 
     /// Where a section's cell sits, for the smoke hooks.

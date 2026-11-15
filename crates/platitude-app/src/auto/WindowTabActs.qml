@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// The tab strip's half of the window's PGG_AUTO_ACT harness: opening a path that is already open, closing a
+/// The tab strip's half of the window's _PGG_AUTO_ACT harness: opening a path that is already open, closing a
 /// tab from the middle button, and every way a tab is carried along the strip or measured on it.
 // `Item`, not `QtObject`: rules-refs/app-ui.md「ドライバの root は `Item`」.
 Item {
@@ -961,7 +961,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-widths: numbers, since a strip that narrowed the wrong tabs frames like one that got it right.
+    // _PGG_AUTO_ACT=tab-widths: numbers, since a strip that narrowed the wrong tabs frames like one that got it right.
     // `room=` says which give-up the strip is living on (the mark's room first, the names after). `ease=` is the width
     // the easing stops at (`TabMetrics.titleEaseChars` letters). `crushed=` is what the widths cannot say — a name
     // drawn away to the mark alone (`TabProbe.tabNamesCrushed`).
@@ -1006,7 +1006,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-mark <index>: the tab the hand is on — one of the others, or the picture says nothing new.
+    // _PGG_AUTO_ACT=tab-mark <index>: the tab the hand is on — one of the others, or the picture says nothing new.
     // `marks=` is each `✕`'s own opacity: 1 only on the tab in front and the tab under the hand. The mark's hover half
     // is checked by no other verb.
     WindowStage {
@@ -1045,7 +1045,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=tab-name <index>: the names a strip of namesakes settled on, and the hover's whole path for the
+    // _PGG_AUTO_ACT=tab-name <index>: the names a strip of namesakes settled on, and the hover's whole path for the
     // pointed tab — one question, asked of the strip and of the hover (デザイン規約 §タブの所作 / §hover のツールチップ).
     WindowStage {
         id: tabNameActTimer
@@ -1086,7 +1086,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
+    // _PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
     // picture is of the mechanism.
     WindowStage {
         id: soloActTimer

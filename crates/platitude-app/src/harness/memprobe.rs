@@ -10,7 +10,7 @@
 //!   remainder.
 //!
 //! The counting is behind the `memprobe` feature; the per-model walks,
-//! O(rows), also need `PGG_MEM_REPORT=1` ([`enabled`]).
+//! O(rows), also need `_PGG_MEM_REPORT=1` ([`enabled`]).
 //!
 //! The process's allocator is chosen here too: there is one
 //! `#[global_allocator]` slot and the counter has to sit in front of
@@ -191,7 +191,7 @@ pub fn size_classes() -> String {
 
 /// Whether the per-model walks run at all: only with the counting
 /// allocator (parts with no counted total are half a report) and
-/// `PGG_MEM_REPORT=1`. The `cfg!` takes the walk out of a shipped build
+/// `_PGG_MEM_REPORT=1`. The `cfg!` takes the walk out of a shipped build
 /// at compile time.
 pub fn enabled() -> bool {
     cfg!(feature = "memprobe") && super::knobs().mem_report

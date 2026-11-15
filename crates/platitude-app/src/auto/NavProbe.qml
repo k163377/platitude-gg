@@ -20,18 +20,18 @@ QtObject {
     readonly property var sections: probe.sidebar.autoSections
     readonly property var peek: probe.sidebar.autoPeek
 
-    /// PGG_AUTO_ACT=nav-filter: type into the filter field itself.
+    /// _PGG_AUTO_ACT=nav-filter: type into the filter field itself.
     function typeFilter(text) {
         probe.sections.filterText = text
         return probe.sections.filterText
     }
 
-    /// PGG_AUTO_ACT=nav-peek: rest on one section's cell. Whether that opens anything is the cell's answer (an empty
+    /// _PGG_AUTO_ACT=nav-peek: rest on one section's cell. Whether that opens anything is the cell's answer (an empty
     /// section answers no).
     function peekAt(kind) {
         probe.rail.enterAt(kind, probe.rail.topOf(kind))
     }
-    /// PGG_AUTO_ACT=nav-peek-away / nav-peek-shut: walk the pointer off the cell that opened it, and click that cell.
+    /// _PGG_AUTO_ACT=nav-peek-away / nav-peek-shut: walk the pointer off the cell that opened it, and click that cell.
     /// Through the cell's own answers, so the leave's beat (`hoverKeepMs`) runs as for a hand: a hook that called the
     /// seat's `settle()` itself would pass with the hover wiring cut, and a `Qt.callLater` is no stand-in for the beat.
     function peekAway(kind) {
@@ -40,7 +40,7 @@ QtObject {
     function peekTap(kind) {
         probe.rail.tapAt(kind)
     }
-    /// PGG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
+    /// _PGG_AUTO_ACT=nav-peek-into / nav-peek-out: the pointer walked off the cell down into the open section, and then
     /// out of it the other way. They write the `contentPointed` the popup's own hover writes: a run that cannot say
     /// "inside" cannot tell the exit that closes the peek from the one that keeps it open.
     function peekInto(kind) {
@@ -51,7 +51,7 @@ QtObject {
         probe.peek.contentPointed = false
     }
 
-    /// PGG_AUTO_ACT=nav-close: close one section at the header band's own click (`NavHeader.tap`) — setting
+    /// _PGG_AUTO_ACT=nav-close: close one section at the header band's own click (`NavHeader.tap`) — setting
     /// `expTags` itself would open a section the band refuses to.
     function closeSection(kind) {
         const head = probe.headOf(kind)
@@ -61,22 +61,22 @@ QtObject {
     function headOf(kind) {
         return probe.sections.headOf(kind)
     }
-    /// PGG_AUTO_ACT=nav-add-remote: press the `+` at the end of the REMOTES band, at the band's own signal.
+    /// _PGG_AUTO_ACT=nav-add-remote: press the `+` at the end of the REMOTES band, at the band's own signal.
     function tapAddRemote() {
         probe.headOf("remote").addRemoteRequested()
     }
-    /// PGG_AUTO_ACT=tags-eye: press the eye at the end of the TAGS band (`NavHeader.tapTags`).
+    /// _PGG_AUTO_ACT=tags-eye: press the eye at the end of the TAGS band (`NavHeader.tapTags`).
     function tapTagEye() {
         probe.headOf("tag").tapTags()
     }
-    /// PGG_AUTO_ACT=nav-close: where a section's header band came to rest, and where the ground under the last
+    /// _PGG_AUTO_ACT=nav-close: where a section's header band came to rest, and where the ground under the last
     /// section begins.
     function headerTopOf(kind) {
         const head = probe.headOf(kind)
         return head ? head.y : -1
     }
     readonly property real groundTop: probe.sections.groundTop
-    /// PGG_AUTO_ACT=nav-peek: where the open peek begins and ends — at the top edge of the cell that opened it, and
+    /// _PGG_AUTO_ACT=nav-peek: where the open peek begins and ends — at the top edge of the cell that opened it, and
     /// inside the pane whatever the row count.
     readonly property real peekY: probe.peek.y
     readonly property real peekBottom: probe.peek.y + probe.peek.height
@@ -87,8 +87,8 @@ QtObject {
         font: probe.rail.autoCells.count > 0 && probe.rail.autoCells.itemAt(0) !== null
               ? probe.rail.autoCells.itemAt(0).autoCount.font : Qt.application.font
     }
-    /// PGG_AUTO_ACT=nav-fold: whether every count on the rail has its ink under its mark's box, centred in the room down
-    /// to half a step over the cell's foot (`NavRail.countInkTop`), with the span the counts' ink takes in their
+    /// _PGG_AUTO_ACT=nav-fold: whether every count on the rail has its ink under its mark's box, centred in the room
+    /// down to half a step over the cell's foot (`NavRail.countInkTop`), with the span the counts' ink takes in their
     /// cells. Read off each laid-out label and the ink of what it says — not the digits the rail seats them by — since
     /// where a line's ink falls is the face's answer. Centred: the room over the ink and the room under it part by no
     /// more than the odd pixel the room gives above, and half a pixel for the label's whole-pixel place.
@@ -122,7 +122,7 @@ QtObject {
         return { clear: clear, top: top, bottom: bottom, face: face }
     }
 
-    /// PGG_AUTO_ACT=nav-tip: rest the pointer on one section's row, through the same `pointedTipRow` the file lists
+    /// _PGG_AUTO_ACT=nav-tip: rest the pointer on one section's row, through the same `pointedTipRow` the file lists
     /// carry.
     function listOf(kind) {
         return probe.sections.listOf(kind)
@@ -132,23 +132,23 @@ QtObject {
         if (list)
             list.pointedTipRow = row
     }
-    /// PGG_AUTO_ACT=nav-open-foot / nav-open-then: where one section's list stands. A run reads it before the hand
+    /// _PGG_AUTO_ACT=nav-open-foot / nav-open-then: where one section's list stands. A run reads it before the hand
     /// arrives, so the give-back is judged against its own reading and not the list's note of it.
     function listContentY(kind) {
         const list = probe.listOf(kind)
         return list ? list.contentY : 0
     }
-    /// PGG_AUTO_ACT=nav-open: whether a row has its facts open, and what they say — read off the row itself
+    /// _PGG_AUTO_ACT=nav-open: whether a row has its facts open, and what they say — read off the row itself
     /// (`SidebarPane.rowFactsWords`).
     readonly property bool rowFactsOpen: probe.sidebar.rowFactsOpen
     function rowFactsWords() {
         return probe.sidebar.rowFactsWords()
     }
-    /// PGG_AUTO_ACT=nav-open-foot: whether the open row is showing whole, its lines included.
+    /// _PGG_AUTO_ACT=nav-open-foot: whether the open row is showing whole, its lines included.
     function rowFactsShown() {
         return probe.sidebar.rowFactsShown()
     }
-    /// PGG_AUTO_ACT=nav-open-then / nav-open-foot: what the hand does once the row is open. For `bar`, answers whether
+    /// _PGG_AUTO_ACT=nav-open-then / nav-open-foot: what the hand does once the row is open. For `bar`, answers whether
     /// the open row had closed the moment the list's bar was taken — read then, before the run asks for the row again
     /// under the held bar.
     function afterOpen(what, kind, row) {
@@ -198,7 +198,7 @@ QtObject {
         else if (what === "filter")
             probe.typeFilter("zzzz")
     }
-    /// PGG_AUTO_ACT=nav-drag-open: a press on a **closed** row's own line that starts to move. False while the view
+    /// _PGG_AUTO_ACT=nav-drag-open: a press on a **closed** row's own line that starts to move. False while the view
     /// has not built that row.
     function dragRow(kind, row) {
         const list = probe.listOf(kind)
@@ -227,20 +227,20 @@ QtObject {
         const list = probe.listOf(kind)
         return !!list && list.rowWashLit(row)
     }
-    /// PGG_AUTO_ACT=nav-open / nav-open-tip: the supplement the open row is asking for — a worktree's path
+    /// _PGG_AUTO_ACT=nav-open / nav-open-tip: the supplement the open row is asking for — a worktree's path
     /// (`NavRowFacts.says`). The ask, not the box: the box follows a rest later, so a run holds the shared instance
     /// against this before reading its line. Empty where the row keeps nothing or no row is open.
     function factsSays() {
         const lines = probe.sidebar.openFactsItem()
         return lines === null ? "" : lines.says
     }
-    /// PGG_AUTO_ACT=nav-open-tag `:tip`: the same rest on **one** of those lines, where a tag's row keeps why a
+    /// _PGG_AUTO_ACT=nav-open-tag `:tip`: the same rest on **one** of those lines, where a tag's row keeps why a
     /// carrier wears a warning (`NavRowFacts.pointLineTip`). False until that line is built.
     function pointFactsLine(row, on) {
         const lines = probe.sidebar.openFactsItem()
         return lines !== null && lines.pointLineTip(row, on)
     }
-    /// PGG_AUTO_ACT=tag-line-menu: a right-click on one line of the open row, in at the hand's own handlers
+    /// _PGG_AUTO_ACT=tag-line-menu: a right-click on one line of the open row, in at the hand's own handlers
     /// (`NavRowFacts.handPressed` / `handClicked`) at the middle of that line's words — so the line the menu acts on
     /// is the one the press found, as for a real hand. False until the lines are built.
     function factsLineMenu(row) {
@@ -254,14 +254,14 @@ QtObject {
         lines.handClicked(Qt.RightButton, Qt.NoModifier)
         return true
     }
-    /// PGG_AUTO_ACT=nav-open-tag `:name`: the rest on the open row's own name, where a tag's row keeps why that name
+    /// _PGG_AUTO_ACT=nav-open-tag `:name`: the rest on the open row's own name, where a tag's row keeps why that name
     /// wears the warning (`NavRowFacts.pointNameTip`). False until the lines are built.
     function pointFactsName(on) {
         const lines = probe.sidebar.openFactsItem()
         return lines !== null && lines.pointNameTip(on)
     }
 
-    /// PGG_AUTO_ACT=nav-follow: the first of the open lines whose words go somewhere (-1 for none), and where.
+    /// _PGG_AUTO_ACT=nav-follow: the first of the open lines whose words go somewhere (-1 for none), and where.
     function factsFirstGoing() {
         const lines = probe.sidebar.openFactsItem()
         return lines === null ? -1 : lines.firstGoing()
@@ -284,7 +284,7 @@ QtObject {
         lines.handClicked(Qt.LeftButton, Qt.NoModifier)
         return true
     }
-    /// PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line, and what the block made of it — the band drawn
+    /// _PGG_AUTO_ACT=nav-follow-lit: the pointer resting on that line, and what the block made of it — the band drawn
     /// under the line, and the hand cursor.
     function pointFactsWords(line, on) {
         const lines = probe.sidebar.openFactsItem()
@@ -299,7 +299,7 @@ QtObject {
         return lines !== null && lines.handShown
     }
 
-    /// PGG_AUTO_ACT=nav-peek-open: the same rest on a row of the peek — the row that grows is inside a popup, which
+    /// _PGG_AUTO_ACT=nav-peek-open: the same rest on a row of the peek — the row that grows is inside a popup, which
     /// has to make room for it without closing.
     function pointPeekTipAt(row) {
         probe.peek.pointTipAt(row)
@@ -317,7 +317,7 @@ QtObject {
         const list = probe.listOf(kind)
         return list ? list.rowNameAt(row) : ""
     }
-    /// PGG_AUTO_ACT=rebase-edit-stop: the name the repository's own worktree draws on its WORKTREES row — its
+    /// _PGG_AUTO_ACT=rebase-edit-stop: the name the repository's own worktree draws on its WORKTREES row — its
     /// branch, or its folder while it stands on none (デザイン規約 §左メニューの所作). Empty while that row is unbuilt.
     function homeWorktreeName() {
         const list = probe.listOf("worktree")
@@ -337,17 +337,17 @@ QtObject {
     /// `headPinPointed`: while a filter hides its row, that row has no place in the list to point at.
     readonly property bool headPinLit: probe.sections.headPinLit
     readonly property string headPinWords: probe.sections.headPinWords
-    /// Whether it is standing, which edge it took, and where the layout put it (PGG_AUTO_ACT=nav-pin-edge).
+    /// Whether it is standing, which edge it took, and where the layout put it (_PGG_AUTO_ACT=nav-pin-edge).
     readonly property bool headPinShown: probe.sections.headPinShown
     readonly property bool headPinAbove: probe.sections.headPinAbove
     readonly property real headPinY: probe.sections.headPinY
-    /// PGG_AUTO_ACT=nav-open `head:<filter>:<row>`: the folded row it sits under, and where that row's seat came
+    /// _PGG_AUTO_ACT=nav-open `head:<filter>:<row>`: the folded row it sits under, and where that row's seat came
     /// out — read off the row's own geometry, so the placement is not judged by the count it placed itself by.
     readonly property int headPinUnder: probe.sections.headPinUnder
     function headPinSeatY() {
         return probe.sections.headPinSeatY()
     }
-    /// PGG_AUTO_ACT=nav-open `head:<filter>:<row>`: click one row of a section (on a folder row, the fold closes) at
+    /// _PGG_AUTO_ACT=nav-open `head:<filter>:<row>`: click one row of a section (on a folder row, the fold closes) at
     /// the row's own click (`NavList.clickRow`). False while the view has not built that row — a section's rows
     /// arrive on a read of their own.
     function clickRow(kind, row) {
@@ -355,7 +355,7 @@ QtObject {
         return !!list && list.clickRow(row)
     }
 
-    /// PGG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, scrolling the current branch's row off — the
+    /// _PGG_AUTO_ACT=nav-pin-edge: jump the branches list to its end, scrolling the current branch's row off — the
     /// other way the stand-in comes on screen (the filter's is `nav-open head:<filter>`). Answers where the list
     /// came to rest (`NavSections.scrollBranchesToEnd`).
     function scrollBranchesToEnd() {

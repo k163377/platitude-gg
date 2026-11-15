@@ -43,9 +43,9 @@ description: 席の枝を main へ反映する手順。`/land` で反映の列�
 - **stop**(CLAUDE.md、land / review-points / verify-ui / gate の SKILL.md)— 何もしない
 - **read**(それ以外の `.claude/` と `internal-docs/`)— そのパスの差分だけを先頭の枝から読
   み(`git diff main...<先頭の枝> -- <path>`)、自分の作業に全体適用される規約・設計の変更なら何もしない
-- どちらでもなければ、今の main へ `PGG_ALLOW_REBASE=1 git rebase main` し、**自分の書いたコードだけを読んでバグ・テスト
-  漏れなど明確な不備だけ直す**。規約との照合・再編・gate はしない(本番のレビューは先頭で)。**明確な不備を超える直しが要
-  ると分かったら** <!--cmd:land.leave-->`cargo xtask land leave <why>` で列から外れ、残作業を続けて §外れた後 へ
+- どちらでもなければ、今の main へ `PGGDEV_ALLOW_REBASE=1 git rebase main` し、**自分の書いたコードだけを読んでバグ・テ
+  スト漏れなど明確な不備だけ直す**。規約との照合・再編・gate はしない(本番のレビューは先頭で)。**明確な不備を超える直し
+  が要ると分かったら** <!--cmd:land.leave-->`cargo xtask land leave <why>` で列から外れ、残作業を続けて §外れた後 へ
 
 済んだら <!--cmd:land.wait-head-->`cargo xtask land wait head` を背景で撃ってターンを終える。先頭の反映が済むと通知で起
 きる。
@@ -56,8 +56,8 @@ description: 席の枝を main へ反映する手順。`/land` で反映の列�
 から外れ、それから訊く**(答えを待ってから外れない — 後ろの席を待たせる)。レビューで出た設計の要判断、4 の差分と無関係な
 天井、7 の承諾待ちがそれ。順に:
 
-1. **rebase** — `PGG_ALLOW_REBASE=1 git rebase main`。衝突は main 側(反映済み)の変更の意図を読んで解き、main 側の改名の
-   取り残しが無いかを確かめる
+1. **rebase** — `PGGDEV_ALLOW_REBASE=1 git rebase main`。衝突は main 側(反映済み)の変更の意図を読んで解き、main 側の改名
+   の取り残しが無いかを確かめる
 2. **レビュー** — main からの差分全体を review-points スキルで(引数の追加観点を足す)
 3. **修正** — 必要なら。直す前に再現テストが赤になるのを確かめる
 4. **確認** — <!--cmd:gate.premerge-->`cargo xtask gate` を背景で撃ち、走行中の木に触らない。赤は撃ち直さず読む。差分と

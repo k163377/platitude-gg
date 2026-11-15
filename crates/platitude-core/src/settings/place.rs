@@ -2,9 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{
-    AUTOMATION_PREFIX, DEV_DIR, DIR_NAME, NOT_AUTOMATION, SETTINGS_FILE, STATE_FILE, Store,
-};
+use super::{AUTOMATION_PREFIX, DEV_DIR, DIR_NAME, SETTINGS_FILE, STATE_FILE, Store};
 
 /// Which platform's placement rules to apply. A parameter, so all three
 /// can be tested from any machine.
@@ -63,12 +61,12 @@ impl Env {
     }
 
     /// True when anything is driving this process. Asked only by a build
-    /// carrying a verification harness ([`Build::driven`]), so a `PGG_*`
+    /// carrying a verification harness ([`Build::driven`]), so a `_PGG_*`
     /// variable somebody exported costs a shipped build nothing.
     pub fn automated(&self) -> bool {
         self.vars
             .iter()
-            .any(|(k, _)| k.starts_with(AUTOMATION_PREFIX) && !NOT_AUTOMATION.contains(&k.as_str()))
+            .any(|(k, _)| k.starts_with(AUTOMATION_PREFIX))
     }
 }
 
@@ -204,14 +202,18 @@ mod tests {
     /// What a harness build hands to [`Build::driven`].
     #[test]
     fn a_knob_is_what_says_something_is_driving() {
-        assert!(Env::from_pairs(&[("PGG_AUTO_ACT", "open-picker")]).automated());
+        assert!(Env::from_pairs(&[("_PGG_AUTO_ACT", "open-picker")]).automated());
         assert!(
             !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PGG_LOG", "info")]).automated(),
             "PGG_LOG says how loud to be, not who is driving"
         );
         assert!(
-            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PGG_ALLOW_GUI", "1")]).automated(),
+            !Env::from_pairs(&[("APPDATA", "C:/Roaming"), ("PGGDEV_ALLOW_GUI", "1")]).automated(),
             "the window a person asked for opens on the tabs they left"
+        );
+        assert!(
+            !Env::from_pairs(&[(CONFIG_DIR_ENV, "/tmp/run-7"), ("PGGDEV_STEP", "7")]).automated(),
+            "the product's own variables and xtask's say nothing about who is driving"
         );
     }
 

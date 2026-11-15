@@ -41,7 +41,7 @@ fn markdown_named_by_code_or_under_build_inputs_only_owes_consistency_checks() {
     sb.commit_all(
         &sb.repo,
         "test: markdown references",
-        &[("PGG_GATE_SKIP", "1")],
+        &[("PGGDEV_GATE_SKIP", "1")],
     );
     sb.git_ok(&sb.seat, &["merge", "--ff-only", "main"]);
     for path in paths {
@@ -268,7 +268,11 @@ fn a_dialog_closed_before_the_picture_still_owes_its_escape_verb() {
     );
     sb.commit_all(&sb.seat, "fix(ui): broken escape handler", &[]);
     let red = "verify settings-escape";
-    let (ok, text) = sb.gate(&sb.seat, &["--main", &base], &[("PGG_GATE_FAKE_FAIL", red)]);
+    let (ok, text) = sb.gate(
+        &sb.seat,
+        &["--main", &base],
+        &[("PGGDEV_GATE_FAKE_FAIL", red)],
+    );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     assert!(sb.ran().contains(red), "{text}");
 }
@@ -303,7 +307,7 @@ fn a_harness_change_without_qml_edges_owes_every_registered_line() {
     let (ok, text) = sb.gate(
         &sb.seat,
         &["--main", &base, "--keep-going"],
-        &[("PGG_GATE_FAKE_FAIL", red)],
+        &[("PGGDEV_GATE_FAKE_FAIL", red)],
     );
     assert!(!ok && text.contains("nothing stamped"), "{text}");
     let ran = sb.ran();

@@ -27,16 +27,17 @@ Rectangle {
     /// on, the left panel's landing, and the card closes (user decision — ask before changing; a gone upstream leads
     /// nowhere). Said by the pointer as the left panel's lines say it (`NavFactLine.goes`): the underline and the hand.
     readonly property bool mateGoes: chip.mate !== null && !!chip.mate.to
-    /// Stands in for the pointer on those words where headless cannot put one (PGG_AUTO_ACT=ref-list-follow-lit).
+    /// Stands in for the pointer on those words where headless cannot put one (_PGG_AUTO_ACT=ref-list-follow-lit).
     property bool matePointedAt: false
     readonly property bool mateHandOn: mateSeat.item !== null && mateSeat.item.containsMouse
     readonly property bool mateAimed: chip.mateGoes && (chip.mateHandOn || chip.matePointedAt)
-    /// Whether the band is drawn — what a run reads back, rather than the ask above (PGG_AUTO_ACT=ref-list-follow-lit).
+    /// Whether the band is drawn — what a run reads back, rather than the ask above
+    /// (_PGG_AUTO_ACT=ref-list-follow-lit).
     readonly property bool mateLit: mateBand.visible
     /// The name on that line was pressed: where it goes (`mate.to`).
     signal mateFollowed(var to)
     /// What the hand's handler calls, and the one way in for a run (verify-ui §壊れない動詞の実装と反復;
-    /// PGG_AUTO_ACT=ref-list-follow).
+    /// _PGG_AUTO_ACT=ref-list-follow).
     function followMate() {
         if (chip.mateGoes)
             chip.mateFollowed(chip.mate.to)

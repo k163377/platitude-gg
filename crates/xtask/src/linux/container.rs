@@ -16,7 +16,7 @@
 //! (`verify::run::gitconfig_home`).
 //!
 //! **A process is addressed by its mark, never by a pid.** Every process
-//! a verb starts inherits `PGG_STEP=<mark>` from the exec, so a stop is a
+//! a verb starts inherits `PGGDEV_STEP=<mark>` from the exec, so a stop is a
 //! walk over `/proc` for that mark — no pid file, no process group, no
 //! reach into another verb. The wrapper takes its own leftovers the same
 //! way, from a shell started without the mark ([`MARKED_FN`]).
@@ -43,7 +43,7 @@ use crate::subprocess::{Answer, bounded_both_streams};
 
 /// The mark every process of a verb carries inside the gate's container
 /// — the address a stop is sent to.
-pub(crate) const STEP_MARK: &str = "PGG_STEP";
+pub(crate) const STEP_MARK: &str = "PGGDEV_STEP";
 
 /// The labels the gate's container carries: whose tree, which gate
 /// (its pid, as the tree's note spells it), which run.
@@ -439,7 +439,7 @@ const MARKED_FN: &str = "marked() {\n\
      \x20 for p in /proc/[0-9]*; do\n\
      \x20 \x20 pid=${p#/proc/}\n\
      \x20 \x20 [ \"$pid\" = \"$$\" ] && continue\n\
-     \x20 \x20 if tr '\\0' '\\n' < \"$p/environ\" 2>/dev/null | grep -qxF \"PGG_STEP=$1\"; then\n\
+     \x20 \x20 if tr '\\0' '\\n' < \"$p/environ\" 2>/dev/null | grep -qxF \"PGGDEV_STEP=$1\"; then\n\
      \x20 \x20 \x20 echo \"$pid $(cat \"$p/comm\" 2>/dev/null)\"\n\
      \x20 \x20 fi\n\
      \x20 done\n\
@@ -627,7 +627,7 @@ mod tests {
         assert!(at("\"$@\"") < at("rm -f \"/run/pgg-gate/steps/1758-40-linux-12\""));
         assert!(
             script.trim_end().ends_with(
-                "exec env -u PGG_STEP sh -c \"$leftovers\" pgg-leftovers 1758-40-linux-12 \
+                "exec env -u PGGDEV_STEP sh -c \"$leftovers\" pgg-leftovers 1758-40-linux-12 \
                  \"$code\" \"$@\""
             ),
             "the walk is the last thing, in a shell of its own:\n{script}"

@@ -17,7 +17,7 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
     // With the harness: the script below drives the app with
-    // `PGG_AUTO_ACT`, which a build without it does not answer.
+    // `_PGG_AUTO_ACT`, which a build without it does not answer.
     let build = [
         "cargo",
         "build",
@@ -43,8 +43,8 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
          test -x /built/release/pgg-todo-editor \
            || {{ echo 'pgg-todo-editor is not beside the app'; exit 2; }}; \
          timeout 50s env QT_QPA_PLATFORM=offscreen \
-         QT_FORCE_STDERR_LOGGING=1 PGG_AUTO_ACT=band \
-         PGG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PGG_SHOT_DIR={OUT_MOUNT} /built/release/platitude-gg"
+         QT_FORCE_STDERR_LOGGING=1 _PGG_AUTO_ACT=band \
+         _PGG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} _PGG_SHOT_DIR={OUT_MOUNT} /built/release/platitude-gg"
     );
     let status = run_on_bare(root, &runtime, &out, &script)?;
     if !status.success() {
@@ -112,7 +112,7 @@ started=0
 last=""
 for _ in $(seq 1 20); do
   out=$(QT_QPA_PLATFORM=offscreen QT_FORCE_STDERR_LOGGING=1 \
-        PGG_AUTO_ACT=band PGG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} PGG_SHOT_DIR={OUT_MOUNT} \
+        _PGG_AUTO_ACT=band _PGG_AUTO_WATCHDOG_MS={BARE_WATCHDOG_MS} _PGG_SHOT_DIR={OUT_MOUNT} \
         timeout 60 /built/release/platitude-gg 2>&1)
   [ $? = 0 ] && started=1 && break
   soname=$(printf '%s' "$out" | sed -n 's/.*error while loading shared libraries: \([^:]*\).*/\1/p' | head -1)

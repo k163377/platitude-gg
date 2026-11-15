@@ -5,7 +5,7 @@ import QtQuick
 // How the band's shortfall is handed out among the state badges, and nothing else: measured widths and the room in,
 // the group's two answers out (the steps: `BandStateGroup`'s header). No font, so every boundary is asked in one
 // process (`tests/qml/tst_bandshare.qml`), not through window widths that land differently per platform font; that
-// real widths reach the group is `PGG_AUTO_ACT=badges`. The costs are pushed in from `BandStateMetrics`.
+// real widths reach the group is `_PGG_AUTO_ACT=badges`. The costs are pushed in from `BandStateMetrics`.
 QtObject {
     id: bandShare
 

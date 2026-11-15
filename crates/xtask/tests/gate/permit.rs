@@ -381,7 +381,7 @@ fn a_sessions_own_git_does_not_write_main_on_any_flag() {
     says(&sb, "/land");
     for command in [
         "git merge --ff-only worktree-a",
-        "PGG_ALLOW_MAIN=1 git merge --ff-only worktree-a",
+        "PGGDEV_ALLOW_MAIN=1 git merge --ff-only worktree-a",
         "git push . worktree-a:main",
         "git update-ref refs/heads/main worktree-a",
     ] {
@@ -453,7 +453,7 @@ fn a_landing_that_stops_past_its_turn_leaves_the_line() {
     let (ok, text) = sb.land_as_with(
         "worktree-a",
         SESSION,
-        &[("PGG_GATE_FAKE_FAIL", "test platitude-core 1")],
+        &[("PGGDEV_GATE_FAKE_FAIL", "test platitude-core 1")],
     );
     assert!(!ok && text.contains("gate failed"), "{text}");
     assert!(text.contains("left the line of landings"), "{text}");

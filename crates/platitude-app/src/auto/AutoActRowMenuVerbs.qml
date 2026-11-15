@@ -48,7 +48,7 @@ Item {
         }
         return true
     }
-    // PGG_AUTO_ACT=menu-list. The list is HEAD's — the one commit sure to have a chip — and a graph row's menu the row
+    // _PGG_AUTO_ACT=menu-list. The list is HEAD's — the one commit sure to have a chip — and a graph row's menu the row
     // under it's, as `menu-hover` raises it. Each stage waits for the one before to land; the list goes, or stays out,
     // in the same turn as the ask, so the answer is read once the menu is up — for `own`, once the beat the hand's
     // leaving started has run out. `swap` raises the menu on the list and puts the hand on another row's chip: the

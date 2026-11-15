@@ -5,7 +5,7 @@ import QtQuick.Layouts
 import platitude
 import platitude.ui
 
-/// PGG_AUTO_ACT=middle-hand <surface>: the middle button's hand, pressed on one surface that scrolls and left drifting
+/// _PGG_AUTO_ACT=middle-hand <surface>: the middle button's hand, pressed on one surface that scrolls and left drifting
 /// for the shot (デザイン規約 §中クリックの自動スクロール). Each surface seats its own hand on its own terms (a list's
 /// frame, a box's words, the pane over the log's text picker), so a picture of one says nothing about the next and
 /// each is pressed where it stands.

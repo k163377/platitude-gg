@@ -225,7 +225,7 @@ fn append(path: &Path, line: &str) -> std::io::Result<()> {
 }
 
 /// Holds the process at one station for good, where a run asked for it
-/// (`PGG_FAULT_HANG`, `xtask::verify::faults`). After the mark: the trail
+/// (`_PGG_FAULT_HANG`, `xtask::verify::faults`). After the mark: the trail
 /// naming the held station is what the fault checks.
 #[cfg(feature = "automation")]
 fn hold_here(station: Station) {
@@ -388,7 +388,7 @@ fn find_first_look(clock: Instant, ceiling: Duration) -> Duration {
     }
 }
 
-/// The station a run was ordered to hold at (`PGG_FAULT_HANG`), if any.
+/// The station a run was ordered to hold at (`_PGG_FAULT_HANG`), if any.
 #[cfg(feature = "automation")]
 fn ordered_hold() -> Option<Station> {
     let slug = super::knobs().fault_hang.as_str();

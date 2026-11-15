@@ -1,7 +1,7 @@
 //! Explicitly authorized, unattended hardware experiment. Never part of a
 //! normal gate: it temporarily changes AC sleep and allows real S3 sleep.
 //! Run it only when the user allows an unattended test, with
-//! `PGG_AWAKE_PHYSICAL_LOG` set to an absolute path for the report:
+//! `PGGDEV_AWAKE_PHYSICAL_LOG` set to an absolute path for the report:
 //! `cargo test -p xtask --bin xtask a_desktop_wait_allows_physical_sleep -- --ignored --nocapture`.
 //! The Claude process and the permission log are fixtures; the holder's OS
 //! requests, the display notifications and the S3 sleep are real, so it
@@ -14,10 +14,11 @@
 use super::{FakeClaude, claim_file, marked, scratch};
 
 #[test]
-#[ignore = "manual: needs unattended sleep permission and PGG_AWAKE_PHYSICAL_LOG"]
+#[ignore = "manual: needs unattended sleep permission and PGGDEV_AWAKE_PHYSICAL_LOG"]
 fn a_desktop_wait_allows_physical_sleep_after_a_protected_turn() {
     use crate::awake::{Mark, apply};
-    let report = std::env::var("PGG_AWAKE_PHYSICAL_LOG").expect("an explicit durable report path");
+    let report =
+        std::env::var("PGGDEV_AWAKE_PHYSICAL_LOG").expect("an explicit durable report path");
     let dir = scratch("physical-desktop");
     let log = dir.join("main.log");
     std::fs::write(&log, "").unwrap();

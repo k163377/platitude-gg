@@ -168,7 +168,7 @@ fn report(at: &Path) -> Result<(), String> {
     );
     readings(at)?;
     println!(
-        "  measure it with: PGG_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
+        "  measure it with: PGGDEV_ALLOW_GUI=1 cargo xtask perf --repo {} --runs 5",
         at.display()
     );
     Ok(())

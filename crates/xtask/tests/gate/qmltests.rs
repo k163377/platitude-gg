@@ -47,7 +47,7 @@ fn with_the_qml_runner(name: &str) -> (Sandbox, String) {
         ),
         (
             "crates/xtask/src/linux/container.rs",
-            "pub fn exec_in() { let _ = \"PGG_IN_CONTAINER=1\"; }\n",
+            "pub fn exec_in() { let _ = \"PGGDEV_IN_CONTAINER=1\"; }\n",
         ),
         (TEST, &census("")),
         (
@@ -194,7 +194,7 @@ fn of_the_container() -> Vec<Boundary> {
         ),
         (
             "crates/xtask/src/linux/container.rs",
-            "pub fn exec_in() { let _ = \"PGG_IN_CONTAINER=2\"; }\n".into(),
+            "pub fn exec_in() { let _ = \"PGGDEV_IN_CONTAINER=2\"; }\n".into(),
             &[LINUX],
             "what starts the run in the container and hands it its environment",
         ),

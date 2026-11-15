@@ -682,7 +682,7 @@ Rectangle {
         function onYChanged() { paneHand.rowsMoved() }
     }
     /// Automation: the pointer resting in the pane, which is what puts the lane bar on screen at all
-    /// (`PGG_AUTO_ACT=graph-bar`).
+    /// (`_PGG_AUTO_ACT=graph-bar`).
     function restPointer(inside) { graphArea.pointerInside = inside }
     /// What is drawn and how brightly: the hooks report the bar itself, so a broken binding cannot pass.
     readonly property alias laneBarShown: laneBar.visible

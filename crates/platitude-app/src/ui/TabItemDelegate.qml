@@ -57,7 +57,7 @@ Rectangle {
     /// Automation: whether the mark is out, read off the mark itself — the output side, so a cut binding cannot pass.
     readonly property real markShown: closeMark.opacity
     /// Automation: how far this tab is drawn from its row, read off the transform as `markShown` is off the mark
-    /// (`PGG_AUTO_ACT=tab-hold`).
+    /// (`_PGG_AUTO_ACT=tab-hold`).
     readonly property real shiftShown: heldShift.x
     /// Automation: whether any of this name is still drawn, read off the label's halves (the handed name is always
     /// whole). A tab crushed to its mark looks in a picture like a short name in a crowded strip

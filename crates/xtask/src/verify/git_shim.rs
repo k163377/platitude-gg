@@ -6,18 +6,18 @@ use std::process::{Command, ExitCode};
 
 /// Set on the app when `--old-git` asks for one: the version a copy of this
 /// binary, standing on PATH under git's name, answers `--version` with.
-pub(super) const SHIM_VERSION: &str = "PGG_SHIM_GIT_VERSION";
+pub(super) const SHIM_VERSION: &str = "_PGG_SHIM_GIT_VERSION";
 /// The git that copy passes everything else to.
-pub(super) const SHIM_REAL: &str = "PGG_SHIM_REAL_GIT";
+pub(super) const SHIM_REAL: &str = "_PGG_SHIM_REAL_GIT";
 /// Set on the app when `--no-lfs` asks for it: the copy answers `git lfs`
 /// as a git without Git LFS does, whatever this machine has.
-pub(super) const SHIM_NO_LFS: &str = "PGG_SHIM_NO_LFS";
+pub(super) const SHIM_NO_LFS: &str = "_PGG_SHIM_NO_LFS";
 /// Set on the app when `--other-git` asks for one: where a second git
 /// stands, staged beside the pictures and **off** PATH.
-pub(super) const OTHER_GIT: &str = "PGG_OTHER_GIT";
+pub(super) const OTHER_GIT: &str = "_PGG_OTHER_GIT";
 /// Set on the app when `--slow-git` asks for one: the subcommand the copy
 /// answers late, and by how much ([`Slow`]).
-pub(super) const SHIM_SLOW: &str = "PGG_SHIM_SLOW";
+pub(super) const SHIM_SLOW: &str = "_PGG_SHIM_SLOW";
 
 /// One subcommand of git answered late:
 /// `<subcommand>:<ms>[:quiet|:head=<word>|:until=<station>]`.
@@ -109,7 +109,7 @@ impl Slow {
             std::thread::sleep(ceiling);
             return;
         };
-        let shot_dir = std::env::var_os("PGG_SHOT_DIR")
+        let shot_dir = std::env::var_os("_PGG_SHOT_DIR")
             .map(PathBuf::from)
             .unwrap_or_default();
         // The trail is a file the app appends to, which announces nothing: looked at again until

@@ -70,7 +70,7 @@ Item {
         return true
     }
 
-    // PGG_AUTO_ACT=peek-hold. The hand on the BRANCHES cell of the folded rail, the section held by its own row, then
+    // _PGG_AUTO_ACT=peek-hold. The hand on the BRANCHES cell of the folded rail, the section held by its own row, then
     // the hand off it and onto the TAGS cell (`NavRail.enterAt` / `leaveAt`, the cells' own doors): held, the section
     // stays — the menu over its row, the box on it — and TAGS is an ask kept for the hold letting go
     // (`SectionPeekPopup`); let go with the hand on TAGS, TAGS comes out at once. With nothing held, TAGS is swapped in
@@ -159,7 +159,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=menu-block. One display out, then a menu raised over it through a real door, then the display
+    // _PGG_AUTO_ACT=menu-block. One display out, then a menu raised over it through a real door, then the display
     // asked for elsewhere under the menu, then the menu gone — stage by stage:
     //   `card`   — the display out;
     //   `menu`   — a menu raised: what was out goes the moment it stands (`down=` is read in the turn the door
@@ -388,7 +388,7 @@ Item {
         }
     }
 
-    // PGG_AUTO_ACT=author-swap. The hand on one line of the author row (`from`) with its card out, then off it and
+    // _PGG_AUTO_ACT=author-swap. The hand on one line of the author row (`from`) with its card out, then off it and
     // onto another line (`to`) in one turn — what a hand crossing the row does, the stand-ins written as the real
     // hover writes them (`CommitAuthorRow.show*`): the card opening takes the one before down at once, so only one is
     // ever out (`DetailsAuthorCards.giveWay`), read in that same turn and again a beat later.

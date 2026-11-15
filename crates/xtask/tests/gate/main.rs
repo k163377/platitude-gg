@@ -1,7 +1,7 @@
 //! The gate on throwaway repositories. Every test has its own repository
 //! and git configuration, so none reads the user's identity or hooks.
 //!
-//! Steps are faked (`PGG_GATE_FAKE_LOG`): under test is which steps a
+//! Steps are faked (`PGGDEV_GATE_FAKE_LOG`): under test is which steps a
 //! change owes and when they are asked again, on a miniature of this
 //! workspace's shape.
 

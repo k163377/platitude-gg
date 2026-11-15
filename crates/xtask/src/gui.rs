@@ -65,7 +65,7 @@ pub fn kill(args: &[String]) -> Result<(), String> {
 }
 
 /// `cargo xtask launch [--no-build]`. The pre-shell hook requires
-/// PGG_ALLOW_GUI=1 in front from a worktree.
+/// PGGDEV_ALLOW_GUI=1 in front from a worktree.
 pub fn launch(args: &[String]) -> Result<(), String> {
     let mut build = true;
     for arg in args {

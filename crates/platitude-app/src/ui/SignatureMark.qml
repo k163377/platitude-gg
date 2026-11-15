@@ -21,7 +21,7 @@ Item {
     property string kind: ""
     property string code: ""
     property string signer: ""
-    /// Stands in for the pointer, so the tooltip can be photographed (PGG_AUTO_ACT=signature-tip).
+    /// Stands in for the pointer, so the tooltip can be photographed (_PGG_AUTO_ACT=signature-tip).
     property bool pointedAt: false
     /// The ink of the mark itself. A smaller face hands in a smaller ink (`AvatarButton.badgeInk`).
     property int ink: Theme.iconSm

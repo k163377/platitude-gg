@@ -74,7 +74,7 @@ fn main() {
         tree: &tree,
         debug: cfg!(debug_assertions),
         // From the harness: a build without one is never driven, so a stray
-        // `PGG_*` in somebody's shell cannot take their settings away.
+        // `_PGG_*` in somebody's shell cannot take their settings away.
         driven: harness::knobs().automated,
     });
     Hub::install(runtime, store, held_elsewhere);
@@ -439,10 +439,10 @@ fn main() {
 fn start_again() {
     // Undriven runs only: the successor would inherit the run's automation
     // environment, replay the verb, hold the run's settings directory and
-    // outlive the parent that was supposed to bound it. A `PGG_*` variable
-    // counts but for the few `NOT_AUTOMATION` names (`settings::Env::automated`),
-    // verify-ui's `--other-git` shim variables included: a real-window check
-    // of the restart needs a second git that exists on the machine.
+    // outlive the parent that was supposed to bound it. Every `_PGG_*`
+    // knob counts (`settings::Env::automated`), verify-ui's `--other-git`
+    // shim variables included: a real-window check of the restart needs a
+    // second git that exists on the machine.
     if crate::harness::knobs().automated {
         tracing::info!("a restart was asked for; a driven run does not start one");
         return;
