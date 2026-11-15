@@ -160,15 +160,19 @@ Rectangle {
                  ? qsTr("Unstage the whole file at once") : qsTr("Stage the whole file at once")
             onActivated: header.stageFileRequested()
         }
-        // The third of the band's end trio, in the toggle pair's seat: `iconXl` wide, band-tall reach, `iconXl` mark
-        // box. Its ink stays lighter than the pair's, and its wash stays its own circle.
+        // The third of the band's end trio, in the toggle pair's seat: `iconXl` wide and band-tall, so a hand along the
+        // band's end meets three targets of one size. The mark is every bar's `✕`, a step down, and its wash stays its
+        // own circle (デザイン規約 §寸法「閉じる印」).
         CloseToolButton {
             Layout.fillWidth: false
             Layout.fillHeight: true
             seat: Theme.iconXl
-            markSize: Theme.iconXl
             topInset: Math.round((height - Theme.iconLg) / 2)
             bottomInset: topInset
+            // Written out: the shared button binds the sides to `topInset`, which here would narrow the wash below
+            // every bar's `iconLg` disc.
+            leftInset: (Theme.iconXl - Theme.iconLg) / 2
+            rightInset: leftInset
             onClicked: header.closeRequested()
         }
     }
