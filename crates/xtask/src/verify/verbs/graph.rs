@@ -198,7 +198,10 @@ pub(super) const TABLE: &[Verb] = &[
     // reaches over there stays on what the menu went up with: a remote
     // branch moved (`remote-moved`, `far-moved`) or the upstream pointed
     // elsewhere (`upstream-moved`), the menu stays up and those rows grey,
-    // naming the reading they showed (`kept=`). The upstream taken off
+    // naming the reading they showed (`kept=`). The branch the menu stands
+    // on renamed outside (`renamed`, `renamed-ref`), the menu follows it to
+    // its new name (`aimed=`) rather than close, the left menu's door with
+    // it (`door=`). The upstream taken off
     // (`upstream-unset`), the BRANCH card's `Unset upstream` row — no chip
     // to fall back on — greys and keeps its words without the name.
     Verb {
@@ -234,6 +237,14 @@ pub(super) const TABLE: &[Verb] = &[
                 Arg::Is("upstream-moved"),
                 "menu_follow form=upstream-moved open=true same=true withdrawn=push,push--delete,Deleteboth \
                  named=main tip=again kept=origin/feature/mine",
+            ),
+            (
+                Arg::Is("renamed"),
+                "menu_follow form=renamed open=true same=true withdrawn=none named=main aimed=base-two",
+            ),
+            (
+                Arg::Is("renamed-ref"),
+                "menu_follow form=renamed-ref open=true same=true withdrawn=none named=main aimed=base-two door=true",
             ),
             (
                 Arg::Is("upstream-unset"),

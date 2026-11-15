@@ -53,6 +53,12 @@ Item {
     // that name the branch no longer apply, and grey where they stand (`withdrawn=`, their chips) rather than stay
     // pressable with no name in them; the first of them shows its tooltip, forced (verify-ui §hover の絵の撮り方),
     // saying to open the menu again (`tip=`). `menu-follow detach-ref`: the same over the left menu's `base` row.
+    // `menu-follow renamed`: the same menu, aimed at `base`'s own chip, and `base` itself renamed outside to
+    // `base-two` — told apart from a branch deleted by its reflog (`NavSectionModel.renamedTo`), the menu stays up and
+    // goes on standing on the branch under its new name (`aimed=`) rather than close as for a branch gone (§hover「中身
+    // が残っていれば字だけ替え」). `menu-follow renamed-ref`: the same over the left menu's `base` row, whose door goes
+    // with it (`door=`: the page's menu door and the row its name boxes open on answer to the new name,
+    // `RepoPage.followRenamedDoor`).
     // `menu-follow dirty`: the menu with its `reset` card open, and a tracked file written outside — the `--hard` row's
     // note (`note=`) says the uncommitted change now there, and the card grows to hold it whole (`width=grew`), as a
     // card opened on that tree stands. `menu-follow written`: the rename made by the window's own write
@@ -73,8 +79,8 @@ Item {
         id: followTimer
         name: "menu_follow"
         order: ["raised", "changed"]
-        /// `rename`, `detach`, `detach-ref`, `dirty`, `written`, `remote-moved`, `far-moved`, `upstream-moved` or
-        /// `upstream-unset`, as above.
+        /// `rename`, `detach`, `detach-ref`, `renamed`, `renamed-ref`, `dirty`, `written`, `remote-moved`,
+        /// `far-moved`, `upstream-moved` or `upstream-unset`, as above.
         property string form: "rename"
         /// The form whose change is the window's own write.
         readonly property bool writes: followTimer.form === "written"
@@ -82,8 +88,11 @@ Item {
         readonly property bool overThere: followTimer.form === "remote-moved" || followTimer.form === "far-moved"
                                           || followTimer.form === "upstream-moved"
                                           || followTimer.form === "upstream-unset"
+        /// The forms that rename the branch the menu stands on.
+        readonly property bool renames: followTimer.form === "renamed" || followTimer.form === "renamed-ref"
         /// The forms raised from the left menu.
-        readonly property bool leftMenu: followTimer.form === "detach-ref" || followTimer.overThere
+        readonly property bool leftMenu: followTimer.form === "detach-ref" || followTimer.form === "renamed-ref"
+                                         || followTimer.overThere
         /// The reading the forms over there stand on, and where the moves send it.
         readonly property string reading: "origin/feature/mine"
         readonly property string movedTo: "origin/release"
@@ -138,7 +147,7 @@ Item {
             const oid = acts.branchesModel.oidOfName("base")
             if (oid === "")
                 return false
-            if (followTimer.form === "detach-ref") {
+            if (followTimer.form === "detach-ref" || followTimer.form === "renamed-ref") {
                 if (!acts.page.openRefMenu("branch", "base", "base", oid, true))
                     return false
                 followTimer.witness("rows", followTimer.level.offeredRows)
@@ -170,6 +179,7 @@ Item {
             if (followTimer.form === "dirty")
                 return Harness.writeFile(repo + "/notes.txt", "written outside\n") === ""
             const args = followTimer.form === "rename" ? ["branch", "-m", "main", "trunk"]
+                       : followTimer.renames ? ["branch", "-m", "base", "base-two"]
                        : followTimer.form === "upstream-moved" ? ["branch", "-u", followTimer.movedTo, "feature/mine"]
                        : followTimer.form === "upstream-unset" ? ["branch", "--unset-upstream", "feature/mine"]
                        : followTimer.overThere ? ["update-ref", "refs/remotes/" + followTimer.reading,
@@ -183,6 +193,11 @@ Item {
                 return acts.refBranchCard.state.upstream === followTimer.movedTo && followTimer.stoodAgain()
             if (followTimer.form === "upstream-unset")
                 return acts.refBranchCard.state.upstream === "" && followTimer.stoodAgain()
+            // Read off the tree first: a menu that took the rename for a branch gone has closed by then, and says so
+            // (`open=false`) rather than wait out the watchdog.
+            if (followTimer.renames)
+                return acts.branchesModel.oidOfName("base-two") !== "" && acts.branchesModel.oidOfName("base") === ""
+                       && (!followTimer.level.visible || followTimer.aimed() === "base-two" && followTimer.stoodAgain())
             if (followTimer.overThere) {
                 const moved = acts.remotesModel.oidOfName(followTimer.reading)
                 return moved !== "" && moved === acts.remotesModel.oidOfName(followTimer.movedTo)
@@ -207,6 +222,10 @@ Item {
             }
             return chips.length === 0 ? "none" : chips.join(",")
         }
+        /// The branch the menu stands on: the left menu's ref, or the name the graph row's menu was aimed at.
+        function aimed() {
+            return followTimer.leftMenu ? acts.refRowMenu.refId : acts.commitMenuState.menu.targetName
+        }
         /// How the `reset` card's width moved from the one it went up with: `grew`, `held` or `shrank`.
         function widthMoved() {
             const was = followTimer.witnessed("cardWidth")
@@ -226,6 +245,11 @@ Item {
                    + " withdrawn=" + followTimer.withdrawn()
                    + " named=" + named
                    + (followTimer.withdraws ? " tip=" + followTimer.tipSays() : "")
+                   + (followTimer.renames ? " aimed=" + followTimer.aimed() : "")
+                   + (followTimer.form === "renamed-ref"
+                      ? " door=" + (acts.page.menuKey === "branch:" + followTimer.aimed()
+                                    && acts.page.refMenuRowId === followTimer.aimed())
+                      : "")
                    + (followTimer.form === "dirty"
                       ? " note=" + (acts.hardResetItem.note !== "") + " width=" + followTimer.widthMoved()
                       : "")
@@ -262,7 +286,7 @@ Item {
             }
             op.complete({
                 "name": "menu_follow_stood",
-                "when": () => ({ "followed": op.followed(), "menu": op.level.visible,
+                "when": () => ({ "followed": op.followed(), "menu": op.renames || op.level.visible,
                                  "tip": !op.withdraws || op.tipSays() === "again",
                                  "written": !op.writes || acts.driver.wroteAndSettled(),
                                  "page": PageSettled.settled(acts.page) }),
