@@ -215,7 +215,7 @@ fn prep(root: &Path, work: &Path, prep: &[Vec<String>]) -> Result<(), String> {
         let out = Command::new("git")
             .args(args)
             .current_dir(work)
-            .env("GIT_CONFIG_GLOBAL", root.join("no-global-config"))
+            .env("GIT_CONFIG_GLOBAL", root.join(crate::demo::BUILD_GITCONFIG))
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_TERMINAL_PROMPT", "0")
             .output()

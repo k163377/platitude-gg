@@ -22,6 +22,28 @@ pub(super) struct DemoRepo {
 const TICK_SECS: u64 = 30 * 60;
 const HISTORY_SECS: u64 = 40 * 60 * 60;
 
+/// The file beside the worktree that every git a build starts reads as its
+/// global configuration (`GIT_CONFIG_GLOBAL`), and a film's preparation
+/// after it. A setting here reaches the receiving end of a local push,
+/// which git starts without the `-c` settings (`GIT_CONFIG_PARAMETERS`,
+/// `GIT_CONFIG_COUNT`), and stays out of the repositories' own
+/// configuration, which a template carries to the app.
+pub(crate) const BUILD_GITCONFIG: &str = "build.gitconfig";
+
+/// Automatic maintenance in the foreground, so a command that wrote has
+/// finished writing when it answers. The commands that write (commit,
+/// merge, rebase, fetch, a push's receiving end) start it, and on POSIX it
+/// would outlive them: newer git's `maintenance run --auto` takes
+/// `objects/maintenance.lock` and then detaches, and the oldest git's
+/// `gc --auto` detaches when it has work to do. A template is walked the
+/// moment its build returns (`super::template`), and a file gone between
+/// the listing and the read refuses the template for the day. Foreground
+/// rather than off: Windows' git cannot detach, so every system builds the
+/// repository maintenance leaves, as Windows does. `gc.autoDetach` is what
+/// the oldest git reads, and newer git's `maintenance.autoDetach` falls
+/// back to it.
+const BUILD_SETTINGS: &str = "[gc]\n\tautoDetach = false\n";
+
 /// Runs a command to its end, output captured. The demo module's own: a
 /// template's key is this module's sources (`super::template`), and a
 /// spawner shared with the crate would put every change to it in that key.
@@ -41,11 +63,13 @@ impl DemoRepo {
         let mut repo = Self {
             root: root.to_path_buf(),
             work: root.join(name),
-            global_config: root.join("no-global-config"),
+            global_config: root.join(BUILD_GITCONFIG),
             base_epoch: now.saturating_sub(HISTORY_SECS),
             tick: 0,
             pinned: None,
         };
+        std::fs::write(&repo.global_config, BUILD_SETTINGS)
+            .map_err(|e| format!("writing {}: {e}", repo.global_config.display()))?;
         std::fs::create_dir_all(&repo.work).map_err(|e| e.to_string())?;
         repo.git(&["init", "-b", "main"])?;
         repo.configure()?;
