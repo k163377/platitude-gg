@@ -85,8 +85,9 @@ pub(super) const DOCS: [&str; 4] = [
     "CLAUDE.md",
 ];
 
-/// The app's QML: the module the product ships, and the QtTest files that
-/// read it. Spelled in pieces for the reason [`core`] gives.
+/// The app's QML: the modules the product ships (`ui/`, its modules of
+/// singletons in the directories under it), and the QtTest files that
+/// read them. Spelled in pieces for the reason [`core`] gives.
 pub(super) fn qml_dirs() -> (String, String) {
     let app = app();
     (format!("{app}/src/ui"), format!("{app}/tests/qml"))

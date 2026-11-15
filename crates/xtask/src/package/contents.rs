@@ -214,8 +214,14 @@ pub(super) const FRAMEWORKS: [&str; 24] = [
 ];
 
 /// The app's own modules, which no directory of Qt's holds: `platitude.ui`
-/// is compiled into it, `platitude` registered by the bridge.
-const APP_OWN: [&str; 2] = ["platitude", "platitude.ui"];
+/// and its modules of singletons (`platitude.ui.<name>`, a directory under
+/// `ui/` each) are compiled into it, `platitude` registered by the bridge.
+fn app_own(module: &str) -> bool {
+    module == "platitude"
+        || module
+            .strip_prefix("platitude.ui")
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+}
 
 /// Where Qt finds the bundle's plugins and QML, relative to `Contents`, as
 /// `Contents/Resources/qt.conf`. Qt 6.12 finds both there without one, and
@@ -337,7 +343,7 @@ pub(super) fn reached(imports: &[Import]) -> Vec<String> {
 fn qt_modules(imports: &[Import]) -> impl Iterator<Item = &Import> {
     imports
         .iter()
-        .filter(|import| import.kind == "module" && !APP_OWN.contains(&import.name.as_str()))
+        .filter(|import| import.kind == "module" && !app_own(&import.name))
 }
 
 /// Why `name` stays out, where a list says it does.

@@ -304,6 +304,16 @@ fn an_answer_cut_short_or_running_on_is_refused() {
 fn each_module_ui_writes_must_be_carried() {
     let mut imports = scanned(WRITTEN).expect("read");
     assert_eq!(written(&imports), Vec::<String>::new());
+    // The product's modules of singletons are compiled in like the product;
+    // a name that only starts like it is not the app's.
+    imports.push(module("platitude.ui.words", None));
+    assert_eq!(written(&imports), Vec::<String>::new());
+    imports.push(module("platitude.uikit", None));
+    assert_eq!(
+        written(&imports),
+        ["ui/ imports platitude.uikit, which the bundle does not carry"]
+    );
+    imports.pop();
     imports.push(module("QtQuick.Effects", None));
     imports.push(module("QtQuick.Particles", None));
     let parted = written(&imports);

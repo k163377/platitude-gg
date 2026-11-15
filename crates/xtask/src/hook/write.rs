@@ -99,30 +99,37 @@ fn doc_notes(path: &str) -> Vec<String> {
 /// fails to resolve only at runtime, and a wrong font form renders fine on
 /// the machine that wrote it.
 fn qml_notes(path: &str) -> Result<Vec<String>, String> {
-    // Both QML modules (`platitude.ui`, `platitude.auto`) have their own
-    // qmldir and are embedded from the one main.rs.
+    // Every QML module — the product's (`platitude.ui`, and each in a
+    // directory under it) and the harness's (`platitude.auto`) — has its own
+    // qmldir beside its files, and all of them are embedded from the one
+    // main.rs.
+    const APP: &str = "crates/platitude-app/";
     let module = ["src/ui/", "src/auto/"]
         .into_iter()
-        .find(|dir| path.contains(&format!("crates/platitude-app/{dir}")));
+        .find(|dir| path.contains(&format!("{APP}{dir}")));
     let (Some(module), true) = (module, path.ends_with(".qml")) else {
         return Ok(Vec::new());
     };
     let Some(file_name) = path.rsplit('/').next().map(str::to_string) else {
         return Ok(Vec::new());
     };
-    let ui_dir = std::path::Path::new(path)
+    let Some(at) = path.rfind(APP) else {
+        return Ok(Vec::new());
+    };
+    let (root, shown) = (&path[..at], &path[at..]);
+    let dir = std::path::Path::new(path)
         .parent()
         .ok_or("qml path has no parent")?;
     let mut notes: Vec<String> = Vec::new();
     let mut missing: Vec<String> = Vec::new();
     // Only judge the registries that are actually there.
-    if let Ok(qmldir) = std::fs::read_to_string(ui_dir.join("qmldir"))
+    if let Ok(qmldir) = std::fs::read_to_string(dir.join("qmldir"))
         && !qmldir.contains(&file_name)
     {
-        missing.push(format!("{module}qmldir"));
+        let dir_shown = shown.rsplit_once('/').map_or(shown, |(dir, _)| dir);
+        missing.push(format!("{}/qmldir", &dir_shown[APP.len()..]));
     }
-    if let Some(src_dir) = ui_dir.parent()
-        && let Ok(main_rs) = std::fs::read_to_string(src_dir.join("main.rs"))
+    if let Ok(main_rs) = std::fs::read_to_string(format!("{root}{APP}src/main.rs"))
         && !main_rs.contains(&file_name)
     {
         missing.push("main.rs (qrc::embed!)".to_string());
@@ -231,7 +238,7 @@ fn qml_font_notes(content: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{qml_font_notes, qml_weight_notes};
+    use super::{qml_font_notes, qml_notes, qml_weight_notes};
 
     #[test]
     fn flags_named_weights_past_normal() {
@@ -271,5 +278,38 @@ mod tests {
              Text { font.family: code ? Theme.monoFamily : Theme.uiFamily }\n",
         );
         assert!(notes.is_empty(), "{notes:?}");
+    }
+
+    /// A singleton's file stands a directory below the product's, its
+    /// registry beside it and main.rs two up.
+    #[test]
+    fn a_module_under_ui_is_judged_by_its_own_qmldir_and_main_rs() {
+        let root = crate::yard::Yard::new("hook-write-modules");
+        let app = root.join("crates/platitude-app/src");
+        let write = |path: &str, text: &str| {
+            let file = app.join(path);
+            std::fs::create_dir_all(file.parent().expect("a parent")).expect("the fixture's dirs");
+            std::fs::write(file, text).expect("the fixture");
+        };
+        write("main.rs", "qrc::embed!(\"ui/words/Words.qml\");\n");
+        write(
+            "ui/qmldir",
+            "module platitude.ui\nsingleton Theme 1.0 Theme.qml\n",
+        );
+        write(
+            "ui/words/qmldir",
+            "module platitude.ui.words\nsingleton Words 1.0 Words.qml\n",
+        );
+        write("ui/words/Words.qml", "pragma Singleton\nQtObject {}\n");
+        write("ui/words/Stray.qml", "Item {}\n");
+        let at = |path: &str| format!("{}/{path}", app.to_string_lossy().replace('\\', "/"));
+        let kept = qml_notes(&at("ui/words/Words.qml")).expect("notes");
+        assert!(kept.is_empty(), "{kept:?}");
+        let stray = qml_notes(&at("ui/words/Stray.qml")).expect("notes");
+        assert_eq!(stray.len(), 1, "{stray:?}");
+        assert!(
+            stray[0].contains("src/ui/words/qmldir and main.rs"),
+            "{stray:?}"
+        );
     }
 }

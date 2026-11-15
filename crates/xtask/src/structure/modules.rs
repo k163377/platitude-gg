@@ -21,7 +21,8 @@
 
 use std::path::Path;
 
-/// The product's QML, and the harness module whose names it may not use.
+/// The product's QML, the directories under it included, and the harness
+/// module whose names it may not use.
 const PRODUCT: &str = "crates/platitude-app/src/ui";
 const HARNESS_QMLDIR: &str = "crates/platitude-app/src/auto/qmldir";
 /// The QML-facing harness singleton, whose members say what the product
@@ -38,25 +39,14 @@ pub(super) fn check(root: &Path) -> Result<(Vec<String>, usize), String> {
     let members = singleton_members(root)?;
     let mut failures = Vec::new();
     let product = root.join(PRODUCT);
-    let entries = std::fs::read_dir(&product)
-        .map_err(|e| format!("could not read {}: {e}", product.display()))?;
-    let mut files: Vec<std::path::PathBuf> = Vec::new();
-    for entry in entries {
-        let path = entry
-            .map_err(|e| format!("could not read {}: {e}", product.display()))?
-            .path();
-        if path.extension().is_some_and(|e| e == "qml") {
-            files.push(path);
-        }
-    }
+    let mut files = Vec::new();
+    super::collect(&product, &mut files)?;
+    files.retain(|path| path.extension().is_some_and(|e| e == "qml"));
     files.sort();
     for path in files {
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("could not read {}: {e}", path.display()))?;
-        let shown = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
+        let shown = super::relative(&product, &path);
         for (number, line) in text.lines().enumerate() {
             if let Some(named) = types.iter().find(|ty| ty.named_by(line)) {
                 failures.push(format!(
@@ -438,11 +428,20 @@ mod tests {
              readonly property bool shown: seat.ready // as PageSettled.settled says\n    \
              readonly property string part: \"PageSettled.qml\"\n}\n",
         );
+        // A module of singletons under the product's directory is the product too.
+        write(
+            &format!("{PRODUCT}/words/Words.qml"),
+            "QtObject {\n    readonly property bool ready: PageSettled.settled(null)\n}\n",
+        );
         let (failures, names) = check(&root).expect("scan the fixture");
         assert_eq!(names, 3, "two types and the singleton's one member");
-        assert_eq!(failures.len(), 1, "{failures:#?}");
+        assert_eq!(failures.len(), 2, "{failures:#?}");
         assert!(
             failures[0].contains("RepoPage.qml:3 names the harness type PageSettled"),
+            "{failures:#?}"
+        );
+        assert!(
+            failures[1].contains("ui/words/Words.qml:2 names the harness type PageSettled"),
             "{failures:#?}"
         );
     }

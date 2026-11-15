@@ -42,7 +42,7 @@ pub(crate) const MAIN: &str = "Main";
 /// Which directory of the app a QML file stands in.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Module {
-    /// `ui/`, the product.
+    /// `ui/` and its modules of singletons under it, the product.
     Product,
     /// `auto/`, the harness.
     Harness,

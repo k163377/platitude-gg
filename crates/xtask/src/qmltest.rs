@@ -583,19 +583,7 @@ fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
     if module.exists() {
         std::fs::remove_dir_all(&module).map_err(|e| format!("{}: {e}", module.display()))?;
     }
-    std::fs::create_dir_all(&module).map_err(|e| format!("{}: {e}", module.display()))?;
-    let ui = root.join(UI);
-    for entry in std::fs::read_dir(&ui).map_err(|e| format!("{}: {e}", ui.display()))? {
-        let path = entry.map_err(|e| e.to_string())?.path();
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if name != "qmldir" && !name.ends_with(".qml") {
-            continue;
-        }
-        std::fs::copy(&path, module.join(&name)).map_err(|e| format!("{name}: {e}"))?;
-    }
+    copy_module(&root.join(UI), &module)?;
     if !module.join("qmldir").is_file() {
         return Err(format!("{UI}/qmldir is gone — nothing declares the module"));
     }
@@ -617,6 +605,26 @@ fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
     }
     std::fs::write(app.join("qmldir"), qmldir).map_err(|e| format!("{APP_MODULE}/qmldir: {e}"))?;
     Ok(import)
+}
+
+/// The QML and the qmldir of `from` into `to`, and each directory under it
+/// as itself: the product's modules of singletons stand in `ui/<name>/`,
+/// where the import path finds `platitude.ui.<name>`.
+fn copy_module(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    for entry in std::fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))? {
+        let path = entry.map_err(|e| e.to_string())?.path();
+        let name = path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if path.is_dir() {
+            copy_module(&path, &to.join(&name))?;
+        } else if name == "qmldir" || name.ends_with(".qml") {
+            std::fs::copy(&path, to.join(&name)).map_err(|e| format!("{name}: {e}"))?;
+        }
+    }
+    Ok(())
 }
 
 /// The stand-in singletons under [`STUBS`], in a fixed order.

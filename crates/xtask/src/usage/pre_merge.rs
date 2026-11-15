@@ -232,9 +232,10 @@ pub(super) const ENTRIES: &str =
       The QtTest files under crates/platitude-app/tests/qml, run through
       Qt's own qmltestrunner (offscreen): what only QML can be asked, such
       as whether a Canvas that owes the screenshot a paint has painted.
-      The product's whole QML module is staged under target/qmltest with
-      its shipped qmldir, because `import platitude.ui` resolves by
-      directory name and the product's directory is called `ui`; the
+      The product's QML is staged whole under target/qmltest with its
+      shipped qmldirs, ui/ and its modules of singletons in the
+      directories under it, because `import platitude.ui` and
+      `import platitude.ui.<name>` resolve by directory name; the
       Rust-backed `platitude` module is staged all but empty, with the
       stand-ins under tests/qml/stubs (`GitFacts`, `Harness`, `PerfProbe`)
       as its singletons. Nothing of the app is compiled.

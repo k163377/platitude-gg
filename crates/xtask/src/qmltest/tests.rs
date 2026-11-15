@@ -2,9 +2,9 @@
 
 use super::{
     Came, FAILED, KEPT, LITTER_AGE, MANIFEST, Manifest, Ran, Setup, TESTS, beyond_the_newest,
-    case_names, environment, failed_root, first_break, in_the_files_order, judged, keep, litter,
-    manifest, outcomes, reported_paths, run_each, short_of, sweep, tests_in, together_verdict,
-    unfinished_in,
+    case_names, copy_module, environment, failed_root, first_break, in_the_files_order, judged,
+    keep, litter, manifest, outcomes, reported_paths, run_each, short_of, sweep, tests_in,
+    together_verdict, unfinished_in,
 };
 use crate::yard::Yard;
 use std::ffi::OsString;
@@ -640,4 +640,29 @@ fn a_name_that_is_not_a_test_cases_is_not_read_as_one() {
     let root = crate::tree::workspace_root();
     let names = case_names(&root.join(Path::new(TESTS)).join("tst_navrowlight.qml"));
     assert_eq!(names, ["NavRowLight"]);
+}
+
+/// The product's modules of singletons stand in directories under `ui/`,
+/// and the import path finds each where its URI says: the staging keeps
+/// them as they stand, and takes nothing a module does not read.
+#[test]
+fn the_staging_keeps_the_modules_under_the_product_s_as_they_stand() {
+    let root = Yard::new("qmltest-modules");
+    let ui = root.join("ui");
+    std::fs::create_dir_all(ui.join("words")).expect("the fixture's dirs");
+    for (path, text) in [
+        ("qmldir", "module platitude.ui\n"),
+        ("Part.qml", "Item {}\n"),
+        ("notes.md", "not QML\n"),
+        ("words/qmldir", "module platitude.ui.words\n"),
+        ("words/Words.qml", "QtObject {}\n"),
+    ] {
+        std::fs::write(ui.join(path), text).expect("the fixture");
+    }
+    let staged = root.join("import/platitude/ui");
+    copy_module(&ui, &staged).expect("stage the module");
+    for path in ["qmldir", "Part.qml", "words/qmldir", "words/Words.qml"] {
+        assert!(staged.join(path).is_file(), "{path}");
+    }
+    assert!(!staged.join("notes.md").exists());
 }
