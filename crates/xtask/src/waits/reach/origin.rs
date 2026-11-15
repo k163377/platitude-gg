@@ -753,7 +753,8 @@ pub(super) fn literal(text: &str) -> bool {
         || text.chars().next().is_some_and(|c| c.is_ascii_digit())
 }
 
-/// The `?` and `:` of a conditional at the top level of `t`.
+/// The `?` and `:` of a conditional at the top level of `t`. The import
+/// graph has its own (`gate::plan::loads` says why the two are not one).
 fn conditional(t: &[Token]) -> Option<(usize, usize)> {
     let mut depth = 0i32;
     let mut question = None;
@@ -781,7 +782,8 @@ fn conditional(t: &[Token]) -> Option<(usize, usize)> {
     None
 }
 
-/// The stretches of `t` between its top-level `separators`.
+/// The stretches of `t` between its top-level `separators`. The import
+/// graph has its own (`gate::plan::loads` says why the two are not one).
 pub(super) fn split_top(t: &[Token], separators: &[&str]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let mut depth = 0i32;

@@ -648,7 +648,8 @@ fn handler(
 
 /// Where an expression starting at `at` ends: at a `,` / `;` or a closing
 /// bracket of its enclosing list, or at a line break no operator carries
-/// across.
+/// across. The import graph has its own (`gate::plan::loads` says why the
+/// two are not one).
 pub(super) fn expression_end(tokens: &[Token], at: usize, end: usize) -> usize {
     let mut depth = 0usize;
     let mut k = at;

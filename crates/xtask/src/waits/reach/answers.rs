@@ -195,7 +195,7 @@ impl Program {
     /// a plain global function named there (`Number`) answers a plain value;
     /// a harness or product function named there answers what its code
     /// returns; anything else answers a value of no known origin.
-    pub(super) fn callback_answers(&mut self, code: usize, arg: Range<usize>) -> Origin {
+    fn callback_answers(&mut self, code: usize, arg: Range<usize>) -> Origin {
         let d = self.codes[code].doc;
         if let Some(body) = function_body(&self.docs[d].tokens[arg.clone()]) {
             let body = arg.start + body.start..arg.start + body.end;

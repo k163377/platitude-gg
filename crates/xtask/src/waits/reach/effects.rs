@@ -312,7 +312,7 @@ impl Program {
 
     /// What changing a value of `origin` does — in place, or its `member`
     /// given a value.
-    pub(super) fn change(
+    fn change(
         &mut self,
         code: usize,
         origin: Origin,
