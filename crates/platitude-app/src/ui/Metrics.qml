@@ -28,14 +28,14 @@ QtObject {
     readonly property int holdPressesPlain: 2
     // One press's step of the fill and the mark. A double-click lands well inside it, so presses never wait on the
     // drawing.
-    readonly property int holdStepMs: 110
+    readonly property int holdStepMs: 120
     // How long the full fill stays after the last press, whatever the work does: long enough to be seen, short enough
     // not to be waited on.
     readonly property int holdFloorMs: 150
     // No press for this long and the count goes back to zero.
     readonly property int holdResetMs: 4000
     readonly property int holdFillMin: Theme.spaceXs
-    readonly property int holdBackMs: 150
+    readonly property int holdBackMs: 200
     // The one opacity anything is dimmed to — the 45% the `*Dim` colours are (デザイン規約 §暗く落とした段).
     readonly property real dimFade: 0.45
     // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (`CloseToolButton`).
