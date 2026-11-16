@@ -13,7 +13,10 @@ import platitude.ui.words
 // name is given on the STASHES row (規約 §左メニューの所作 の改名), half the tree is set aside by a file row's `stash`.
 // A name already written is used, though (`WipPane.stashName`). A plain button: a stash discards nothing, so it has no
 // warning colour, and the write is local, so no ring (規約 §進行中・回数押しの定数); while any other git command runs it
-// goes down like the rest. Boxed with fetch and push though its word never changes (`TopBar.widestAction`).
+// goes down like the rest, and stays down until what that command left has been read again (`RepoTab.settling`; user
+// decision — ask before changing): git answers ahead of that reading, and a press in between would set aside a tree
+// the screen is not showing yet — its own press included, so it takes one press at a time. Boxed with fetch and push
+// though its word never changes (`TopBar.widestAction`).
 ActionButton {
     id: stashButton
 
@@ -40,6 +43,7 @@ ActionButton {
     // (`RepoPage.wipWritable`). Down too while a stage or unstage press stands, as the commit button is
     // (`Words.stagingWait`): what it sets aside is the index git holds, not yet the one on screen.
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
+             && !stashButton.curPage.pageTab.settling
              && !stashButton.curPage.pageTab.stagingUnseen
              && !stashButton.curPage.planShown && stashButton.curPage.wipWritable
     tip: {
@@ -50,8 +54,9 @@ ActionButton {
         // Not said anywhere else: the rows look moved already (`Words.stagingWait`, git running or not).
         if (stashButton.curPage.pageTab.stagingUnseen)
             return Words.stagingWait
-        // Another git command running: the band says it.
-        if (stashButton.curPage.pageTab.busyCount > 0)
+        // Another git command out — running, where the band says it, or answered and still being read back, the
+        // same wait's tail.
+        if (stashButton.curPage.pageTab.busyCount > 0 || stashButton.curPage.pageTab.settling)
             return ""
         // The freeze names itself: a tree that could be stashed looks no different while a plan stands over it.
         if (stashButton.curPage.planShown)

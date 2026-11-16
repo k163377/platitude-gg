@@ -856,9 +856,10 @@ Item {
             "when": () => ({ "ready": wipPane.signingTipShown }),
             "report": () => "commit_face signs=" + repoTab.signsCommits + " tip=" + wipPane.signingTipShown })
     }
-    // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy. The row
-    // that has to go is read here, once the worktree row leads — it can arrive after the graph's first pass (a
-    // stopped merge), and read earlier the verb would wait on the newest commit.
+    // The band's Stash button, pressed until it takes: it is down while the opening fetch keeps the tab busy, and
+    // until what the fetch left is read again (`BandStashButton.enabled`). The row that has to go is read here, once
+    // the worktree row leads — it can arrive after the graph's first pass (a stopped merge), and read earlier the verb
+    // would wait on the newest commit.
     PageStage {
         id: stashPressTimer
         name: "stash_press"

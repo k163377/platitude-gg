@@ -624,8 +624,9 @@ Item {
     //
     // Started once the two writes that fill the log are through (`commandsFillTimer`). The stash goes in once the
     // band's own `stash` would take a press (`TopBar.stashLive` — down while a stage press stands,
-    // `Words.stagingWait`): the slot behind it, with a message of two paragraphs no box can type, and the watch armed
-    // for it holds it in turn. Everything is read in the branch that acts (rules/app-ui.md §UI 自動化).
+    // `Words.stagingWait`, and until what a write left is read again): the slot behind it, with a message of two
+    // paragraphs no box can type, and the watch armed for it holds it in turn. Everything is read in the branch that
+    // acts (rules/app-ui.md §UI 自動化).
     //
     // `rows`, witnessed at the drag: the rows the drag spans, read off the model — the panel's `(N)` is the view's, a
     // frame behind in the tick a press lands in.

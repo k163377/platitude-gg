@@ -6,7 +6,8 @@ import platitude.ui.words
 // The two writes that take the index whole and wait while a stage or unstage press stands, besides the commit button
 // and HEAD's amend (`stage-held` / `stage-held-amend`): the stopped operation's `--continue` (`OpExitCard`) and the
 // toolbar's `stash` (`BandStashButton`). Each goes down and says why in the same words (`Words.stagingWait`), the
-// `git add` running included. Driven by their own inputs, the page's shape stood in for (`RepoTab.stagingUnseen`).
+// `git add` running included. The `stash` stays down besides until what any command of the window's left has been read
+// again (`RepoTab.settling`). Driven by their own inputs, the page's shape stood in for.
 Item {
     id: root
     width: 400
@@ -15,6 +16,7 @@ Item {
     readonly property QtObject tab: QtObject {
         id: tab
         property int busyCount: 0
+        property bool settling: false
         property bool stagingUnseen: false
         property string state: "open"
         function resolveOperation(how) {}
@@ -64,6 +66,7 @@ Item {
 
         function init() {
             tab.busyCount = 0
+            tab.settling = false
             tab.stagingUnseen = false
             tree.conflictCount = 0
         }
@@ -130,6 +133,18 @@ Item {
             compare(stash.tip, "", "another command running alone: the band says why")
             tab.busyCount = 0
             verify(stash.enabled, "nothing standing again")
+        }
+
+        function test_stash_stays_down_until_what_a_command_left_is_read() {
+            verify(stash.enabled, "nothing out: stash takes a press")
+            tab.busyCount = 1
+            tab.settling = true
+            verify(!stash.enabled, "a command running")
+            tab.busyCount = 0
+            verify(!stash.enabled, "git answered, and what it left is still being read")
+            compare(stash.tip, "", "no words, as while the command ran")
+            tab.settling = false
+            verify(stash.enabled, "the screen has what the command left")
         }
     }
 }

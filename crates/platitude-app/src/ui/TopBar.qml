@@ -295,8 +295,8 @@ Rectangle {
     readonly property int fetchFails: fetchButton.fails
     readonly property bool fetchFrameTurned: Qt.colorEqual(fetchButton.frameColor, Theme.warning)
     /// Automation: the Stash button, pressed at the button so the real wiring answers (`_PGG_AUTO_ACT=stash`).
-    /// **Answers whether the press went in**: it is refused while the tab is busy (the fetch on opening is one), so the
-    /// caller keeps offering it.
+    /// **Answers whether the press went in**: it is refused while the tab is busy (the fetch on opening is one) and
+    /// until what that command left has been read again (`BandStashButton.enabled`), so the caller keeps offering it.
     function stashNow() {
         if (!stashButton.enabled)
             return false
