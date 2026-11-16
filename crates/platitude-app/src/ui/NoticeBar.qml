@@ -100,7 +100,7 @@ Rectangle {
     onShutChanged: if (bar.shut) bar.travelling = false
     Behavior on implicitHeight {
         enabled: bar.travelling
-        NumberAnimation { duration: 200 }
+        NumberAnimation { duration: Metrics.animStandardMs }
     }
     // The hairline carries the tone (`Words.reportTone`); the heading and words keep their own colours
     // (デザイン規約 §回数押し「警告の色は枠と印が持つ」).

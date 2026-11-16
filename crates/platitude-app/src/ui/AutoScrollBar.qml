@@ -401,12 +401,12 @@ ScrollBar {
         Transition {
             from: "lit,underHand"
             to: ""
-            NumberAnimation { target: bar; property: "opacity"; duration: 400 }
+            NumberAnimation { target: bar; property: "opacity"; duration: Metrics.animLongMs }
         },
         Transition {
             from: ",gone"
             to: "underHand"
-            NumberAnimation { target: bar; property: "opacity"; duration: 200 }
+            NumberAnimation { target: bar; property: "opacity"; duration: Metrics.animStandardMs }
         }
     ]
 }

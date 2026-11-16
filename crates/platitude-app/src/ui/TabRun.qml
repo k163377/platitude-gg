@@ -1,12 +1,13 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import platitude.ui
 
 // Where the strip's run has scrolled to, its two ends, and the travel that moves it with nothing in hand (the carry
 // is `TabCarry`'s). The one owner of the strip's scroll: `TabStrip` only forwards. Several hands write `contentX`
 // (the wheel, a held tab's drift, the stand-in's travel, an asked-for travel), so every hand that comes after a
-// travel calls `halt()` before it writes — else for 200ms two writers draw over each other. Where to go is
-// `wholeAt` alone; `showTab` (200ms) and `landOn` (at once) differ only in how they get there.
+// travel calls `halt()` before it writes — else for a travel's length two writers draw over each other. Where to go is
+// `wholeAt` alone; `showTab` (a travel) and `landOn` (at once) differ only in how they get there.
 QtObject {
     id: tabRun
 
@@ -52,11 +53,11 @@ QtObject {
     }
 
     /// Travels the strip until `tab` is whole in the run — the least move (`wholeAt`) — animated rather than jumped,
-    /// and quick: the app's animation time, 200ms (user decision; 規約 §QML 実装ルール). A jump hides which way and how
-    /// far the strip went, which is what the hand that pressed was asking. The wheel and a press outrank it (`halt`):
-    /// a strip being sent goes where the sending hand sends it.
+    /// and quick: the app's standard animation length, `animStandardMs` (user decision; 規約 §QML 実装ルール). A
+    /// jump hides which way and how far the strip went, which is what the hand that pressed was asking. The wheel and
+    /// a press outrank it (`halt`): a strip being sent goes where the sending hand sends it.
     /// Answers false when there is nowhere to go, or a travel is already headed there — restarting mid-flight would
-    /// begin the 200ms over.
+    /// begin the travel over.
     function showTab(tab) {
         if (!tab)
             return false
@@ -100,7 +101,7 @@ QtObject {
     readonly property NumberAnimation travel: NumberAnimation {
         target: tabRun.view
         property: "contentX"
-        duration: 200
+        duration: Metrics.animStandardMs
         onStopped: tabRun.view.contentX = tabRun.clamp(tabRun.view.contentX)
     }
 }

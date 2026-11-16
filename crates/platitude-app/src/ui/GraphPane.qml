@@ -476,7 +476,7 @@ Rectangle {
         // pushes the list down.
         anchors.topMargin: findSeat.item !== null && findSeat.item.findClears ? findSeat.item.height : 0
         Behavior on anchors.topMargin {
-            NumberAnimation { duration: 200 }
+            NumberAnimation { duration: Metrics.animStandardMs }
         }
         graphModel: graphArea.graphModel
         worktree: graphArea.worktree

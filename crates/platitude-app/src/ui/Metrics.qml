@@ -20,6 +20,12 @@ QtObject {
     // A heading's mark a step over its capitals: it opens the section the way the capitals name it, and is centred on
     // their middle, as every head is.
     readonly property real markHead: 1.25
+    // The three lengths an animation takes (デザイン規約 §QML 実装ルール): short, standard, and the long one, kept to
+    // what falls back and to the blink. The ring's turn and the glide of a wheel notch or a bar's arrow keep lengths
+    // of their own.
+    readonly property int animShortMs: 120
+    readonly property int animStandardMs: 200
+    readonly property int animLongMs: 400
     readonly property int spinMs: 1000
     // Presses that confirm a control that takes something away (デザイン規約 §回数押し): one to start, two more to mean it.
     // Danger asks no more than warning — the colour says what is lost, the count only that it was meant.
@@ -28,14 +34,14 @@ QtObject {
     readonly property int holdPressesPlain: 2
     // One press's step of the fill and the mark. A double-click lands well inside it, so presses never wait on the
     // drawing.
-    readonly property int holdStepMs: 120
+    readonly property int holdStepMs: animShortMs
     // How long the full fill stays after the last press, whatever the work does: long enough to be seen, short enough
     // not to be waited on.
     readonly property int holdFloorMs: 150
     // No press for this long and the count goes back to zero.
     readonly property int holdResetMs: 4000
     readonly property int holdFillMin: Theme.spaceXs
-    readonly property int holdBackMs: 200
+    readonly property int holdBackMs: animStandardMs
     // The one opacity anything is dimmed to — the 45% the `*Dim` colours are (デザイン規約 §暗く落とした段).
     readonly property real dimFade: 0.45
     // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (`CloseToolButton`).
@@ -48,7 +54,7 @@ QtObject {
     readonly property int hoverKeepMs: 150
     // One on or off of a blink — what points at a place something just went (the discard log's seat). The longest
     // ruled length (user decision): the blink calls the eye over to a place, and a shorter one goes by unread.
-    readonly property int blinkMs: 400
+    readonly property int blinkMs: animLongMs
 
     // ---- 2. ベーシック: the ordinary window — its graph column, its rows, its menus ----
     readonly property int laneW: Theme.iconLg

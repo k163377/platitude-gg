@@ -108,7 +108,7 @@ Rectangle {
     visible: opacity > 0
     opacity: findBar.open ? 1 : 0
     Behavior on opacity {
-        NumberAnimation { duration: 120 }
+        NumberAnimation { duration: Metrics.animShortMs }
     }
 
     RowLayout {

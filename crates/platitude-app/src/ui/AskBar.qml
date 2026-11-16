@@ -161,8 +161,8 @@ Rectangle {
     }
 
     /// Whether the question stands. **The words stay put when it comes down**: the bar is on screen for the whole
-    /// 200ms it spends going back up, and a bar emptied at the press spends it as a blank band in whatever colour its
-    /// owner's bindings fell back to. The next question replaces the words (`GraphPane.startAsking` dresses the bar,
+    /// `animStandardMs` it spends going back up, and a bar emptied at the press spends it as a blank band in whatever
+    /// colour its owner's bindings fell back to. The next question replaces the words (`GraphPane.startAsking` dresses the bar,
     /// then raises it; `stopAsking` only lowers it).
     property bool open: false
     readonly property color tone: bar.danger ? Theme.danger : bar.neutral ? Theme.accent : Theme.warning
@@ -249,7 +249,7 @@ Rectangle {
     onShutChanged: if (bar.shut) bar.travelling = false
     Behavior on implicitHeight {
         enabled: bar.travelling
-        NumberAnimation { duration: 200 }
+        NumberAnimation { duration: Metrics.animStandardMs }
     }
     BandRule {
         color: bar.tone
