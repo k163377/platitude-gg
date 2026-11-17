@@ -7,10 +7,12 @@
 use super::{Arg, Verb};
 
 pub(super) const TABLE: &[Verb] = &[
+    // `share=true`: the one window that opens unsized (its store is never
+    // read) came up at the share of its screen.
     Verb {
         name: "solo",
         when: &[],
-        plain: "solo blocked=true",
+        plain: "solo blocked=true share=true",
     },
     // The same gate screen, swept (verbs.md §面の掃き): it stands before
     // any repository opens, so no command log carries its words.

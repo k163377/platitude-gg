@@ -409,14 +409,16 @@ impl AppBackend {
         Hub::with(|hub| hub.state().window.y.unwrap_or(i32::MIN)).unwrap_or(i32::MIN)
     }
 
+    /// `i32::MIN` (`WindowShape.unplaced`) for a size never saved, as for
+    /// the corner: the window then takes its share of the screen.
     #[qslot]
     fn start_window_width(&self) -> i32 {
-        with_window(|w| w.width)
+        Hub::with(|hub| hub.state().window.width.unwrap_or(i32::MIN)).unwrap_or(i32::MIN)
     }
 
     #[qslot]
     fn start_window_height(&self) -> i32 {
-        with_window(|w| w.height)
+        Hub::with(|hub| hub.state().window.height.unwrap_or(i32::MIN)).unwrap_or(i32::MIN)
     }
 
     #[qslot]

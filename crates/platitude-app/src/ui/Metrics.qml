@@ -57,6 +57,12 @@ QtObject {
     readonly property int blinkMs: animLongMs
 
     // ---- 2. ベーシック: the ordinary window — its graph column, its rows, its menus ----
+    // The share of the screen's width and of its height a window never sized before opens at (user decision): a
+    // share, so a large screen gets a large window. 0.8 and not 0.75: height is what this window runs short of first
+    // (graph rows, the left menu's sections, the log), and 0.75 gives a 1920x1080 screen 810 of its 1080. Under 0.9:
+    // GNOME maximises a first window over 80% of the work area's area (mutter `MAX_UNMAXIMIZED_WINDOW_AREA`), so the
+    // first window would come up maximised there and windowed everywhere else.
+    readonly property real firstWindowShare: 0.8
     readonly property int laneW: Theme.iconLg
     readonly property int laneInset: Theme.spaceXs
     readonly property int nodeIcon: Theme.iconLg

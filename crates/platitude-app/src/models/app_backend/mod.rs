@@ -31,7 +31,7 @@ use signals as stop;
 
 pub use build_id::{build_id, build_tree};
 
-use start::{Assignments, assignments, section_open, with_flag, with_layout, with_window};
+use start::{Assignments, assignments, section_open, with_flag, with_layout};
 // Also used by the settings screen's `GLOBAL` identity chapter.
 pub(crate) use start::app_workdir;
 

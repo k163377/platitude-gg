@@ -17,8 +17,11 @@ import platitude.ui.words
 
 ApplicationWindow {
     id: root
-    width: 1440
-    height: 900
+    // Built at the shape it opens at, which the start then holds to the screen and the floor
+    // (`WindowShape.applySavedWindow`): a window built at another size is resized as it comes up, and headless, a
+    // window resized after it is built leaves the scene's mirror of the content empty (`cargo xtask shot-check`).
+    width: windowShape.builtLength(AppBackend.startWindowWidth(), Screen.width)
+    height: windowShape.builtLength(AppBackend.startWindowHeight(), Screen.height)
     visible: true
     /// Whether the tab row is the window's title bar: fixed at creation, and named by platform — hints are read then,
     /// so "try it and see whether it took" is not open, and a window that came up without a way to close it cannot be
@@ -387,10 +390,11 @@ ApplicationWindow {
         const acts = harness.ask()
         chrome.decorateWindow()
         AppBackend.initialize()
-        // A window that is only here to say another process has the files does none of the rest: its store is empty
-        // (`main`'s `claim_store`), and the saved shape is the real window's to wear.
+        // A window that is only here to say another process has the files opens no tabs. Its store is empty (`main`'s
+        // `claim_store`), so it takes the never-saved shape — a share of the screen, fitted to it like any other — and
+        // the saved shape stays the real window's to wear.
+        windowShape.applySavedWindow()
         if (!AppBackend.alreadyRunning) {
-            windowShape.applySavedWindow()
             root.startingTabs()
             if (!root.tabsClaimed)
                 tabsModel.restoreTabs()
@@ -399,8 +403,7 @@ ApplicationWindow {
         // (`WindowBody.blankDue`), and the saved shape is settled once whichever page that brings is up
         // (`WindowShape.applySavedWindow`).
         body.tabsStarted = true
-        if (!AppBackend.alreadyRunning)
-            windowShape.settleSavedWindow()
+        windowShape.settleSavedWindow()
         if (acts !== null)
             acts.begin()
     }

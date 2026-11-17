@@ -10,7 +10,7 @@ Item {
 
     required property var window
 
-    /// What the store sends for a coordinate it has never been told.
+    /// What the store sends for a coordinate or a length it has never been told.
     readonly property int unplaced: -2147483648
 
     /// What this window adds to a size on the way in: Qt takes the frame margins from one place when it sets the
@@ -51,6 +51,18 @@ Item {
     function insideScreen(saved, screen) {
         return shape.keepSavedSize ? saved : Math.min(saved, screen)
     }
+    /// One side of the window the screen's side `room` opens it at: [`builtLength`] kept inside the screen
+    /// ([`insideScreen`]). The room is the screen, not its work area, which QML is not told; Windows fits the frame to
+    /// the work area after (`settleSavedWindow`), and the other platforms' window managers keep a new window on the
+    /// screen themselves.
+    function firstLength(saved, room) {
+        return shape.insideScreen(shape.builtLength(saved, room), room)
+    }
+    /// One side of the window as `Main` builds it: the remembered length, or for a window never sized,
+    /// `Metrics.firstWindowShare` of the room.
+    function builtLength(saved, room) {
+        return saved === shape.unplaced ? Math.round(room * Metrics.firstWindowShare) : saved
+    }
 
     /// The screen the saved top-left corner falls on, or `null` for an unsaved position or a screen no longer here.
     /// The saved place decides the screen: `Screen` is wherever the platform just put the window (on Windows, the
@@ -81,10 +93,11 @@ Item {
     }
 
     // Restores the saved size and place, assigned: from here on the window manager and the user own them. An
-    // unsaved position stays unset so the platform places the window.
+    // unsaved size is a share of the screen ([`firstLength`]); an unsaved position stays unset so the platform places
+    // the window.
     //
     // In two steps, either side of the strip's start (`Main`). The size and place go on first, so the page built next
-    // is laid out for the window it stands in rather than the default one. The floor is a page's to say, so the frame
+    // is laid out for the window it stands in. The floor is a page's to say, so the frame
     // is fitted and the window maximised after ([`settleSavedWindow`]): the page a restored tab brings, or the blank
     // one, is up by then, and where its floor is over the saved shape it has lifted it in between (`holdFloor`), the
     // window still windowed. A run that asks for its folders has no page yet at the second step — git places them
@@ -98,10 +111,10 @@ Item {
         const roomH = home !== null ? home.height : Screen.height
         // Over the floor as far as it is known: the band's alone, with no page up yet.
         const wantWidth = Math.max(
-            shape.insideScreen(AppBackend.startWindowWidth(), roomW),
+            shape.firstLength(AppBackend.startWindowWidth(), roomW),
             Math.ceil(shape.window.floorWidth))
         const wantHeight = Math.max(
-            shape.insideScreen(AppBackend.startWindowHeight(), roomH),
+            shape.firstLength(AppBackend.startWindowHeight(), roomH),
             Math.ceil(shape.window.floorHeight))
         shape.window.width = wantWidth
         shape.window.height = wantHeight

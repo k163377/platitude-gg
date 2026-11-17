@@ -194,8 +194,8 @@ mod tests {
             window: WindowState {
                 x: Some(-1200),
                 y: Some(40),
-                width: 1600,
-                height: 980,
+                width: Some(1600),
+                height: Some(980),
                 maximized: true,
             },
             layout: LayoutState {
@@ -265,8 +265,8 @@ mod tests {
             window: WindowState {
                 x: Some(120),
                 y: Some(80),
-                width: 1600,
-                height: 980,
+                width: Some(1600),
+                height: Some(980),
                 maximized: false,
             },
             layout: LayoutState::default(),

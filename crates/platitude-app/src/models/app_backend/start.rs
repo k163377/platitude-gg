@@ -50,11 +50,6 @@ pub(super) fn assignments() -> Assignments {
     .unwrap_or_default()
 }
 
-pub(super) fn with_window(pick: impl Fn(&platitude_core::settings::WindowState) -> i32) -> i32 {
-    let fallback = platitude_core::settings::WindowState::default();
-    Hub::with(|hub| pick(&hub.state().window)).unwrap_or_else(|| pick(&fallback))
-}
-
 pub(super) fn with_layout(pick: impl Fn(&platitude_core::settings::LayoutState) -> i32) -> i32 {
     let fallback = platitude_core::settings::LayoutState::default();
     Hub::with(|hub| pick(&hub.state().layout)).unwrap_or_else(|| pick(&fallback))

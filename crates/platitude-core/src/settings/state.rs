@@ -3,29 +3,20 @@
 use toml::{Table, Value};
 
 use super::SCHEMA_VERSION;
-use super::toml::{coord, flag, int_in, repo_key, sub_table, width_or_auto};
+use super::toml::{coord, flag, int_in, int_within, repo_key, sub_table, width_or_auto};
 
 /// Where the window was left. Position is optional: "never saved" lets
 /// the window manager place the window, "saved at 0,0" names the corner.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// So is the size: never saved, the window takes a share of the screen it
+/// opens on (`WindowShape.builtLength`) — a screen's size is the UI's to
+/// know, so no size stands here for it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WindowState {
     pub x: Option<i32>,
     pub y: Option<i32>,
-    pub width: i32,
-    pub height: i32,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
     pub maximized: bool,
-}
-
-impl Default for WindowState {
-    fn default() -> Self {
-        Self {
-            x: None,
-            y: None,
-            width: 1440,
-            height: 900,
-            maximized: false,
-        }
-    }
 }
 
 /// Which sidebar sections are expanded.
@@ -139,8 +130,8 @@ impl State {
             state.window = WindowState {
                 x: coord(w, "x"),
                 y: coord(w, "y"),
-                width: int_in(w, "width", 320..=32_000, d.width),
-                height: int_in(w, "height", 240..=32_000, d.height),
+                width: int_within(w, "width", 320..=32_000),
+                height: int_within(w, "height", 240..=32_000),
                 maximized: flag(w, "maximized", d.maximized),
             };
         }
@@ -223,8 +214,12 @@ impl State {
         if let Some(y) = self.window.y {
             window.insert("y".into(), Value::Integer(y.into()));
         }
-        window.insert("width".into(), Value::Integer(self.window.width.into()));
-        window.insert("height".into(), Value::Integer(self.window.height.into()));
+        if let Some(width) = self.window.width {
+            window.insert("width".into(), Value::Integer(width.into()));
+        }
+        if let Some(height) = self.window.height {
+            window.insert("height".into(), Value::Integer(height.into()));
+        }
         window.insert("maximized".into(), Value::Boolean(self.window.maximized));
         root.insert("window".into(), Value::Table(window));
 
@@ -315,13 +310,27 @@ colour = "midnight"
 
         let state = dir_store(dir.path()).load_state();
         let d = State::default();
-        assert_eq!(state.window.width, d.window.width, "wrong type falls back");
-        assert_eq!(state.window.height, 1000, "the good key survives");
+        assert_eq!(state.window.width, None, "a wrong type is no size");
+        assert_eq!(state.window.height, Some(1000), "the good key survives");
         assert_eq!(
             state.layout.sidebar_width, d.layout.sidebar_width,
             "an unusable width falls back like a wrong type"
         );
         assert_eq!(state.layout.details_width, 640);
+    }
+
+    /// A window never saved has no size to write, and none comes back: the
+    /// UI takes a share of the screen instead.
+    #[test]
+    fn an_unsaved_window_has_no_size() {
+        let dir = crate::temp::dir();
+        let store = dir_store(dir.path());
+        store.save_state(&State::default()).expect("save");
+        let text = std::fs::read_to_string(dir.path().join(STATE_FILE)).expect("read");
+        assert!(!text.contains("\nwidth = "), "{text}");
+        assert!(!text.contains("\nheight = "), "{text}");
+        let back = store.load_state().window;
+        assert_eq!((back.width, back.height), (None, None));
     }
 
     /// [`AUTO_WIDTH`] has to survive the same range check that throws out

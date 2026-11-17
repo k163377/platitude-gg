@@ -110,12 +110,21 @@ pub(super) fn int_in(
     range: std::ops::RangeInclusive<i64>,
     fallback: i32,
 ) -> i32 {
+    int_within(table, key, range).unwrap_or(fallback)
+}
+
+/// [`int_in`] for a value with no default: missing, the wrong type and out
+/// of range alike are none.
+pub(super) fn int_within(
+    table: &Table,
+    key: &str,
+    range: std::ops::RangeInclusive<i64>,
+) -> Option<i32> {
     table
         .get(key)
         .and_then(Value::as_integer)
         .filter(|v| range.contains(v))
         .and_then(|v| i32::try_from(v).ok())
-        .unwrap_or(fallback)
 }
 
 /// A column width inside the graph: `AUTO_WIDTH` for "nobody moved this

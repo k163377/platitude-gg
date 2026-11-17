@@ -3,7 +3,7 @@ import QtTest
 import platitude.ui
 
 // Which screen a saved place belongs to, held against desktops this machine does not have: everything the restore
-// does after it is measured against the screen this answers with.
+// does after it is measured against the screen this answers with. And the length each side opens at on that screen.
 Item {
     id: root
     width: 200
@@ -53,6 +53,19 @@ Item {
             compare(shape.screenHolding(Qt.point(240, shape.unplaced), root.desktop), null)
             compare(shape.screenHolding(Qt.point(6000, 200), root.desktop), null)
             compare(shape.screenHolding(Qt.point(240, 90), []), null)
+        }
+
+        /// A share and not a size: a large screen gets a large window, a small one a small window.
+        function test_a_window_never_sized_takes_a_share_of_each_side() {
+            compare(shape.firstLength(shape.unplaced, 3840), Math.round(3840 * Metrics.firstWindowShare))
+            compare(shape.firstLength(shape.unplaced, 1080), Math.round(1080 * Metrics.firstWindowShare))
+            verify(shape.firstLength(shape.unplaced, 3840) > shape.firstLength(shape.unplaced, 1920))
+        }
+
+        /// A saved length comes back as it was, kept inside the screen it opens on.
+        function test_a_saved_length_is_kept_inside_the_screen() {
+            compare(shape.firstLength(1440, 3840), 1440)
+            compare(shape.firstLength(1440, 1093), 1093)
         }
     }
 }

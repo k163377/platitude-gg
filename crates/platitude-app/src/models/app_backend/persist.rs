@@ -201,8 +201,16 @@ impl AppBackend {
                 // launch's restore rectangle and feed themselves.
                 x: if maximized { previous.x } else { Some(x) },
                 y: if maximized { previous.y } else { Some(y) },
-                width: if maximized { previous.width } else { width },
-                height: if maximized { previous.height } else { height },
+                width: if maximized {
+                    previous.width
+                } else {
+                    Some(width)
+                },
+                height: if maximized {
+                    previous.height
+                } else {
+                    Some(height)
+                },
                 maximized,
             });
         });

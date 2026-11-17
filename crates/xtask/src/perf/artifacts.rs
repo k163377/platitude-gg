@@ -10,8 +10,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use super::Options;
 use super::display::Screen;
 
-/// The app's own default window, said out loud: the height sets how many
-/// rows a graph builds, and the overhang sets the scroll bench's speed.
+/// The window every measured run opens at, written into its state: the
+/// height sets how many rows a graph builds, and the overhang sets the
+/// scroll bench's speed. The same size verify-ui's runs open at
+/// (`verify::seed`).
 const WINDOW_WIDTH: i32 = 1440;
 const WINDOW_HEIGHT: i32 = 900;
 

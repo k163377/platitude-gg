@@ -324,7 +324,7 @@
 - `corner wip|<行>`(右下の git バージョン表示が隅を譲るか。**省略はエラー**。**`--preset basic` と `--preset long` を対で読む**(片側だけでは「常に出る」「常に出ない」と見分けが付かない)。報告行 `git_corner` — 詳細は `AutoActDetailsVerbs.qml` の `cornerTimer`、判定は `verify/verbs/panes.rs`)
 - `open-again [<パス>]`(開いているリポジトリをもう一度開く — そのまま既存タブへ。引数なし(`--preset basic --preset stashes`)と git の綴りを渡す形を対で読み、本題は後者 — 詳細は `WindowTabActs.qml` の `openAgainTimer`)
 - `identity [<name>|<email>]` / `identity-half` / `identity-tip`(identity 未設定の質問ダイアログ / 半分だけ保存された identity から続ける / 半端 save の後の帯の状態カード(overlay.png 側。must_say)。既定の値は `Ada Lovelace|ada@example.com`。**書き込みが demo リポジトリの外 = 人の git 設定へ出る**のはこの系列だけ(隔離は全動詞共通 — linux.md §Linux(コンテナ)での動確「どの run も自分の gitconfig で立つ」)— 詳細は `WindowDialogActs.qml` の `identityTimer` / `identityTipTimer`、仕込みは `verify/shim.rs`、判定は `verify/verbs/identity.rs`)
-- `solo`(2 つ目のプロセスが出す窓 = 2 個目の起動が断られる報告。xtask が `--config-dir` の `lock` を握ってから起動する。must_say `solo blocked=true` — 詳細は `WindowTabActs.qml` の `soloActTimer`、判定は `verify/verbs/panes.rs`)
+- `solo`(2 つ目のプロセスが出す窓 = 2 個目の起動が断られる報告。xtask が `--config-dir` の `lock` を握ってから起動する。must_say `solo blocked=true share=true`(`share=`: 保存寸法を読まない唯一の窓が画面の割合で開いたか)— 詳細は `WindowTabActs.qml` の `soloActTimer`、判定は `verify/verbs/panes.rs`)
 - `band`(タブ行がタイトルバーを兼ねる帯 — 掴めるかは絵に出ないので数字で読む。報告行 `band`。`--system-title-bar` を付けると兼ねない側(mac / Linux)の形。チップや行を見せたい時は、その行を待つ動詞(`nav-jump` / `ref-list` / `row-card`)で撮る — 詳細は `WindowBandActs.qml` の `bandActTimer`)
 - `app-menu` / `app-menu-reclick`(☰ を 1 回押して立てたまま / 2 回押して閉じる。**対で読む**。引数なし。must_say — 詳細は `WindowBandActs.qml` の `appMenuActTimer`、判定は `verify/verbs/window.rs`)
 - `ops-panel [<幅>]`(**操作パネルが立った姿** = 状態の表を撮る動詞。preset は登録表の行(`panel` / `longnames` / `worktrees`)。must_say と絵の主張 `ops_panel` — 詳細は `WindowBandActs.qml` の `opsPanelTimer`)

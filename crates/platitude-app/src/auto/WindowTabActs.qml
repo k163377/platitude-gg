@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import platitude
 import platitude.ui
 import platitude.ui.hover
@@ -1088,17 +1089,27 @@ Item {
     }
 
     // _PGG_AUTO_ACT=solo: the harness holds the real lock on the config directory before starting this process, so the
-    // picture is of the mechanism.
+    // picture is of the mechanism. `share=`: its store is never read, so this is the window that opens unsized — each
+    // side at `Metrics.firstWindowShare` of its screen (`WindowShape.builtLength`), or at the floor where that is short
+    // of it, which a sentinel lost on the way from the store would not give. On the offscreen 800x800 screen the floor
+    // covers the width, so the height is the side that says it.
     WindowStage {
         id: soloActTimer
         name: "solo_act"
         running: Harness.autoAct === "solo"
+        function atShare() {
+            return window.width === Math.max(Math.round(Screen.width * Metrics.firstWindowShare),
+                                             Math.ceil(window.floorWidth))
+                && window.height === Math.max(Math.round(Screen.height * Metrics.firstWindowShare),
+                                              Math.ceil(window.floorHeight))
+        }
         onTriggered: {
             soloActTimer.complete({
                 "name": "solo_act_ready",
                 "when": () => ({ "ready": !(!AppBackend.alreadyRunning || !gate.visible),
                                  "page": PageSettled.windowSettled(window) }),
                 "report": () => "solo blocked=" + AppBackend.alreadyRunning
+                                + " share=" + soloActTimer.atShare()
                                 + " held=" + (AppBackend.heldElsewhere !== "")
                                 + " gate=" + gate.visible
                                 + " main=" + mainUi.visible })
