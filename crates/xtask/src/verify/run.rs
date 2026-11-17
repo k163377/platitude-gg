@@ -216,19 +216,17 @@ fn gitconfig_for(verb: &str, shot_dir: &std::path::Path) -> Result<std::path::Pa
 }
 
 /// What the registered table promises for this line, or nothing for a line
-/// it does not hold. A table that cannot be read is said, so a run judged
-/// without its row's promise is no quiet pass.
-fn promised(root: &std::path::Path, line: &str) -> Option<BTreeSet<String>> {
-    match crate::gate::Lines::load(root) {
-        Ok(lines) => lines.declared(line),
-        Err(why) => {
-            println!(
-                "verify: the registered table could not be read ({why}) — the row's promise \
-                 is not held against this run"
-            );
-            None
-        }
-    }
+/// it does not hold. A table that cannot be read fails the run: judged
+/// without its row's promise, the run would pass on the picture alone.
+fn promised(root: &std::path::Path, line: &str) -> Result<Option<BTreeSet<String>>, String> {
+    crate::gate::Lines::load(root)
+        .map(|lines| lines.declared(line))
+        .map_err(|why| {
+            format!(
+                "verify: the registered table could not be read ({why}), so the row's promise \
+                 cannot be held against this run"
+            )
+        })
 }
 
 pub fn run(args: &[String]) -> Result<(), String> {
@@ -329,7 +327,10 @@ pub fn run(args: &[String]) -> Result<(), String> {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
     let typable = opts.typable_line();
-    let declared = typable.as_deref().and_then(|line| promised(&root, line));
+    let declared = match typable.as_deref() {
+        Some(line) => promised(&root, line)?,
+        None => None,
+    };
     let verdict = outcome::judge(
         &opts,
         &ran,

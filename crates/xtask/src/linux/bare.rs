@@ -17,10 +17,13 @@ pub(super) fn bare(root: &Path, discover: bool) -> Result<(), String> {
     let app = ensure_image(root, "app", false)?;
     println!("building the release, workspace-wide…");
     // With the harness: the script below drives the app with
-    // `_PGG_AUTO_ACT`, which a build without it does not answer.
+    // `_PGG_AUTO_ACT`, which a build without it does not answer. Locked as
+    // every cargo the gate and the container run is: `/work` is the host's
+    // checkout, and an unlocked build would write its Cargo.lock.
     let build = [
         "cargo",
         "build",
+        "--locked",
         "--release",
         "--features",
         crate::app_build::HARNESS_FEATURE,
