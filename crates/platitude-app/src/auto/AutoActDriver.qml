@@ -282,11 +282,13 @@ Item {
             && PageSettled.settled(page)
     }
     /// The worktree row this run's write takes out of its bucket, as `<bucket>:<path>` — or "" for the verbs the
-    /// write barrier alone answers for. The write barrier already has the model re-read (each feed's drain is queued
-    /// ahead of the tab's settle), but a settle also comes for a write git refused and for one whose re-read failed
-    /// (`WriteSettled.failed` never reaches the tab): the row leaving is what says this write landed — a refusal
-    /// leaves it for the watchdog to diagnose, a failed re-read until the next read. Read off the row (verify-ui
-    /// verbs.md「は着地まで待って撮る」), not a counter: a counter also moves for statuses nobody here asked for.
+    /// write barrier alone answers for. The write barrier already has the model re-read (the tab lets the write go
+    /// behind the models' drains, `RepoTab::settle_heard`), but a settle also comes for a write git refused and for one
+    /// whose re-read failed (of `WriteSettled.failed` the tab hears only a failed status, `TabMsg::StatusUnread`, read
+    /// by `ops::StageAhead` alone — not by the barrier, nor by this wait): the row leaving is what says this write
+    /// landed — a refusal leaves it for the watchdog to diagnose, a failed re-read until the next read. Read off the
+    /// row (verify-ui verbs.md「は着地まで待って撮る」), not a counter: a counter also moves for statuses nobody here
+    /// asked for.
     property string treeGoneRow: ""
     /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
     /// Until the row is gone from the model, rows can wear each other's marks (a popped stash's box on the

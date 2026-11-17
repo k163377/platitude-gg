@@ -19,11 +19,18 @@ Rectangle {
     readonly property real holdIndent: Theme.iconMd
     /// Whether leaving the stopped commit out costs nothing — core's rule (`offers::skip_is_free`).
     readonly property bool skipIsFree: opExitCard.worktree.opSkipFree
-    /// `--continue` waits on a stage or unstage press standing (`RepoTab.stagingUnseen`): the step's commit is the
-    /// index git holds, not yet the one on screen. The one reason the row says (`Words.stagingWait`, git running or
+    /// `--continue` waits on a stage or unstage press holding it back (`RepoTab.stagingUnseen`): the step's commit is
+    /// the index git holds, not yet the one on screen. The one reason the row says (`Words.stagingWait`, git running or
     /// not) — the conflicted rows say theirs, so not while one stands.
     readonly property bool continueWaits:
         opExitCard.repoTab.stagingUnseen && opExitCard.worktree.conflictCount === 0
+    /// A git command of the window's is out — running, or answered with what it left not yet read again
+    /// (`RepoTab.settling`). Every way out stays down through both, the merge's button too (user decision — ask before
+    /// changing), as the toolbar's `stash` does (`BandStashButton`): git answers ahead of that reading, so the stop on
+    /// screen is still the one before the answer, and a press would land on a stop nobody has seen. A row pressed
+    /// through keeps its fill and ring as long (`OpExitRow.waiting`), and none says why
+    /// (`OpExitRow.blockedWhy`). Net: `tst_stagingwaits`.
+    readonly property bool commandOut: opExitCard.repoTab.busyCount > 0 || opExitCard.repoTab.settling
     readonly property real codeColW: {
         let widest = 0
         for (let i = 0; i < opExitCol.children.length; i++) {
@@ -165,13 +172,13 @@ Rectangle {
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
-            waiting: opExitCard.repoTab.busyCount > 0
+            waiting: opExitCard.commandOut
             code: "--continue"
             text: qsTr("Carry on with what is staged")
             visible: !opExitCard.worktree.opMerging
             // Dim while a conflict remains: git refuses then, and the commit button dims for the same reason. Dim
-            // too while a stage or unstage press stands, as the commit button does (`continueWaits`).
-            enabled: opExitCard.repoTab.busyCount === 0
+            // too while a stage or unstage press holds it back, as the commit button does (`continueWaits`).
+            enabled: !opExitCard.commandOut
                      && opExitCard.worktree.conflictCount === 0 && !opExitCard.continueWaits
             blockedWhy: opExitCard.continueWaits ? Words.stagingWait : ""
             onPicked: opExitCard.repoTab.resolveOperation("continue")
@@ -183,14 +190,14 @@ Rectangle {
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
-            waiting: opExitCard.repoTab.busyCount > 0
+            waiting: opExitCard.commandOut
             code: "--skip"
             text: qsTr("Leave this commit out")
             // Off the count the presses under way were given, so tag and gesture agree between presses
             // (`OpExitRow.armedPresses`).
             note: skipRow.armedPresses <= 0 ? qsTr("nothing in it") : ""
             visible: opExitCard.worktree.opStepping
-            enabled: opExitCard.repoTab.busyCount === 0
+            enabled: !opExitCard.commandOut
             // Held only where a real commit is lost (デザイン規約 §回数押し): conflicted or resolved and staged, the
             // commit's content goes with it and lives on only in the reflog. An emptied commit's stop loses nothing —
             // git itself says it is empty and names `--skip` — so a click and `nothing in it`. That stop is the only
@@ -208,14 +215,14 @@ Rectangle {
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
-            waiting: opExitCard.repoTab.busyCount > 0
+            waiting: opExitCard.commandOut
             code: "--quit"
             text: qsTr("Stop stepping, keep the tree")
             // **The tree it keeps is the conflicted one**: git drops the operation but leaves every unmerged path, so
             // this card goes while the files still wait (デザイン規約 §進行中の操作から出る).
             note: opExitCard.worktree.conflictCount > 0 ? qsTr("conflicts stay") : ""
             visible: opExitCard.worktree.opStepping
-            enabled: opExitCard.repoTab.busyCount === 0
+            enabled: !opExitCard.commandOut
             onPicked: opExitCard.repoTab.resolveOperation("quit")
         }
         OpExitRow {
@@ -223,11 +230,11 @@ Rectangle {
             codeColW: opExitCard.codeColW
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
-            waiting: opExitCard.repoTab.busyCount > 0
+            waiting: opExitCard.commandOut
             code: "--abort"
             text: qsTr("Undo it all and go back")
             visible: !opExitCard.worktree.opMerging
-            enabled: opExitCard.repoTab.busyCount === 0
+            enabled: !opExitCard.commandOut
             holdPresses: Metrics.holdPressesWarned
             // Everything the operation did since it started goes, none of it on the discard record.
             holdTone: Theme.danger
@@ -259,7 +266,7 @@ Rectangle {
             // the fill and while the button waits or cannot be pressed.
             phraseTailTint: Words.nameInk(abortButton.fg, opExitCard.worktree.detached ? undefined : Theme.textLink)
             phraseTailMark: opExitCard.worktree.detached ? "" : "branch"
-            enabled: opExitCard.repoTab.busyCount === 0
+            enabled: !opExitCard.commandOut
             onHeld: opExitCard.repoTab.resolveOperation("abort")
         }
     }

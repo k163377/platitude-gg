@@ -36,8 +36,10 @@ ActionButton {
     readonly property bool warned: pushButton.shownForce || pushButton.failed
 
     kind: "push"
-    busy: pushButton.busyLatched
-          || (pushButton.curPage !== null && pushButton.curPage.pageTab.busyOp === "push")
+    // The ring turns until what the push left is on screen — the counts, the remote's chip on its new row — not until
+    // git's answer, as fetch's does (`RepoTab.pushing`, `BandFetchButton`; user decision — ask before changing). The
+    // `!` of a refusal comes at the answer all the same (`failed`).
+    busy: pushButton.busyLatched || (pushButton.curPage !== null && pushButton.curPage.pageTab.pushing)
     // The command in every state; a first push is not called `Publish` (規約 §リモートへ送る). No counts: the label would
     // change width with them and move the panel's row — they are on the sidebar's `↑N ↓M` and in the tip. Every state
     // is the shared box's width (`TopBar.widestAction`).

@@ -20,7 +20,8 @@ HoverToolButton {
     /// (デザイン規約 §暗く落とした段). Where only the frame and the mark carry a warning it follows the frame, not the
     /// word; a plain button has no darker step and takes `textMuted`.
     property color toneDim: Theme.textMuted
-    /// git is on the network for this button: the ring takes the icon's seat, the word drops to the disabled colour,
+    /// git is on the network for this button — or, for the band's fetch and push, what it brought is still on its
+    /// way to the screen (`BandFetchButton`): the ring takes the icon's seat, the word drops to the disabled colour,
     /// and presses are ignored — with `enabled` kept, since dropping it takes the focus from a keyboard press
     /// (デザイン規約 §進行中・回数押しの定数).
     property bool busy: false

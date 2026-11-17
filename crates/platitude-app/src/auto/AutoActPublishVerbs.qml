@@ -283,7 +283,7 @@ Item {
                     "loaded": worktree.loaded,
                     "open": repoTab.state === "open",
                     "idle": repoTab.busyCount <= 0,
-                    "fetched": !repoTab.autoFetchRunning }))
+                    "fetched": PageSettled.openingFetchIn(repoTab) }))
                     return
                 // The hand goes on where a real one is read (`HoverToolButton.pointedAt`).
                 op.input("pointed", () => {
@@ -463,13 +463,14 @@ Item {
     readonly property int fetchFailRuns: Harness.autoAct === "fetch-fail" ? Math.max(1, Number(Harness.autoActArg))
                                        : Harness.autoAct === "fetch-hover" ? Math.max(0, Number(Harness.autoActArg))
                                        : Harness.autoAct === "fetch-resume" ? 3 : 0
-    /// What every beat of the run waits on: git not out (the opening's fetch shows in `autoFetchRunning`, the rest in
-    /// `busyCount`), and no ask still waiting for its answer. `askSeq` is the `writeSeq` the run's last fetch was
-    /// asked at, -1 for none: a fetch is admitted a drain after it is asked, so between one finishing and the next
-    /// being admitted `busyCount` is 0 and `writeSeq` has moved — which reads like a run at rest, and `writeBarrier`
-    /// completes there. So the wait is for the answer to the ask.
+    /// What every beat of the run waits on: git not out and no fetch still to be read back, so the button's ring is
+    /// down (the opening's fetch shows in `fetching` alone, a pressed one in `busyCount` too), and no ask still
+    /// waiting for its answer. `askSeq` is the `writeSeq` the run's last fetch was asked at, -1 for none: a fetch is
+    /// admitted a drain after it is asked, so between one finishing and the next being admitted `busyCount` is 0 and
+    /// `writeSeq` has moved — which reads like a run at rest, and `writeBarrier` completes there. So the wait is for
+    /// the answer to the ask.
     function fetchQuiet(askSeq) {
-        return { "ready": !(repoTab.busyCount !== 0 || repoTab.autoFetchRunning),
+        return { "ready": !(repoTab.busyCount !== 0 || repoTab.fetching),
                  "answered": !(askSeq >= 0 && repoTab.writeSeq <= askSeq) }
     }
     /// A run of failed fetches. Asking for the next fetch and judging the run long enough are one owner, so the two

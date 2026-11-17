@@ -110,7 +110,7 @@ Item {
                 return { "ready": !(window.curPage === null || !window.curPage.pageRefsLoaded
                                     || window.curPage.pageGraph.rowTotal < 1),
                          "page": PageSettled.windowSettled(window),
-                         "idle": tab !== null && tab.busyCount === 0 && !tab.autoFetchRunning,
+                         "idle": tab !== null && tab.busyCount === 0 && !tab.fetching,
                          "side": Harness.autoActArg === "off" ? tab !== null && tab.remoteCount === 0
                                                               : topBar.fetchLive }
             },
@@ -134,7 +134,7 @@ Item {
                 const tab = window.curPage !== null ? window.curPage.pageTab : null
                 return { "ready": !(window.curPage === null || !window.curPage.pageWorktree.loaded),
                          "page": PageSettled.windowSettled(window),
-                         "idle": tab !== null && tab.busyCount === 0 && !tab.autoFetchRunning,
+                         "idle": tab !== null && tab.busyCount === 0 && !tab.fetching,
                          "mode": topBar.stashMode === Harness.autoActArg }
             },
             "report": () => "stash_state mode=" + topBar.stashMode
@@ -239,19 +239,7 @@ Item {
         if (!window.visible || topBar.width <= 0 || window.curPage === null
                 || !window.curPage.pageRefsLoaded || !window.curPage.pageWorktree.loaded)
             return false
-        return acts.fetchSettled(window.curPage.pageTab)
-    }
-    /// Whether the fetch the page makes on its own at the opening has answered, and nothing is running now: a
-    /// `busyCount` of 0 read before that fetch began is the moment before it, not after it, and a picture taken
-    /// then is of counts the answer rewrites. Read off the count of answers (`RepoTab.autoFetchSeq`), since the
-    /// running flag falls between two beats and the answer rides one notify. A repository with no remote, or a
-    /// page whose fetching is suspended, makes no such fetch.
-    function fetchSettled(tab) {
-        if (tab.busyCount !== 0 || tab.autoFetchRunning)
-            return false
-        if (tab.remoteNames.length === 0 || tab.autoFetchSuspended)
-            return true
-        return tab.autoFetchSeq > 0
+        return PageSettled.openingFetchIn(window.curPage.pageTab)
     }
     /// The panel as the completion reads it. Claimed again at the pictures (`ops_panel`): a fetch answering between
     /// the report and the picture rewrites the counts the report named.
@@ -436,11 +424,11 @@ Item {
             if (op.at("start")) {
                 // Not before the repository is open: core refuses the fetch without reaching git, that refusal
                 // suspends the fetches too, and the panel the verb then opens holds no row. Nor before the opening
-                // fetch has answered (`fetchSettled`), which the next one would be answered with.
+                // fetch has answered (`PageSettled.openingFetchIn`), which the next one would be answered with.
                 if (!Awaited.all("fetch_stop_idle", {
                         "open": page !== null && page.pageTab.state === "open",
                         "page": page !== null && PageSettled.windowSettled(window),
-                        "idle": page !== null && acts.fetchSettled(page.pageTab) }))
+                        "idle": page !== null && PageSettled.openingFetchIn(page.pageTab) }))
                     return
                 op.input("asked", () => {
                     op.witness("seq", page.pageTab.writeSeq)
@@ -470,7 +458,7 @@ Item {
         function terms(pointed) {
             const page = acts.window.curPage
             const ready = page !== null && PageSettled.windowSettled(window)
-            const idle = ready && page.pageTab.busyCount === 0 && !page.pageTab.autoFetchRunning
+            const idle = ready && page.pageTab.busyCount === 0 && !page.pageTab.fetching
             const terms = { "ready": page !== null,
                             "page": PageSettled.windowSettled(window),
                             "idle": idle,
@@ -555,7 +543,7 @@ Item {
                 "band": topBar.bandTabsWidth > 0 && topBar.actionNaturalW > Theme.railWidth,
                 "page": PageSettled.settledUnder(window),
                 // The opening fetch answered: push's wording and the alert are the worktree's after it.
-                "fetch": page !== null && acts.fetchSettled(page.pageTab)
+                "fetch": page !== null && PageSettled.openingFetchIn(page.pageTab)
             }
             const ready = terms["band"] && terms["page"] && terms["fetch"]
             // The refusal also brings its report down, and the bar grows into place (`NoticeBar.settled`):
@@ -568,7 +556,7 @@ Item {
             // The same corner on fetch, which is marked by the run of failures that stops its timer
             // (`fetchStopTimer`).
             if (corner && Harness.autoAct === "band-actions-stopped") {
-                const idle = page !== null && page.pageTab.busyCount === 0 && !page.pageTab.autoFetchRunning
+                const idle = page !== null && page.pageTab.busyCount === 0 && !page.pageTab.fetching
                 terms["idle"] = idle
                 terms["stopped"] = ready && idle && acts.fetchStopped
             }
@@ -626,7 +614,7 @@ Item {
                 op.witness("shape", acts.bandActionsKey())
                 op.advance("shaped")
                 Awaited.claim("band_actions", () => acts.bandActionsKey() === op.witnessed("shape")
-                              && acts.fetchSettled(window.curPage.pageTab))
+                              && PageSettled.openingFetchIn(window.curPage.pageTab))
             }
             // Which button the mark is on: `alert=` is the pair or-ed (`TopBar.actionAlertShown`), so
             // `band-actions-stopped` says fetch's side on a line of its own — `suspended=` the timer stopped, `turned=`

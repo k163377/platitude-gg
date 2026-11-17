@@ -65,7 +65,7 @@ Item {
         property bool canPush: false
         property bool canForcePush: true
         property string pushFailReason: ""
-        property QtObject pageTab: QtObject { property string busyOp: "" }
+        property QtObject pageTab: QtObject { property bool pushing: false }
         property QtObject pageWorktree: QtObject {
             property string branch: tab.branch
         }

@@ -339,15 +339,22 @@ Item {
                 op.complete({ "name": "edit_stop", "when": () => op.stood(), "report": () => op.line() })
                 return
             }
-            if (!Awaited.all("edit_stop", op.stood()))
+            if (op.at("start")) {
+                if (!Awaited.all("edit_stop", op.stood()))
+                    return
+                // The stop as it stood, said before the continuation takes it down; where that leaves the reader is
+                // the landing's (`AutoActDriver.awaitOpExitLanding`).
+                if (!op.advance("stopped", () => op.line()))
+                    return
+            }
+            // The row takes no press until what the rebase left has been read again (`OpExitCard.commandOut`), which
+            // `stood` does not wait for: a press turned away is pressed again on the next beat. Whether the
+            // continuation's press went in is its own answer, kept as it went.
+            if (!op.input("continued",
+                          () => op.witness("exitHeld", driver.pressWrite(
+                                               "op-exit", () => wipPane.completeOpExit("--continue"))),
+                          () => "op_exit_held " + op.witnessed("exitHeld")))
                 return
-            // The stop as it stood, said before the continuation takes it down; where that leaves the reader is the
-            // landing's (`AutoActDriver.awaitOpExitLanding`). Whether the continuation's press went in is its own
-            // answer, kept as it went.
-            op.advance("stopped", () => op.line())
-            op.input("continued", () => {
-                op.witness("exitHeld", driver.pressWrite("op-exit", () => wipPane.completeOpExit("--continue")))
-            }, () => "op_exit_held " + op.witnessed("exitHeld"))
             op.stop()
             driver.awaitOpExitLanding()
         }

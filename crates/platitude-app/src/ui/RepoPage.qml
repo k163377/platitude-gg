@@ -122,9 +122,9 @@ FocusScope {
     /// (`RepoSession::move_worktree`) — nothing else may be written meanwhile.
     property bool worktreeMoveOut: false
     /// What a menu's rows say while they wait for a git command this window asked for (`AppMenu.runningWhy`): until
-    /// what it left has been read again (`RepoTab.settling`) and the doors are let go (a plan's run is asked for
-    /// elsewhere, and counted only once it starts). A menu opened under one stands again on that reading the moment it
-    /// ends. `busyCount` alone ends too early: it drops at git's answer, before the reading.
+    /// what it left has been read again and the models hold it (`RepoTab.settling`) and the doors are let go (a plan's
+    /// run is asked for elsewhere, and counted only once it starts). A menu opened under one stands again on that
+    /// reading the moment it ends. `busyCount` alone ends too early: it drops at git's answer, before the reading.
     /// Not `moveLanding`: a move's landing is inside the reading again already, and one that failed to come down would
     /// keep every menu waiting.
     readonly property string runningWhy:

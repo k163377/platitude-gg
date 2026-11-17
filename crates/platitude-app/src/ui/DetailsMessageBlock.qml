@@ -203,7 +203,7 @@ Flickable {
                 canSave: msgEditor.subjectText.trim() !== ""
                 // The save is `commit --amend`, which takes what is staged too: one that would leave HEAD changing
                 // nothing is git's to refuse, so it is refused first, as the commit button refuses it — and none goes
-                // while a stage press stands, whose rows are not yet git's (`amendWaits`). A plan's reword runs
+                // while a stage press holds it back, its rows not yet git's (`amendWaits`). A plan's reword runs
                 // nothing here.
                 refusedWhy: block.intoPlan ? ""
                             : block.amendWaits ? Words.stagingWait

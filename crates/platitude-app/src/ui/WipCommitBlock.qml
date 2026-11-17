@@ -301,9 +301,10 @@ Flickable {
                 // after it failed, which is an answer too (`identityUnread`; git's words are in the command log's error
                 // line, and the button comes back at the next read that lands). Nor while `commitWaits` holds:
                 // another write is out — queued ones too, whose work it would carry — **or a stage or unstage
-                // press stands** (`stagingUnseen`): the rows move at the press, ahead of git, and are the press's
-                // word until the status after it is drawn — git's own then, and what Commit records
-                // (デザイン規約 §バケツごとの一覧と、ペインの分け方).
+                // press holds it back** (`stagingUnseen`): the rows move at the press, ahead of git, and are the
+                // press's word until the status after it is drawn — git's own then, and what Commit records. The
+                // one press that lets it go sooner is one a failed status read let off the wait, over rows still
+                // the press's word (`ops::StageAhead::index_unseen`; デザイン規約 §バケツごとの一覧と、ペインの分け方).
                 enabled: !block.composeHidden && !block.repoTab.commitWaits
                          && block.repoTab.identityRead && !block.repoTab.identityUnread
                          && block.repoTab.identityReady
@@ -321,8 +322,8 @@ Flickable {
                     target: commitButton
                     asked: (commitHover.containsMouse || block.commitPointedAt) && !commitButton.enabled
                     // The button's own waits first — a later reason would name something the press is not waiting
-                    // on: a stage press standing (`Words.stagingWait`, git running or not), then another write
-                    // out, queued ones too (`commitWaits`).
+                    // on: a stage press holding it back (`Words.stagingWait`, git running or not), then another
+                    // write out, queued ones too (`commitWaits`).
                     words: block.repoTab.stagingUnseen
                            ? Words.stagingWait
                            : block.repoTab.commitWaits || !block.repoTab.identityRead

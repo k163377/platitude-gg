@@ -305,9 +305,10 @@ MenuItem {
     }
     /// Automation: every press at once without a hand behind them — on a row a hand could press. Answers whether
     /// they went in, so a run that met the row out of reach waits rather than counting presses nothing landed. A row
-    /// of a card opened under a write is still grey in the beat the run's `wroteAndSettled()` turns true: `settling`
-    /// comes down at the next drain (`AppMenu.waiting`). A refused press has armed the write's watch again, so the
-    /// retry must not read the earlier write's passage afresh — latch it (`AutoActRefVerbs`' `forceDeleteTimer`).
+    /// of a card opened under a write can still be grey once the run's `wroteAndSettled()` is true: the card waits on
+    /// every command of the window's out, not that write alone (`AppMenu.waiting`). A refused press has armed the
+    /// write's watch again, so the retry must not read the earlier write's passage afresh — latch it
+    /// (`AutoActRefVerbs`' `forceDeleteTimer`).
     function completeHold() {
         if (!menuItem.present || menuItem.greyed)
             return false

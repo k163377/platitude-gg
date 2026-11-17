@@ -143,6 +143,20 @@ QtObject {
         return pageSettled.lists(page).every(([, view]) => Awaited.built(view))
     }
 
+    /// Whether the fetch a page makes on its own at the opening has answered, and nothing is running or still being
+    /// read back now (`RepoTab.fetching`, which the fetch button's ring turns on) — a term apart from `settled`, for
+    /// the verbs that read or photograph what that fetch moves. A `busyCount` of 0 read before that fetch began is the
+    /// moment before it, not after it, and so is a low `fetching` (readiness, rules-refs/app-ui.md「まだ答えが無い」):
+    /// it is read off the count of answers (`RepoTab.autoFetchSeq`) as well. A repository with no remote, or a page
+    /// whose fetching is suspended, makes no such fetch. `tab` is a `RepoTab`.
+    function openingFetchIn(tab) {
+        if (tab.busyCount !== 0 || tab.fetching)
+            return false
+        if (tab.remoteNames.length === 0 || tab.autoFetchSuspended)
+            return true
+        return tab.autoFetchSeq > 0
+    }
+
     /// The window's page settled, or no page yet: the term a window's act waits on before its report, which reads
     /// the page under the window — the completion's hold (`CompletionRoute`) holds the report on the same reads.
     function windowSettled(window) {

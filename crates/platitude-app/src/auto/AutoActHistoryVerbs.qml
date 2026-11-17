@@ -562,13 +562,6 @@ Item {
             menuWaitTimer.witness("raisedOn", menuWaitTimer.selector)
             return true
         }
-        /// The fetch the page makes on its own at the opening has answered, and nothing runs: landing later, it would
-        /// move `origin/main` itself, ahead of the fetch the forms press (`WindowBandActs.fetchSettled`).
-        function openingFetchIn() {
-            if (repoTab.busyCount !== 0 || repoTab.autoFetchRunning)
-                return false
-            return repoTab.remoteNames.length === 0 || repoTab.autoFetchSuspended || repoTab.autoFetchSeq > 0
-        }
         /// `origin/main` put back where `main` stands, as a terminal would (`git update-ref`): the far side is ahead of
         /// it again, so the fetch the forms press moves it. Says whether it was put.
         function rewind() {
@@ -644,10 +637,12 @@ Item {
         onTriggered: {
             const op = menuWaitTimer
             if (op.at("start")) {
+                // The opening's own fetch, landing later, would move `origin/main` itself, ahead of the fetch the
+                // forms press.
                 if (!Awaited.all("menu_wait_idle", { "open": repoTab.state === "open",
                                                      "idle": repoTab.busyCount === 0,
                                                      "page": PageSettled.settled(page),
-                                                     "opening": !op.fetches || op.openingFetchIn() }))
+                                                     "opening": !op.fetches || PageSettled.openingFetchIn(repoTab) }))
                     return
                 if (op.mode === "stash" || op.mode === "stash-ref")
                     op.input("popped", () => op.popUnder())
@@ -739,8 +734,9 @@ Item {
                               "report": () => op.line("during"), "arriving": ["*"] })
                 return
             }
-            // `after`, the stash forms and the replay's stop: the menu's own word that it stood again. The write's settle
-            // reaches the tab a drain before the models it was read into are through (`RepoTab::settling`).
+            // `after`, the stash forms and the replay's stop: the menu's own word that it stood again, beside the
+            // write's. The menu waits on every command of the window's out, the doors a replay holds included
+            // (`RepoPage.runningWhy`); the barrier answers for this run's write alone.
             op.complete({
                 "name": "menu_wait_up",
                 "when": () => ({ "written": driver.wroteAndSettled(), "stood": !op.level.waiting }),

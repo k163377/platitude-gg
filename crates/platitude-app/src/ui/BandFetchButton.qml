@@ -10,9 +10,13 @@ import platitude.ui.words
 // all three buttons.
 //
 // The states: idle — the `fetch` chip. Fetching, whoever asked — ring and frame a step under that state's colour
-// (規約 §進行中・回数押しの定数), deaf to presses with `enabled` kept. One or two failures in a row — `fetch`, word and
-// mark unchanged, a `warning` `!` past the chip. Three in a row — stopped: `Resume`, no chip, a `warning` frame, word
-// and mark down to `textSecondary`, the `!` kept. Every state but fetching takes a press.
+// (規約 §進行中・回数押しの定数), deaf to presses with `enabled` kept. **The ring turns until what the fetch left is on
+// screen** — the counts, the graph's rows, the chips — not until git's answer (`RepoTab.fetching`; user decision — ask
+// before changing): the answer comes ahead of the reading, and a ring stopped on it says done over a screen the fetch
+// has not reached. The `!` and the count of failures come at the answer all the same (`RepoTab::fetch_settled`). One
+// or two failures in a row — `fetch`, word and mark unchanged, a `warning` `!` past the chip. Three in a row —
+// stopped: `Resume`, no chip, a `warning` frame, word and mark down to `textSecondary`, the `!` kept. Every state but
+// fetching takes a press.
 ActionButton {
     id: fetchButton
 
@@ -89,9 +93,7 @@ ActionButton {
     faceColor: Theme.bgSurface
     alert: fetchButton.fails > 0
     alertTone: Theme.warning
-    busy: fetchButton.busyLatched
-          || (fetchButton.curPage !== null
-              && (fetchButton.curPage.pageTab.busyOp === "fetch" || fetchButton.curPage.pageTab.autoFetchRunning))
+    busy: fetchButton.busyLatched || (fetchButton.curPage !== null && fetchButton.curPage.pageTab.fetching)
     enabled: fetchButton.curPage !== null
              && fetchButton.curPage.pageTab.remoteCount > 0
              && (fetchButton.stopped || fetchButton.curPage.pageTab.busyCount === 0)

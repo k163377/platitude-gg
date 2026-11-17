@@ -40,7 +40,7 @@ ActionButton {
     faceColor: Theme.bgSurface
     // No `!`, hold or ring (header). Down while a rebase plan is composed (its run button is the one
     // write), and while the pane reads another worktree — a press would set aside *this* window's changes
-    // (`RepoPage.wipWritable`). Down too while a stage or unstage press stands, as the commit button is
+    // (`RepoPage.wipWritable`). Down too while a stage or unstage press holds it back, as the commit button is
     // (`Words.stagingWait`): what it sets aside is the index git holds, not yet the one on screen.
     enabled: stashButton.mode === "ready" && stashButton.curPage.pageTab.busyCount === 0
              && !stashButton.curPage.pageTab.settling

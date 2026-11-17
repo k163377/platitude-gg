@@ -3,8 +3,9 @@ import QtTest
 import platitude.ui
 
 // The exit card's words are wrapped, never cut (user decisions — `OpExitCard`'s `edit` line, `OpExitRow`): the
-// `edit` stop's line ends on what to do, and a row's sentence is what the row does — a cut takes exactly those. Narrower
-// than any pane gives, so every line of it has to wrap: what is read is the wrapping, and the card growing by it.
+// `edit` stop's line ends on what to do, and a row's sentence is what the row does — a cut takes exactly those.
+// Narrower than any pane gives, so every line of it has to wrap: what is read is the wrapping, and the card
+// growing by it.
 Item {
     id: root
     width: 200
@@ -13,6 +14,7 @@ Item {
     readonly property QtObject tab: QtObject {
         id: tab
         property int busyCount: 0
+        property bool settling: false
         property bool stagingUnseen: false
         function resolveOperation(how) {}
     }
