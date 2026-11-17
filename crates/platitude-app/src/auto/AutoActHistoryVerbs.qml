@@ -671,7 +671,8 @@ Item {
             // (`arriving`).
             const landed = driver.wroteAndSettled()
             if (op.at("pressed")) {
-                // The hook sleeps for seconds, so the commit is still out when the menu goes up. One that has landed
+                // The hook holds the commit — for seconds, the merge form's until the app is on its way out
+                // (`demo::remote::slowmerge`) — so it is still out when the menu goes up. One that has landed
                 // already left no moment to raise it in. A replay's menu goes up once the rewrite shows mid-way — HEAD
                 // detached, `REBASING` counted — which is what a menu standing on the worktree as it is would lose its
                 // rows to (`RepoPage.treeAtAsk`).

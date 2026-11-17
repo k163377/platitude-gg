@@ -387,7 +387,7 @@ pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
 /// The station a write held for its run is let go at: where
 /// `Hub::shutdown` starts joining the writes still out, so the join lets it
 /// go — the held save, and the held `git add` (`super::run::slow_git_for`).
-pub(super) const WRITES_JOINING: &str = "writes-joining";
+pub(crate) const WRITES_JOINING: &str = "writes-joining";
 
 /// Whether this verb's subject is a second process finding the settings
 /// held. Every other run's config directory is its own, so a taken store

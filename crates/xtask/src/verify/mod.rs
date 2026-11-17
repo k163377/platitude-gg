@@ -27,10 +27,11 @@ mod tests;
 mod verbs;
 mod wedge;
 
+pub(crate) use child::WRITES_JOINING;
 pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
 pub(crate) use look::look_into;
-pub(crate) use options::{canonical_line, suite_words};
+pub(crate) use options::{WATCHDOG_MS, canonical_line, suite_words};
 pub(crate) use ownership::{
     RUN_BASES, ResourceClaim, claim_dir, claim_resource, keep, sweep_yesterdays_runs,
 };

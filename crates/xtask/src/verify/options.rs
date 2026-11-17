@@ -24,7 +24,7 @@ use std::path::PathBuf;
 /// both are — a red from the clock thinned by the clock, against waiting
 /// by cause. How the two reds read is `super::outcome::loop_was_turning`.
 /// Lower it with `--watchdog-ms` only to diagnose the wait itself.
-const WATCHDOG_MS: u64 = 600_000;
+pub(crate) const WATCHDOG_MS: u64 = 600_000;
 
 pub(super) struct Options {
     pub(super) verb: String,

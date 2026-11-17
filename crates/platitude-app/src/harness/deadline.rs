@@ -47,12 +47,15 @@ pub(crate) const WEDGED: i32 = 97;
 /// carries it out of the container).
 pub(crate) const REPORT_FILE: &str = "wedge.txt";
 
-/// The trail, beside the pictures: one `<seconds> <slug>` line per
-/// station, appended as it is reached and emptied by [`watch`].
+/// The trail, beside the pictures: one `<seconds>s <slug>` line per
+/// station, ending in its newline, appended as it is reached and emptied
+/// by [`watch`].
 ///
 /// On disk before each step begins, so the parent can read it whatever
 /// ended the run — [`REPORT_FILE`] needs a process still able to write.
-/// Read at a ceiling only (`xtask::verify::wedge`).
+/// Read by the parent at a ceiling (`xtask::verify::wedge`), and by what
+/// holds a write until the app is on its way out: `--slow-git … until=`
+/// and `--preset slowmerge`'s hook. A station's slug is theirs to match.
 const TRAIL_FILE: &str = "stations.txt";
 
 /// The places a run passes through that a wedge can be in: a coarse,

@@ -355,8 +355,18 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
 /// and a `prepare-commit-msg` hook holds that commit — git writes
 /// `MERGE_HEAD` before the hooks run and takes it away after the commit
 /// (git 2.55 measured), so the tree reads as `MERGING` while the write is
-/// out (`menu-wait merge`). Eight seconds outlasts the poll that has to
-/// read it and the menu raised after it.
+/// out (`menu-wait merge`).
+///
+/// Under a verify-ui run the hook holds the commit until the app's trail
+/// says it is joining its writes on the way out — its pictures are taken
+/// by then — as `--slow-git … until=writes-joining` holds a git call
+/// (`verify::git_shim`): the app hands the run's `_PGG_SHOT_DIR` to every
+/// git it starts, and git to its hooks. A clock would end the merge
+/// wherever the run stood: one that outlasts the paced read bringing
+/// `MERGING` in and the menu raised after it does so by under a second on
+/// an idle machine, and between the completion and the pictures on a busy
+/// one. The ceiling is the run's own watchdog's. In a repository opened by
+/// hand (`demo-repo`) there is no trail, and the hold is eight seconds.
 pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
     repo.git(&["switch", "-q", "-c", "side"])?;
@@ -366,7 +376,42 @@ pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
     install_hook(
         &repo.work.join(".git").join("hooks"),
         "prepare-commit-msg",
-        "#!/bin/sh\nsleep 8\n",
+        &held_until_the_way_out(),
+    )
+}
+
+/// The `slowmerge` hook ([`slowmerge`]): the station and the ceiling are the
+/// ones the run's own git shim and watchdog use (`verify::WRITES_JOINING`,
+/// `verify::WATCHDOG_MS`), so a renamed station or a moved ceiling moves
+/// the hook too. The trail's lines are `<seconds>s <station>`, each ending
+/// in its newline (`platitude_app::harness::deadline`); a line the writer
+/// was stopped in has none, and `read` hands it to nothing.
+fn held_until_the_way_out() -> String {
+    /// How often the hook looks at the trail, in milliseconds.
+    const LOOK_MS: u64 = 200;
+    format!(
+        r#"#!/bin/sh
+if [ -z "$_PGG_SHOT_DIR" ]; then
+  sleep 8
+  exit 0
+fi
+trail="$(printf '%s' "$_PGG_SHOT_DIR" | tr '\\' '/')/stations.txt"
+looks=0
+while [ "$looks" -lt {looks} ]; do
+  if [ -f "$trail" ]; then
+    while IFS= read -r line; do
+      case "$line" in
+        *" {station}") exit 0 ;;
+      esac
+    done < "$trail"
+  fi
+  sleep {look}
+  looks=$((looks + 1))
+done
+"#,
+        looks = crate::verify::WATCHDOG_MS / LOOK_MS,
+        station = crate::verify::WRITES_JOINING,
+        look = format_args!("{}.{:03}", LOOK_MS / 1000, LOOK_MS % 1000),
     )
 }
 
