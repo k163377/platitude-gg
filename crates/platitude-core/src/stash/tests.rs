@@ -66,10 +66,8 @@ fn wrong_arity_is_an_error() {
 /// only by `worktree_state::capture_fixtures` (command in the panic below).
 #[test]
 fn committed_stash_fixture_parses() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join("stash_list.bin");
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/stash_list.bin");
     let bytes = std::fs::read(&path).unwrap_or_else(|e| {
         panic!(
             "missing fixture {} ({e}); regenerate with: cargo test -p platitude-core \
