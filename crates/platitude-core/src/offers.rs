@@ -619,10 +619,14 @@ pub fn worktree_rows(
 }
 
 #[cfg(test)]
+#[path = "offers/tests/commit.rs"]
 mod commit_tests;
 #[cfg(test)]
+#[path = "offers/tests/moves.rs"]
 mod moves_tests;
 #[cfg(test)]
+#[path = "offers/tests/ref_menu.rs"]
 mod tests;
 #[cfg(test)]
+#[path = "offers/tests/worktree.rs"]
 mod worktree_tests;

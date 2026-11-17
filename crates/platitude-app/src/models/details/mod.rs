@@ -13,6 +13,7 @@ use super::pathtree::DirNode;
 use super::qml_register;
 
 #[cfg(test)]
+#[path = "tests.rs"]
 mod details_tests;
 mod qobject;
 mod tree;

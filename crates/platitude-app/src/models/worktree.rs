@@ -903,5 +903,5 @@ impl WorktreeModel {
 qml_register!(WorktreeModel, "WorktreeModel", singleton = false);
 
 #[cfg(test)]
-#[path = "worktree_tests.rs"]
+#[path = "worktree/tests.rs"]
 mod tests;

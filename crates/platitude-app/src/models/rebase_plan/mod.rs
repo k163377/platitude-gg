@@ -9,12 +9,15 @@ use super::qml_register;
 
 mod answer;
 #[cfg(test)]
+#[path = "tests/answer.rs"]
 mod answer_tests;
 mod drain;
 #[cfg(test)]
+#[path = "tests/drain.rs"]
 mod drain_tests;
 mod qobject;
 #[cfg(test)]
+#[path = "tests/steps.rs"]
 mod steps_tests;
 
 /// For `repo_tab::drain_report_tests`, which holds both doors to one

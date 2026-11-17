@@ -10,6 +10,7 @@ mod steps;
 mod urls;
 
 #[cfg(test)]
+#[path = "tests.rs"]
 mod controls;
 
 use std::collections::BTreeSet;

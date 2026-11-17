@@ -70,11 +70,13 @@ mod graph_refresh;
 mod head_reach;
 mod heap;
 #[cfg(test)]
+#[path = "tests/join.rs"]
 mod join_tests;
 mod joins;
 mod latest;
 mod leaving;
 #[cfg(test)]
+#[path = "tests/leaving.rs"]
 mod leaving_tests;
 mod lfs;
 mod log;
@@ -88,6 +90,7 @@ mod ops_stash;
 mod ops_tree;
 mod pace;
 #[cfg(test)]
+#[path = "tests/pace.rs"]
 mod pace_tests;
 mod pacer;
 mod pass_watch;
@@ -99,6 +102,7 @@ mod refresh;
 mod refresh_op;
 mod relay;
 #[cfg(test)]
+#[path = "tests/relay.rs"]
 mod relay_tests;
 mod remote_tags;
 mod removals;
@@ -108,11 +112,13 @@ mod rows;
 mod shown_discard;
 mod snapshot;
 #[cfg(test)]
+#[path = "tests/snapshot_push.rs"]
 mod snapshot_push_tests;
 mod standing;
 mod stash_round;
 mod state;
 #[cfg(test)]
+#[path = "tests/state.rs"]
 mod state_tests;
 mod walk;
 mod write;

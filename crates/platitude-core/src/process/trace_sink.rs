@@ -524,5 +524,5 @@ mod imp {
 }
 
 #[cfg(test)]
-#[path = "trace_sink_tests.rs"]
+#[path = "trace_sink/tests.rs"]
 mod tests;

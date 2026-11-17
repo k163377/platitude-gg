@@ -23,7 +23,7 @@ use crate::error::GitError;
 use crate::operation::OperationId;
 
 #[cfg(test)]
-#[path = "tests.rs"]
+#[path = "executor/tests.rs"]
 mod tests;
 
 /// Default time budget, which is to say for reads: streaming log walks and

@@ -11,6 +11,7 @@
 
 mod api;
 #[cfg(test)]
+#[path = "tests.rs"]
 mod resource_tests;
 #[cfg(windows)]
 mod win32;

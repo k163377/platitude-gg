@@ -29,6 +29,7 @@ use super::qml_register;
 mod qobject;
 mod work;
 #[cfg(test)]
+#[path = "tests.rs"]
 mod work_tests;
 
 /// What a spawned read or write sends back.

@@ -26,14 +26,17 @@ use super::{
 
 mod ahead;
 #[cfg(test)]
+#[path = "tests/ahead.rs"]
 mod ahead_tests;
 mod find;
 #[cfg(test)]
+#[path = "tests/find.rs"]
 mod find_tests;
 mod qobject;
 mod rows;
 mod selection;
 #[cfg(test)]
+#[path = "tests/selection.rs"]
 mod selection_tests;
 
 use ahead::takes_all;

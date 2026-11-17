@@ -372,7 +372,7 @@ fn a_functions_parameters_are_bound_from_their_own_arguments() {
 /// report alike.
 #[test]
 fn the_forms_qt_runs_are_judged_by_what_they_change() {
-    let file = include_str!("../../../../platitude-app/tests/qml/tst_reachforms.qml");
+    let file = include_str!("../../../../../platitude-app/tests/qml/tst_reachforms.qml");
     let lines: Vec<&str> = file.lines().collect();
     let mut judged = Vec::new();
     for (at, line) in lines.iter().enumerate() {

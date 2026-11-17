@@ -17,8 +17,10 @@ mod wire;
 mod words;
 
 #[cfg(test)]
+#[path = "tests/rows.rs"]
 mod rows_tests;
 #[cfg(test)]
+#[path = "tests/wire_qml.rs"]
 mod wire_qml;
 
 pub use columns::{Candidates, widest_lines};

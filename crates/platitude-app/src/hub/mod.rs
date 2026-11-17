@@ -27,11 +27,13 @@ use platitude_core::{OperationId, OperationKind};
 use qtbridge::QmlMethodInvoker;
 
 #[cfg(test)]
+#[path = "tests/details.rs"]
 mod details_tests;
 mod feed;
 mod life;
 mod msg;
 #[cfg(test)]
+#[path = "tests/plan.rs"]
 mod plan_tests;
 mod prefs;
 mod saves;

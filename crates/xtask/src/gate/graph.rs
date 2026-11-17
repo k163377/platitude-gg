@@ -1759,7 +1759,9 @@ pub(crate) fn collect(
 mod built;
 
 #[cfg(test)]
+#[path = "graph/tests/bindings.rs"]
 mod bindings;
 
 #[cfg(test)]
+#[path = "graph/tests/edges.rs"]
 mod tests;

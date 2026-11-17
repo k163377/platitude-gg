@@ -8,10 +8,13 @@
 mod builder;
 
 #[cfg(test)]
+#[path = "tests/dag.rs"]
 mod dag_tests;
 #[cfg(test)]
+#[path = "tests/lane.rs"]
 mod lane_tests;
 #[cfg(test)]
+#[path = "tests/leash.rs"]
 mod leash_tests;
 #[cfg(test)]
 mod testkit;

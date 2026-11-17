@@ -36,29 +36,38 @@
 
 mod branch_delete_out;
 #[cfg(test)]
+#[path = "tests/branch_delete_out.rs"]
 mod branch_delete_out_tests;
 mod diff_reread;
 #[cfg(test)]
+#[path = "tests/diff_reread.rs"]
 mod diff_reread_tests;
 mod press;
 #[cfg(test)]
+#[path = "tests/press.rs"]
 mod press_tests;
 mod push_out;
 #[cfg(test)]
+#[path = "tests/push_out.rs"]
 mod push_out_tests;
 mod stage_ahead;
 #[cfg(test)]
+#[path = "tests/stage_ahead.rs"]
 mod stage_ahead_tests;
 #[cfg(test)]
+#[path = "tests/stage_diff.rs"]
 mod stage_diff_tests;
 mod stage_parts;
 #[cfg(test)]
+#[path = "tests/stage_parts.rs"]
 mod stage_parts_tests;
 mod stand_in;
 #[cfg(test)]
+#[path = "tests/stand_in.rs"]
 mod stand_in_tests;
 mod tree_out;
 #[cfg(test)]
+#[path = "tests/tree_out.rs"]
 mod tree_out_tests;
 
 pub use branch_delete_out::BranchDeleteOut;

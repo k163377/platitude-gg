@@ -44,6 +44,7 @@ pub mod setting;
 mod working_tree;
 
 #[cfg(test)]
+#[path = "tests.rs"]
 mod read_tests;
 
 pub use attrs::{Ruling, normalises, ruling, rulings, rulings_given};

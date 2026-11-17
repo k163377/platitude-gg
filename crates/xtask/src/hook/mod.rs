@@ -49,6 +49,7 @@ mod python;
 mod repeat;
 mod review;
 #[cfg(test)]
+#[path = "tests.rs"]
 mod runner;
 mod seat;
 mod shell;

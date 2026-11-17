@@ -6,6 +6,7 @@
 mod child;
 mod contract;
 #[cfg(test)]
+#[path = "tests.rs"]
 mod contract_tests;
 mod coverage;
 mod faults;

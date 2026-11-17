@@ -204,5 +204,5 @@ impl LogParser {
 }
 
 #[cfg(test)]
-#[path = "log_tests.rs"]
+#[path = "log/tests.rs"]
 mod tests;

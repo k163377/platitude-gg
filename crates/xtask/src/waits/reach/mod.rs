@@ -40,6 +40,7 @@
 
 mod answers;
 #[cfg(test)]
+#[path = "tests/bindings.rs"]
 mod bindings;
 mod builtins;
 mod calls;
@@ -54,6 +55,7 @@ mod rules;
 mod scan;
 mod scope;
 #[cfg(test)]
+#[path = "tests/rule.rs"]
 mod tests;
 
 pub(super) use rules::findings;

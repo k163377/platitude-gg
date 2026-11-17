@@ -42,18 +42,25 @@ impl Record for RemoteBranchAsked {
 
 mod drain;
 #[cfg(test)]
+#[path = "tests/drain_boundaries.rs"]
 mod drain_boundaries_tests;
 #[cfg(test)]
+#[path = "tests/drain_inputs.rs"]
 mod drain_inputs;
 #[cfg(test)]
+#[path = "tests/drain_remotes.rs"]
 mod drain_remotes_tests;
 #[cfg(test)]
+#[path = "tests/drain_report.rs"]
 mod drain_report_tests;
 #[cfg(test)]
+#[path = "tests/drain_signature.rs"]
 mod drain_signature_tests;
 #[cfg(test)]
+#[path = "tests/drain_staging.rs"]
 mod drain_staging_tests;
 #[cfg(test)]
+#[path = "tests/drain.rs"]
 mod drain_tests;
 mod ops_config;
 mod ops_conflict;
