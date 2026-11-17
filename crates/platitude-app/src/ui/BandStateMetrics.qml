@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 import platitude.ui.words
 
 /// What each of the band's state badges would like to be drawn at, measured off labels nothing lays out: the badge
@@ -60,7 +61,8 @@ Item {
     /// is `BandStateGroup.foldedWidth`; this floor only decides where the words are given up.
     property real minW: 0
     function settleMinW() {
-        metrics.minW = Math.ceil(stateFont.advanceWidth("…") + metrics.minChars * stateFont.advanceWidth("n"))
+        metrics.minW = Math.ceil(stateFont.advanceWidth(WordFace.cutGlyph)
+                                 + metrics.minChars * stateFont.advanceWidth("n"))
             + 2 * Theme.spaceXs
     }
 

@@ -293,20 +293,35 @@ Rectangle {
         }
         PlainTextLabel {
             id: nameLabel
+            /// A one-line name wider than its room: the label keeps the whole name, clear, for every width read off it,
+            /// and the name is drawn cut over it with the cut mark (`CutName`, closed up).
+            readonly property bool cut: !chip.wrapped && nameLabel.implicitWidth > nameLabel.width + 0.5
             y: chip.inkY(nameLabel, nameInk)
             text: chip.recName
-            color: chip.nameColor
+            color: nameLabel.cut ? "transparent" : chip.nameColor
             // The chip's own face, not the code face a name wears in a sentence (user decision — ask before changing):
             // the frame is the chip already, and the wider mono letters cut the name sooner in the same column.
             font.pixelSize: Theme.fontChip
             font.weight: chip.recHead ? Theme.fontWeightStrong : Font.Normal
-            elide: chip.wrapped ? Text.ElideNone : Text.ElideRight
             // `Text.Wrap`: a ref name has no spaces, and this breaks anywhere when there is no word boundary.
             wrapMode: chip.wrapped ? Text.Wrap : Text.NoWrap
             // Also when wrapped: handed its whole room, every chip in a list would be as wide as the widest name. A
             // wrapping `Text` keeps its one-line `implicitWidth`, so this one line reads both ways: its own width where
             // it fits, the whole room where it wraps.
             width: Math.min(implicitWidth, chip.nameRoom)
+            Loader {
+                active: nameLabel.cut
+                width: nameLabel.width
+                height: nameLabel.height
+                sourceComponent: CutName {
+                    closed: true
+                    cutAt: "end"
+                    text: chip.recName
+                    color: chip.nameColor
+                    pixelSize: nameLabel.font.pixelSize
+                    weight: nameLabel.font.weight
+                }
+            }
         }
         // Remote / PR badge: its width is reserved in `furnitureW`, so it survives any elision. A state after the name,
         // on the name's first line: centred on a wrapped chip, it would leave its name. Its seat runs into the half gap

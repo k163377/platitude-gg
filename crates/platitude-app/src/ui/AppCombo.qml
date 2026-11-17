@@ -136,10 +136,13 @@ ComboBox {
         if (!combo.pickOnly && !combo.idleCut)
             return
         cutRuler.font = combo.font
+        // The mark's room: the face's own `…` (`CutMark`).
+        cutRuler.text = WordFace.cutGlyph
+        const markWidth = cutRuler.advanceWidth
         combo.cutValue = WordFace.cutToFit(word => {
             cutRuler.text = word
             return cutRuler.advanceWidth
-        }, combo.wanted, input.room, combo.leadMark === "remote")
+        }, combo.wanted, input.room, combo.leadMark === "remote", markWidth)
     }
 
     editable: !combo.pickOnly
@@ -169,10 +172,11 @@ ComboBox {
         // Picking only, the value is the owner's (ComboBox keeps `editText` only when editable), cut in the middle — a
         // remote's at its end, its head being the remote (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」): a
         // read-only `TextInput` too narrow scrolls to the caret and loses the name's head unmarked. Cut to fill the
-        // room up to the arrow's step (`WordFace.cutToFit`); not `CutName`: a lone field has no column edge to line up.
+        // room up to the arrow's step (`WordFace.cutToFit`), into the string the field holds (`cutValue`).
         text: combo.pickOnly ? (input.fitWidth > input.room ? combo.cutValue : combo.wanted) : combo.editText
-        // Clear while the cut stands in for it (`idleCut`).
-        color: combo.idleCut ? "transparent" : combo.enabled ? Theme.textPrimary : Theme.textMuted
+        // Clear while the cut stands in for it (`idleWord`): a typed value with nobody typing in it, or a picked one
+        // cut — its text the cut value, whose `…` is the font's.
+        color: combo.idleCut || combo.shownCut ? "transparent" : combo.enabled ? Theme.textPrimary : Theme.textMuted
         font: combo.font
         // The plain boxes' inset (`SlimField`), which this field stands beside in the question bar — and the kind's
         // mark after it, a sign on the value (`leadMark`), its seat's air on the frame's side given back (`frameAir`).
@@ -215,18 +219,19 @@ ComboBox {
             height: Math.min(input.height, combo.height - Theme.radiusSm - input.y) - leadGround.inY
             color: Theme.bgBase
         }
-        // The typed name, cut, while nobody is typing in it (`idleCut`), on the input's own line; the input's own
-        // text goes clear meanwhile, so no scrolled piece of it is drawn beside.
-        PlainTextLabel {
+        // The value, cut, while nobody is typing in it (`idleCut`) or as picked (`shownCut`), on the input's own line
+        // in pieces round the cut mark (`CutPieces`); the input's own text goes clear meanwhile, so no scrolled piece
+        // of it and no typed `…` is drawn beside.
+        CutPieces {
             id: idleWord
-            visible: combo.idleCut
+            visible: combo.idleCut || combo.shownCut
             x: input.leftPadding
             width: input.room
             height: input.height
+            whole: combo.wanted
             text: combo.cutValue
             color: combo.enabled ? Theme.textPrimary : Theme.textMuted
             font: input.font
-            verticalAlignment: Text.AlignVCenter
         }
         // In the inset, on the value's line: drawn, not written, so the value starts after it and none of it is text.
         NavIcon {
@@ -448,18 +453,17 @@ ComboBox {
             }
         }
         contentItem: Item {
-            PlainTextLabel {
+            // Cut at the end with the cut mark (`CutName`, closed up), in the face `rowsWidth` measures the list in: a
+            // popup takes its window's face, not the field's.
+            CutName {
                 id: rowWord
+                closed: true
+                cutAt: "end"
                 anchors.fill: parent
                 anchors.rightMargin: mark.visible ? mark.width + mark.anchors.rightMargin : 0
                 text: row.modelData
                 color: Theme.textPrimary
-                // The face `rowsWidth` measures the list in, named here: a popup takes its window's face, not the
-                // field's.
-                font.family: Theme.uiFamily
-                font.pixelSize: Theme.fontMd
-                verticalAlignment: Text.AlignVCenter
-                elide: Text.ElideRight
+                pixelSize: Theme.fontMd
             }
             // The left menu's push mark for that remote, at its colour: a state after the name, as the left menu sets
             // it (デザイン規約 §アイコンの席「名前の後の状態」).

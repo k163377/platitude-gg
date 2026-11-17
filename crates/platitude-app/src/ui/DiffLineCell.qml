@@ -47,8 +47,22 @@ Item {
     /// (`DiffTextSelect`).
     required property var ruler
     /// A row that names something rather than being a line of the file: the hunk's heading, or the commit each block
-    /// is of (デザイン規約 §複数のコミットを選ぶ). It stands at the cell's left edge and elides.
+    /// is of (デザイン規約 §複数のコミットを選ぶ). It stands at the cell's left edge and is cut at its end (`bandCut`).
     required property bool banded
+    /// A heading wider than the cell: the label keeps the whole line, clear, for every width read off it, and the line
+    /// is drawn cut over it with the cut mark (`CutName`, closed up), from the markup back to its characters
+    /// (`plainOf`).
+    readonly property bool bandCut: cell.banded && codeLine.implicitWidth > cell.width + 0.5
+    /// The line's colour (`codeLine`).
+    readonly property color ink: cell.fence ? Theme.textMuted
+                                 : cell.kind === "hunk" ? Theme.diffHunkHeaderFg
+                                 : cell.kind === "commit" ? Theme.textSecondary
+                                 : cell.kind === "meta" ? Theme.textMuted
+                                 : Theme.textPrimary
+    /// A heading's markup as its characters: a heading takes no colour runs, only the escapes `encode::markup` writes.
+    function plainOf(markup) {
+        return markup.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    }
 
     /// How far the line is drawn — what the row files under `rowDrawn` (`DiffReach`). Read off the Label and
     /// followed: the first answer comes before the font fallback resolves.
@@ -148,7 +162,6 @@ Item {
         id: codeLine
         x: cell.banded ? 0 : -cell.codeX
         width: cell.banded ? cell.width : implicitWidth
-        elide: cell.banded ? Text.ElideRight : Text.ElideNone
         height: cell.height
         verticalAlignment: Text.AlignVCenter
         // A heading starts at the row's left edge (`spaceXs`), not past the number columns, which are empty on it (user
@@ -167,11 +180,23 @@ Item {
         font.pixelSize: cell.banded ? Theme.fontSm : Theme.fontCode
         // The whole colour of a line the theme said nothing about; a changed line stays `textPrimary` and a fence
         // drops to muted (`fence`). A row that is not a line of the file takes its kind's colour, never the syntax's.
-        color: cell.fence ? Theme.textMuted
-               : cell.kind === "hunk" ? Theme.diffHunkHeaderFg
-               : cell.kind === "commit" ? Theme.textSecondary
-               : cell.kind === "meta" ? Theme.textMuted
-               : Theme.textPrimary
+        // Clear under a cut heading, which is drawn over it (`bandCut`).
+        color: cell.bandCut ? "transparent" : cell.ink
+        Loader {
+            active: cell.bandCut
+            x: codeLine.leftPadding
+            width: cell.width - codeLine.leftPadding
+            height: cell.height
+            sourceComponent: CutName {
+                closed: true
+                cutAt: "end"
+                text: cell.plainOf(codeLine.text)
+                color: cell.ink
+                mono: true
+                pixelSize: codeLine.font.pixelSize
+                weight: codeLine.font.weight
+            }
+        }
     }
     // git's `\ No newline at end of file` as a mark at the line's end (user decision — ask before changing; GitHub's
     // way). The note is git's about the line above it; as a row of its own it stands between the `-` and the `+` and

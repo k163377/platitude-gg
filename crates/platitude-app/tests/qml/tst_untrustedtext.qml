@@ -90,8 +90,8 @@ Item {
         }
 
         function test_action_phrase_keeps_tags() {
-            // The phrase's own words among them, past the two the plain label holds.
-            verify(fieldsWithText(phrase, root.payload).length > fieldsWithText(action, root.payload).length,
+            // The phrase's own words, drawn, among them — and drawn as written.
+            verify(fieldsWithText(phrase, root.payload).some(field => field.visible),
                    "the phrase's words carry the text")
             checkSpelling(phrase, root.payload)
         }

@@ -62,7 +62,8 @@ TextArea {
         visible: !summary.length && !summary.preeditText
                  && (!summary.activeFocus || summary.horizontalAlignment !== Qt.AlignHCenter)
         wrapMode: summary.wrapMode
-        elide: Text.ElideRight
+        // Wrapped, the hint fits a box of one line and more; clipped at its box, never cut with a typed `…`.
+        clip: true
         renderType: summary.renderType
     }
     FieldMenuSeat {

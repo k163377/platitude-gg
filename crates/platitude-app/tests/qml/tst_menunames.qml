@@ -178,11 +178,13 @@ Control {
             verify(nameRow.implicitWidth - nameRow.besideWords <= Math.ceil(wordsCapRuler.advanceWidth) + 1,
                    "the words bid at most the ceiling")
             // …and are drawn no wider, cut in the middle, however wide the row.
-            const words = root.find(nameRow, item => item.text === root.farName && item.truncated !== undefined)
-            tryVerify(() => words.truncated, undefined, "the name is cut at the ceiling")
+            const words = root.find(nameRow, item => item.text === root.farName && item.cutWords !== undefined)
+            tryVerify(() => words.cutWords, undefined, "the name is cut at the ceiling")
             verify(words.width <= Math.ceil(wordsCapRuler.advanceWidth) + words.rightPadding + 0.5,
                    "drawn no wider than the ceiling: " + words.width)
-            compare(words.elide, Text.ElideMiddle)
+            const drawn = root.find(nameRow, item => item.text === root.farName && item.cutting !== undefined)
+            verify(drawn !== null && drawn.cutting, "drawn cut, with the cut mark")
+            compare(drawn.cutAt, "middle")
             tryVerify(() => nameRow.trailCut, undefined, "the worktree run cut")
             tryVerify(() => nameRow.sideCut, undefined, "the far column's name cut")
         }

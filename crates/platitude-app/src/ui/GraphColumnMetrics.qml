@@ -35,11 +35,11 @@ QtObject {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontChip
     }
-    /// The cut mark's advance. A `TextMetrics`, whose `advanceWidth` is a property: `FontMetrics.advanceWidth()` is a
-    /// method, so a binding reads it once, on the default font.
+    /// The cut mark's room (`CutMark`): the chip face's own `…`. A `TextMetrics`, whose `advanceWidth` is a property:
+    /// `FontMetrics.advanceWidth()` is a method, so a binding reads it once, on the default font.
     readonly property TextMetrics chipCutInk: TextMetrics {
         font: metrics.chipFont.font
-        text: "…"
+        text: WordFace.cutGlyph
     }
     /// What one kept character costs: a measured `n`, as the tab titles' floor (`TabMetrics.titleMinW`). Not
     /// `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」).

@@ -305,7 +305,8 @@ Rectangle {
                 visible: !area.length && !area.preeditText
                          && (!area.activeFocus || area.horizontalAlignment !== Qt.AlignHCenter)
                 wrapMode: area.wrapMode
-                elide: Text.ElideRight
+                // Wrapped, the hint fits a box of one line and more; clipped at its box, never cut with a typed `…`.
+                clip: true
                 renderType: area.renderType
             }
             FieldMenuSeat {

@@ -70,7 +70,7 @@ Item {
             compare(given.join(","), "68,80,71", "the row's own order survives the sort")
         }
 
-        /// A fractional cap comes out over what the boxes are laid out at, and every word then elides in a band that
+        /// A fractional cap comes out over what the boxes are laid out at, and every word is then cut in a band that
         /// had the room.
         function test_the_cap_is_whole_pixels() {
             const cap = share.cap(root.three, 68 + 2 * 60 + 2 * root.gap + 0.75)

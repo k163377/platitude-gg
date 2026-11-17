@@ -112,32 +112,35 @@ ColumnLayout {
     //    to show` and one beside lines would go unseen (as would the mode a part left behind on its side). No row of
     //    the diff carries it, and no part of the diff moves it (`patch::header`): it has no tools. On a mode-only
     //    change it stands instead of `No changes to show` — it says the whole change.
-    PlainTextLabel {
+    //    Cut at the end (`CutName`, closed up).
+    CutName {
         id: modeLine
+        closed: true
+        cutAt: "end"
         objectName: "mode"
         visible: notices.diffModel.modeFrom !== ""
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        elide: Text.ElideRight
         text: Words.modeLine(notices.diffModel.modeFrom, notices.diffModel.modeTo)
-        font.family: Theme.monoFamily
-        font.pixelSize: Theme.fontCode
+        mono: true
+        pixelSize: Theme.fontCode
         color: Theme.textPrimary
     }
     // -- line endings: one line for the file, words only (デザイン規約 §改行コードの警告). This line is the diff's one
     //    mark for it — no row is marked: a CR is invisible, with nowhere in a line to stand, and the count of (b) says
     //    enough.
-    PlainTextLabel {
+    CutName {
         id: endingsLine
+        closed: true
+        cutAt: "end"
         objectName: "endings"
         visible: notices.diffModel.endingKind !== ""
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        elide: Text.ElideRight
         text: Words.lineEndings(notices.diffModel.endingKind, notices.diffModel.endingFrom, notices.diffModel.endingTo,
                                 notices.diffModel.endingLines, notices.diffModel.endingScope,
                                 notices.diffModel.endingExt)
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
         color: Theme.warning
     }
     // -- a file the pane offers whole only: no hunk or line tools, and this says why (デザイン規約 §diff の中のステージ;
@@ -145,16 +148,19 @@ ColumnLayout {
     //    decision), under the header's word it explains — the staging tools stand at that edge. Only where that is the
     //    one reason tools are missing (`DiffPane.wholeWhy`): a new file's one hunk shows itself, and another
     //    worktree's diff and a commit's never had tools.
-    PlainTextLabel {
+    //    Set against the right edge, cut at its start (`CutName`, closed up).
+    CutName {
         id: wholeLine
+        closed: true
+        cutAt: "start"
         objectName: "whole"
         visible: notices.wholeWhy !== ""
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        horizontalAlignment: Text.AlignRight
-        elide: Text.ElideLeft
+        Layout.maximumWidth: implicitWidth
+        Layout.alignment: Qt.AlignRight
         text: Words.wholeOnlyLine(notices.wholeWhy)
-        font.pixelSize: Theme.fontSm
+        pixelSize: Theme.fontSm
         color: Theme.warning
     }
     // -- content preview: binaries summarized by size, images rendered (added = After only, deleted = Before only,
@@ -179,11 +185,12 @@ ColumnLayout {
     //    all", and the same words would make the directory look empty. The row's `+` stays — git decides whether it
     //    can, and a refusal is shown in git's words. Its file row is one line too (`models::pathtree`). Headless
     //    `wip-embedded` (preset `embedded`).
-    PlainTextLabel {
+    CutName {
+        closed: true
+        cutAt: "end"
         visible: notices.diffModel.embedded
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        elide: Text.ElideRight
         text: notices.diffModel.embeddedSha8 !== ""
             ? qsTr("Embedded git repository · on %1").arg(notices.diffModel.embeddedSha8)
             : qsTr("Embedded git repository · no commits yet")
@@ -192,11 +199,12 @@ ColumnLayout {
     // -- headers and no hunks (a pure rename, an empty file added): a blank frame would read as a failed load. One line
     //    for both (user decision — ask before changing) — git is not asked a second question for why. A mode change,
     //    the third headers-only read, has its own line above (`FilePatch::mode_change`).
-    Label {
+    CutName {
+        closed: true
+        cutAt: "end"
         visible: notices.headersOnly && notices.diffModel.modeFrom === ""
         Layout.margins: Theme.spaceSm
         Layout.fillWidth: true
-        elide: Text.ElideRight
         text: qsTr("No changes to show")
         color: Theme.textMuted
     }

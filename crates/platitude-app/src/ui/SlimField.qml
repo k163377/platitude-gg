@@ -54,10 +54,13 @@ TextField {
         if (!slim.idleCut)
             return
         cutRuler.font = slim.font
+        // The mark's room: the face's own `…` (`CutMark`).
+        cutRuler.text = WordFace.cutGlyph
+        const markWidth = cutRuler.advanceWidth
         slim.cutText = WordFace.cutToFit(word => {
             cutRuler.text = word
             return cutRuler.advanceWidth
-        }, slim.text, slim.room, slim.leadMark === "remote")
+        }, slim.text, slim.room, slim.leadMark === "remote", markWidth)
     }
 
     implicitHeight: Theme.iconLg
@@ -110,18 +113,18 @@ TextField {
         height: slim.height - 2 * Theme.radiusSm
         color: Theme.bgBase
     }
-    // The name, cut, while nobody is typing in it (`idleCut`), on the field's own line; the field's own text goes
-    // clear meanwhile, so no scrolled piece of it is drawn beside.
-    PlainTextLabel {
+    // The name, cut, while nobody is typing in it (`idleCut`), on the field's own line in pieces round the cut mark
+    // (`CutPieces`); the field's own text goes clear meanwhile, so no scrolled piece of it is drawn beside.
+    CutPieces {
         id: idleWord
         visible: slim.idleCut
         x: slim.leftPadding
         width: slim.room
         height: slim.height
+        whole: slim.text
         text: slim.cutText
         color: slim.palette.text
         font: slim.font
-        verticalAlignment: Text.AlignVCenter
     }
     // In the inset, on the words' line: drawn, not typed.
     NavIcon {

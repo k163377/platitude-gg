@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 
 // What a tab costs before its name, and what a name is allowed. The strip lays out by these numbers and the delegate
 // sets its margins by them — one copy, so the two agree. A new dimension goes here; `TabStrip` only declares seats and
@@ -60,7 +61,7 @@ QtObject {
     /// Measured in `n`s, not `averageCharacterWidth` (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」).
     /// Pushed, for `titleEaseFullW`'s reason.
     function titleMinW() {
-        return Math.ceil(tabMetrics.titleFont.advanceWidth("…")
+        return Math.ceil(tabMetrics.titleFont.advanceWidth(WordFace.cutGlyph)
                          + tabMetrics.titleMinChars * tabMetrics.titleFont.advanceWidth("n"))
     }
     /// Where a name stops being helped along (同表): below this length the tab still narrows, at `titleEaseShare` of the

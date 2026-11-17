@@ -53,12 +53,13 @@ RowLayout {
                 size: Theme.fontSm
                 cap: legend.nameCap
             }
-            PlainTextLabel {
+            CutName {
+                closed: true
+                cutAt: "middle"
                 visible: !side.modelData.branch
                 text: side.modelData.name
-                font.pixelSize: Theme.fontSm
+                pixelSize: Theme.fontSm
                 color: Theme.textSecondary
-                elide: Text.ElideMiddle
                 Layout.maximumWidth: legend.nameCap
             }
         }

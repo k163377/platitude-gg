@@ -366,8 +366,10 @@ AppCard {
                 }
                 // Whose reading this is: a drifted tag puts one bare name on two rows, with no namespace to tell them
                 // apart. Meta, in the row's meta colour (§ref の種別).
-                PlainTextLabel {
+                CutName {
                     id: whose
+                    closed: true
+                    cutAt: "end"
                     visible: rowChip.recWhere !== ""
                     // At the row's far end, so it lines up across rows; it stops at the bar's gutter.
                     x: refRow.width - whose.width - rows.rightInset
@@ -376,10 +378,10 @@ AppCard {
                        + Math.round((Theme.fontChipLine - whose.height) / 2)
                     text: rowChip.recWhere
                     color: Theme.textSecondary
-                    font.pixelSize: Theme.fontSm
+                    pixelSize: Theme.fontSm
                     // A third at most: the name it qualifies comes first.
                     width: Math.min(implicitWidth, refList.chipRoom / 3)
-                    elide: Text.ElideRight
+                    height: implicitHeight
                 }
                 // Whether there is a ref name to change — every row but the two markers. Apart from `leadsNowhere`:
                 // the current branch and a tag lead nowhere but can still be renamed.

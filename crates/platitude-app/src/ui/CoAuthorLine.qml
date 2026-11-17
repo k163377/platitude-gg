@@ -55,10 +55,11 @@ Item {
         font.pixelSize: Theme.fontSm
         text: "n"
     }
+    /// The cut mark's room (`CutMark`): the face's own `…`.
     readonly property TextMetrics cutInk: TextMetrics {
         font.family: Theme.uiFamily
         font.pixelSize: Theme.fontSm
-        text: "…"
+        text: WordFace.cutGlyph
     }
     readonly property real nameFloor: Math.min(names.implicitWidth,
         Math.ceil(line.nameMinChars * line.letterInk.advanceWidth + line.cutInk.advanceWidth))

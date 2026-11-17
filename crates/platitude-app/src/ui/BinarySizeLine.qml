@@ -19,10 +19,11 @@ RowLayout {
     readonly property bool removed: binaryLine.newSize === "" && binaryLine.oldSize !== ""
 
     spacing: Theme.spaceXs
-    Label {
+    CutName {
+        closed: true
+        cutAt: "end"
         text: !binaryLine.sized ? qsTr("Binary file — no text diff")
               : binaryLine.removed ? qsTr("Binary file removed") : qsTr("Binary file")
-        elide: Text.ElideRight
         color: Theme.textMuted
     }
     // Signs between the words, drawn in their characters' place (デザイン規約 §アイコンの席 の字の代替): each box the

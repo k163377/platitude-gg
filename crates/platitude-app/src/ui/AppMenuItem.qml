@@ -475,6 +475,20 @@ MenuItem {
                                        ? menuItem.refName : menuItem.refRulers.cut1.elidedText
     readonly property string refShown2: menuItem.refCuts[1] < 0 || menuItem.refRulers === null
                                         ? menuItem.refName2 : menuItem.refRulers.cut2.elidedText
+    /// Where each cut name's `…` stands in it (-1: whole). The glyph is drawn clear (`Words.codeMarkup`) and the cut
+    /// mark laid over it in the glyph's face, so in its room (`refMarkX1` / `refMarkX2`).
+    readonly property int refCutAt1: menuItem.refCuts[0] < 0 ? -1
+                                     : WordFace.cutPoint(menuItem.refName, menuItem.refShown)
+    readonly property int refCutAt2: menuItem.refCuts[1] < 0 ? -1
+                                     : WordFace.cutPoint(menuItem.refName2, menuItem.refShown2)
+    readonly property real refShownWidth1: menuItem.refRulers === null ? 0 : menuItem.refRulers.shown1.advanceWidth
+    readonly property real refShownWidth2: menuItem.refRulers === null ? 0 : menuItem.refRulers.shown2.advanceWidth
+    /// Where a cut name's clear `…` starts as the row lays it, in the code face, from the name's head: the head's
+    /// advance as the name's own width is read (`refCutHead1` / `refCutHead2`).
+    readonly property real refMarkX1: menuItem.refRulers === null || menuItem.refCutAt1 < 0
+                                      ? 0 : menuItem.refRulers.cutHead1.advanceWidth
+    readonly property real refMarkX2: menuItem.refRulers === null || menuItem.refCutAt2 < 0
+                                      ? 0 : menuItem.refRulers.cutHead2.advanceWidth
     /// A name was cut: the hover gives the whole line back.
     readonly property bool refCut: menuItem.refCuts[0] >= 0 || menuItem.refCuts[1] >= 0
     /// The sentence's name seats in its own order — a translation may put `%2` first: `{at, name, tint, room, key}`,
@@ -483,11 +497,12 @@ MenuItem {
         const seats = []
         const first = menuItem.sentence.indexOf("%1")
         if (first >= 0)
-            seats.push({ at: first, name: menuItem.refShown, tint: menuItem.refColor, room: menuItem.refRoom1, key: 1 })
+            seats.push({ at: first, name: menuItem.refShown, tint: menuItem.refColor, room: menuItem.refRoom1, key: 1,
+                         cut: menuItem.refCutAt1 })
         const second = menuItem.sentence.indexOf("%2")
         if (second >= 0)
             seats.push({ at: second, name: menuItem.refShown2, tint: menuItem.refColor2, room: menuItem.refRoom2,
-                         key: 2 })
+                         key: 2, cut: menuItem.refCutAt2 })
         return seats.sort((a, b) => a.at - b.at)
     }
     /// Those words as rich-text markup, in one label so the line measures and hovers like any row's: the words in the
@@ -503,7 +518,7 @@ MenuItem {
         let from = 0
         for (const seat of menuItem.refSeats) {
             out += menuItem.inked(menuItem.sentence.substring(from, seat.at)) + Words.inked(seat.room)
-                 + Words.codeMarkup(seat.name, seat.tint)
+                 + Words.codeMarkup(seat.name, seat.tint, seat.cut)
             from = seat.at + 2
         }
         return out + menuItem.inked(menuItem.sentence.substring(from))
@@ -520,8 +535,8 @@ MenuItem {
         const seats = menuItem.refSeats
         if (seats.length === 0 || seats[0].key === key)
             return rulers.head.advanceWidth
-        const first = seats[0].key === 1 ? rulers.shown1 : rulers.shown2
-        return seats.length > 1 ? rulers.head.advanceWidth + first.advanceWidth + rulers.between.advanceWidth : 0
+        const first = seats[0].key === 1 ? menuItem.refShownWidth1 : menuItem.refShownWidth2
+        return seats.length > 1 ? rulers.head.advanceWidth + first + rulers.between.advanceWidth : 0
     }
     function inked(words) {
         return words.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;")
@@ -536,7 +551,7 @@ MenuItem {
         target: menuItem
         // A blocked row's line comes before the elision's: one tooltip, one delay.
         asked: (menuItem.hovered || menuItem.tipForced)
-               && (menuItem.blocked || itemLabel.truncated || menuItem.refCut || menuItem.trailCut
+               && (menuItem.blocked || itemLabel.cutWords || menuItem.refCut || menuItem.trailCut
                    || menuItem.sideCut || menuItem.nameCut)
         // The whole line, code name included — a cut name is what the hover is there to give back, behind a chip too
         // (`worktree remove`).
@@ -709,7 +724,6 @@ MenuItem {
             // Pinned: rows carry text nobody here chose (a branch called `<b>`), and AutoText guesses at markup. The
             // one markup line is `refWords`, escaped on the way in.
             textFormat: menuItem.refWords !== "" ? Text.RichText : Text.PlainText
-            elide: menuItem.textNames ? Text.ElideMiddle : Text.ElideRight
             verticalAlignment: Text.AlignVCenter
             // Clear of the card's arrow (`arrow`) at the right edge (the note, when there is one, sits last instead).
             rightPadding: !noteLabel.visible && menuItem.subMenu && menuItem.arrow
@@ -719,7 +733,27 @@ MenuItem {
             // (user decision — ask before changing). The left menu's own folded headings and folder rows (∨) stay
             // `textSecondary`.
             font.weight: menuItem.titled ? Theme.fontWeightStrong : menuItem.font.weight
-            color: menuItem.wordColor
+            // Clear while the words are cut: the label keeps the whole words for every width read off it, and the cut
+            // is drawn over it with the cut mark (`cutWords`).
+            color: itemLabel.cutWords ? "transparent" : menuItem.wordColor
+            /// Plain words wider than the label's room, cut: a name in its middle (`textNames`), words at their end.
+            /// A row of `refWords` is never cut here: its names give way first (`refCuts`). The label's own
+            /// `implicitWidth` is the whole words, whatever room it is given.
+            readonly property bool cutWords: menuItem.refWords === "" && itemLabel.implicitWidth > itemLabel.width + 0.5
+            Loader {
+                active: itemLabel.cutWords
+                x: itemLabel.leftPadding
+                width: itemLabel.width - itemLabel.leftPadding - itemLabel.rightPadding
+                height: itemLabel.height
+                sourceComponent: CutName {
+                    closed: true
+                    cutAt: menuItem.textNames ? "middle" : "end"
+                    text: menuItem.text
+                    color: menuItem.wordColor
+                    pixelSize: itemLabel.font.pixelSize
+                    weight: itemLabel.font.weight
+                }
+            }
             TextMetrics {
                 id: refSpace
                 font: itemLabel.font
@@ -755,7 +789,10 @@ MenuItem {
                     readonly property TextMetrics cut2: refName2Ruler
                     readonly property TextMetrics shown1: refShown1Code
                     readonly property TextMetrics shown2: refShown2Code
+                    readonly property TextMetrics cutHead1: refCutHead1
+                    readonly property TextMetrics cutHead2: refCutHead2
                     readonly property TextMetrics fixed: refFixedRuler
+                    readonly property FontMetrics code: codeFace
                     /// The markup ahead of the names in the row's face (`leadOf`): the words and room before the first,
                     /// and the words and room between it and the second.
                     TextMetrics {
@@ -822,6 +859,19 @@ MenuItem {
                         font.pixelSize: itemLabel.font.pixelSize
                         text: menuItem.refShown2
                     }
+                    // A cut name's head, ahead of its mark (`refMarkX1` / `refMarkX2`).
+                    TextMetrics {
+                        id: refCutHead1
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refCutAt1 >= 0 ? menuItem.refShown.substring(0, menuItem.refCutAt1) : ""
+                    }
+                    TextMetrics {
+                        id: refCutHead2
+                        font.family: Theme.monoFamily
+                        font.pixelSize: itemLabel.font.pixelSize
+                        text: menuItem.refCutAt2 >= 0 ? menuItem.refShown2.substring(0, menuItem.refCutAt2) : ""
+                    }
                     TextMetrics {
                         id: refFixedRuler
                         font: itemLabel.font
@@ -835,10 +885,12 @@ MenuItem {
                                  && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
                         x: menuItem.refMarkRoom > 0 ? menuItem.refLead1 - menuItem.refCell
                                                     : WordFace.groundStart(menuItem.refLead1)
-                        width: (menuItem.refMarkRoom > 0
-                                ? WordFace.groundEnd(codeFace, menuItem.refShown,
-                                                     menuItem.refLead1 + refShown1Code.advanceWidth)
-                                : menuItem.refLead1 + refShown1Code.advanceWidth + Theme.spaceXs / 2) - x
+                        width: (menuItem.refMarkRoom <= 0
+                                ? menuItem.refLead1 + menuItem.refShownWidth1 + Theme.spaceXs / 2
+                                : menuItem.refCutAt1 === menuItem.refShown.length - 1
+                                ? WordFace.groundEndAtMark(refCutMark1.x, refCutMark1.ruler)
+                                : WordFace.groundEnd(codeFace, menuItem.refShown,
+                                                     menuItem.refLead1 + menuItem.refShownWidth1)) - x
                         wordBaseline: itemLabel.baselineOffset
                         size: itemLabel.font.pixelSize
                     }
@@ -847,10 +899,12 @@ MenuItem {
                                  && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
                         x: menuItem.refMarkRoom2 > 0 ? menuItem.refLead2 - menuItem.refCell
                                                      : WordFace.groundStart(menuItem.refLead2)
-                        width: (menuItem.refMarkRoom2 > 0
-                                ? WordFace.groundEnd(codeFace, menuItem.refShown2,
-                                                     menuItem.refLead2 + refShown2Code.advanceWidth)
-                                : menuItem.refLead2 + refShown2Code.advanceWidth + Theme.spaceXs / 2) - x
+                        width: (menuItem.refMarkRoom2 <= 0
+                                ? menuItem.refLead2 + menuItem.refShownWidth2 + Theme.spaceXs / 2
+                                : menuItem.refCutAt2 === menuItem.refShown2.length - 1
+                                ? WordFace.groundEndAtMark(refCutMark2.x, refCutMark2.ruler)
+                                : WordFace.groundEnd(codeFace, menuItem.refShown2,
+                                                     menuItem.refLead2 + menuItem.refShownWidth2)) - x
                         wordBaseline: itemLabel.baselineOffset
                         size: itemLabel.font.pixelSize
                     }
@@ -886,6 +940,26 @@ MenuItem {
                         nameAir: WordFace.nameAir(codeFace, menuItem.refShown2)
                         kind: menuItem.refMark2 !== "" ? menuItem.refMark2 : "remote"
                         tint: refMarkIcon2.inkBeside(menuItem.refColor2)
+                    }
+                    // A cut name's mark, over its clear `…` (`Words.codeMarkup`) in that glyph's face, so in its
+                    // room, on the row's baseline in the name's ink. Gone where the words are cut before the name.
+                    CutMark {
+                        id: refCutMark1
+                        visible: menuItem.refCutAt1 >= 0
+                                 && menuItem.refLead1 < itemLabel.width - itemLabel.rightPadding
+                        x: menuItem.refLead1 + menuItem.refMarkX1
+                        y: itemLabel.baselineOffset - baselineOffset
+                        font: codeFace.font
+                        color: menuItem.refColor
+                    }
+                    CutMark {
+                        id: refCutMark2
+                        visible: menuItem.refCutAt2 >= 0
+                                 && menuItem.refLead2 < itemLabel.width - itemLabel.rightPadding
+                        x: menuItem.refLead2 + menuItem.refMarkX2
+                        y: itemLabel.baselineOffset - baselineOffset
+                        font: codeFace.font
+                        color: menuItem.refColor2
                     }
                 }
             }

@@ -78,7 +78,9 @@ Item {
     /// cut names included (`tst_cardcopy`).
     property bool holdsNames: false
     /// The line as drawn, before the rooms: `text` with each name the marks give a length for cut where
-    /// `holdsNames` cuts it, the marks moved onto it, and which of them were cut — `{ text, marks, cuts }`.
+    /// `holdsNames` cuts it, the marks moved onto it, which of them were cut, and where in each name its `…` stands
+    /// (-1 for a name drawn whole) — `{ text, marks, cuts, cutAts }`. The `…` is drawn clear and the cut mark laid
+    /// over it (`Words.codeMarkup`, `cutMarkSeats`).
     readonly property var held: {
         const marks = cardText.marks
         const cap = capRuler.advanceWidth
@@ -90,6 +92,7 @@ Item {
         let shift = 0
         const moved = []
         const cuts = []
+        const cutAts = []
         marks.forEach(mark => {
             const length = mark[3] > 0 ? mark[3] : 0
             const name = cardText.text.substr(mark[0], length)
@@ -98,12 +101,13 @@ Item {
                           : name
             line += cardText.text.substring(from, mark[0]) + shown
             moved.push([mark[0] + shift, mark[1], mark[2], length > 0 ? shown.length : mark[3]])
+            cutAts.push(shown !== name ? WordFace.cutPoint(name, shown) : -1)
             if (shown !== name)
                 cuts.push(moved.length - 1)
             shift += shown.length - name.length
             from = mark[0] + length
         })
-        return { text: line + cardText.text.substring(from), marks: moved, cuts: cuts }
+        return { text: line + cardText.text.substring(from), marks: moved, cuts: cuts, cutAts: cutAts }
     }
     /// The seat in this line: as many of the field's own spaces — its font and weight — as hold the widest mark. The
     /// size is the field's own `pixelSize`, never read back off the ruler's font (that read loops the binding on
@@ -150,7 +154,7 @@ Item {
             out += cardText.wordsMarkup(from, mark[0]) + Words.inked(cardText.markRoomTexts[i])
             from = mark[0]
             if (mark[3] > 0) {
-                out += Words.codeMarkup(line.substr(mark[0], mark[3]), cardText.nameInkAt(i))
+                out += Words.codeMarkup(line.substr(mark[0], mark[3]), cardText.nameInkAt(i), cardText.held.cutAts[i])
                 from = mark[0] + mark[3]
                 apart = true
             }
@@ -212,13 +216,36 @@ Item {
                 // The name's end on this line: where the next character stands, or past this one's own advance where
                 // the field wraps after it — and at a marked name's end, half a gap off its ink.
                 const right = sameLine ? next.x : here.x + codeFace.advanceWidth(line.charAt(mark[0] + at - start))
-                const end_ = at + 1 === end && icon
-                             ? WordFace.groundEnd(codeFace, line.substr(mark[0], mark[3]), right) : right + half
+                // A name cut at its end ends on the cut mark laid over its clear `…` (`codeCut`).
+                const endsOnMark = cardText.held.cutAts[i] === mark[3] - 1
+                const end_ = at + 1 !== end || !icon ? right + half
+                             : endsOnMark ? WordFace.groundEndAtMark(here.x, codeCut)
+                             : WordFace.groundEnd(codeFace, line.substr(mark[0], mark[3]), right)
                 pieces.push({ x: left, baseline: cardText.baselineAt(here), width: end_ - left })
                 left = next.x - half
             }
         })
         return pieces
+    }
+    /// Where each cut name's clear `…` stands (`Words.codeMarkup`): `{at, x, top, height, baseline, ink}` in this
+    /// part's coordinates, the cut mark laid over it in the glyph's face, so in its room. One binding over its inputs,
+    /// as `codeGrounds`.
+    readonly property var cutMarkSeats: {
+        const rooms = cardText.markRooms
+        if (cardText.namedMarkup === "" || field.text === "" || cardText.width <= 0 || cardText.height <= 0)
+            return []
+        const length = field.length
+        const seats = []
+        cardText.held.marks.forEach((mark, i) => {
+            const cut = cardText.held.cutAts[i]
+            const at = cardText.markRoomAt(i) + rooms[i] + cut
+            if (cut < 0 || at + 1 > length)
+                return
+            const here = field.positionToRectangle(at)
+            seats.push({ at: at, x: here.x, top: here.y, height: here.height, baseline: cardText.baselineAt(here),
+                         ink: cardText.nameInkAt(i) })
+        })
+        return seats
     }
     /// What the field draws, and whether as markup.
     readonly property string drawnText: cardText.markup !== "" ? cardText.markup
@@ -406,6 +433,12 @@ Item {
         font.pixelSize: cardText.pixelSize
         font.weight: cardText.weight
     }
+    /// That face's own `…`, the ruler a cut name's mark is set by (`CutMark.ruler`): for where the name's ground ends.
+    TextMetrics {
+        id: codeCut
+        font: codeFace.font
+        text: WordFace.cutGlyph
+    }
     Text {
         id: ruler
         visible: false
@@ -476,6 +509,33 @@ Item {
         font: field.font
         text: "\u00a0"
     }
+    // Each cut name's mark, over its clear `…` (`cutMarkSeats`). A selection draws the clear glyph in its own text
+    // colour, so while the glyph is selected the mark stands on a patch of the selection's colour over it, in the
+    // selection's text colour.
+    Repeater {
+        model: cardText.cutMarkSeats
+        Item {
+            id: seat
+            required property var modelData
+            readonly property bool selected: field.selectionStart <= seat.modelData.at
+                                             && seat.modelData.at < field.selectionEnd
+            Rectangle {
+                visible: seat.selected
+                x: seat.modelData.x
+                y: seat.modelData.top
+                width: seatMark.width
+                height: seat.modelData.height
+                color: field.selectionColor
+            }
+            CutMark {
+                id: seatMark
+                x: seat.modelData.x
+                y: seat.modelData.baseline - seatMark.baselineOffset
+                font: codeFace.font
+                color: seat.selected ? field.selectedTextColor : seat.modelData.ink
+            }
+        }
+    }
     // The marks, each in the room opened in front of its name, against that name's baseline (`baselineAt`) with a
     // step of the box under it for a stem that runs past it.
     Repeater {
@@ -534,13 +594,12 @@ Item {
         height: cardText.lineHeight
         x: cardText.markLeft
         y: cardText.height - height
-        Label {
+        // On that line's baseline, where the field stands its words (`baselineAt`).
+        CutMark {
             id: markLabel
             anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            text: "…"
+            y: face.ascent - markLabel.baselineOffset
             color: cardText.color
-            // The field's font, so `mono` reaches the mark too.
             font: field.font
         }
     }

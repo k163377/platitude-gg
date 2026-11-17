@@ -50,20 +50,22 @@ Item {
     /// the end (`CodeLine`).
     property string cutAt: "middle"
     /// Whether the word gave way (`cap`, `cutToWidth`): the hover gives it back.
-    readonly property bool cut: wordLabel.truncated
+    readonly property bool cut: wordLabel.width + 0.5 < wordLabel.implicitWidth
     /// What the whole word would take, cap or no cap — what a caller sharing out room asks for, since `implicitWidth`
     /// is already the answer to that sharing (reading it back closes a ring).
     readonly property real wantWidth: chip.markRoom + wordLabel.implicitWidth
     /// The word as drawn: cut where it gave way.
     readonly property string shownWord: chip.cut ? wordShown.elidedText : chip.word
-    /// What the chip draws: the mark's room and the word as cut — short of the width it was given where the cut drops
-    /// a whole glyph, so what stands after it closes up to its ground (`CodeLine`). A cut is read off the cut text, not
-    /// `paintedWidth`: offscreen a cut label answered a pixel past the glyphs it kept (105 for 104, `Cascadia Mono`).
+    /// Where the cut word's `…` stands in `shownWord` (-1: whole). A cut is drawn in pieces: the code face's head and
+    /// tail round the cut mark, in the room the elide kept for that face's `…` (`CutPieces`, `CutMark`).
+    readonly property int markAt: chip.cut ? WordFace.cutPoint(chip.word, chip.shownWord) : -1
+    /// What the chip draws: the mark's room and the word, in pieces where it was cut (`CutPieces`) — short of the
+    /// width it was given where the cut drops a whole glyph, so what stands after it closes up to its ground
+    /// (`CodeLine`).
     readonly property real drawnWidth: chip.markRoom
-                                       + (chip.cut ? wordFace.advanceWidth(chip.shownWord) : wordLabel.paintedWidth)
+                                       + (chip.markAt >= 0 ? cutPieces.implicitWidth : wordLabel.paintedWidth)
 
-    implicitWidth: chip.markRoom + (chip.cap > 0 ? Math.min(wordLabel.paintedWidth, chip.cap - chip.markRoom)
-                                                 : wordLabel.implicitWidth)
+    implicitWidth: chip.cap > 0 ? Math.min(chip.drawnWidth, chip.cap) : chip.markRoom + wordLabel.implicitWidth
     implicitHeight: wordLabel.implicitHeight
     /// The word's, so a row can stand a sentence beside the chip on its baseline (`AskBar`, `OpExitCard`). The
     /// label's: a `grabbable` chip draws its word in a field instead, which stands its words by its own rule
@@ -76,8 +78,10 @@ Item {
         // to half a gap past the ink of the last glyph the name is drawn with — the `…` of a cut at the end
         // (`WordFace.groundStart` / `groundEnd`).
         x: chip.mark !== "" ? 0 : WordFace.groundStart(0)
-        width: (chip.mark !== "" ? WordFace.groundEnd(wordFace, chip.shownWord, chip.drawnWidth)
-                                 : chip.drawnWidth + Theme.spaceXs / 2) - x
+        width: (chip.mark === "" ? chip.drawnWidth + Theme.spaceXs / 2
+                : chip.markAt >= 0 && chip.markAt === chip.shownWord.length - 1
+                ? WordFace.groundEndAtMark(cutPieces.x + cutPieces.markX, cutPieces.markRuler)
+                : WordFace.groundEnd(wordFace, chip.shownWord, chip.drawnWidth)) - x
         // The baseline of the word as drawn: the field's where it draws the word (`grabbable`).
         wordBaseline: wordField.item !== null ? wordField.y + wordField.item.baselineOffset
                                           : wordLabel.y + wordLabel.baselineOffset
@@ -93,7 +97,7 @@ Item {
     TextMetrics {
         id: wordShown
         font: wordLabel.font
-        elide: wordLabel.elide
+        elide: chip.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
         elideWidth: wordLabel.width
         text: chip.cut ? chip.word : ""
     }
@@ -114,17 +118,16 @@ Item {
     }
     PlainTextLabel {
         id: wordLabel
-        // Hidden where the field below draws the word, so it is drawn and pressed once; kept, since every measurement
-        // this chip makes is read off it and a `Text` lays out while invisible.
-        visible: !chip.grabbable
+        // Hidden where the field below draws the word, so it is drawn and pressed once, and where the word is cut,
+        // which the pieces below draw; kept, since every measurement this chip makes is read off it and a `Text` lays
+        // out while invisible.
+        visible: !chip.grabbable && !chip.cut
         anchors.left: parent.left
         anchors.leftMargin: chip.markRoom
         anchors.verticalCenter: parent.verticalCenter
-        // A word that will not fit gives way where `cutAt` says.
+        // A word that will not fit gives way where `cutAt` says (`cut`, drawn by the pieces below).
         width: chip.cutToWidth ? Math.min(implicitWidth, chip.width - chip.markRoom)
              : chip.cap > 0 ? Math.min(implicitWidth, chip.cap - chip.markRoom) : implicitWidth
-        elide: !chip.cutToWidth && chip.cap <= 0 ? Text.ElideNone
-             : chip.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
         text: chip.word
         color: chip.tint
         font.family: Theme.monoFamily
@@ -133,6 +136,18 @@ Item {
         font.wordSpacing: -Theme.spaceXs
         font.pixelSize: chip.size
         font.weight: chip.weight
+    }
+    // The cut word, in pieces on the label's line: the head and tail in the code face, the cut mark between them.
+    CutPieces {
+        id: cutPieces
+        visible: !chip.grabbable && chip.markAt >= 0
+        x: wordLabel.x
+        y: wordLabel.y
+        height: wordLabel.height
+        whole: chip.word
+        text: chip.markAt >= 0 ? chip.shownWord : ""
+        color: chip.tint
+        font: wordLabel.font
     }
     /// Automation only: the word is in a field — a picture cannot say it (`settings-sweep`).
     readonly property bool grabbed: wordField.item !== null && wordField.item.grabs

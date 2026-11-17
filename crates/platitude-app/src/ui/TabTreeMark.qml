@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import platitude.ui
+import platitude.ui.face
 import platitude.ui.words
 
 // The run a tab draws after the repository's name while it stands in a linked worktree: the WORKTREES mark and
@@ -38,8 +39,8 @@ Item {
 
     /// This run at its own width: what a tab asks the strip for on top of its name, and the most it is ever drawn at.
     readonly property real naturalWidth: treeRun.name === "" ? 0 : treeRun.fixedWidth + treeRun.nameWhole
-    /// The name alone, whole and at its floor — both ends and the `…` — in the face it is drawn in, for a holder that
-    /// prices the run (`OpsPicker`).
+    /// The name alone, whole and at its floor — both ends and the cut mark (`CutMark`, the face's own `…`) — in the
+    /// face it is drawn in, for a holder that prices the run (`OpsPicker`).
     readonly property real nameWhole: Math.ceil(nameRun.nameWidth)
     readonly property real nameFloor: Math.ceil(floorRuler.advanceWidth)
     /// Everything but the name: the gap before it and the mark's seat.
@@ -68,7 +69,7 @@ Item {
     TextMetrics {
         id: floorRuler
         font: capRuler.font
-        text: "nnn…nnn"
+        text: "nnn" + WordFace.cutGlyph + "nnn"
     }
 
     // The mark and the folder as one code chip (`NameRun`), a step under the tab's name in size and colour — the mark

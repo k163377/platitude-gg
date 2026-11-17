@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.face
 import platitude.ui.hover
 
 // The commit's own hash over its parents', rows aligned right. Each hash is a control and a value: a press that lets go
@@ -45,10 +46,11 @@ ColumnLayout {
         font.pixelSize: Theme.fontSm
         text: "0"
     }
+    /// The cut mark's room (`CutMark`): the hashes' face's own `…`.
     readonly property TextMetrics cutInk: TextMetrics {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
-        text: "…"
+        text: WordFace.cutGlyph
     }
     // The count's own font: the label draws in whatever face the window gives a `Label`, which need not be the one
     // `Theme.uiFamily` names.

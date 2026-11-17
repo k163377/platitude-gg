@@ -95,6 +95,9 @@ Item {
             const feature = rowCalled(card, "feature")
             verify(feature !== null, "the folder's row says the folder's name")
             verify(feature.subMenu !== null, "the folder's row opens a card")
+            // The words' ink as drawn: a row not yet laid out holds its words in a room cut short, which a cut row
+            // draws clear (`cutWords`).
+            verify(waitForItemPolished(feature.contentItem), "the row is laid out")
             verify(Qt.colorEqual(wordsOf(feature).color, Theme.textPrimary),
                    "a row that opens a card to its right is not drawn darker than a branch row")
             verify(card.openFolder("feature"))

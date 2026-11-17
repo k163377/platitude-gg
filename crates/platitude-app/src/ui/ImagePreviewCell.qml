@@ -97,12 +97,13 @@ ColumnLayout {
             Layout.preferredHeight: captionWord.implicitHeight
             middle: captionWord.baselineOffset - WordFace.signMiddle(captionWord.font.pixelSize)
         }
-        PlainTextLabel {
+        CutName {
+            closed: true
+            cutAt: "end"
             Layout.fillWidth: true
             text: previewCell.sizeText
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
             color: Theme.textSecondary
-            elide: Text.ElideRight
         }
     }
     Rectangle {
@@ -153,12 +154,14 @@ ColumnLayout {
             onStatusChanged: previewCell.learnZoom()
         }
         // A side with nothing to show: a blob core could not read, or a format this runtime has no decoder for.
-        Label {
+        CutName {
+            closed: true
+            cutAt: "end"
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width - 2 * Theme.spaceSm)
+            height: implicitHeight
             visible: previewCell.url === "" || previewImage.status === Image.Error
             text: qsTr("Preview unavailable")
-            elide: Text.ElideRight
             color: Theme.textMuted
         }
     }

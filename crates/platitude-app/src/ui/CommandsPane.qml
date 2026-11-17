@@ -165,17 +165,19 @@ Rectangle {
                     count: list.count
                     curPage: pane.curPage
                 }
-                // One line here; the failed row keeps the whole. Capped: eliding trims only the last line of a
-                // multi-line message, and the band would grow over the rows.
-                PlainTextLabel {
+                // One line here, cut at its end (`CutName`, closed up); the failed row keeps the whole. The first line
+                // only, the band would grow over the rows: where more follow it ends on the mark (`more`).
+                CutName {
+                    closed: true
+                    cutAt: "end"
+                    more: pane.errorWhy === "" && pane.errorText.indexOf("\n") >= 0
                     Layout.fillWidth: true
                     visible: pane.errorText !== ""
                     // A remote out of reach is said in this application's words; the rest is git's first line, and
                     // the whole of it is under the row (デザイン規約 §git が言ったことを読む場所).
-                    text: "— " + (pane.errorWhy !== "" ? Words.unreachedWhy(pane.errorWhy) : pane.errorText)
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                    font.pixelSize: Theme.fontSm
+                    text: "— " + (pane.errorWhy !== "" ? Words.unreachedWhy(pane.errorWhy)
+                                                       : pane.errorText.split("\n")[0])
+                    pixelSize: Theme.fontSm
                     color: Theme.danger
                     MouseArea {
                         anchors.fill: parent

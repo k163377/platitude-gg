@@ -45,22 +45,22 @@ TextField {
     ContextMenu.menu: null
     ContextMenu.onRequested: menuSeat.offer()
     Keys.onMenuPressed: event => event.accepted = menuSeat.offer()
-    // Laid out as the style's PlaceholderText is (Fusion's TextField.qml), so the words stand where they stood.
-    PlainTextLabel {
+    // Laid out as the style's PlaceholderText is (Fusion's TextField.qml), so the words stand where they stood, and cut
+    // at its end as that one is (`CutName`, closed up).
+    CutName {
         id: hint
+        closed: true
+        cutAt: "end"
         x: form.leftPadding
         y: form.topPadding
         width: form.width - (form.leftPadding + form.rightPadding)
         height: form.height - (form.topPadding + form.bottomPadding)
         text: form.placeholder
-        font: form.font
+        pixelSize: form.font.pixelSize
+        weight: form.font.weight
         color: form.placeholderTextColor
-        horizontalAlignment: form.horizontalAlignment
-        verticalAlignment: form.verticalAlignment
         visible: !form.length && !form.preeditText
                  && (!form.activeFocus || form.horizontalAlignment !== Qt.AlignHCenter)
-        elide: Text.ElideRight
-        renderType: form.renderType
     }
     FieldMenuSeat {
         id: menuSeat

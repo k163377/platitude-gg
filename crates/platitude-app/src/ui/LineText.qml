@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // One line a pane draws to be read, in a field the reader can take away (デザイン規約 §右のペインの字は掴める) — the
 // one-line half of `CardText`. It cuts its width by clipping, not eliding: `TextEdit` has no `elide`, and an elided
@@ -45,15 +46,17 @@ Item {
     /// The cut is taken from the head (or the middle): the words are held against the far edge, the mark at the near
     /// one.
     readonly property bool cutsHead: (line.cutAt === "start" || line.cutAt === "middle") && line.clipped
-    /// `…`, or for a middle cut the head and `…`, split where `Text.ElideMiddle` would at this width.
-    readonly property string markText: (line.cutAt === "middle" && line.clipped
-                                        ? line.headOf(line.text, middleRuler.elidedText) : "") + "…"
+    /// A middle cut's head, drawn ahead of the mark on its patch: split where `Text.ElideMiddle` would at this width.
+    readonly property string markHead: line.cutAt === "middle" && line.clipped
+                                       ? line.headOf(middleRuler.elidedText) : ""
+    /// What the patch holds: the cut mark (`CutMark`), behind a middle cut's head.
+    readonly property real markInk: (line.markHead !== "" ? markHeadLabel.implicitWidth : 0) + cutMark.implicitWidth
     /// Where an end cut's mark starts: the far edge of the last character standing whole before it. Cut by the pixel,
     /// a character stands half under the mark and reads as another (`12` as `1` and a stroke). One binding over what
     /// moves the answer, since `positionAt` is a call (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
     /// Held, with `tailSlack`, by `tests/qml/tst_linecut.qml`.
     readonly property real markAt: {
-        const room = Math.max(0, line.width - markLabel.implicitWidth)
+        const room = Math.max(0, line.width - line.markInk)
         if (!line.clipped || line.cutsHead || field.text === "" || field.contentWidth <= 0)
             return room
         // Asked on the line's first row: below the line a field answers with its last character.
@@ -78,7 +81,7 @@ Item {
     readonly property real tailSlack: {
         if (!line.cutsHead || field.text === "" || field.contentWidth <= 0)
             return 0
-        const from = markLabel.implicitWidth - (line.width - field.width)
+        const from = line.markInk - (line.width - field.width)
         const at = field.positionAt(from, 0)
         const edge = field.positionToRectangle(at).x
         // `positionAt` answers the nearer edge, which can be the one the mark still covers — by under a pixel, the
@@ -86,9 +89,9 @@ Item {
         const next = edge > from - 1 || at >= field.length ? edge : field.positionToRectangle(at + 1).x
         return Math.max(0, next - from)
     }
-    /// How wide the mark is: what a holder that cuts the value back to a word of its own choosing leaves past that word
-    /// (`CommitAuthorRow.dateDayRoom`).
-    readonly property alias markWidth: markLabel.implicitWidth
+    /// How wide the mark is, with a middle cut's head (`markInk`): what a holder that cuts the value back to a word of
+    /// its own choosing leaves past that word (`CommitAuthorRow.dateDayRoom`).
+    readonly property real markWidth: line.markInk
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText
     /// A value a `SweepPad` walking a card can land a sweep on.
@@ -110,13 +113,10 @@ Item {
     function deselect() {
         field.deselect()
     }
-    /// The head of an elided value — searched, since the value itself may hold a `…`.
-    function headOf(whole, elided) {
-        for (let i = elided.indexOf("…"); i >= 0; i = elided.indexOf("…", i + 1)) {
-            if (whole.startsWith(elided.substring(0, i)) && whole.endsWith(elided.substring(i + 1)))
-                return elided.substring(0, i)
-        }
-        return ""
+    /// The head of the value as `elided` cuts it (`WordFace.cutPoint`); empty for no cut.
+    function headOf(elided) {
+        const at = WordFace.cutPoint(line.text, elided)
+        return at >= 0 ? elided.substring(0, at) : ""
     }
 
     // ---- driven from outside ----------------------------------------
@@ -160,7 +160,8 @@ Item {
         font: field.font
         wrapMode: Text.NoWrap
     }
-    /// Where a middle elide would split at this width; no text in the other modes, so nothing is laid out twice.
+    /// Where a middle elide would split at this width; no text in the other modes, so nothing is laid out twice. The
+    /// room it keeps for its `…` is the mark's (`CutMark`).
     TextMetrics {
         id: middleRuler
         font: field.font
@@ -212,20 +213,28 @@ Item {
     Rectangle {
         visible: line.clipped
         color: line.ground
-        width: line.cutsHead ? markLabel.implicitWidth : line.width - line.markAt
+        width: line.cutsHead ? line.markInk : line.width - line.markAt
         height: line.height
         x: line.cutsHead ? 0 : line.markAt
         Rectangle {
             anchors.fill: parent
             color: line.groundOverlay
         }
+        // Both on the words' own baseline, not at the patch's middle: the two are half a pixel apart where the face's
+        // leading is odd, and each rounds its own way — the head of a path cut in its middle would stand a pixel off
+        // its tail. The mark is drawn (`CutMark`).
         PlainTextLabel {
-            id: markLabel
-            // On the words' own baseline, not at the patch's middle: the two are half a pixel apart where the face's
-            // leading is odd, and each rounds its own way — the head of a path cut in its middle would stand a pixel
-            // off its tail.
-            y: field.y + field.baselineOffset - markLabel.baselineOffset
-            text: line.markText
+            id: markHeadLabel
+            visible: line.markHead !== ""
+            y: field.y + field.baselineOffset - markHeadLabel.baselineOffset
+            text: line.markHead
+            color: line.color
+            font: field.font
+        }
+        CutMark {
+            id: cutMark
+            x: line.markHead !== "" ? markHeadLabel.implicitWidth : 0
+            y: field.y + field.baselineOffset - cutMark.baselineOffset
             color: line.color
             font: field.font
         }

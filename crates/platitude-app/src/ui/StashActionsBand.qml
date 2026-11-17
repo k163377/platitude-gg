@@ -57,16 +57,17 @@ Rectangle {
             width: Theme.iconMd
             height: stashCaption.implicitHeight
         }
-        Label {
+        CutName {
             id: stashCaption
+            closed: true
+            cutAt: "end"
             transform: Translate { y: band.capsLift }
             text: qsTr("STASH")
-            font.pixelSize: Theme.fontMd
-            font.weight: Theme.fontWeightStrong
+            pixelSize: Theme.fontMd
+            weight: Theme.fontWeightStrong
             color: Theme.textSecondary
             // Unlike `PaneHeader`'s, this caption shares its row with the buttons and would paint over them when
             // squeezed.
-            elide: Text.ElideRight
             Layout.fillWidth: true
         }
         HoverToolButton {

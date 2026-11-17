@@ -194,19 +194,22 @@ Rectangle {
             font.family: Theme.monoFamily
             font.pixelSize: Theme.fontSm
         }
-        PlainTextLabel {
+        // Cut at its end (`CutName`, closed up).
+        CutName {
             id: argsText
+            closed: true
+            cutAt: "end"
             // One space after `git`: the ruler is handed `git <args>` as one string (`CommandsModel.columnText`), so
             // a selection lands on the pixels the copy names. The width is written, since a right anchor would move
             // the x as well.
             x: program.x + 4 * row.charW
             width: Math.max(0, outcome.x - Theme.spaceMd - x)
+            height: implicitHeight
             anchors.verticalCenter: parent.verticalCenter
             text: row.args
-            elide: Text.ElideRight
+            mono: true
             color: Theme.textPrimary
-            font.family: Theme.monoFamily
-            font.pixelSize: Theme.fontSm
+            pixelSize: Theme.fontSm
         }
         Row {
             id: outcome

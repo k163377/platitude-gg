@@ -199,7 +199,7 @@ Item {
             /// The floor for anything that gives: a cut leaves a `…` behind (user decision — ask before changing). A
             /// part gone in silence reaches the reader as a sentence that never said it; words and `+N` alike keep one
             /// mark's width (`by <face> …` says there are more names).
-            readonly property real cutMark: ellipsis.implicitWidth
+            readonly property real cutMark: cutRuler.advanceWidth
             readonly property real midCap:
                 btnLabel.phraseRoom <= 0 || btnLabel.text === "" ? 0
                 : Math.max(phraseRow.cutMark, Math.min(midWords.implicitWidth,
@@ -214,14 +214,13 @@ Item {
                 : (phraseRow.mateFits ? mateFull.implicitWidth : phraseRow.cutMark) + phraseRow.spacing
 
             spacing: Theme.spaceXs
-            // Rulers for the cut mark and the whole `+N`: both are read to work out who gives, so neither can be an
-            // item whose width that answer sets.
-            Label {
-                id: ellipsis
-                visible: false
-                text: "…"
+            // Rulers for the cut mark (`CutMark`, the face's own `…`) and the whole `+N`: both are read to work out who
+            // gives, so neither can be an item whose width that answer sets.
+            TextMetrics {
+                id: cutRuler
                 font.family: Theme.uiFamily
                 font.pixelSize: btnLabel.fontSize
+                text: WordFace.cutGlyph
             }
             PlainTextLabel {
                 id: mateFull
@@ -287,15 +286,17 @@ Item {
                 font.pixelSize: btnLabel.fontSize
                 anchors.verticalCenter: parent.verticalCenter
             }
-            PlainTextLabel {
+            // Cut at its end (`CutName`, closed up), down to the mark alone at the floor.
+            CutName {
                 id: midWords
+                closed: true
+                cutAt: "end"
                 visible: phraseRow.midCap > 0
                 width: Math.min(implicitWidth, phraseRow.midCap)
-                elide: Text.ElideRight
+                height: implicitHeight
                 text: btnLabel.text
                 color: btnLabel.tint
-                font.family: Theme.uiFamily
-                font.pixelSize: btnLabel.fontSize
+                pixelSize: btnLabel.fontSize
                 anchors.verticalCenter: parent.verticalCenter
             }
             PlainTextLabel {
@@ -352,17 +353,29 @@ Item {
             }
             PlainTextLabel {
                 id: mateCount
-                visible: btnLabel.phraseMates > 0
-                text: phraseRow.mateFits ? phraseRow.mateWord : ellipsis.text
+                visible: btnLabel.phraseMates > 0 && phraseRow.mateFits
+                text: phraseRow.mateWord
                 color: btnLabel.tint
                 font.family: Theme.uiFamily
                 font.pixelSize: btnLabel.fontSize
                 anchors.verticalCenter: parent.verticalCenter
             }
+            // …or, short of room for it, the mark in its place: in a word's line box, on its baseline (`mateFull`, the
+            // same face).
+            CutMark {
+                visible: btnLabel.phraseMates > 0 && !phraseRow.mateFits
+                height: mateFull.height
+                base: mateFull.baselineOffset
+                color: btnLabel.tint
+                font: mateFull.font
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
-    PlainTextLabel {
+    CutName {
         id: headText
+        closed: true
+        cutAt: "end"
         visible: !btnLabel.phrased && !btnLabel.folded
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
@@ -375,12 +388,11 @@ Item {
         width: Math.min(implicitWidth, btnLabel.wordCeiling)
         text: btnLabel.head
         color: btnLabel.tint
-        font.family: btnLabel.code ? Theme.monoFamily : Theme.uiFamily
-        font.weight: btnLabel.wordWeight
+        mono: btnLabel.code
+        weight: btnLabel.wordWeight
         // A chip's words close up by a gap (`CodeGround`): a mono space would stand the flag off as a second word.
-        font.wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
-        font.pixelSize: btnLabel.fontSize
-        elide: Text.ElideRight
+        wordSpacing: btnLabel.code ? -Theme.spaceXs : 0
+        pixelSize: btnLabel.fontSize
     }
     // The flag: the mono space's air, a drawn rule per dash (the font's own dash is `borderWidth` thick) with a hair of
     // air after it, and the letters in the font.

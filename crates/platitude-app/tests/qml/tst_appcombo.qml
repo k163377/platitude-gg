@@ -215,10 +215,25 @@ Control {
 
         /// A cut value fills its room: one letter more on either side it is cut from would not fit
         /// (`WordFace.cutToFit`) — not Qt's middle elide, which stops up to two letters short and leaves a gap before
-        /// the arrow.
+        /// the arrow. The pieces are measured apart, the drawn cut mark between them in the room of the face's own `…`
+        /// (`CutPieces`).
         function widthOf(word) {
             ruler.text = word
             return ruler.advanceWidth
+        }
+        /// The pieces a field draws its cut value in (`CutPieces`, the one child with a `markRuler`).
+        function drawnPieces(item) {
+            if (item.markRuler !== undefined)
+                return item
+            for (const child of item.children || []) {
+                const found = drawnPieces(child)
+                if (found !== null)
+                    return found
+            }
+            return null
+        }
+        function cutWidthOf(head, tail) {
+            return widthOf(head) + widthOf(WordFace.cutGlyph) + widthOf(tail)
         }
 
         function test_a_cut_value_fills_its_room() {
@@ -228,17 +243,20 @@ Control {
             verify(cut > 0, "cut in the middle: " + shown)
             const head = shown.slice(0, cut)
             const tail = shown.slice(cut + 1)
-            verify(widthOf(shown) <= room, "inside its room")
-            fuzzyCompare(picked.contentItem.contentWidth, widthOf(shown), 0.5, "measured as it is laid out")
-            verify(widthOf(root.longName.slice(0, head.length + 1) + "…" + tail) > room,
+            verify(cutWidthOf(head, tail) <= room, "inside its room")
+            // …and drawn so: the pieces as laid out (`CutPieces`), not only as measured.
+            const pieces = drawnPieces(picked)
+            verify(pieces !== null && pieces.visible, "drawn in pieces")
+            verify(pieces.implicitWidth <= room, "drawn inside its room: " + pieces.implicitWidth + " in " + room)
+            verify(cutWidthOf(root.longName.slice(0, head.length + 1), tail) > room,
                    "one more letter at the head would not fit: " + shown)
-            verify(widthOf(head + "…" + root.longName.slice(root.longName.length - tail.length - 1)) > room,
+            verify(cutWidthOf(head, root.longName.slice(root.longName.length - tail.length - 1)) > room,
                    "nor one more at the tail: " + shown)
 
             const remoteRoom = pickedRemote.contentItem.width - pickedRemote.contentItem.leftPadding
                 - pickedRemote.contentItem.rightPadding
             const remote = pickedRemote.contentItem.text
-            verify(widthOf(root.longName.slice(0, remote.length) + "…") > remoteRoom,
+            verify(cutWidthOf(root.longName.slice(0, remote.length), "") > remoteRoom,
                    "a remote's cut at its end fills its room too: " + remote)
         }
 
@@ -246,7 +264,7 @@ Control {
         /// shows stays empty, so its width does not swing between the two and loop the row's binding.
         function test_an_empty_value_is_never_cut() {
             failOnWarning(/Binding loop/)
-            compare(WordFace.cutToFit(widthOf, "", -8, false), "")
+            compare(WordFace.cutToFit(widthOf, "", -8, false, 0), "")
             const row = createTemporaryObject(emptyRow, root)
             tryVerify(() => row.children[0].width > 0)
             compare(row.children[0].contentItem.text, "")
@@ -355,7 +373,7 @@ Control {
             const mark = rows.itemAtIndex(1).contentItem.children[1]
             compare(word.text, "fork")
             verify(mark.visible, "the row wears the mark")
-            tryVerify(() => !word.truncated, undefined,
+            tryVerify(() => !word.cutting, undefined,
                       "the word is whole in " + word.width + " for " + word.implicitWidth)
             data.combo.popup.close()
         }

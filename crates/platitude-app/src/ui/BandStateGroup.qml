@@ -320,16 +320,16 @@ Item {
             visible: stateGroup.opBadgeShown
             naturalW: stateGroup.opBadgeW
             cap: stateGroup.cap
-            PlainTextLabel {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: stateGroup.stateWorktree !== null ? stateGroup.stateWorktree.opText : ""
                 color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 // The one part of this badge that gives: the count and the second operation mean nothing cut in half.
-                elide: Text.ElideRight
                 Layout.fillWidth: true
-                // Rounded up, here and below (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
             // Drawn — a typed middle dot would put a full-width cell in the badge (規約 §余白). On the capitals' middle,
             // not the line's: the words beside it are capitals only.
@@ -363,14 +363,15 @@ Item {
             naturalW: stateGroup.conflictBadgeW
             cap: stateGroup.cap
             filled: true
-            Label {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: Words.badgeConflicts
                 color: Theme.textOnAccent
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
         }
         StateBadge {
@@ -381,14 +382,15 @@ Item {
             cap: stateGroup.cap
             pressable: true
             onPressed: stateGroup.identityEditRequested()
-            Label {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: Words.badgeSetIdentity
                 color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
         }
         // Outlined `danger`, and ahead of `OLD GIT` (`staleBadgeShown`, the header's order).
@@ -399,14 +401,15 @@ Item {
             naturalW: stateGroup.staleBadgeW
             cap: stateGroup.cap
             tint: Theme.danger
-            Label {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: Words.badgeStaleGraph
                 color: Theme.danger
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
         }
         // Cleared by an install as `OLD GIT` is, but ahead of it: it also goes with the files that raised it
@@ -417,14 +420,15 @@ Item {
             visible: stateGroup.lfsBadgeShown
             naturalW: stateGroup.lfsBadgeW
             cap: stateGroup.cap
-            Label {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: Words.badgeNoLfs
                 color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
         }
         StateBadge {
@@ -433,21 +437,21 @@ Item {
             visible: stateGroup.oldGitBadgeShown
             naturalW: stateGroup.oldGitBadgeW
             cap: stateGroup.cap
-            Label {
+            CutName {
+                closed: true
+                cutAt: "end"
                 text: Words.badgeOldGit
                 color: Theme.warning
-                font.pixelSize: Theme.fontSm
-                font.weight: Theme.fontWeightStrong
-                elide: Text.ElideRight
+                pixelSize: Theme.fontSm
+                weight: Theme.fontWeightStrong
                 Layout.fillWidth: true
-                Layout.maximumWidth: Math.ceil(implicitWidth)
+                Layout.maximumWidth: implicitWidth
             }
         }
     }
 
-    // `…` typed — the same glyph and width on both OSes, unlike the East Asian Ambiguous `↑` `↓` `→` `·`. Outside
-    // `Theme.buttonMinWidth`, which is for a box round a word. Hover and a press both open the card: a small target
-    // answers however it is touched.
+    // The folded group: its mark (`CutMark`) in a frame, outside `Theme.buttonMinWidth`, which is for a box round a
+    // word. Hover and a press both open the card: a small target answers however it is touched.
     Rectangle {
         id: stateToggle
         visible: stateGroup.folded
@@ -474,17 +478,16 @@ Item {
             border.color: stateGroup.tint
             radius: Theme.radiusSm
         }
-        // On the band's line, as the words it stands for (a glyph, on the line's one baseline): the frame is cut round
-        // the words' capitals from that line, and a centred line puts the dots wherever the face's descent leaves them.
-        // Where in the line the dots fall is the face's: in Noto Sans JP / Noto Sans CJK JP they come within 1px of the
-        // middle of the capital-cut frame. The face's own report of the dots' ink is no help — Noto Sans JP's spans
-        // 7px.
-        Label {
+        // On the band's line, as the words it stands for (a character, on the line's one baseline): the frame is cut
+        // round the words' capitals from that line, and a centred line box puts a mark wherever the face's descent
+        // leaves it. The cut mark (`CutMark`), in the words' face and weight: the words given up, said as every cut
+        // says it.
+        CutMark {
             id: stateMark
             anchors.horizontalCenter: markFrame.horizontalCenter
             anchors.baseline: parent.top
             anchors.baselineOffset: Math.round(stateGroup.lineBaseline)
-            text: "…"
+            font.family: Theme.uiFamily
             font.pixelSize: Theme.fontMd
             font.weight: Theme.fontWeightStrong
             color: stateGroup.tint
