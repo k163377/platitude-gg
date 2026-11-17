@@ -27,8 +27,8 @@
 - **英文中の `…` `—` の形はヘッドレスで判定しない** — Qt は shaping の言語を `QLocale()`(= OS のロケール)から HarfBuzz
   へ渡すので、JP ロケールのこの機械では、ヘッドレスの `Noto Sans JP` が英文に続く `…` `—` を和文字形(中央の三点・全角の
   ダッシュ)で描く。実窓の `Yu Gothic UI` は欧文字形のまま(`FontLoader` に `C:/Windows/Fonts/YuGothR.ttc` を読ませれば
-  offscreen でも両方を並べて描ける — FONTDIR の走査が拾わないだけ)。`Text.elide` の印も英文に続く字なので同じく変わる。
-  単独で置いた `…`(`CutName` の印)は `Noto Sans JP` では Qt の版によらず和文字形、`Yu Gothic UI` では欧文字形
+  offscreen でも両方を並べて描ける — FONTDIR の走査が拾わないだけ)。省略の印は描く(`CutMark`)ので、ヘッドレスでも実窓で
+  も同じ形
 - fps 計測(`_PGG_AUTO_SCROLL`)は offscreen でも完走するが、値は疑似フレームループの上限 — **判定に使う性能実測はアンロッ
   ク状態・点灯した D3D の通常起動でのみ行う**(`perf --software` は表示に依らず撮れるがメモリだけが読める別の量)
 - **ポップアップ(Popup / Dialog / Menu)は `grabToImage` に写らない** — 撮影は overlay.png で足りる。実ウィンドウが要る検
