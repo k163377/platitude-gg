@@ -875,11 +875,17 @@ QtObject {
     }
     /// `name` as code in markup (デザイン規約 §ref の種別「文の中の名前」): the mono face, in `ink`. Its ground is drawn
     /// under the words by whoever lays them out (`CardText`, `AppMenuItem`): from the head of its mark's seat to half a
-    /// gap past its last glyph's ink (`WordFace.groundEnd`), or for a name with no mark, from half a gap before it to
-    /// half a gap past its advance (`WordFace.groundStart`).
-    function codeMarkup(name, ink) {
-        return "<span style=\"font-family:'" + Theme.monoFamily + "'; color:" + ink + "\">" + Words.inked(name)
-             + "</span>"
+    /// gap past its last glyph's ink (`WordFace.groundEnd`; past the cut mark's last dot for a name cut at its end,
+    /// `groundEndAtMark`), or for a name with no mark, from half a gap before it to half a gap past its advance
+    /// (`WordFace.groundStart`).
+    /// A name cut by an elide gives `cut`, where its `…` stands (`WordFace.cutPoint`; -1 or none for a whole name):
+    /// that glyph is drawn clear, keeping the room the elide kept for it, and the holder lays the cut mark over it, as
+    /// wide as the glyph (`CutMark`) — a typed `…` takes the form the locale and the letters before it choose.
+    function codeMarkup(name, ink, cut) {
+        const body = cut === undefined || cut < 0 ? Words.inked(name)
+            : Words.inked(name.substring(0, cut)) + "<span style=\"color:transparent\">\u2026</span>"
+              + Words.inked(name.substring(cut + 1))
+        return "<span style=\"font-family:'" + Theme.monoFamily + "'; color:" + ink + "\">" + body + "</span>"
     }
     /// A sentence as rich-text markup with a link on its one word a press can reach (`CardText.markup`), found inside
     /// the already-spelled sentence that is measured and read back (`FindBar`'s note; a tip's place goes through

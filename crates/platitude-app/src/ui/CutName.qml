@@ -1,6 +1,6 @@
 import QtQuick
-import QtQuick.Controls.Fusion
 import platitude.ui
+import platitude.ui.face
 
 // A name in a column narrower than itself, cut so the column keeps both of its edges
 // (規約 §寸法「列に並ぶ名前の省略は、余りを切れ目へ入れる」). `Text.ElideMiddle` alone draws what fits from the left, so the
@@ -14,6 +14,10 @@ import platitude.ui
 // the column's right edge (規約 §寸法「文の省略は末尾で、印は列の右辺に貼る」): a sentence has no telling tail to keep,
 // and a mark set right after the text lands where the elide stopped — a character short on some rows — so the `…`
 // would stand at a different x on every row. The leftover goes in front of the mark.
+//
+// A line that stands alone, in no column (`closed`), is cut the same way and drawn as `Text.elide` draws its cut: the
+// pieces closed up — the mark straight after the head, the tail straight after the mark — and the leftover past them.
+// A cut at its start (`cutAt: "start"`) keeps its tail against the right edge, the mark straight before it.
 //
 // The name in full stays the row's hover (規約 §hover のツールチップ).
 Item {
@@ -29,9 +33,20 @@ Item {
     property real letterSpacing: 0
     /// Set in git's own family, as a name set as code is (`NameRun`, デザイン規約 §ref の種別「文の中の名前」).
     property bool mono: false
+    /// Added to the space between words (a code word's, `CodeGround`).
+    property real wordSpacing: 0
     /// Where the mark falls: `middle` for a name (told apart by both of its ends), `end` for a sentence (read from the
-    /// left, and nothing after the cut is worth keeping).
+    /// left, and nothing after the cut is worth keeping), `start` for a line set against the right edge whose end says
+    /// it.
     property string cutAt: "middle"
+    /// The pieces closed up, the leftover past them, as `Text.elide` lays its cut out — a line in no column. Off, the
+    /// leftover goes into the cut (a name) or in front of the mark (a sentence), so a column keeps its edges.
+    property bool closed: false
+    /// The line stands for more lines past it (the first of a message): it ends on the mark where it fits with it, as
+    /// a label held to one line ends.
+    property bool more: false
+    /// The face the name is drawn in, for a holder that sets a mark by the words (`WordFace.capitalDrop`).
+    readonly property font font: headLabel.font
     /// Whether the pieces are drawn. False where something else draws the same name here (`NameCell.whole`); the cut
     /// is still worked out, so the column keeps its width and `cutting` keeps answering.
     property bool inked: true
@@ -72,10 +87,16 @@ Item {
             cut.cutting = false
             return
         }
-        if (measure.advanceWidth <= box) {
+        if (measure.advanceWidth <= box && !cut.more) {
             cut.headText = whole
             cut.tailText = ""
             cut.cutting = false
+            return
+        }
+        if (cut.more && measure.advanceWidth + cut.inkOf(WordFace.cutGlyph) <= box) {
+            cut.headText = whole
+            cut.tailText = ""
+            cut.cutting = true
             return
         }
         // Start from the elide's answer: it breaks only where text may break (never inside a surrogate pair or a
@@ -83,11 +104,12 @@ Item {
         probe.elideWidth = box
         probe.text = whole
         const elided = probe.elidedText
-        const at = cut.cutPoint(whole, elided)
+        const at = WordFace.cutPoint(whole, elided)
         const toEnd = cut.cutAt === "end"
+        const toStart = cut.cutAt === "start"
         let head = at >= 0 ? at : 0
         let tail = !toEnd && at >= 0 ? elided.length - at - 1 : 0
-        const room = box - cut.inkOf("…")
+        const room = box - cut.inkOf(WordFace.cutGlyph)
         let headInk = cut.inkOf(whole.substring(0, head))
         let tailInk = cut.inkOf(whole.substring(whole.length - tail))
         // …which can run past the column (a middle cut of a small face, by a few pixels — `fontSm`, the WORKTREES rows'
@@ -103,7 +125,7 @@ Item {
             }
         }
         // Fill the column, the tail first: a generated name is told apart by its end
-        // (規約 §git 用語のコード表記「ref の省略は中央」). A cut at the end grows only the head.
+        // (規約 §git 用語のコード表記「ref の省略は中央」). A cut at the end grows only the head, at the start only the tail.
         // A character at a time, not a binary search (built, measured, no difference): the elide's answer starts within
         // two characters of the fit, so this goes round two or three times. Propose a search again only with a new
         // measurement; what cutting costs is measuring the whole name (`measure`, and `probe`'s elide), not this loop.
@@ -118,7 +140,7 @@ Item {
                     grew = true
                 }
             }
-            const on = cut.stepOn(whole, head)
+            const on = toStart ? 0 : cut.stepOn(whole, head)
             if (on > 0 && head + tail + on <= whole.length) {
                 const ink = cut.inkOf(whole.substring(0, head + on))
                 if (ink + tailInk <= room) {
@@ -164,22 +186,15 @@ Item {
         }
         return n
     }
-    /// Where the elide put its mark — searched for, since a name may hold its own `…` (a stash is named by its
-    /// message): the first mark with a real head and tail of the name around it.
-    function cutPoint(whole, elided) {
-        for (let i = elided.indexOf("…"); i >= 0; i = elided.indexOf("…", i + 1)) {
-            if (whole.startsWith(elided.substring(0, i)) && whole.endsWith(elided.substring(i + 1)))
-                return i
-        }
-        return -1
-    }
 
-    // Rounded up once here for every caller (rules-refs/app-ui.md「自然幅の上限は切り上げる」).
-    implicitWidth: Math.ceil(measure.advanceWidth)
-    implicitHeight: markLabel.implicitHeight
+    // Rounded up once here for every caller (rules-refs/app-ui.md「自然幅の上限は切り上げる」). A closed cut stands in for
+    // a label, and is as wide as that label (`lineRuler`).
+    implicitWidth: Math.ceil(cut.closed ? lineRuler.implicitWidth : measure.advanceWidth)
+    implicitHeight: headLabel.implicitHeight
     // The label's own, its centring in the box included: a mark set beside the name stands on it (`NavIcon.wordBase`).
     baselineOffset: headLabel.baselineOffset
     onTextChanged: cut.relayout()
+    onMoreChanged: cut.relayout()
     onWidthChanged: cut.relayout()
     Component.onCompleted: cut.relayout()
 
@@ -188,9 +203,17 @@ Item {
     TextMetrics {
         id: measure
     }
+    /// The whole line as a label lays it out, for a closed cut's width: a label sizes its text past the metrics'
+    /// advance (a pixel, `Discard hunk` at `fontSm`).
+    PlainTextLabel {
+        id: lineRuler
+        visible: false
+        text: cut.closed ? cut.text : ""
+        font: headLabel.font
+    }
     TextMetrics {
         id: probe
-        elide: cut.cutAt === "end" ? Text.ElideRight : Text.ElideMiddle
+        elide: cut.cutAt === "end" ? Text.ElideRight : cut.cutAt === "start" ? Text.ElideLeft : Text.ElideMiddle
     }
 
     // The three pieces, centred vertically (`Text.AlignVCenter`): a `Label` draws at the top of its box, and callers
@@ -209,32 +232,35 @@ Item {
         font.pixelSize: cut.pixelSize
         font.weight: cut.weight
         font.letterSpacing: cut.letterSpacing
+        font.wordSpacing: cut.wordSpacing
         // The family arrives with the window and the size with the caller; either changes what fits.
         onFontChanged: cut.relayout()
     }
+    // Against the right edge; straight after the mark where a middle cut is closed up.
     PlainTextLabel {
         id: tailLabel
         anchors.fill: parent
-        horizontalAlignment: Text.AlignRight
+        anchors.leftMargin: cut.closed && cut.cutAt === "middle" ? markLabel.x + markLabel.implicitWidth : 0
+        horizontalAlignment: cut.closed && cut.cutAt === "middle" ? Text.AlignLeft : Text.AlignRight
         verticalAlignment: Text.AlignVCenter
         visible: cut.inked && cut.tailText !== ""
         text: cut.tailText
         color: cut.color
         font: headLabel.font
     }
-    Label {
+    // On the name's baseline (`CutMark` stands on the baseline it is set on).
+    CutMark {
         id: markLabel
-        y: 0
-        height: cut.height
+        y: headLabel.y + headLabel.baselineOffset - markLabel.baselineOffset
         visible: cut.inked && cut.cutting
-        verticalAlignment: Text.AlignVCenter
-        text: "…"
         color: cut.color
         font: headLabel.font
         // In the middle of the cut, the sub-character leftover split either side of the mark, and never left of the
-        // head's end (a hair-wide measure would draw the mark over it). A cut at the end pins it to the right edge.
-        x: cut.cutAt === "end"
-           ? cut.width - markLabel.implicitWidth
+        // head's end (a hair-wide measure would draw the mark over it). A cut at the end pins it to the right edge, a
+        // cut at the start sets it straight before the tail, and closed up it stands straight after the head.
+        x: cut.cutAt === "start" ? cut.width - tailLabel.implicitWidth - markLabel.implicitWidth
+           : cut.closed ? headLabel.implicitWidth
+           : cut.cutAt === "end" ? cut.width - markLabel.implicitWidth
            : Math.max(headLabel.implicitWidth,
                       (headLabel.implicitWidth + cut.width - tailLabel.implicitWidth - markLabel.implicitWidth) / 2)
     }

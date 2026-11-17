@@ -179,6 +179,8 @@ fn main() {
     qrc::embed!("ui/SweepBand.qml");
     qrc::embed!("ui/BinarySizeLine.qml");
     qrc::embed!("ui/ConflictSideLegend.qml");
+    qrc::embed!("ui/CutMark.qml");
+    qrc::embed!("ui/CutPieces.qml");
     qrc::embed!("ui/CutName.qml");
     qrc::embed!("ui/DiffCodeScroll.qml");
     qrc::embed!("ui/DiffFileNotices.qml");

@@ -67,6 +67,8 @@ SweepPad 1.0 SweepPad.qml
 SweepBand 1.0 SweepBand.qml
 BinarySizeLine 1.0 BinarySizeLine.qml
 ConflictSideLegend 1.0 ConflictSideLegend.qml
+CutMark 1.0 CutMark.qml
+CutPieces 1.0 CutPieces.qml
 CutName 1.0 CutName.qml
 DetailsAuthorCards 1.0 DetailsAuthorCards.qml
 DetailsChangesBand 1.0 DetailsChangesBand.qml
