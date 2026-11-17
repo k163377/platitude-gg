@@ -59,7 +59,9 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         return Ok(());
     };
     through(&root, &here, &ready, &me, phases).map_err(|why| {
-        if line::leave(&here, &me.session, &why) {
+        // A place behind another head is the user's latest `/land`'s, not the
+        // stopped landing's to give up.
+        if !line::stands_behind(&here, &me) && line::leave(&here, &me.session, &why) {
             format!(
                 "{why}\n— this seat left the line of landings; the user's next {} puts it back \
                  at the end.",
@@ -205,6 +207,11 @@ fn through(
     // And the permit: a landing in the background outlives the user's next
     // message, which closes it — nothing moves on a closed permit.
     permit_still_open(here, me)?;
+    // And the place: a landing in the background outlives it. A message
+    // and a `/land` after it put the seat at the end behind a head already
+    // preparing, and a landing that went red and left the line may be run
+    // again (`line::must_be_head`, as at the turn).
+    line::must_be_head(here, me)?;
     let ahead = crate::seats::commits_in(here, &format!("main..{branch}")).unwrap_or(*ahead);
     let before = git_query(here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     if primary.branch == "main" {

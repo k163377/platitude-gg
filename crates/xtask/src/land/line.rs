@@ -239,6 +239,15 @@ pub(crate) fn must_be_head(dir: &str, me: &Identity) -> Result<(), String> {
     }
 }
 
+/// Whether the line, read as it is now, has the session behind another
+/// head: the place the user's latest `/land` gave it, which a landing that
+/// stopped there leaves alone. A line that cannot be read says nothing of
+/// the kind, and a stopped landing gives its place up as at the head —
+/// otherwise a red head would stand at the head until its session spoke.
+pub(crate) fn stands_behind(dir: &str, me: &Identity) -> bool {
+    read(dir).is_ok_and(|line| line.place_of(me).is_some_and(|place| place > 0))
+}
+
 /// `cargo xtask land line | wait next | wait head | leave <why>`.
 pub(crate) fn run(args: &[String]) -> Result<(), String> {
     let here = crate::seats::slashed(&crate::tree::workspace_root());
