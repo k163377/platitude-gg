@@ -1,7 +1,7 @@
 //! What the two tables' own moves owe, and what a line's key is held to:
 //! a row added or retiered runs where the gate owes it now, a row whose
 //! promise moved runs again, and a comment moved in what a run reads
-//! keeps its green (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める /
+//! keeps its green (反映前テストの機械化.md §動詞を絞るのは段 1 だけ /
 //! §キャッシュとスタンプ).
 
 use crate::support::{Sandbox, tiered, without_always};

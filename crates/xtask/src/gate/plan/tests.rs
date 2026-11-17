@@ -24,6 +24,7 @@ fn agent_controls_owe_tests_but_no_app_runs() {
     let ask = Ask {
         main_ref: "main",
         host_only: false,
+        related: false,
         whole: false,
         fresh: false,
         extra_verbs: &[],

@@ -98,12 +98,12 @@ struct Sorted {
 
 /// `everything` runs every package's tests unfiltered.
 fn sort(g: &Graph, reach: &Reach, everything: bool) -> Sorted {
-    let (_, qml_tests) = qml_dirs();
+    let qml_tests = app_tests();
     let mut sorted = Sorted::default();
     for (file, carried) in reach {
         if file.ends_with(".qml") {
-            // A QtTest file is no component: no line shows it, so it
-            // belongs to `qmltest_steps` alone.
+            // A QtTest file and the files it loads are no components: no
+            // line shows them, so they belong to `qmltest_steps` alone.
             if !under(file, &qml_tests) {
                 sorted.qml.insert(stem_of(file));
             }
@@ -182,13 +182,13 @@ pub(super) fn select(
             .rust_moved
             .extend(g.modules.values().map(|module| module.package.clone()));
     }
-    steps.extend(clippy_steps(&sorted));
+    steps.extend(clippy_steps(g, &sorted));
     steps.extend(unit_steps(g, &sorted));
     steps.extend(it_steps(g, &sorted));
     if read.whole_tier {
         steps.extend(periodic_steps(g, read.dir, &sorted));
     }
-    let (binary, counted) = binary_steps(read, &sorted, reach, changed, ask);
+    let (binary, counted) = binary_steps(g, read, &sorted, reach, changed, ask);
     steps.extend(binary);
     // Behind the lines in the release block: the first line builds the
     // release alone, and the checks, each a handful of runs of their own,
@@ -525,6 +525,8 @@ fn shot_inputs(g: &Graph) -> Vec<String> {
     let mut inputs: BTreeSet<String> = g.inputs(&[shot_check()]).into_iter().collect();
     inputs.extend(cargo_inputs(&[&app(), &core()]));
     inputs.extend(harness());
+    // Each of its runs is a verify-ui run, driven through the same code.
+    inputs.extend(driven_by(g, &verify_run()));
     inputs.into_iter().collect()
 }
 
@@ -596,6 +598,7 @@ fn records_steps(
     let mut inputs: BTreeSet<String> = g.inputs(&[records_check()]).into_iter().collect();
     inputs.extend(cargo_inputs(&[&app(), &core()]));
     inputs.extend(harness());
+    inputs.extend(driven_by(g, &verify_run()));
     let inputs: Vec<String> = inputs.into_iter().collect();
     let mut checks = vec![step(
         "records-check",
@@ -648,10 +651,14 @@ fn promised_contract(lines: impl Iterator<Item = &'static str>, read: &Reading<'
 /// reads code alone, so a crate the product reaches only as data a tool
 /// reads (`graph::Carried`) owes none; its tests may read that data, so
 /// `unit_steps` / `it_steps` select them however the reach was handed.
-fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
+fn clippy_steps(g: &Graph, sorted: &Sorted) -> Vec<Step> {
     let mut steps = Vec::new();
     for package in &sorted.rust_moved {
         let crate_dir = format!("crates/{package}");
+        // A crate is linted against what it calls in the crates it reads:
+        // a `#[must_use]` or a deprecation there is a warning here.
+        let mut read = vec![crate_dir.clone(), clippy_config()];
+        read.extend(crates_read_by(g, package));
         let mut clippy = words(&["cargo", "clippy", "--locked", "-p", package]);
         clippy.extend(words(&[
             "--all-targets",
@@ -660,7 +667,8 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
             "-D",
             "warnings",
         ]));
-        let inputs = cargo_inputs(&[&crate_dir, &clippy_config()]);
+        let read: Vec<&str> = read.iter().map(String::as_str).collect();
+        let inputs = cargo_inputs(&read);
         let id = format!("clippy {package}");
         steps.push(step(&id, Side::Host, false, clippy.clone(), &inputs));
         let mut linux = xtask(&["linux"]);
@@ -676,6 +684,23 @@ fn clippy_steps(sorted: &Sorted) -> Vec<Step> {
         ));
     }
     steps
+}
+
+/// The other workspace crates `package`'s code reads, tests and all, as
+/// their directories: what `clippy --all-targets` compiles it against.
+fn crates_read_by(g: &Graph, package: &str) -> BTreeSet<String> {
+    let own: Vec<String> = g
+        .modules
+        .iter()
+        .filter(|(_, module)| module.package == package)
+        .map(|(file, _)| file.clone())
+        .collect();
+    g.inputs(&own)
+        .iter()
+        .filter_map(|file| g.modules.get(file))
+        .filter(|module| module.package != package)
+        .map(|module| format!("crates/{}", module.package))
+        .collect()
 }
 
 /// The unit tests in the reach, per package, by module filter. Their
@@ -798,21 +823,22 @@ fn holds_periodic(text: &str) -> bool {
     })
 }
 
-/// How many of `lines` show a component the change touched — the selection
-/// a gate choosing by what each line shows would make, printed beside
-/// the selection by reach and never used to skip a run
-/// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める). Counted
-/// over the components the change itself touched, not their readers:
-/// composition reads up to `Main`, which every line shows. Every line
-/// counts where the change is the whole tree or has no QML in it to
-/// compare against.
+/// Which of `lines` show a component the change touched — with the rows
+/// the tables owe, what stage 1 selects, and before a merge a count
+/// printed beside the selection by reach and never used to skip a run
+/// (反映前テストの機械化.md §動詞を絞るのは段 1 だけ). `changed` are the
+/// components by the names lines show them under ([`touched_as_shown`]),
+/// not their readers: composition reads up to `Main`, which every line
+/// shows. Where the change is the whole tree every line shows it; where it
+/// has no QML in it, none is shown it — a Rust or harness change is its own
+/// tests', not a picture's.
 fn lines_showing_the_change(
     read: &Reading<'_>,
     changed: &BTreeSet<String>,
     lines: &[String],
-) -> usize {
-    if read.everything || changed.is_empty() {
-        return lines.len();
+) -> BTreeSet<String> {
+    if read.everything {
+        return lines.iter().cloned().collect();
     }
     lines
         .iter()
@@ -821,22 +847,115 @@ fn lines_showing_the_change(
                 .of(line)
                 .is_some_and(|shown| changed.iter().any(|stem| shown.contains(stem)))
         })
-        .count()
+        .cloned()
+        .collect()
 }
 
-/// The QML components among the changed files, by name.
-fn changed_qml(changed: &[String]) -> BTreeSet<String> {
-    let (_, qml_tests) = qml_dirs();
-    changed
+/// The QML components the change touched, by the names lines show them
+/// under: a changed file a line shows by its own name, and one no line
+/// shows — a singleton or a `QtObject` root, which stands in no item
+/// tree — by the components that read it, followed reader by reader until
+/// one a line shows.
+fn touched_as_shown(
+    g: &Graph,
+    read: &Reading<'_>,
+    changed: &[String],
+    lines: &[String],
+) -> BTreeSet<String> {
+    let qml_tests = app_tests();
+    let component = |file: &String| file.ends_with(".qml") && !under(file, &qml_tests);
+    let shown = |stem: &String| {
+        lines.iter().any(|line| {
+            read.shown
+                .of(line)
+                .is_some_and(|names| names.contains(stem))
+        })
+    };
+    let mut queue: Vec<String> = changed
         .iter()
-        .filter(|file| file.ends_with(".qml") && !under(file, &qml_tests))
-        .map(|file| stem_of(file))
+        .filter(|file| component(file))
+        .cloned()
+        .collect();
+    let mut seen: BTreeSet<String> = queue.iter().cloned().collect();
+    let mut touched = BTreeSet::new();
+    while let Some(file) = queue.pop() {
+        let stem = stem_of(&file);
+        if shown(&stem) {
+            touched.insert(stem);
+            continue;
+        }
+        for reader in g.rdeps.get(&file).into_iter().flatten() {
+            if component(reader) && seen.insert(reader.clone()) {
+                queue.push(reader.clone());
+            }
+        }
+    }
+    touched
+}
+
+/// The app's QtTest tree: the tests and the QML they load, none of it a
+/// component a line shows (反映前テストの機械化.md §選択の正本 — the
+/// components are `ui/` and `auto/`).
+fn app_tests() -> String {
+    format!("{}/tests", app())
+}
+
+/// The lines that show what the change touched with the rows the tables
+/// owe — what stage 1 runs, the rest of the selection being the pre-merge
+/// gate's (反映前テストの機械化.md §段 1 / 段 2 / 段 3) — and how many they
+/// are. `related` keeps only them; otherwise `lines` stand as selected.
+fn stage_one(
+    g: &Graph,
+    read: &Reading<'_>,
+    changed: &[String],
+    lines: Vec<String>,
+    related: bool,
+) -> (Vec<String>, usize) {
+    let touched = touched_as_shown(g, read, changed, &lines);
+    let mut near = lines_showing_the_change(read, &touched, &lines);
+    near.extend(read.added.iter().filter(|row| lines.contains(row)).cloned());
+    let count = near.len();
+    if !related {
+        return (lines, count);
+    }
+    (
+        lines
+            .into_iter()
+            .filter(|line| near.contains(line))
+            .collect(),
+        count,
+    )
+}
+
+/// The verify-ui command's entry, spelled in pieces as [`shot_check`] is.
+fn verify_run() -> String {
+    format!("{}/{}", harness()[0], "run.rs")
+}
+
+/// An xtask command's own file under `crates/xtask/src`, spelled in pieces
+/// as [`shot_check`] is.
+fn entry_of(file: &str) -> String {
+    format!("{}/{}", "crates/xtask/src", file)
+}
+
+/// The Rust a run of the command at `entry` compiles and calls — beyond
+/// its own directory, the Qt it finds, the environment it clears, the
+/// build it makes ([`Graph::built_inputs`]): a change there is a change to
+/// every run it drives, which the reach already owes (`harness_moved`) and
+/// the key has to see too. Code alone: the tables and the product a run
+/// reads as data are in its contract and in the product's inputs, and a
+/// row added to the registry owes its own line only.
+fn driven_by(g: &Graph, entry: &str) -> Vec<String> {
+    g.built_inputs(&[entry.to_string()])
+        .into_iter()
+        .filter(|file| file.ends_with(".rs"))
         .collect()
 }
 
 /// The app as a built thing: `shipped`, the verify-ui verbs, `bare`. The
 /// first verb of each side builds the release; the rest reuse it.
 fn binary_steps(
+    g: &Graph,
     read: &Reading<'_>,
     sorted: &Sorted,
     reach: &Reach,
@@ -858,12 +977,14 @@ fn binary_steps(
     // a scan.
     let binary_inputs = cargo_inputs(&[&app(), &core()]);
     if qml_moved {
+        let mut shipped = binary_inputs.clone();
+        shipped.extend(driven_by(g, &entry_of("shipped.rs")));
         steps.push(step(
             "shipped",
             Side::Host,
             false,
             xtask(&["shipped"]),
-            &binary_inputs,
+            &shipped,
         ));
     }
     let harness_moved = harness_moved(reach);
@@ -883,7 +1004,7 @@ fn binary_steps(
     } else {
         read.added.to_vec()
     };
-    let by_shown = lines_showing_the_change(read, &changed_qml(changed), &lines);
+    let (lines, by_shown) = stage_one(g, read, changed, lines, ask.related);
     let selected = lines.len();
     let mut lines = owed_lines(read, &sorted.qml, lines, read.whole_tier);
     let left = selected - lines.len();
@@ -892,11 +1013,15 @@ fn binary_steps(
             lines.push(extra.clone());
         }
     }
-    // A run reads the product, the harness that drives it, the fixtures it
-    // stands on and the judgment it is held to; its row's promise and its
-    // judgment are its contract, in the key as text.
+    // A run reads the product, the harness that drives it — with the code
+    // it calls outside its own directories — the fixtures it stands on and
+    // the judgment it is held to; its row's promise and its judgment are
+    // its contract, in the key as text. The container's runs go through the
+    // launcher too.
     let mut verb_inputs = binary_inputs.clone();
     verb_inputs.extend(harness());
+    verb_inputs.extend(driven_by(g, &verify_run()));
+    let launcher = driven_by(g, &entry_of("linux.rs"));
     for line in &lines {
         let contract = format!(
             "promises={}\n{}",
@@ -926,6 +1051,7 @@ fn binary_steps(
         let mut linux = xtask(&["linux", "verify-ui"]);
         linux.extend(crate::verify::suite_words(line));
         let mut linux_inputs = verb_inputs.clone();
+        linux_inputs.extend(launcher.iter().cloned());
         linux_inputs.extend(IMAGE.map(String::from));
         let mut linux_step = step(
             &format!("verify-linux {line}"),
@@ -944,6 +1070,7 @@ fn binary_steps(
     if binary_moved {
         let mut bare_inputs = binary_inputs;
         bare_inputs.push("crates/xtask/src/linux".to_string());
+        bare_inputs.extend(launcher);
         bare_inputs.extend(IMAGE.map(String::from));
         let mut bare = step(
             "bare",
@@ -1031,7 +1158,10 @@ mod tests {
         let sorted = sort(&g, &reach, false);
         assert!(sorted.rust_in.contains_key("xtask"));
         assert_eq!(sorted.unit_files["xtask"], vec![tool]);
-        let ids: Vec<String> = clippy_steps(&sorted).into_iter().map(|s| s.id).collect();
+        let ids: Vec<String> = clippy_steps(&g, &sorted)
+            .into_iter()
+            .map(|s| s.id)
+            .collect();
         assert_eq!(
             ids,
             ["clippy platitude-core", "clippy-linux platitude-core"]
@@ -1042,7 +1172,7 @@ mod tests {
             .into_keys()
             .map(|file| (file, Carried::Whole))
             .collect();
-        let ids: Vec<String> = clippy_steps(&sort(&g, &both, false))
+        let ids: Vec<String> = clippy_steps(&g, &sort(&g, &both, false))
             .into_iter()
             .map(|s| s.id)
             .collect();

@@ -192,7 +192,7 @@ fn a_promise_moved_on_the_shot_line_moves_its_key_and_selects_it() {
 /// A popup stands only when a line opens it, so a change to it is shown
 /// by the line that names it alone; the selection still runs every
 /// registered line, and says what a selection by what the lines show
-/// would have run (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める).
+/// would have run (反映前テストの機械化.md §動詞を絞るのは段 1 だけ).
 #[test]
 fn a_qml_leaf_owes_every_line_and_reports_the_selection_by_what_they_show() {
     let sb = Sandbox::new("qml-shown");
@@ -957,4 +957,91 @@ fn a_tier_table_that_cannot_be_read_stops_the_gate_before_anything_runs() {
         "verify stash --preset basic",
         "verify-linux stash --preset basic",
     ]);
+}
+
+/// A run goes through code outside the harness's directories (the Qt it
+/// finds): a change there owes every line, and the lines' keys see it, so
+/// no green from before answers for it.
+#[test]
+fn code_a_run_calls_outside_the_harness_moves_every_lines_key() {
+    let sb = Sandbox::new("harness-calls");
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/main.rs",
+        "mod demo;\nmod qmltest;\nmod qt;\nmod seats;\nmod verify;\nfn main() {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/verify/mod.rs",
+        "mod run;\npub fn judge() {}\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/verify/run.rs",
+        "pub fn run() { crate::qt::offscreen_fonts(); }\n",
+    );
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/qt.rs",
+        "pub fn offscreen_fonts() { let _ = 1; }\n",
+    );
+    sb.commit_all(&sb.seat, "feat(xtask): a run finds its Qt", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(sb.ran().contains("verify stash --preset basic"));
+    sb.write(
+        &sb.seat,
+        "crates/xtask/src/qt.rs",
+        "pub fn offscreen_fonts() { let _ = 2; }\n",
+    );
+    sb.commit_all(&sb.seat, "fix(xtask): another font directory", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    assert!(
+        ran.contains("verify stash --preset basic")
+            && ran.contains("verify-linux stash --preset basic")
+            && ran.contains("shot-check")
+            && ran.contains("records-check"),
+        "{ran:?}"
+    );
+}
+
+/// The app is linted against the core it calls: a change to the core
+/// moves the app's clippy key.
+#[test]
+fn a_change_to_a_crate_another_reads_moves_the_readers_clippy_key() {
+    let sb = Sandbox::new("clippy-deps");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/src/models.rs",
+        "use platitude_core::stash;\npub struct StashModel;\n#[qobject]\nimpl StashModel {\n    \
+         fn moved() {}\n}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn m() {}\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(app): the model moved", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    assert!(sb.ran().contains("clippy platitude-app"));
+    sb.write(
+        &sb.seat,
+        "crates/platitude-core/src/stash.rs",
+        "#[must_use]\npub fn stash() {}\n#[cfg(test)]\nmod tests {\n    use super::*;\n    \
+         #[test]\n    fn t() { stash() }\n}\n",
+    );
+    sb.commit_all(&sb.seat, "feat(core): the stash is used", &[]);
+    sb.gate_ok(&sb.seat, &[]);
+    let ran = sb.ran();
+    assert!(ran.contains("clippy platitude-app"), "{ran:?}");
+}
+
+/// What a QtTest loads under the app's tests/ is no component: it owes
+/// its runner, not a line.
+#[test]
+fn a_file_a_qtest_loads_owes_no_verb() {
+    let sb = Sandbox::new("qtest-loads");
+    sb.write(
+        &sb.seat,
+        "crates/platitude-app/tests/loads/Plain.qml",
+        "Item {}\n",
+    );
+    sb.commit_all(&sb.seat, "test(app): a file a QtTest loads", &[]);
+    let text = sb.gate_ok(&sb.seat, &["--dry-run"]);
+    assert!(!text.contains("verify "), "{text}");
 }

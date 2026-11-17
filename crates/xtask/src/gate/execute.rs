@@ -67,6 +67,15 @@ pub(super) fn execute(
             failures.join(" / "),
         ));
     }
+    // Stage 1 ran short of the pre-merge selection, so no commit stamp
+    // answers for it; its steps' stamps stand for the gate that follows.
+    if plan.related {
+        println!(
+            "gate: PASS — the change's own tests; {head} is not stamped (the pre-merge gate \
+             runs the rest: `cargo xtask gate`, and land)"
+        );
+        return Ok(());
+    }
     // A host-only run keeps a both-sides stamp already on the commit:
     // writing `container=false` over it would send the next landing back
     // through a container side that has already answered.

@@ -108,6 +108,10 @@ pub(crate) struct Plan {
     /// landing would add.
     pub onto_main: bool,
     pub host_only: bool,
+    /// The verbs narrowed to the lines that show what the change touched
+    /// ([`Ask::related`]): a run short of the pre-merge selection, so its
+    /// commit is never stamped.
+    pub related: bool,
     /// Every step runs whether or not a stamp answers for it, even one
     /// another tree stamps while this run queues (`gate::step::run_one`
     /// looks again).
@@ -130,9 +134,10 @@ pub(crate) struct Plan {
     /// (`graph::complaints`); no run over such a tree can be stamped.
     pub complaints: Vec<String>,
     /// How many of the selected lines show a component the change itself
-    /// touched (`lines::Shown`), for comparison only: what a selection by
-    /// what each line shows would run, against the selection by reach
-    /// (反映前テストの機械化.md §動詞の絞り込みは比較表示に留める).
+    /// touched (`lines::Shown`) or are owed by the tables: what stage 1
+    /// selects before the tiers and `--verb` ([`Ask::related`]), and before a
+    /// merge a comparison only, against
+    /// the selection by reach (反映前テストの機械化.md §動詞を絞るのは段 1 だけ).
     pub verbs_by_shown: usize,
     /// Registered lines the reach selected that this gate leaves to the
     /// whole one (`tiers`) — before a merge only; the whole gate leaves none.
@@ -142,6 +147,12 @@ pub(crate) struct Plan {
 pub(crate) struct Ask<'a> {
     pub main_ref: &'a str,
     pub host_only: bool,
+    /// Stage 1, the tests the change itself owes before it is reported:
+    /// the host side with every step the reach selects, but of the verbs
+    /// only the lines that show a component the change touched, the rows
+    /// the tables owe and the lines asked for by name. What it passes keeps
+    /// its step stamps, so the pre-merge gate pays only the rest.
+    pub related: bool,
     pub whole: bool,
     pub fresh: bool,
     /// Registered verify-ui lines to run besides the reach's, as typed.

@@ -244,6 +244,7 @@ pub(crate) fn make(dir: &Path, ask: &Ask<'_>, spent: &mut Spent) -> Result<Plan,
         base,
         onto_main,
         host_only: ask.host_only,
+        related: ask.related,
         fresh: ask.fresh,
         host,
         container,
@@ -741,7 +742,12 @@ pub(crate) fn describe(plan: &Plan, keys: bool) -> String {
         .iter()
         .filter(|r| r.step.id.starts_with("verify-linux "))
         .count();
-    if chosen > 0 || on_linux > 0 {
+    if plan.related {
+        out.push_str(&format!(
+            "verbs: {chosen} selected by what they show (stage 1); the reach's other lines are \
+             the pre-merge gate's\n"
+        ));
+    } else if chosen > 0 || on_linux > 0 {
         // The container's lines are the host's own unless its side owes
         // more than the host's does; what waits for the whole gate is the
         // host's count.
@@ -788,7 +794,9 @@ fn headline(plan: &Plan) -> String {
         }
         .to_string(),
     ];
-    if plan.host_only {
+    if plan.related {
+        standing.push("stage 1: the host side, the verbs that show the change".to_string());
+    } else if plan.host_only {
         standing.push("host side only".to_string());
     }
     standing.extend(scope(&plan.host));

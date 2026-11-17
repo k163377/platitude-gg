@@ -38,6 +38,8 @@ struct Options {
     dir: std::path::PathBuf,
     main_ref: String,
     host_only: bool,
+    /// Stage 1 ([`plan::Ask::related`]); host-only too.
+    related: bool,
     whole: bool,
     fresh: bool,
     dry_run: bool,
@@ -53,6 +55,7 @@ fn options(args: &[String]) -> Result<Options, String> {
         dir: crate::tree::workspace_root(),
         main_ref: "main".to_string(),
         host_only: false,
+        related: false,
         whole: false,
         fresh: false,
         dry_run: false,
@@ -64,6 +67,12 @@ fn options(args: &[String]) -> Result<Options, String> {
     while let Some(arg) = args.get(at) {
         match arg.as_str() {
             "--host-only" => opts.host_only = true,
+            // The container answers for fonts and the oldest git, which
+            // the change's own tests do not ask after.
+            "--related" => {
+                opts.related = true;
+                opts.host_only = true;
+            }
             // Stage 3 is asked for the whole picture, not the first red,
             // and asks every step again: what it is run for — a release, a
             // machine's own install — moves nothing a stamp's key holds.
@@ -99,13 +108,19 @@ fn options(args: &[String]) -> Result<Options, String> {
             }
             other => {
                 return Err(format!(
-                    "unknown option {other:?} (gate takes --host-only, --whole, --fresh, \
-                     --keep-going, --dry-run, --dir <tree>, --main <ref>, --verb <line>…, \
-                     --jobs <n>)"
+                    "unknown option {other:?} (gate takes --related, --host-only, --whole, \
+                     --fresh, --keep-going, --dry-run, --dir <tree>, --main <ref>, \
+                     --verb <line>…, --jobs <n>)"
                 ));
             }
         }
         at += 1;
+    }
+    if opts.related && opts.whole {
+        return Err(
+            "--related narrows the verbs to the change and --whole reads no diff: ask for one"
+                .to_string(),
+        );
     }
     Ok(opts)
 }
@@ -134,6 +149,7 @@ fn gate(args: &[String]) -> Result<(), String> {
         &plan::Ask {
             main_ref: &opts.main_ref,
             host_only: opts.host_only,
+            related: opts.related,
             whole: opts.whole,
             fresh: opts.fresh,
             extra_verbs: &opts.verbs,
@@ -181,6 +197,7 @@ pub(crate) fn for_landing(seat: &Path, main_ref: &str) -> Result<(), String> {
         &plan::Ask {
             main_ref,
             host_only: false,
+            related: false,
             whole: false,
             fresh: false,
             extra_verbs: &[],

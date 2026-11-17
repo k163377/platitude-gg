@@ -33,5 +33,6 @@ mod seats;
 mod selection;
 mod shell;
 mod shots;
+mod stage_one;
 mod stamps;
 mod tables;

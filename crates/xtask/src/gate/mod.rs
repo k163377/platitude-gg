@@ -59,8 +59,9 @@ pub(crate) static PREMERGE: command::Command = command::Command {
 /// 段 1.
 pub(crate) static DAILY: command::Command = command::Command {
     id: "gate.daily",
-    call: "gate --host-only",
-    purpose: "the daily tier: the host half, no container",
+    call: "gate --related",
+    purpose: "the daily tier, run before a change is reported: the host half, its verbs only the \
+              lines that show what the change touched; no commit stamp",
     run_in: Where::Seat,
     needs: &[],
     permission: Permission::Plain,

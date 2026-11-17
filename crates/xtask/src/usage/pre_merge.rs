@@ -3,7 +3,7 @@
 
 // No `"\` continuation on the opening line (see `demo_repo`).
 pub(super) const ENTRIES: &str =
-    "  gate [--host-only] [--whole] [--fresh] [--keep-going] [--dry-run]
+    "  gate [--related | --host-only] [--whole] [--fresh] [--keep-going] [--dry-run]
        [--verb <line>]... [--jobs <n>] [--dir <tree>] [--main <ref>]
       The pre-merge tests, chosen by machine (gate skill 確認は 3 段;
       internal-docs/反映前テストの機械化.md). Reads the branch's diff
@@ -46,7 +46,14 @@ pub(super) const ENTRIES: &str =
       tree holds one gate at a time: a second one there is refused with
       the first's pid (a dry run holds nothing).
       options:
-        --host-only   the daily tier: no container; stamps the host half
+        --related     the daily tier, before a change is reported: the
+                      host side, and of the verbs only the lines that show
+                      a QML component the branch changed (a singleton, by
+                      the components that read it), the rows the tables
+                      owe and --verb; a Rust or harness change runs its
+                      tests and no verb. Stamps its steps, never the
+                      commit: the pre-merge gate pays only the rest
+        --host-only   no container; stamps the host half
         --whole       stage 3: no diff is read, every file counts as
                       changed; every registered line on both sides (a twin
                       is registered nowhere) and the `periodic` tests;
