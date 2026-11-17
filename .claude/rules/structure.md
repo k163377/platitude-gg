@@ -40,7 +40,8 @@ paths:
   割る)
 - 挙動不変・**移動だけのコミット**(変更・リネームは別で)。公開名は `pub use` / qmldir で不変に保つ
 - Rust: ディレクトリ化は **mod.rs 方式(既存踏襲)**。mod.rs は mod 宣言・re-export・共有型のみ。`#[cfg(test)]` は対象と同
-  じファイルへ付いて行く(テストだけ巨大なら同ディレクトリの `#[cfg(test)]` 専用ファイルへ)
+  じファイルへ付いて行く(テストだけ巨大なら子の `tests` へ — 置き場は
+  [rules-refs/structure.md](../rules-refs/structure.md) の「`mod tests` を専用ファイルへ出す時の置き場」)
 - **クレート root(lib.rs / main.rs / tests/it/main.rs)は宣言と再エクスポートだけ** — root は全モジュールへ dispatch し、
   そこにヘルパがあると全モジュールが root を読む = gate の依存木でどの変更も全体へ届くハブになる。**機械化済み: 毎回の
   `cargo xtask gate`(`gate::graph::complaints` — 走らせる前に拒む)と `cargo test -p xtask`(同じ関数)** — 置き場は責務名

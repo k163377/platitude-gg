@@ -9,6 +9,8 @@
 
 - **mod.rs から出す型の `pub(super)` は `pub(crate)` と書き写す** — session は crate 直下なので mod.rs の `pub(super)` = `pub(crate)`。移動先で `pub(super)` にすると session 内へ狭まる(逆に mod.rs で private だった型は移動先で `pub(super)` にすると元と同じ範囲)
 - **insta のスナップショットはソースファイル基準の `snapshots/` を見る** — `foo.rs` → `foo/bar.rs` へ動いたテストは置き場(`src/snapshots/` → `src/foo/snapshots/`)とファイル名(モジュールパス)の両方が変わる。中身は不変なので `INSTA_FORCE_UPDATE=1 cargo test` で `source:` 行だけ再生成する
+- **`mod tests` を専用ファイルへ出す時の置き場は、そのテストが読むスコープのモジュールの子 `tests`** — 宣言はそのモジュールのファイルに `#[cfg(test)] mod tests;`、ファイルは `<モジュール>/tests.rs`(`refs.rs` → `refs/tests.rs`、`sequencer/mod.rs` → `sequencer/tests.rs`)。主題で分ける時は `tests/mod.rs`(`mod <主題>;` の宣言だけ — mod.rs 方式)+ `tests/<主題>.rs`(`ops/tests/press.rs` = `ops::tests::press`)。**`#[path]` と兄弟の `<名前>_tests.rs` は使わない** — Rust の標準の形: The Rust Book §11.3 の子 `tests`、rust-lang/rust の tidy(`src/tools/tidy/src/unit_tests.rs`)が強制する `tests.rs` / `tests/`、std の `collections/hash/map.rs` → `map/tests.rs`、rust-analyzer の `hover.rs` → `hover/tests.rs`、tokio の `runtime/tests/mod.rs`。親の `use super::*` で兄弟たちを読むテストは親の `tests/` に置き、1 段深くなった分 `super::` を 1 つ足す(`crate::` から書いた道は変わらない)。子からは祖先の private が見えるので、**可視性はテストのために広げない**。テストが共有するヘルパ(`testkit` / `temp` / `wait`)は使う全員から届く最深のモジュールに `#[cfg(test)] mod` で置く。xtask は `tests.rs` と `tests/` の下をテストとして読む(`waits::audit::whole_test_file`・`structure::relied_messages::is_test_file`)
+- **`mod tests` を専用ファイルへ出すだけでファイルが閾値を切ることがある** — 判定は「コードだけの行数」なので、テストが半分を占める大きな .rs は最初にこれを見る(置き場は前の項)。dedent は往復で証明する — 4 桁下げて出した後、`sed s/^./    &/` で戻して原本と `cmp` する(複数行リテラルが混ざっていれば必ず差が出る)
 - **`mod tests` を専用ファイルへ持ち上げる時、複数行文字列リテラルの中身は字下げされていない** — 一律 dedent は fixture を壊す。宣言行だけ下げ、リテラルの行はそのまま移す(`parse/diff/testkit.rs` の `PATCH` が実例)
 - **xtask も mod.rs 方式 — `run` / dispatch は子(`cli.rs` / `run.rs` 等)へ出す** — mod.rs に残るのは `mod`・re-export・共有型・`Command` の static(`budget` / `gate` / `shots` / `verify` / `waits`)。file-parent の `awake` `corpus` `docs` `linux` `perf` `qmltest` `shipped` `structure` `sweep` `usage`(と、入れ子の `gate::plan` / `gate::graph` / `verify::verbs` 等)は触った時に寄せる
 - **外部クレートと同名のモジュールを作ったら親の `use` は `self::` で書く** — `settings/toml.rs` があると mod.rs の `use toml::…` は extern prelude と衝突して E0659。子ファイル側は素の `use toml::…` のままでよい
@@ -55,4 +57,3 @@
 
 - **`ui/RepoPage.qml`** — 理由はファイル冒頭のコメント
 - **`#[expect]` の不発判定は「その lint が実際に発火するか」** — 未有効(pedantic)のままでも長い fn なら不発にならない
-- **`mod tests` を専用ファイルへ出すだけでファイルが閾値を切ることがある** — 判定は「コードだけの行数」なので、テストが半分を占める大きな .rs は最初にこれを見る。**置き場は 2 つ**: テストが対象の公開 API しか触らないなら兄弟の `<名前>_tests.rs`(core の既存踏襲)、private を触るなら対象の子 = `<名前>/tests.rs`(可視性は製品の都合だけで決める)。dedent は往復で証明する — 4 桁下げて出した後、`sed s/^./    &/` で戻して原本と `cmp` する(複数行リテラルが混ざっていれば必ず差が出る)
