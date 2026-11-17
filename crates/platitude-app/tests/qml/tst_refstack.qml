@@ -252,6 +252,14 @@ Item {
             return out
         }
 
+        /// The stack laid out and drawn after its records landed. A frame asked for: records equal to the ones before
+        /// change nothing on the scene, and `waitForRendering` only waits for the next frame
+        /// (rules-refs/app-ui.md「`frameSwapped` を待つなら頼むのは `window.update()`」).
+        function drawStack() {
+            stack.Window.window.update()
+            verify(waitForRendering(stack), "the stack was laid out and drawn")
+        }
+
         // The seat comes and goes with what is drawn, or every name on the graph stands one count too far left.
         function test_a_row_with_one_name_counts_nothing() {
             stack.records = [root.current]
@@ -283,9 +291,9 @@ Item {
             const chip = stack.chipItem
             verify(chip.hasCount && chip.hasBadge && chip.recHeld && chip.hasLock,
                    "the card is not the worst-dressed one")
-            // The positioner and the eliding name answer their widths a pass after the records land; an earlier read
-            // catches the name unelided.
-            verify(waitForRendering(stack), "the stack was laid out and drawn")
+            // The positioner and the cut name answer their widths a pass after the records land; an earlier read
+            // catches the name uncut.
+            drawStack()
             compare(chip.width, chip.maxWidth)
             // Where the contents end, read off the laid-out row: the padding short of the frame, wherever they start —
             // the padlock's seat gives its air on the frame's side back (`frameAir`), and the name has that room.
@@ -305,7 +313,7 @@ Item {
             const chip = stack.chipItem
             verify(chip.hasBadge && chip.hasCount, "the card is not wearing both")
             // An x read before the positioner's pass is every seat's own default.
-            verify(waitForRendering(stack), "the stack was laid out and drawn")
+            drawStack()
             verify(chip.badgeX < chip.countX,
                    "the count at " + chip.countX + " is not behind the badge at " + chip.badgeX)
         }
@@ -327,7 +335,7 @@ Item {
             stack.records = [root.dressed].concat(tags(41))
             const chip = stack.chipItem
             verify(chip.hasMark && chip.hasBadge && chip.frameAir > 0, "the card is not the worst-dressed one")
-            verify(waitForRendering(stack), "the stack was laid out and drawn")
+            drawStack()
             const name = Painted.labelSaying(chip, chip.recName)
             verify(name !== null, "the card's name")
             fuzzyCompare(columns.chipFurnitureW - columns.chipFan.fanMaxW - columns.chipCountInk.implicitWidth,
