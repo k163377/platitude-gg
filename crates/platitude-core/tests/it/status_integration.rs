@@ -91,6 +91,134 @@ async fn a_directory_that_is_no_repository_of_its_own_says_nothing() {
     );
 }
 
+/// A repository with one pending row of each shape a commit treats apart:
+/// staged alone, on both sides, in the working tree alone, untracked, and
+/// an intent-to-add entry with its rename — which no commit records.
+fn a_row_of_every_shape() -> TestRepo {
+    let mut repo = TestRepo::init();
+    for name in [
+        "staged-edit",
+        "staged-delete",
+        "staged-rename-from",
+        "both",
+        "renamed-then-edited-from",
+        "renamed-then-deleted-from",
+        "unstaged-edit",
+        "unstaged-delete",
+        "moved-on-disk-from",
+    ] {
+        // Long enough for git to pair a rename by content.
+        repo.write_file(&format!("{name}.txt"), &format!("{name}\n").repeat(8));
+    }
+    repo.git(&["add", "--all"]);
+    repo.git(&["commit", "-m", "root"]);
+
+    let rewrite = |name: &str| repo.write_file(&format!("{name}.txt"), "edited\n");
+    rewrite("staged-edit");
+    rewrite("both");
+    repo.write_file("staged-add.txt", "new\n");
+    repo.write_file("added-then-edited.txt", "new\n");
+    repo.write_file("added-then-deleted.txt", "new\n");
+    repo.git(&["rm", "--quiet", "staged-delete.txt"]);
+    repo.git(&["mv", "staged-rename-from.txt", "staged-rename-to.txt"]);
+    repo.git(&[
+        "mv",
+        "renamed-then-edited-from.txt",
+        "renamed-then-edited-to.txt",
+    ]);
+    repo.git(&[
+        "mv",
+        "renamed-then-deleted-from.txt",
+        "renamed-then-deleted-to.txt",
+    ]);
+    repo.git(&[
+        "add",
+        "--",
+        "staged-edit.txt",
+        "both.txt",
+        "staged-add.txt",
+        "added-then-edited.txt",
+        "added-then-deleted.txt",
+    ]);
+    // The working tree's side, over what is staged.
+    repo.write_file("both.txt", "edited again\n");
+    repo.write_file("added-then-edited.txt", "new, edited\n");
+    repo.write_file("renamed-then-edited-to.txt", "edited\n");
+    repo.write_file("unstaged-edit.txt", "edited\n");
+    repo.write_file("untracked.txt", "new\n");
+    for gone in [
+        "added-then-deleted.txt",
+        "renamed-then-deleted-to.txt",
+        "unstaged-delete.txt",
+    ] {
+        std::fs::remove_file(repo.path.join(gone)).expect("delete from the working tree");
+    }
+    // Its own words: git pairs an intent-to-add entry with a deletion in
+    // the working tree by content, as it does `moved-on-disk` below.
+    repo.write_file("meant-to-add.txt", "meant, not added\n");
+    std::fs::rename(
+        repo.path.join("moved-on-disk-from.txt"),
+        repo.path.join("moved-on-disk-to.txt"),
+    )
+    .expect("move on disk");
+    repo.git(&[
+        "add",
+        "--intent-to-add",
+        "--",
+        "meant-to-add.txt",
+        "moved-on-disk-to.txt",
+    ]);
+    repo
+}
+
+/// What [`status::WorktreeStatus::left_by_commit`] works out of a status is
+/// what git reports behind the commit, row for row and print for print:
+/// every index-side letter gone, the working tree's side of each row and
+/// the untracked files as they were.
+#[tokio::test]
+async fn a_commit_leaves_the_status_its_rows_foretell() {
+    let mut repo = a_row_of_every_shape();
+    let (executor, cancel) = env();
+    let before = status::load(&executor, &repo.path, &cancel)
+        .await
+        .expect("the status the commit is made over");
+    let letters = |status: &status::WorktreeStatus| -> Vec<String> {
+        status
+            .items
+            .iter()
+            .map(|item| match item {
+                status::StatusItem::Tracked {
+                    staged, unstaged, ..
+                } => format!("{staged}{unstaged}"),
+                status::StatusItem::Unmerged { .. } => "UU".to_string(),
+                status::StatusItem::Untracked { .. } => "??".to_string(),
+            })
+            .collect()
+    };
+    // The shapes are the ones meant: a setup that drifted would compare
+    // two statuses that say nothing.
+    for shape in [
+        "M.", "A.", "D.", "R.", "MM", "AM", "AD", "RM", "RD", ".M", ".D", ".A", ".R", "??",
+    ] {
+        assert!(
+            letters(&before).iter().any(|row| row == shape),
+            "no {shape} row to commit over: {:?}",
+            before.items
+        );
+    }
+    let foretold = before
+        .left_by_commit()
+        .expect("no conflict stands in the status");
+
+    repo.git(&["commit", "-m", "what is staged"]);
+    let after = status::load(&executor, &repo.path, &cancel)
+        .await
+        .expect("the status behind the commit");
+    assert_eq!(foretold.items, after.items);
+    assert_eq!(foretold.staged_print, after.staged_print);
+    assert_eq!(after.staged().count(), 0);
+}
+
 /// Left out of the pre-merge run: how `status` lists a repository inside
 /// the working tree, which is git's boundary (`-uall` on a plain directory
 /// is held by `stage_integration::partial::stage_part_of_an_untracked_file`).

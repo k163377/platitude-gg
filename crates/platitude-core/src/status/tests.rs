@@ -236,6 +236,146 @@ fn empty_output_is_a_clean_tree() {
     assert!(!s.has_conflicts());
 }
 
+fn tracked(staged: char, unstaged: char, path: &str, orig: Option<&str>) -> StatusItem {
+    StatusItem::Tracked {
+        staged,
+        unstaged,
+        path: path.to_string(),
+        orig_path: orig.map(str::to_string),
+    }
+}
+
+fn holding(items: Vec<StatusItem>) -> WorktreeStatus {
+    WorktreeStatus {
+        branch_head: Some("main".to_string()),
+        upstream: Some("origin/main".to_string()),
+        upstream_tracked: true,
+        ahead: 2,
+        behind: 1,
+        items,
+        // Any number that is not the one nothing staged hashes to.
+        staged_print: 7,
+        ..WorktreeStatus::default()
+    }
+}
+
+/// A row with nothing on the working tree's side goes with the commit,
+/// whatever its index letter was.
+#[test]
+fn a_commit_takes_the_rows_staged_alone() {
+    let status = holding(vec![
+        tracked('M', '.', "edited.txt", None),
+        tracked('A', '.', "added.txt", None),
+        tracked('D', '.', "deleted.txt", None),
+        tracked('R', '.', "renamed.txt", Some("old.txt")),
+        tracked('C', '.', "copied.txt", Some("source.txt")),
+        tracked('T', '.', "retyped.txt", None),
+    ]);
+    let left = status.left_by_commit().expect("no conflict stands in it");
+    assert_eq!(left.items, []);
+}
+
+/// A row on both sides keeps the working tree's half, under the name the
+/// commit recorded: the old name was the index side's.
+#[test]
+fn a_commit_leaves_the_working_tree_half_of_a_row_on_both_sides() {
+    let status = holding(vec![
+        tracked('M', 'M', "edited-twice.txt", None),
+        tracked('A', 'M', "added-then-edited.txt", None),
+        tracked('A', 'D', "added-then-deleted.txt", None),
+        tracked('R', 'M', "renamed-then-edited.txt", Some("old.txt")),
+        tracked('R', 'D', "renamed-then-deleted.txt", Some("older.txt")),
+        tracked('M', 'T', "edited-then-retyped.txt", None),
+    ]);
+    let left = status.left_by_commit().expect("no conflict stands in it");
+    assert_eq!(
+        left.items,
+        [
+            tracked('.', 'M', "edited-twice.txt", None),
+            tracked('.', 'M', "added-then-edited.txt", None),
+            tracked('.', 'D', "added-then-deleted.txt", None),
+            tracked('.', 'M', "renamed-then-edited.txt", None),
+            tracked('.', 'D', "renamed-then-deleted.txt", None),
+            tracked('.', 'T', "edited-then-retyped.txt", None),
+        ]
+    );
+}
+
+/// What the index never held is as it was: the unstaged rows, the untracked
+/// files, and an intent-to-add entry's rename, whose old name is the
+/// working tree side's.
+#[test]
+fn a_commit_leaves_what_was_not_staged_as_it_was() {
+    let unstaged = vec![
+        tracked('.', 'M', "edited.txt", None),
+        tracked('.', 'D', "deleted.txt", None),
+        tracked('.', 'A', "meant-to-add.txt", None),
+        tracked('.', 'R', "moved-on-disk.txt", Some("where-it-was.txt")),
+        StatusItem::Untracked {
+            path: "new.txt".to_string(),
+        },
+    ];
+    let mut items = vec![tracked('M', '.', "staged.txt", None)];
+    items.extend(unstaged.iter().cloned());
+    let left = holding(items)
+        .left_by_commit()
+        .expect("no conflict stands in it");
+    assert_eq!(left.items, unstaged);
+}
+
+/// git takes no commit over a conflict, so no status follows from one.
+#[test]
+fn no_status_follows_a_commit_from_one_holding_a_conflict() {
+    let status = holding(vec![
+        tracked('M', '.', "staged.txt", None),
+        StatusItem::Unmerged {
+            ours: 'U',
+            theirs: 'U',
+            path: "clash.txt".to_string(),
+        },
+    ]);
+    assert_eq!(status.left_by_commit(), None);
+}
+
+/// The index holds what HEAD does behind a commit — the print the parser
+/// ends on where nothing is staged — and the branch lines are the ones the
+/// commit was made over: no row says where HEAD went.
+#[test]
+fn a_commit_leaves_nothing_staged_and_the_branch_lines_as_they_were() {
+    let status = holding(vec![
+        tracked('M', 'M', "both.txt", None),
+        tracked('A', '.', "added.txt", None),
+    ]);
+    let left = status.left_by_commit().expect("no conflict stands in it");
+    assert_eq!(left.staged().count(), 0);
+    let nothing_staged = parse_status(&z(&[
+        &format!("1 .M N... 100644 100644 100644 {H1} {H1} both.txt"),
+        "? new.txt",
+    ]))
+    .unwrap()
+    .staged_print;
+    assert_eq!(left.staged_print, nothing_staged);
+    assert_ne!(left.staged_print, status.staged_print);
+    assert_eq!(
+        (
+            left.branch_oid,
+            left.branch_head,
+            left.upstream,
+            left.upstream_tracked,
+            left.ahead,
+            left.behind
+        ),
+        (
+            status.branch_oid,
+            status.branch_head.clone(),
+            status.upstream.clone(),
+            true,
+            2,
+            1
+        )
+    );
+}
+
 #[test]
 fn garbage_entry_is_fatal() {
     let bytes = z(&["Z whatever"]);

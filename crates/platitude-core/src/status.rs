@@ -119,6 +119,60 @@ impl WorktreeStatus {
     pub fn is_dirty(&self) -> bool {
         !self.items.is_empty()
     }
+
+    /// The status a commit of the index leaves behind this one — `None`
+    /// where a conflict stands in it, which git takes no commit over.
+    ///
+    /// `git commit`, amending or not, records the index and writes neither
+    /// it nor the working tree. Behind it HEAD holds what the index does,
+    /// so every index-side letter goes, and with it the row that had no
+    /// other; the working tree's side of each row is measured against that
+    /// same index and stands as it was, the untracked files with it. A
+    /// rename or copy on the index side takes its old name along; one on
+    /// the working tree's side — an intent-to-add entry, which no commit
+    /// records — keeps it. Held against real git by
+    /// `status_integration::a_commit_leaves_the_status_its_rows_foretell`.
+    ///
+    /// The branch lines are carried over as they are: where the commit put
+    /// HEAD, and how its counts moved, no row says.
+    #[must_use]
+    pub fn left_by_commit(&self) -> Option<Self> {
+        let mut items = Vec::new();
+        for item in &self.items {
+            match item {
+                StatusItem::Unmerged { .. } => return None,
+                StatusItem::Untracked { .. } => items.push(item.clone()),
+                StatusItem::Tracked { unstaged: '.', .. } => {}
+                StatusItem::Tracked {
+                    staged,
+                    unstaged,
+                    path,
+                    orig_path,
+                } => items.push(StatusItem::Tracked {
+                    staged: '.',
+                    unstaged: *unstaged,
+                    path: path.clone(),
+                    orig_path: orig_path.clone().filter(|_| !matches!(staged, 'R' | 'C')),
+                }),
+            }
+        }
+        Some(Self {
+            branch_oid: self.branch_oid,
+            branch_head: self.branch_head.clone(),
+            upstream: self.upstream.clone(),
+            upstream_tracked: self.upstream_tracked,
+            ahead: self.ahead,
+            behind: self.behind,
+            items,
+            staged_print: nothing_staged(),
+        })
+    }
+}
+
+/// [`WorktreeStatus::staged_print`] of an index that holds what HEAD does:
+/// the hash [`parse_status`] ends on where no entry is staged.
+fn nothing_staged() -> u64 {
+    std::hash::Hasher::finish(&std::collections::hash_map::DefaultHasher::new())
 }
 
 /// How many entries fall into each bucket, counted in one pass: the
