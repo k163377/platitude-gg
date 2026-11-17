@@ -23,6 +23,17 @@
 //!   `ToolButton` or `CheckBox`). A box that shows input draws its own
 //!   `placeholder` with a `PlainTextLabel`.
 //!
+//! And two more, about what a label draws rather than its format — a cut
+//! drawn with the font's `…`, whose form the face, the locale and the
+//! letters before it choose, where the window draws one mark (`CutMark`):
+//!
+//! * an `elide` on anything but a `TextMetrics`, which measures a cut and
+//!   draws nothing — Qt's elide types the `…` into the line;
+//! * a lone `…` as a string literal of its own (a label's `text`, a
+//!   ruler's, the text a metric is asked for), outside the face's measures
+//!   of it (`WordFace`: where an elide put it, and `cutGlyph`, the face's
+//!   own, which the cut mark is measured by). Read off the line as written.
+//!
 //! Only a block's own body counts, a one-line `Label { text: … }`
 //! included; comments and string literals are taken out before anything
 //! is read (a literal's contents never matter: it is the app's words
@@ -52,6 +63,14 @@ const BARE: &[&str] = &["Label", "Text"];
 const UNPINNABLE: &[&str] = &["HoverToolButton", "AppCheckBox", "ToolButton", "CheckBox"];
 /// The property the style draws as a `Text` of its own.
 const PLACEHOLDER: &str = "placeholderText";
+/// The file that may spell a lone `…`: the face's measures of the font's.
+const MARK_FILES: &[&str] = &["WordFace.qml"];
+/// A lone `…` as a string literal, as written: the character and its escape.
+const LONE_MARKS: &[&str] = &["\"…\"", r#""\u2026""#];
+/// The one type an `elide` may be written on: a ruler, which draws nothing.
+const CUT_RULER: &str = "TextMetrics";
+/// Where a cut drawn with the font's `…` sends its reader.
+const MARK_RULE: &str = ".claude/rules-refs/app-ui.md「切れ目の印 `…` は `CutMark`」";
 /// Where a failing line sends its reader.
 pub(crate) const RULE: &str =
     ".claude/rules-refs/app-ui.md「入力は `PlainTextLabel`、固定値は素の `Label`」";
@@ -158,6 +177,15 @@ pub(crate) fn findings(file_name: &str, text: &str) -> Vec<Finding> {
                 match name.as_str() {
                     "text" if frame.text.is_none() => frame.text = Some(gather(&lines, index)),
                     "textFormat" => frame.format = true,
+                    "elide" if frame.name != CUT_RULER => found.push(Finding {
+                        line: number,
+                        what: format!(
+                            "a `{}` cut with `elide`, which types the font's `…` — a cut draws the cut \
+                             mark (`CutName`, `CutPieces`, `LineText`, `CardText`); `elide` measures on a \
+                             `{CUT_RULER}` only ({MARK_RULE})",
+                            frame.name
+                        ),
+                    }),
                     _ => {}
                 }
             }
@@ -165,6 +193,20 @@ pub(crate) fn findings(file_name: &str, text: &str) -> Vec<Finding> {
         while stack.last().is_some_and(|frame| depth < frame.inside) {
             let Some(frame) = stack.pop() else { break };
             found.extend(judge(frame));
+        }
+    }
+    if !MARK_FILES.iter().any(|name| file_name.ends_with(name)) {
+        for (index, line) in text.lines().enumerate() {
+            if LONE_MARKS.iter().any(|mark| line.contains(mark)) {
+                found.push(Finding {
+                    line: index + 1,
+                    what: format!(
+                        "draws or measures a lone `…` — the cut mark is drawn (`CutMark`, measured by \
+                         `WordFace.cutGlyph`): the font's `…` takes the form the face, the locale and \
+                         the letters before it choose ({MARK_RULE})"
+                    ),
+                });
+            }
         }
     }
     found.sort_by_key(|finding| finding.line);
@@ -621,6 +663,31 @@ mod tests {
         let qml = "Item {\n    SlimField {\n        placeholderText: qsTr(\"Filter\")\n    }\n    HoverToolButton {\n   \
                    text: Words.loadFurther(Number(band.step))\n    }\n}\n";
         assert!(findings("Pane.qml", qml).is_empty());
+    }
+
+    #[test]
+    fn a_lone_mark_is_found_outside_the_faces_measures_and_a_mark_in_words_is_not() {
+        let qml = "Item {\n    Label {\n        text: \"…\"\n    }\n    TextMetrics {\n        \
+                   text: \"\\u2026\"\n    }\n    Label {\n        text: qsTr(\"Saving…\")\n    }\n    \
+                   Label { text: on ? \"…\" : \"x\" }\n    function w() {\n        \
+                   return face.advanceWidth(\"…\")\n    }\n}\n";
+        let lines: Vec<usize> = findings("Pane.qml", qml).iter().map(|f| f.line).collect();
+        assert_eq!(lines, vec![3, 6, 11, 13]);
+        assert!(findings("face/WordFace.qml", qml).is_empty());
+    }
+
+    #[test]
+    fn an_elide_is_found_on_a_label_and_not_on_a_ruler() {
+        let qml = "Item {\n    Label {\n        text: \"x\"\n        elide: Text.ElideRight\n    }\n    \
+                   TextMetrics {\n        text: \"x\"\n        elide: Text.ElideMiddle\n    }\n}\n";
+        let found = findings("Pane.qml", qml);
+        let lines: Vec<usize> = found.iter().map(|f| f.line).collect();
+        assert_eq!(
+            lines,
+            vec![4],
+            "{:?}",
+            found.iter().map(|f| &f.what).collect::<Vec<_>>()
+        );
     }
 
     #[test]
