@@ -120,6 +120,31 @@ fn slashed(path: &Path) -> String {
     path.display().to_string().replace('\\', "/")
 }
 
+/// A note quoting the written file — a label's expression keeps its
+/// quotes — still reaches the session as JSON.
+#[test]
+fn a_note_quoting_the_written_file_rides_in_json() {
+    let sb = Sandbox::new("write-note-json");
+    let mine = letter(&sb, "d");
+    lock(&sb, &mine, "claude-seat mine");
+    let file = mine.join("crates/platitude-app/src/ui/Probe.qml");
+    std::fs::write(
+        &file,
+        "Item {\n    Label { text: \"(\" + toggle.count + \")\" }\n}\n",
+    )
+    .expect("the component");
+    let note = wrote(&sb, &mine, "mine", &file);
+    let body = note
+        .trim()
+        .strip_prefix(
+            "{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"",
+        )
+        .and_then(|rest| rest.strip_suffix("\"}}"))
+        .unwrap_or_else(|| panic!("one JSON object: {note}"));
+    assert!(body.contains("toggle.count"), "the label is named: {body}");
+    assert!(!body.contains('"'), "no quote left raw: {body}");
+}
+
 fn letter_path(sb: &Sandbox, name: &str) -> PathBuf {
     sb.repo.join(".claude/worktrees").join(name)
 }

@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use super::payload::{deny, string_field};
+use super::payload::{deny, own_string_field, string_field};
 
 /// How far back earlier runs of the same line are counted.
 const WINDOW: u64 = 10 * 60;
@@ -47,13 +47,26 @@ pub(super) fn pre_shell(input: &str) -> Result<bool, String> {
     Ok(false)
 }
 
-/// SessionEnd: the ledger goes with the session that wrote it.
+/// SessionEnd: the ledgers go with the session that wrote them, its
+/// subagents' too.
 pub(super) fn session_end(input: &str) {
     let Some(path) = ledger_path(input) else {
         return;
     };
-    if let Err(_unheard) = std::fs::remove_file(&path) {
-        // Never written, or already gone. Nobody is left to tell.
+    let (Some(dir), Some(own)) = (path.parent(), path.file_name()) else {
+        return;
+    };
+    let own = own.to_string_lossy().into_owned();
+    let subagents = format!("{}.", own.trim_end_matches(".tsv"));
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let theirs = name == own || (name.starts_with(&subagents) && name.ends_with(".tsv"));
+        if theirs && let Err(_unheard) = std::fs::remove_file(entry.path()) {
+            // Already gone. Nobody is left to tell.
+        }
     }
 }
 
@@ -82,19 +95,37 @@ fn within_window(runs: &[(u64, u64)], now: u64) -> Vec<(u64, u64)> {
         .collect()
 }
 
-/// This session's ledger, `.repeats/<session>.tsv` beside the primary
+/// The caller's ledger, `.repeats/<`[`ledger_name`]`>` beside the primary
 /// checkout: a session types there before it has a seat and in the seat
 /// after, and a per-tree ledger would leave the first half undeleted.
 fn ledger_path(input: &str) -> Option<PathBuf> {
-    let session: String = string_field(input, "session_id")?
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
-        .collect();
+    let name = ledger_name(input)?;
+    let root = crate::tree::primary_root(&string_field(input, "cwd")?)?;
+    Some(root.join(".repeats").join(name))
+}
+
+/// `<session>.tsv` for the session's own calls. A subagent's call carries
+/// its parent's session id, and subagents run side by side, each asking
+/// its own questions: its ledger is `<session>.<agent>.tsv`, so three of
+/// them running one line once each is no poll.
+fn ledger_name(input: &str) -> Option<String> {
+    let session = file_word(&string_field(input, "session_id")?);
     if session.is_empty() {
         return None;
     }
-    let root = crate::tree::primary_root(&string_field(input, "cwd")?)?;
-    Some(root.join(".repeats").join(format!("{session}.tsv")))
+    Some(
+        match own_string_field(input, "agent_id").map(|agent| file_word(&agent)) {
+            Some(agent) if !agent.is_empty() => format!("{session}.{agent}.tsv"),
+            _ => format!("{session}.tsv"),
+        },
+    )
+}
+
+/// An id as a file name may carry it.
+fn file_word(id: &str) -> String {
+    id.chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+        .collect()
 }
 
 /// Field separator inside a ledger line; both fields are numbers, so
@@ -140,7 +171,29 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ALLOWED, WINDOW, fingerprint, held, record, recorded, within_window};
+    use super::{ALLOWED, WINDOW, fingerprint, held, ledger_name, record, recorded, within_window};
+
+    /// Subagents carry their parent's session id; each keeps a ledger of
+    /// its own, and the session's own calls keep theirs. Only the payload's
+    /// own `agent_id` names a subagent, not one inside the tool's input.
+    #[test]
+    fn a_subagents_lines_are_counted_apart_from_its_sessions() {
+        let payload = |agent: &str| {
+            format!(
+                "{{\"session_id\":\"s1\",\"cwd\":\"/w\",{agent}\"tool_name\":\"Bash\",\
+                 \"tool_input\":{{\"command\":\"ls\",\"agent_id\":\"nested\"}}}}"
+            )
+        };
+        assert_eq!(ledger_name(&payload("")).as_deref(), Some("s1.tsv"));
+        assert_eq!(
+            ledger_name(&payload("\"agent_id\":\"a1\",")).as_deref(),
+            Some("s1.a1.tsv")
+        );
+        assert_eq!(
+            ledger_name(&payload("\"agent_id\":\"a2\",")).as_deref(),
+            Some("s1.a2.tsv")
+        );
+    }
 
     /// Through the file: every line is judged by a fresh process.
     #[test]

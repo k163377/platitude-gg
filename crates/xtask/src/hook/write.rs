@@ -28,7 +28,8 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
     println!(
         "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PreToolUse\",\
          \"permissionDecision\":\"{decision}\",\"permissionDecisionReason\":\
-         \"{reason}\"}}}}"
+         \"{}\"}}}}",
+        super::payload::printable(&reason)
     );
     Ok(())
 }
@@ -52,7 +53,9 @@ fn second_test_binary(path: &str) -> Option<String> {
 }
 
 /// PostToolUse(Write|Edit). One JSON object is the whole answer, so every
-/// note rides in a single additionalContext.
+/// note rides in a single additionalContext — made printable, since a note
+/// quotes the edited file (a label's expression keeps its quotes) and a raw
+/// quote leaves no JSON for the session to be told.
 pub(super) fn post_write(input: &str) -> Result<(), String> {
     let Some(path) = string_field(input, "file_path") else {
         return Ok(());
@@ -67,7 +70,7 @@ pub(super) fn post_write(input: &str) -> Result<(), String> {
         println!(
             "{{\"hookSpecificOutput\":{{\"hookEventName\":\"PostToolUse\",\
              \"additionalContext\":\"{}\"}}}}",
-            notes.join(" ")
+            super::payload::printable(&notes.join(" "))
         );
     }
     Ok(())

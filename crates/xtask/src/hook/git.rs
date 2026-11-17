@@ -253,8 +253,8 @@ impl Offence {
                  fast-forwards main where main actually is (a hand-typed merge inherits \
                  whatever HEAD the primary checkout happens to be on), and runs only on \
                  the permit the user's own /land opened. If the user typed /land for this \
-                 landing, run `{}`; otherwise leave the work on its branch and report it as \
-                 ready to merge.",
+                 landing, run `{}`; otherwise leave the work on its branch and report it \
+                 with what it was checked by.",
                 crate::land::LAND.instruction(),
                 crate::land::LAND.line()
             ),

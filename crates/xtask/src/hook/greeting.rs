@@ -49,7 +49,8 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
                  The claim is the only thing that decides who gets a seat; the \
                  letter comes from it. \
                  Make the edit in the seat you are given, and report the branch \
-                 as ready to merge. {seats}"
+                 with what it was checked by — 「マージ可」 waits for the \
+                 pre-merge gate (gate skill). {seats}"
             ),
         },
         Some(root) => {

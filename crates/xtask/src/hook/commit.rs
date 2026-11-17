@@ -32,10 +32,12 @@ pub(super) fn primary_commit_denied(command: &str, cwd: &str) -> bool {
          and the shared session rules all ride worktree branches, because \
          parallel sessions keep reaching for the same files and direct \
          commits to main collide with theirs (CLAUDE.md ビルド・テスト). Take a \
-         seat — `claude --worktree <letter>`, or EnterWorktree by path — \
-         redo the edit there, and report the branch as ready to merge. If \
-         the user asked for this direct commit in so many words, run the \
-         same command again with {}=1 in front of it.\"}}}}",
+         seat — `{}` claims one and prints the path to enter with \
+         EnterWorktree — redo the edit there, and report the branch with \
+         what it was checked by (gate skill §gate を撃つ時機). If the user \
+         asked for this direct commit in so many words, run the same command \
+         again with {}=1 in front of it.\"}}}}",
+        crate::seats::commands::TAKE.line(),
         MAIN_APPROVAL_FLAG
     );
     true
