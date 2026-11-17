@@ -71,8 +71,8 @@ impl WatchedWrite {
         }
     }
 
-    /// Everything that write invalidated has been read again and
-    /// published.
+    /// Everything that write invalidated has been read again, and the
+    /// models have drained it (`RepoTab::settle_drained`).
     pub(super) fn settled(&mut self, id: u64) {
         if let Self::Held {
             id: mine, settled, ..

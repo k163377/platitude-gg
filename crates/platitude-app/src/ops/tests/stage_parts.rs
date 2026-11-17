@@ -260,6 +260,33 @@ fn a_discard_of_the_disk_alone_holds_no_write_of_the_index() {
     assert!(ahead.unseen());
 }
 
+/// A part and a discard of a staged row hold the doors past a failed status
+/// read, whatever they drew: the wait is let go for a press of whole files
+/// alone (`StageAhead::index_unseen`).
+#[test]
+fn a_part_and_a_staged_discard_hold_the_doors_past_a_failed_status() {
+    let mut whole_part = StageAhead::default();
+    assert!(whole_part.asked_part(part(PartVerb::Stage, true), Some(OURS)));
+    let base = status(vec![tracked('.', 'M', "a.txt")]);
+    assert_eq!(
+        drawn(&mut whole_part, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt")],
+        "drawn moved as a whole file's press would be"
+    );
+    whole_part.answered(OURS, false, FENCE);
+    whole_part.read_failed(OURS);
+    assert!(whole_part.index_unseen());
+
+    let mut staged = discard(&[("a.txt", DiscardSide::Staged)]);
+    let base = status(vec![tracked('M', '.', "a.txt")]);
+    assert_eq!(drawn(&mut staged, IN_FLIGHT, &base), []);
+    staged.answered(OURS, false, FENCE);
+    staged.read_failed(OURS);
+    assert!(staged.index_unseen());
+    every_reader_drew(&mut staged, FENCE);
+    assert!(!staged.index_unseen());
+}
+
 #[test]
 fn a_folder_and_an_intent_to_add_file_are_left_to_the_status() {
     let base = status(vec![

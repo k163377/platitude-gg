@@ -15,7 +15,7 @@ fn times(commands: &[String], needle: &str) -> usize {
 }
 
 /// The newest status reading the session published.
-fn last_status(sink: &CaptureSink) -> platitude_core::status::WorktreeStatus {
+fn last_status(sink: &CaptureSink) -> std::sync::Arc<platitude_core::status::WorktreeStatus> {
     sink.events
         .lock()
         .unwrap()

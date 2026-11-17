@@ -56,6 +56,11 @@ impl RepoSession {
         let marks = Arc::clone(&relock(&self.eol_marks));
         parts.push(Part::new("eol-marks", marks.heap_bytes(), marks.len()));
 
+        // The rows are an `Arc` the consumer was sent, counted in full here
+        // as the refs snapshot is.
+        let (status_bytes, status_rows) = relock(&self.status_told).weight();
+        parts.push(Part::new("status-told", status_bytes, status_rows));
+
         let (base_bytes, base_count) = {
             let g = relock(&self.eol_baselines);
             (g.heap_bytes(), g.len())

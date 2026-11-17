@@ -86,7 +86,6 @@ impl RepoTab {
         self.move_ask_start = String::new();
         self.move_ask_lost = 0;
         self.paced_worktrees = Vec::new();
-        self.auto_fetch_running = false;
         self.auto_fetch_seq = 0;
         self.fetch_failures = 0;
         self.fetch_log_raised = false;
@@ -94,6 +93,8 @@ impl RepoTab {
         // The retired sink never delivers the settles still owed.
         self.unsettled.clear();
         self.settling = false;
+        self.unshown.clear();
+        self.read_unshown();
         // Nor the answers the stage presses wait for: they went with the
         // session (`ops::StageAhead::session_gone`). The lists draw the next
         // session's status as it lands; nothing here has them draw again.

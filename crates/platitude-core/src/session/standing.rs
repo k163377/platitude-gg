@@ -19,7 +19,8 @@
 //! such a write fenced would otherwise wait for the next tick. Pinned by
 //! `session_integration::write_burst`; HEAD's order by
 //! `session_integration::head`, the offer's classes by this module's unit
-//! tests.
+//! tests. A status is refused at the telling too, under the lock the
+//! statuses go out in (`session::foretold`).
 //!
 //! **The report numbers run across sessions.** A consumer arms a landing
 //! on "the first report after this write" by the number the write's
@@ -88,6 +89,11 @@ pub(super) struct Standing {
 /// different things and cannot be compared with each other. The consumer
 /// is answered by the first report or listing at or above its number, in
 /// whichever order that and the write's answer reach it.
+///
+/// What the write itself tells of the repository it left — the status
+/// behind a commit (`session::foretold`) — goes out under these two
+/// numbers as they are: the write's end is the first moment that looked
+/// after the write, and the report it names is the one the write is owed.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Fence {
     /// The smallest number the first report of HEAD after this write can

@@ -117,7 +117,7 @@ fn reads_from(events: &[SessionEvent], id: OperationId) -> u64 {
         .expect("the write answered")
 }
 
-/// Where each status read published, and when it looked.
+/// Where each status was told, and when it looked.
 fn statuses(events: &[SessionEvent]) -> Vec<(usize, u64)> {
     events
         .iter()
@@ -129,10 +129,35 @@ fn statuses(events: &[SessionEvent]) -> Vec<(usize, u64)> {
         .collect()
 }
 
+/// Where the commit under `id` told the status it left — worked out at its
+/// answer, not read (`session::foretold`): the one stamped with the write's
+/// own end, which no read's stamp is.
+fn told_by(events: &[SessionEvent], id: OperationId) -> Option<usize> {
+    let end = reads_from(events, id);
+    statuses(events)
+        .into_iter()
+        .find_map(|(at, looked)| (looked == end).then_some(at))
+}
+
+/// [`statuses`] without the one the commit under `commit` told at its
+/// answer: the statuses that were read.
+fn statuses_read(events: &[SessionEvent], commit: OperationId) -> Vec<(usize, u64)> {
+    let told = told_by(events, commit);
+    statuses(events)
+        .into_iter()
+        .filter(|(at, _)| Some(*at) != told)
+        .collect()
+}
+
 /// Three files staged behind a commit: the four writes run back to back,
 /// one status is read behind the last — one `git status` spawned, not one a
 /// write thrown away — and every one of them settles behind that status,
 /// which looked after each of them.
+///
+/// The commit tells the status it left at its own answer, before the first
+/// stage starts and stamped below that stage's end: rows a stage press has
+/// moved on the screen stay drawn over it (the app's `StagePress::draws_over`
+/// measures the stamp), until the one read behind the burst.
 #[tokio::test(flavor = "multi_thread")]
 async fn writes_waiting_behind_one_another_are_read_behind_once() {
     let (mut repo, release) = rooted(&["a.txt", "b.txt", "c.txt"]);
@@ -173,7 +198,16 @@ async fn writes_waiting_behind_one_another_are_read_behind_once() {
             1,
             "one status was spawned behind the commit's answer"
         );
-        let read = statuses(events);
+        let told = told_by(events, commit).expect("the commit told the status it left");
+        assert!(
+            first < told && told < started(events, stages[0]),
+            "at its answer, before the write behind it started"
+        );
+        assert!(
+            reads_from(events, commit) < reads_from(events, stages[0]),
+            "stamped below the end of the stage behind it"
+        );
+        let read = statuses_read(events, commit);
         assert_eq!(
             read.iter()
                 .filter(|(at, _)| (first..last).contains(at))
@@ -235,11 +269,11 @@ async fn a_write_refused_inside_a_burst_settles_with_the_burst() {
         let events = sink.events.lock().unwrap();
         let events = &events[from..];
         let last = answered(events, after);
-        let behind: Vec<(usize, u64)> = statuses(events)
+        let behind: Vec<(usize, u64)> = statuses_read(events, commit)
             .into_iter()
             .filter(|(at, _)| *at > answered(events, commit))
             .collect();
-        assert_eq!(behind.len(), 1, "one status for the burst: {behind:?}");
+        assert_eq!(behind.len(), 1, "one status read for the burst: {behind:?}");
         assert!(behind[0].0 > last, "read behind the last write");
         for id in burst {
             assert!(settled(events, id) > behind[0].0);
@@ -627,8 +661,13 @@ async fn a_fenced_read_is_left_to_the_burst(
     {
         let events = sink.events.lock().unwrap();
         let events = &events[from..];
-        let read = statuses(events);
-        assert_eq!(read.len(), 1, "one status published: {read:?}");
+        let told = told_by(events, burst[0]).expect("the commit told the status it left");
+        assert!(
+            told < started(events, burst[1]),
+            "at its answer, the parked read still out"
+        );
+        let read = statuses_read(events, burst[0]);
+        assert_eq!(read.len(), 1, "one status read: {read:?}");
         assert!(
             read[0].1 >= reads_from(events, burst[2]),
             "the one read behind the burst, which looked after its last write"
@@ -814,12 +853,14 @@ async fn a_closed_session_settles_each_write_as_it_answers() {
 
 /// A session closed while a burst's last write is inside git reads nothing
 /// behind the burst: every write of it settles with nothing read, the ones
-/// that answered before the close included.
+/// that answered before the close included. What the commit told at its
+/// answer, the session still open, is no read: no `git status` ran.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_closed_inside_a_burst_settles_it_unread() {
     let (mut repo, hook, filter) = held_twice();
     let (sink, session) = opened(&repo).await;
     let from = quiet(&sink, &session).await;
+    session.set_recording(Recording::WithBackground);
 
     let burst = burst_held_twice(&session);
     std::fs::write(&hook, b"go").expect("release the hook");
@@ -835,9 +876,18 @@ async fn a_session_closed_inside_a_burst_settles_it_unread() {
         let events = sink.events.lock().unwrap();
         let events = &events[from..];
         assert_eq!(
-            statuses(events),
+            statuses_read(events, burst[0]),
             [],
             "nothing was read behind a burst whose session closed"
+        );
+        assert_eq!(
+            events.iter().filter(|e| is_status_spawn(e)).count(),
+            0,
+            "no status was spawned for it either"
+        );
+        assert!(
+            told_by(events, burst[0]).is_some_and(|told| told < started(events, burst[1])),
+            "the commit told what it left at its answer, ahead of the close"
         );
     }
     bounded(
@@ -870,11 +920,12 @@ async fn a_close_during_the_reads_still_serves_the_write_waiting_behind_them() {
     let behind = session
         .create_branch("behind".into(), None, false)
         .expect("the branch was accepted");
-    // The first status from here on is the one read behind the commit:
-    // nothing else reads while it is inside git.
+    // The first refs listing from here on is the one read behind the commit:
+    // nothing else reads while it is inside git. Not the first status, which
+    // the commit tells at its answer, ahead of the reads.
     let closing = Arc::clone(&session);
     sink.hook_once(
-        |e| matches!(e, SessionEvent::StatusLoaded { .. }),
+        |e| matches!(e, SessionEvent::RefsLoaded { .. }),
         move || closing.close(),
     );
     std::fs::write(&release, b"go").expect("release the hook");

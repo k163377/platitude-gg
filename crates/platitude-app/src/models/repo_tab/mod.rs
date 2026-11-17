@@ -93,8 +93,9 @@ pub struct RepoTab {
     busy_count: i32,
     busy_op: String,
     /// The writes asked for (or started, where asked elsewhere) whose
-    /// re-reads have not been published yet (`TabMsg::WriteSettled`), by
-    /// id. `busy_count` rises at a write's start and drops at git's answer,
+    /// re-reads are not in the models yet, by id: each leaves at the call
+    /// the tab posts itself on hearing it settle (`drain::settle_heard`).
+    /// `busy_count` rises at a write's start and drops at git's answer,
     /// ahead of what it left being read again; a menu that waits on a
     /// write stands its rows on that reading, so it waits on this
     /// (`settling`).
@@ -104,8 +105,11 @@ pub struct RepoTab {
     /// (`hub::Feeds`), and the log's receipt is asked after by these ids
     /// (`settled_writes`, `CommandsModel.recorded`).
     settled: std::collections::VecDeque<u64>,
-    /// A write is in `unsettled`, or the models have not drained the reads
-    /// behind the last one out yet (`TabMsg::ReadsDrained`).
+    /// A write is in `unsettled`: asked for, running, or answered with the
+    /// reads behind it not yet drained into the models. It falls only
+    /// behind those drains (`drain::settle_heard`), so what reads it going
+    /// down — a menu standing again, a door opening — reads the models as
+    /// the write left them.
     settling: bool,
     /// The tab moved to another worktree and the new session has not
     /// said where it is yet (`Hub::restand_tab`).
@@ -203,8 +207,8 @@ pub struct RepoTab {
     staging_moving: Vec<String>,
     /// A copy of `StageAhead::index_unseen`: a press that writes the index
     /// (a stage or unstage of files or of a part, a discard of a staged
-    /// row) stands that the screen has not caught up with — Commit waits,
-    /// and says why.
+    /// row) stands that the screen has not caught up with, and no failed
+    /// status read has let it off the wait — Commit waits, and says why.
     staging_unseen: bool,
     /// A copy of `StageAhead::unseen`, the same for any press — a discard of
     /// the disk alone too — read for the follow of the open diff
@@ -229,9 +233,10 @@ pub struct RepoTab {
     /// Whether the Commit button waits: on a write out (`outstanding` — one
     /// queued would be committed with its work in it, which no row on screen
     /// showed), on a press that writes the index the screen has not caught
-    /// up with (`StageAhead::index_unseen` — until then the rows are the
-    /// press's word, not git's, landed or not), and on a tab still standing
-    /// in another worktree.
+    /// up with (`staging_unseen` — until then the rows are the press's
+    /// word, not git's, landed or not; the one press let off sooner is
+    /// `StageAhead::index_unseen`'s to say), and on a tab still standing in
+    /// another worktree.
     commit_waits: bool,
     /// The commit the standing `checkSignature` is about — the question,
     /// where `signature_oid` and its three are the answer.
@@ -519,13 +524,25 @@ pub struct RepoTab {
     move_ask_start: String,
     move_ask_lost: i32,
     move_ask_seq: i32,
-    /// Auto fetch, reported apart from the shared busy/error
-    /// surface, which an offline machine would set off every interval.
-    auto_fetch_running: bool,
+    /// The writes started whose result has not reached the models, by id
+    /// with their kind: from the start — a fetch nobody pressed too
+    /// (`TabMsg::AutoFetch`), which counts in nothing else here: the shared
+    /// busy and error surface would go off on an offline machine every
+    /// interval — until the reads behind the write are in the models
+    /// (`drain::settle_drained`, the boundary `settling` falls on). The one
+    /// place that says which operation the screen is still waiting to
+    /// show; `fetching` and `pushing` are copies for bindings.
+    unshown: Vec<(u64, OperationKind)>,
+    /// A fetch is among `unshown` — pressed, the interval's or an
+    /// opening's — and a push is (every write that answers as one: a
+    /// branch's, a tag's, a `push --delete`). The toolbar's two rings turn
+    /// on these: past git's answer, until what the fetch or the push left
+    /// has reached the models (デザイン規約 §進行中・回数押しの定数).
+    fetching: bool,
+    pushing: bool,
     /// How many automatic fetches have answered since the tab stood
-    /// here, clean or not: the answer's edge, kept — `auto_fetch_running`
-    /// falls between two reads, and the answer itself rides one notify
-    /// (`write_answers`).
+    /// here, clean or not: the answer's edge, kept — the answer itself
+    /// rides one notify (`write_answers`), and `fetching` stays up past it.
     auto_fetch_seq: i32,
     /// Fetches that came back with something to say, in a row, whoever
     /// asked for them. Any fetch that comes back clean puts it to zero.
@@ -539,6 +556,10 @@ pub struct RepoTab {
     /// behind the reader's back.
     auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
+    /// For the calls the tab posts itself (`drain::settle_heard`). Its
+    /// own: the feed keeps the one it was attached with, and an invoker
+    /// cannot be cloned.
+    self_invoker: Option<qtbridge::QmlMethodInvoker>,
 }
 
 /// One write's answer as it arrived, for the readers that wait on a

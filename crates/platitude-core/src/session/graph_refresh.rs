@@ -540,7 +540,12 @@ impl RepoSession {
     /// or a worktree removal a closed tab let run on, which moves no ref —
     /// and nothing else this session reads would say so before the
     /// page's own paced read comes round.
+    ///
+    /// The write fenced none of this session's reads, so the status told
+    /// last can be from before it: no commit's status is worked out from
+    /// that one ([`RepoSession::rows_moved_elsewhere`]).
     pub(super) fn read_again(self: &Arc<Self>) {
+        self.rows_moved_elsewhere();
         self.poll_gate.owe();
         drop(self.start_refresh_poll());
     }

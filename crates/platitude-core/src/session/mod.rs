@@ -66,6 +66,7 @@ mod discard_record;
 mod eol;
 mod event;
 mod feed;
+mod foretold;
 mod graph_refresh;
 mod head_reach;
 mod heap;

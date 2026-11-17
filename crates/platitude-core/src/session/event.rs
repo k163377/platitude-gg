@@ -153,15 +153,31 @@ pub enum SessionEvent {
     PacedRead {
         worktree: Option<String>,
     },
+    /// The working tree as a status read found it — or, behind a commit git
+    /// took, as that commit left it, worked out at git's answer ahead of
+    /// the read (`session::foretold`).
+    ///
+    /// No status that looked before a write ended is sent after one that
+    /// speaks for what the write left: a consumer draws them in the order
+    /// they come.
     StatusLoaded {
         /// Its `upstream` named as the send names its destination
         /// ([`crate::remote::PushMarks::upstream_name`]) wherever the
         /// branch's keys were read — not as `git status` shortens it.
-        status: WorktreeStatus,
+        ///
+        /// Shared: the session keeps the one it sent last, to work the
+        /// next commit's out from.
+        status: Arc<WorktreeStatus>,
         /// The [`HeadObserved::seq`](SessionEvent::HeadObserved) this
         /// status stands beside, taken after the read's own HEAD went into
         /// the record. Tells a consumer the counts are about the HEAD it
         /// holds; a consumer waiting on a write's tree waits for it.
+        ///
+        /// A status worked out at a commit's answer carries that answer's
+        /// [`head_seq`](Self::WriteFinished) — the number the report the
+        /// write is owed starts from — ahead of the report itself: its
+        /// rows are the tree the commit left, while its branch lines and
+        /// counts are still the ones read before it.
         head_seq: u64,
         /// When the repository was looked at for this read, stamped before
         /// `git status` is spawned (`Standing::stamp`). The count in
@@ -169,6 +185,10 @@ pub enum SessionEvent {
         /// [`SessionEvent::OpProgress`] that looked later can be newer
         /// while it arrives first: the badge's count is whichever looked
         /// last.
+        ///
+        /// A status worked out at a commit's answer carries that answer's
+        /// [`reads_from`](Self::WriteFinished): the write's own end, which
+        /// is at or above its fence and below every read begun after it.
         looked: u64,
         op_state: OpState,
         /// "commit N of M" while a rebase is stepping through commits.
@@ -480,7 +500,13 @@ pub enum SessionEvent {
     /// A write's git command ended — the second of its three boundaries,
     /// between acceptance and [`WriteSettled`](SessionEvent::WriteSettled);
     /// the reads it invalidated have not been made yet. `error` is git's
-    /// own message.
+    /// own message. Behind a commit git took, the status it left follows
+    /// at once, worked out and not read
+    /// ([`StatusLoaded`](SessionEvent::StatusLoaded)), where one follows
+    /// from the status told before it (`StatusTold::answered`): not while an
+    /// operation stands, a bisect among them, nor where a conflict is
+    /// listed, no status has been told yet, the last one told looked before
+    /// a write that moved its rows, or the session is closed.
     ///
     /// `report` is set where something outside this application refused
     /// the write and what it said is a report

@@ -150,7 +150,7 @@ impl NavSectionModel {
     /// own: a line-ending answer arrives after the status it is about.
     fn draw_status(
         &mut self,
-        base: platitude_core::status::WorktreeStatus,
+        base: Arc<platitude_core::status::WorktreeStatus>,
         marks: Arc<Vec<platitude_core::session::EolMark>>,
     ) -> bool {
         match crate::hub::status_picture(self.tab_id, self.looked, &base, &marks) {

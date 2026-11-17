@@ -248,6 +248,12 @@ impl RepoSession {
     }
 
     /// Replaces one commit's message; the newest is amended, not replayed.
+    ///
+    /// The amend is `git commit --amend` over the index, as the commit
+    /// box's is: what is staged goes into HEAD with the words, and the
+    /// status that leaves is told as git answers
+    /// ([`Self::note_index_committed`]) where one can be — the conditions
+    /// are `StatusTold::answered`'s.
     pub fn reword(self: &Arc<Self>, oid: String, message: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
@@ -261,6 +267,7 @@ impl RepoSession {
                         ..Default::default()
                     };
                     commit::commit(&exec, &repo, &message, options, &cancel).await?;
+                    session.note_index_committed();
                     session.tell_if_left(&exec, &repo, &[head], &cancel).await;
                     return Ok(());
                 }

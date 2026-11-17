@@ -14,7 +14,7 @@ impl RepoTab {
     /// finds the tree empty comes long after the answer, when only the
     /// press can say whose doing it was.
     ///
-    /// **Not while a stage or unstage press stands**
+    /// **Not while a stage or unstage press holds it back**
     /// ([`Self::staging_turns_away`]).
     pub(super) fn stash_push(&mut self, message: String) {
         if self.staging_turns_away("stash") {

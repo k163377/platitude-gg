@@ -87,6 +87,9 @@ impl<T> Feed<T> {
     fn wake(guard: MutexGuard<'_, FeedState<T>>) {
         // Invoking while holding the lock is fine: it only posts a queued
         // call to the Qt event loop and never runs the slot synchronously.
+        // Its answer is not read, as the tab's own call's is
+        // (`RepoTab::settle_heard`): a consumer QML has destroyed while its
+        // feed still holds it answers `false` too, at every push after.
         if let Some(inv) = &guard.invoker {
             inv.invoke_method("drain");
         }

@@ -205,6 +205,27 @@ struct DiffPress {
     truth_from: Option<u64>,
 }
 
+/// What the pictures drawn of one press have done with the paths it names
+/// ([`StageAhead::picture`]) — the one thing about a move that is kept
+/// (why: [`StageAhead`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pictured {
+    /// No reader has drawn it over a status: no row on screen is its word.
+    Never,
+    /// Every picture so far moved every path it names.
+    AllMoved,
+    /// A picture left a path it names to the status, or held no row for it.
+    /// So does one over a status that already holds git's answer, the row
+    /// on its new side already: the press moves nothing there, and the
+    /// picture cannot tell that from a row left to the status.
+    ///
+    /// For good: that reader's rows showed nothing of the press there, and a
+    /// later picture that moves every path takes nothing back — the doors
+    /// stay held until the press goes with the status after it (the safe
+    /// side).
+    SomeLeft,
+}
+
 /// One press, from the queue's acceptance to the status that shows it.
 #[derive(Debug)]
 struct StagePress {
@@ -215,6 +236,11 @@ struct StagePress {
     /// The smallest stamp a status that looked after this write can carry
     /// (`WriteFinished::reads_from`); zero until it has landed.
     reads_from: u64,
+    /// The status the queue read behind the write failed
+    /// ([`StageAhead::read_failed`]). The press stands all the same, its
+    /// rows drawn, until a status that looked after the write lands.
+    unread: bool,
+    pictured: Pictured,
 }
 
 impl StagePress {
@@ -223,6 +249,28 @@ impl StagePress {
     /// write ended.
     fn draws_over(&self, looked: u64) -> bool {
         !(self.landed && looked >= self.reads_from)
+    }
+
+    /// A picture drew this press and moved `moved` rows with it. Every path
+    /// moved is as many rows as the press names paths: a path is one row at
+    /// most (`picture_of` leaves one git lists twice). A whole bucket's
+    /// press, a part and a discard name no such count, and are never
+    /// [`Pictured::AllMoved`].
+    fn pictured(&mut self, moved: usize) {
+        let every = matches!(
+            &self.act,
+            Act::Whole { reach: Reach::Paths(paths), .. } if paths.len() == moved
+        );
+        self.pictured = match (self.pictured, every) {
+            (Pictured::Never | Pictured::AllMoved, true) => Pictured::AllMoved,
+            _ => Pictured::SomeLeft,
+        };
+    }
+
+    /// Whether the writes that take the index whole wait on this press
+    /// ([`StageAhead::index_unseen`]).
+    fn holds_index(&self) -> bool {
+        self.act.moves_index() && !(self.unread && self.pictured == Pictured::AllMoved)
     }
 }
 
@@ -266,6 +314,30 @@ impl StagePress {
 /// the index — what Commit, the stash's staged half, HEAD's Save and
 /// `--continue` take — where it was, and holds none of them.
 ///
+/// **The one exception: where the status read behind a press failed, the wait
+/// is let go for a press of rows that moved every one it names, and for no
+/// other** ([`Self::read_failed`], user decision — ask before changing). What
+/// failed is the one read the queue made behind that write: the next status
+/// that lands — the paced read of a tab on screen (`session::pace`), the read
+/// behind another write — lets the press go as any does, and the wait would
+/// end there too, but not for as long as the read keeps failing. Let off, the
+/// doors open on rows that are still the press's word: each row it names
+/// shows what the press did, drawn wrong where [`moved`] cannot tell two
+/// shapes apart. A press that left a row to the status keeps the wait — that
+/// row is drawn as it was before the press, so a commit would record what no
+/// row shows — and so do a whole bucket's (`git add --all` takes files no
+/// status listed), a part and a discard.
+///
+/// **Whether a press moved every row is written down as it is drawn**
+/// ([`Pictured`], [`Self::picture`]), where the move itself is not: the
+/// readers hold a status each and draw on turns of their own, so there is no
+/// one status to work it out on when the failure is told. Every picture of a
+/// press adds to its record — one that left a path where it was, or held no
+/// row for it, marks the press for good, whatever the other readers drew —
+/// and the wait is read off the record as it stands, so a picture drawn after
+/// the failure was told moves the doors too (the tab hears of it as of a
+/// press let go, [`Self::take_notice`]).
+///
 /// **Three kinds of press, one life** ([`Act`]): whole files staged or
 /// unstaged, part of one file's diff ([`Self::asked_part`]) and chosen rows
 /// discarded ([`Self::asked_discard`]). A part is drawn by a fifth reader
@@ -293,8 +365,10 @@ pub struct StageAhead {
     /// tracked row — asked once per path while presses are out (`moved`).
     dirs: HashMap<String, bool>,
     /// A reader's drawing moved the presses — a press let go, so Commit can
-    /// be pressed again where it was the last, or the open diff's parts moved
-    /// with its read — and the tab has not been told ([`Self::take_notice`]).
+    /// be pressed again where it was the last, the doors of a press whose
+    /// status read failed moved with a picture ([`Self::picture`]), or the
+    /// open diff's parts moved with its read — and the tab has not been told
+    /// ([`Self::take_notice`]).
     notice: bool,
     /// The parts as the open diff draws them, in the order they were
     /// pressed; each goes with its answer where refused, and once landed
@@ -369,8 +443,23 @@ impl StageAhead {
             act,
             landed: false,
             reads_from: 0,
+            unread: false,
+            pictured: Pictured::Never,
         });
         Some(id)
+    }
+
+    /// The status the queue read behind write `id` failed
+    /// (`TabMsg::StatusUnread`): git answered the press, and the one read
+    /// asked for behind it drew nothing. Written down on the press — whether
+    /// the doors stop waiting on it is [`Self::index_unseen`]'s to say — and
+    /// its rows stay where it put them until the next status that lands,
+    /// which lets it go as any does. Nothing for a write that is no press of
+    /// these, or one git has not answered: no read was made behind that.
+    pub fn read_failed(&mut self, id: u64) {
+        if let Some(press) = self.presses.iter_mut().find(|p| p.id == id && p.landed) {
+            press.unread = true;
+        }
     }
 
     /// git answered a write; only a press's own answer moves anything. Says
@@ -588,6 +677,11 @@ impl StageAhead {
     ///
     /// `is_dir` answers whether a path is a directory on disk; each path is
     /// asked once while presses are out.
+    ///
+    /// Each press drawn is told what this picture did with its paths
+    /// ([`Pictured`]); where that moves the doors of one whose status read
+    /// failed ([`Self::index_unseen`]), the tab is owed the news
+    /// ([`Self::take_notice`]).
     pub fn picture(
         &mut self,
         looked: u64,
@@ -595,8 +689,12 @@ impl StageAhead {
         marks: &[EolMark],
         mut is_dir: impl FnMut(&str) -> bool,
     ) -> Option<Picture> {
+        let held = self.index_unseen();
         let Self { presses, dirs, .. } = self;
-        let over: Vec<&StagePress> = presses.iter().filter(|p| p.draws_over(looked)).collect();
+        let mut over: Vec<&mut StagePress> = presses
+            .iter_mut()
+            .filter(|p| p.draws_over(looked))
+            .collect();
         if over.is_empty() {
             return None;
         }
@@ -608,7 +706,11 @@ impl StageAhead {
             dirs.insert(path.to_string(), found);
             found
         };
-        picture_of(base, marks, &over, &mut dir)
+        let picture = picture_of(base, marks, &mut over, &mut dir);
+        if self.index_unseen() != held {
+            self.notice = true;
+        }
+        picture
     }
 
     /// The paths named by presses still waiting for git's answer, sorted and
@@ -670,7 +772,10 @@ impl StageAhead {
     /// any, until every reader has drawn the status after it: an open diff
     /// waiting in place for where its file went waits meanwhile
     /// (`RepoPage.followLanding`). Without one nothing is out, landed or
-    /// not, and a status is drawn as it is.
+    /// not, and a status is drawn as it is. A status read that failed
+    /// ([`Self::read_failed`]) lets nothing go here: the diff waiting in
+    /// place, and automation's `staging` wait ([`Self::ahead_unseen`]), stay
+    /// on the next status that lands.
     #[must_use]
     pub fn unseen(&self) -> bool {
         !self.presses.is_empty()
@@ -678,9 +783,14 @@ impl StageAhead {
 
     /// [`Self::unseen`] for the presses that write the index — what Commit,
     /// the stash, HEAD's Save and `--continue` wait on ([`Act::moves_index`]).
+    /// Not a press whose status read failed ([`Self::read_failed`]) where
+    /// every picture drawn of it moved every row it names
+    /// ([`Pictured::AllMoved`]): waited on, it would hold them for as long as
+    /// the read keeps failing. Any other press stands here until the status
+    /// after it is drawn (which press and why: [`StageAhead`]).
     #[must_use]
     pub fn index_unseen(&self) -> bool {
-        self.presses.iter().any(|p| p.act.moves_index())
+        self.presses.iter().any(StagePress::holds_index)
     }
 
     /// Whether anything on screen is still a press's word: a press the
@@ -745,10 +855,11 @@ impl StageAhead {
 }
 
 /// `base` with `presses` in it, in their order — `None` where nothing moved.
+/// Each press is told how many rows it moved ([`StagePress::pictured`]).
 fn picture_of(
     base: &WorktreeStatus,
     marks: &[EolMark],
-    presses: &[&StagePress],
+    presses: &mut [&mut StagePress],
     dir: &mut dyn FnMut(&str) -> bool,
 ) -> Option<Picture> {
     // A path git lists twice — a staged deletion beside an untracked file of
@@ -764,7 +875,8 @@ fn picture_of(
     // Which side each moved path ended on — its marks go with it — or
     // `None` where the row left the list, and its marks with it.
     let mut ends: HashMap<String, Option<bool>> = HashMap::new();
-    for press in presses {
+    for press in presses.iter_mut() {
+        let mut moved = 0;
         for slot in &mut items {
             let Some(item) = slot else {
                 continue;
@@ -782,14 +894,17 @@ fn picture_of(
                         ends.insert(item.path().to_string(), Some(staged));
                     }
                     *item = next;
+                    moved += 1;
                 }
                 Some(Next::Gone) => {
                     ends.insert(item.path().to_string(), None);
                     *slot = None;
+                    moved += 1;
                 }
                 None => {}
             }
         }
+        press.pictured(moved);
     }
     let items: Vec<StatusItem> = items.into_iter().flatten().collect();
     if items == base.items {

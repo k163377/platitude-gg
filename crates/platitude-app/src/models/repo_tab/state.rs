@@ -139,12 +139,15 @@ impl Default for RepoTab {
             move_ask_start: String::new(),
             move_ask_lost: 0,
             move_ask_seq: 0,
-            auto_fetch_running: false,
+            unshown: Vec::new(),
+            fetching: false,
+            pushing: false,
             auto_fetch_seq: 0,
             fetch_failures: 0,
             fetch_log_raised: false,
             auto_fetch_suspended: false,
             feed: None,
+            self_invoker: None,
         }
     }
 }
@@ -196,19 +199,24 @@ impl RepoTab {
         asked
     }
 
-    /// Runs `f`, then raises `settling_changed` and `commit_waits_changed`, in
-    /// that order, for whichever of the two `f` moved. Not around
-    /// [`Self::ask_session`], which raises them itself — wrapped, a write it
-    /// counts out on a settled tab raises `settling_changed` twice.
+    /// Runs `f`, then raises `settling_changed`, `commit_waits_changed` and
+    /// `unshown_changed`, in that order, for whichever of the three `f`
+    /// moved. Not around [`Self::ask_session`], which raises the first two
+    /// itself — wrapped, a write it counts out on a settled tab raises
+    /// `settling_changed` twice.
     pub(super) fn telling_waits(&mut self, f: impl FnOnce(&mut Self)) {
         let was_settling = self.settling;
         let waiting = self.commit_waits;
+        let turning = (self.fetching, self.pushing);
         f(self);
         if self.settling != was_settling {
             self.settling_changed();
         }
         if self.commit_waits != waiting {
             self.commit_waits_changed();
+        }
+        if (self.fetching, self.pushing) != turning {
+            self.unshown_changed();
         }
     }
 
@@ -242,9 +250,9 @@ impl RepoTab {
     /// caught up with the last press standing (`unseen` — an open diff
     /// waiting in place lands then, `RepoPage.followLanding`), or a part of
     /// the open diff went (`ahead_unseen` — the diff draws again); and
-    /// whether the Commit button waits — on a write out, a press writing the
-    /// index or the stand (`commit_waits`). Answers whether anything QML
-    /// reads moved.
+    /// whether the Commit button waits — on a write out, a press holding
+    /// the index's writes back (`StageAhead::index_unseen`) or the stand
+    /// (`commit_waits`). Answers whether anything QML reads moved.
     pub(super) fn read_writes_out(&mut self, moved: bool) -> bool {
         let (all_out, moving, unseen, index_unseen, ahead_unseen, diff_writes_out) =
             crate::hub::stage_ahead(self.tab_id, |ahead| {
@@ -467,11 +475,13 @@ impl RepoTab {
 
     /// Whether a write that takes the index whole — a commit, the details
     /// pane's amend of HEAD, a stash, the stopped operation's `--continue` —
-    /// is turned away here: a press that writes the index stands
-    /// (`StageAhead::index_unseen`), so the rows on screen are the press's
+    /// is turned away here: a press that writes the index holds it back
+    /// (`StageAhead::index_unseen`) — the rows on screen are the press's
     /// word until the status after it is drawn, and git would take its own
-    /// index. Their buttons wait then (`stagingUnseen`, `Words.stagingWait`);
-    /// this is the belt under them.
+    /// index. Not the press a failed status read lets off the wait, which
+    /// that rule names: the write goes over rows that are its word still.
+    /// Their buttons wait then (`stagingUnseen`, `Words.stagingWait`); this
+    /// is the belt under them.
     pub(super) fn staging_turns_away(&self, what: &str) -> bool {
         let stands = crate::hub::stage_ahead(self.tab_id, |ahead| ahead.index_unseen());
         if stands {
@@ -487,7 +497,7 @@ impl RepoTab {
     /// empties the editor — and only its own tree read, taken after that
     /// answer, lands the page (`ops::TreeOut`).
     ///
-    /// **Not while a stage or unstage press stands**
+    /// **Not while a stage or unstage press holds it back**
     /// ([`Self::staging_turns_away`]).
     pub(super) fn commit_from_fields(
         &mut self,
@@ -519,7 +529,7 @@ impl RepoTab {
     /// (`RepoPage.messageEdit` takes typing on HEAD alone), and the amend
     /// takes what is staged too.
     ///
-    /// **Not while a stage or unstage press stands**
+    /// **Not while a stage or unstage press holds it back**
     /// ([`Self::staging_turns_away`]).
     pub(super) fn reword_from_fields(&mut self, oid: String, subject: String, body: String) {
         if self.staging_turns_away("amend") {

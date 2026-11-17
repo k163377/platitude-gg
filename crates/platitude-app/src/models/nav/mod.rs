@@ -405,6 +405,6 @@ pub struct NavSectionModel {
 /// A status as git reported it, with the line-ending marks that came with it
 /// (`NavSectionModel::staged_from`).
 struct StatusBase {
-    status: platitude_core::status::WorktreeStatus,
+    status: Arc<platitude_core::status::WorktreeStatus>,
     marks: Arc<Vec<platitude_core::session::EolMark>>,
 }

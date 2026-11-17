@@ -44,7 +44,10 @@ fn all_staged() -> platitude_core::status::WorktreeStatus {
 }
 
 fn unstaged_list(tab: i32) -> NavSectionModel {
-    let mut model = worktree("unstaged", Source::files(Default::default()));
+    let mut model = worktree(
+        "unstaged",
+        Source::files(platitude_core::status::WorktreeStatus::default()),
+    );
     model.tab_id = tab;
     model
 }
@@ -54,7 +57,7 @@ fn status_msg(
     looked: u64,
 ) -> crate::hub::StatusMsg {
     crate::hub::StatusMsg {
-        status,
+        status: status.into(),
         head_seq: 1,
         looked,
         op_state: platitude_core::opstate::OpState::default(),
@@ -79,7 +82,7 @@ fn status_msg(
 fn a_list_draws_a_bucket_press_over_its_status_and_again_as_it_goes() {
     let tab = crate::hub::testkit::installed_tab();
     let mut unstaged = unstaged_list(tab);
-    unstaged.draw_status(pending(), Arc::new(Vec::new()));
+    unstaged.draw_status(pending().into(), Arc::new(Vec::new()));
     assert!(unstaged.holds("unstaged", "b.txt"));
 
     assert!(crate::hub::stage_ahead(tab, |ahead| {

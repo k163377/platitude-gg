@@ -13,6 +13,7 @@ use super::super::*;
 use super::drain_inputs::started;
 use crate::ops::{Reach, Reader, Side};
 use platitude_core::OperationKind as K;
+use platitude_core::status::{StatusItem, WorktreeStatus};
 
 const STAGE: u64 = 7;
 const NEXT: u64 = 8;
@@ -140,6 +141,92 @@ fn commit_waits_until_the_screen_has_caught_up_with_a_press() {
         tab.staging_seq, seq,
         "the page draws again: the open diff follows now"
     );
+}
+
+/// The status a reader holds, of `a.txt` alone: untracked, which a stage
+/// press moves asking no disk — with no session there is none to say whether
+/// a tracked row is a folder (`hub::status_picture`) — or changed on both
+/// sides, which the press leaves to the status.
+fn held(moves: bool) -> WorktreeStatus {
+    let item = if moves {
+        StatusItem::Untracked {
+            path: "a.txt".into(),
+        }
+    } else {
+        StatusItem::Tracked {
+            staged: 'M',
+            unstaged: 'M',
+            path: "a.txt".into(),
+            orig_path: None,
+        }
+    };
+    WorktreeStatus {
+        items: vec![item],
+        ..WorktreeStatus::default()
+    }
+}
+
+/// A reader draws `base` with the presses over it, as the lists and the
+/// counts do on the press's turn (`RepoPage.restage`), and the tab drains
+/// what the hub queued for it. Answers whether a press moved a row.
+fn reader_pictured(tab: &mut RepoTab, base: &WorktreeStatus) -> bool {
+    let moved = crate::hub::status_picture(tab.tab_id, FENCE - 1, base, &[]).is_some();
+    let told = crate::hub::testkit::tab_feed_drained(tab.tab_id);
+    tab.absorb(told);
+    moved
+}
+
+/// The status read behind a landed press failed (`TabMsg::StatusUnread`),
+/// and the press moved the row it names: Commit waits no more, and the press
+/// is still the hub's, so its row stays where it went until a status lands.
+#[test]
+fn a_press_that_moved_its_row_lets_commit_go_when_its_status_failed() {
+    let mut tab = tab();
+    press(&mut tab, STAGE, "a.txt");
+    assert!(reader_pictured(&mut tab, &held(true)));
+    tab.absorb(vec![started(STAGE, K::Stage), answer(STAGE, K::Stage, "")]);
+    assert!(tab.commit_waits, "landed, its status not yet drawn");
+    tab.absorb(vec![TabMsg::StatusUnread { id: STAGE }]);
+    assert!(!tab.staging_unseen);
+    assert!(!tab.commit_waits);
+    assert!(
+        crate::hub::stage_ahead(tab.tab_id, |ahead| ahead.unseen()),
+        "the press stands until a status lands"
+    );
+    every_reader_drew(&mut tab, AFTERWARDS);
+    assert!(!crate::hub::stage_ahead(tab.tab_id, |ahead| ahead.unseen()));
+}
+
+/// A press that left its row to the status keeps Commit waiting past the
+/// failed read: the row shows nothing of the press. The next status that
+/// lands lets it go.
+#[test]
+fn a_press_that_left_its_row_keeps_commit_waiting_when_its_status_failed() {
+    let mut tab = tab();
+    press(&mut tab, STAGE, "a.txt");
+    assert!(!reader_pictured(&mut tab, &held(false)));
+    tab.absorb(vec![started(STAGE, K::Stage), answer(STAGE, K::Stage, "")]);
+    tab.absorb(vec![TabMsg::StatusUnread { id: STAGE }]);
+    assert!(tab.staging_unseen && tab.commit_waits);
+    every_reader_drew(&mut tab, AFTERWARDS);
+    assert!(!tab.staging_unseen && !tab.commit_waits);
+}
+
+/// A reader drawing the press over a status it moves nothing in, after the
+/// failure let Commit go, has Commit wait again: the hub tells the tab on
+/// its feed, as it does of a press let go.
+#[test]
+fn a_picture_that_leaves_the_row_after_the_failure_has_commit_wait_again() {
+    let mut tab = tab();
+    press(&mut tab, STAGE, "a.txt");
+    reader_pictured(&mut tab, &held(true));
+    tab.absorb(vec![
+        answer(STAGE, K::Stage, ""),
+        TabMsg::StatusUnread { id: STAGE },
+    ]);
+    assert!(!tab.commit_waits);
+    reader_pictured(&mut tab, &held(false));
+    assert!(tab.staging_unseen && tab.commit_waits);
 }
 
 /// A refused press goes with its answer: Commit waits no more.

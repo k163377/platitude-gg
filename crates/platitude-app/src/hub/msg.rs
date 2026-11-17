@@ -95,24 +95,28 @@ pub enum TabMsg {
     },
     /// Everything that write invalidated has been read again and
     /// published (`SessionEvent::WriteSettled`) — nothing further is
-    /// coming for it, which says nothing about what the window has drawn.
-    /// What a run photographing the page a write leaves waits on
-    /// (`AutoActDriver.writeBarrier`). The id alone: two writes of a kind
-    /// answer alike (`write_watch`).
+    /// coming for it. Published onto the other feeds, ahead of this
+    /// message; whether their drains have run by the time the tab's takes
+    /// it is not this message's to say, so the tab waits them out
+    /// (`RepoTab::settle_heard`) before a run photographing the page the
+    /// write leaves goes on (`AutoActDriver.writeBarrier`). The id alone:
+    /// two writes of a kind answer alike (`write_watch`).
     WriteSettled {
         id: u64,
     },
-    /// Pushed by the tab itself on the settle of the last write it was
-    /// waiting on (`RepoTab::unsettled`). The other models' feeds were
-    /// woken for the reads that write's settle waited for before the settle
-    /// was pushed, so their drains run ahead of this one's: those reads are
-    /// in the models by the time it is drained (`RepoTab::settling`). A
-    /// read the settle does not wait for — the tip's reach — may land
-    /// after.
-    ReadsDrained,
-    /// Pushed by the hub when a status reader drew and a stage press was let
-    /// go with it (`ops::StageAhead::take_notice`): the tab reads the presses
-    /// again — its Commit button waits on them (`ops_stage::read_writes_out`).
+    /// The status read the queue made behind that write did not land
+    /// (`SessionEvent::WriteSettled::failed` naming `FollowUp::Status`),
+    /// pushed ahead of its `WriteSettled`. A stage press that moved every
+    /// row it names stops holding the doors on it
+    /// (`ops::StageAhead::read_failed`); the press itself stands until the
+    /// next status that lands.
+    StatusUnread {
+        id: u64,
+    },
+    /// Pushed by the hub when what a status reader drew moved the stage
+    /// presses — one let go, or the doors of one whose status read failed
+    /// (`ops::StageAhead::take_notice`): the tab reads the presses again —
+    /// its Commit button waits on them (`RepoTab::read_writes_out`).
     PressLetGo,
     /// A branch move would take `lost` commits off the branch and was not
     /// made.
@@ -200,8 +204,12 @@ pub enum TabMsg {
     },
     /// A fetch nobody asked for (the interval's, or an opening's) started
     /// or ended. Kept off the error surface — the toolbar indicator
-    /// carries it, so an offline machine stays quiet.
+    /// carries it, so an offline machine stays quiet. Under the write's
+    /// own id and kind: the indicator turns until that write's settle,
+    /// which comes as any other's (`WriteSettled`).
     AutoFetch {
+        id: u64,
+        kind: platitude_core::OperationKind,
         running: bool,
         error: String,
     },
@@ -454,9 +462,29 @@ pub struct CarriedStatusMsg {
     pub status: WorktreeStatus,
 }
 
+/// What a reader holding `status` weighs for it in a memory report: the
+/// whole of it where the reader is its one holder — a picture drawn with
+/// the stage presses in it, another worktree's rows — and nothing where it
+/// is shared ([`StatusMsg::status`]): the session counts the one it keeps
+/// (`status-told`), and counted at every holder one allocation would read
+/// as five. Once the session has gone on to the next status, an earlier one
+/// still held by two readers or more is counted by nobody.
+#[must_use]
+pub fn own_status_bytes(status: &Arc<WorktreeStatus>) -> usize {
+    use platitude_core::mem::Footprint as _;
+    if Arc::strong_count(status) == 1 {
+        status.heap_bytes()
+    } else {
+        0
+    }
+}
+
 #[derive(Debug)]
 pub struct StatusMsg {
-    pub status: WorktreeStatus,
+    /// The session's own allocation (`SessionEvent::StatusLoaded::status`),
+    /// shared by every reader it is handed to: a status is as long as the
+    /// tree is dirty, and a copy per reader would be made on every read.
+    pub status: Arc<WorktreeStatus>,
     /// The number of the report of HEAD this status stands beside
     /// (`SessionEvent::StatusLoaded::head_seq`): the counts are about
     /// the HEAD the consumer holds only while the two numbers agree.

@@ -273,8 +273,9 @@ pub struct WorktreeModel {
     /// The last status as git reported it, its line-ending marks and when it
     /// looked: what the counts are drawn from, with the stage presses out over
     /// it (`ops::StageAhead`), and drawn from again as those move
-    /// (`restage`).
-    status: platitude_core::status::WorktreeStatus,
+    /// (`restage`). Shared with the session and the bucket lists
+    /// (`StatusMsg::status`).
+    status: Arc<platitude_core::status::WorktreeStatus>,
     status_marks: Arc<Vec<platitude_core::session::EolMark>>,
     status_looked: u64,
     /// The last status's standing operation, kept for the same reason.
@@ -578,7 +579,7 @@ impl WorktreeModel {
         self.seen_counts = None;
         self.seen_reading = None;
         self.counts = platitude_core::status::Counts::default();
-        self.status = platitude_core::status::WorktreeStatus::default();
+        self.status = Arc::default();
         self.status_marks = Arc::default();
         self.status_looked = 0;
         self.op_state = platitude_core::opstate::OpState::default();
@@ -687,12 +688,12 @@ impl WorktreeModel {
         self.status_marks = eol_marks;
         self.status_looked = looked;
         if crate::harness::memprobe::enabled() {
-            // A copy beside each bucket list's (`nav-*-all`): the counts draw
+            // Held beside each bucket list's (`nav-*-all`): the counts draw
             // from it as the presses move (`restage`).
             crate::harness::memprobe::note_bytes(
                 "worktree-status",
                 self.tab_id,
-                platitude_core::mem::Footprint::heap_bytes(&self.status),
+                crate::hub::own_status_bytes(&self.status),
                 self.status.items.len(),
             );
         }
@@ -726,7 +727,7 @@ impl WorktreeModel {
         );
         let (status, marks) = match &picture {
             Some(picture) => (&picture.status, picture.marks.as_slice()),
-            None => (&self.status, self.status_marks.as_slice()),
+            None => (self.status.as_ref(), self.status_marks.as_slice()),
         };
         let eol_staged =
             i32::try_from(marks.iter().filter(|m| m.staged).count()).unwrap_or(i32::MAX);

@@ -42,8 +42,8 @@ impl RepoTab {
     }
 
     /// `--continue` commits the index git holds: **not while a stage or
-    /// unstage press stands** ([`Self::staging_turns_away`]). The ways out
-    /// that take no index stay open.
+    /// unstage press holds it back** ([`Self::staging_turns_away`]). The
+    /// ways out that take no index stay open.
     pub(super) fn settle_operation(&mut self, how: String) {
         use platitude_core::integrate::Continuation;
         let continuation = match how.as_str() {

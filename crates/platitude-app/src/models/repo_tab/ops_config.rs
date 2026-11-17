@@ -47,6 +47,8 @@ impl RepoTab {
         // delete is standing in for (`ops_delete::read_stand_in`).
         self.read_stand_in();
         self.changed();
+        // Before the feed can wake a drain that posts through it.
+        self.self_invoker = Some(self.get_qml_method_invoker());
         let invoker = self.get_qml_method_invoker();
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, invoker);
     }

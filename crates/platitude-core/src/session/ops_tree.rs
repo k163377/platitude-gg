@@ -181,6 +181,11 @@ impl RepoSession {
 
     /// Commits the index (or amends HEAD — which moves the branch off the
     /// commit it replaces, told to the discard log where that went).
+    ///
+    /// Either way git takes the index whole, and the status that leaves is
+    /// told as git answers, ahead of the reads behind the write
+    /// ([`Self::note_index_committed`]) — where one can be told: the
+    /// conditions are `StatusTold::answered`'s.
     pub fn commit(
         self: &Arc<Self>,
         message: String,
@@ -198,6 +203,7 @@ impl RepoSession {
                     Vec::new()
                 };
                 commit::commit(&exec, &repo, &message, options, &cancel).await?;
+                s.note_index_committed();
                 s.tell_if_left(&exec, &repo, &before, &cancel).await;
                 Ok(())
             },

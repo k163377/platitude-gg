@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::session::{
-    CaptureSink, PassDoors, TestSession, open_with_doors, opened, write_answer, write_settled,
+    CaptureSink, PassDoors, TestSession, open_with_doors, opened, poll_landed, write_answer,
+    write_settled,
 };
 use crate::support::wait::bounded;
 use platitude_core::commit::CommitOptions;
@@ -333,6 +334,65 @@ async fn a_read_that_failed_is_named_under_the_writes_own_id() {
     assert!(
         sink.count(|e| matches!(e, SessionEvent::OpFailed { op: "log", .. })) >= 1,
         "the failure itself still reaches the error surface"
+    );
+    session.close_and_wait().await;
+}
+
+/// A stage whose status read failed settles naming the status under its id,
+/// with the file staged and no status published that looked after the write
+/// — what a consumer drawing the write ahead of git keeps waiting on
+/// (the app's `ops::StageAhead`). What failed is the one read behind the
+/// write: the next read that lands publishes a status from past the write's
+/// fence.
+///
+/// `git status` refuses a `status.aheadBehind` it cannot read as a boolean;
+/// `git add` reads none of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_status_that_failed_behind_a_stage_is_named_and_the_next_read_answers_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file("f.txt", "base\n", "root");
+    repo.write_file("f.txt", "changed\n");
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    repo.git(&["config", "status.aheadBehind", "bogus"]);
+
+    let id = session
+        .stage_paths(vec!["f.txt".to_string()])
+        .expect("the session is open");
+    assert_eq!(write_answer(&sink, id).await, None, "git staged the file");
+    assert_eq!(
+        write_settled(&sink, id).await,
+        [FollowUp::Status],
+        "the status behind the stage did not land, and the write says so by id"
+    );
+    assert_eq!(repo.git(&["diff", "--cached", "--name-only"]), "f.txt");
+    let looked_past_the_write = |events: &[SessionEvent]| {
+        let fence = events.iter().find_map(|e| match e {
+            SessionEvent::WriteFinished {
+                id: got,
+                reads_from,
+                ..
+            } if *got == id => Some(*reads_from),
+            _ => None,
+        })?;
+        events.iter().rev().find_map(|e| match e {
+            SessionEvent::StatusLoaded { status, looked, .. } if *looked >= fence => {
+                Some(status.clone())
+            }
+            _ => None,
+        })
+    };
+    // Judged outside the events lock, which a panic would poison.
+    let spoken = looked_past_the_write(&sink.events.lock().unwrap());
+    assert_eq!(spoken, None, "no status speaks for the write yet");
+
+    repo.git(&["config", "--unset", "status.aheadBehind"]);
+    poll_landed(&session).await;
+    let spoken = looked_past_the_write(&sink.events.lock().unwrap());
+    let status = spoken.expect("the tick's status looked after the write");
+    assert_eq!(
+        status.staged().map(|item| item.path()).collect::<Vec<_>>(),
+        ["f.txt"]
     );
     session.close_and_wait().await;
 }

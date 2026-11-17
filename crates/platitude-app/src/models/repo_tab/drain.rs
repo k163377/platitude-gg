@@ -184,9 +184,15 @@ impl RepoTab {
                     self.head_commit_seq += 1;
                 }
                 TabMsg::AmendChecked { empties } => self.amend_empties = empties,
-                TabMsg::AutoFetch { running, error } => {
-                    self.auto_fetch_running = running;
-                    if !running {
+                TabMsg::AutoFetch {
+                    id,
+                    kind,
+                    running,
+                    error,
+                } => {
+                    if running {
+                        self.started_unshown(id, kind);
+                    } else {
                         self.auto_fetch_seq += 1;
                         self.fetch_settled(&error, false);
                     }
@@ -239,6 +245,7 @@ impl RepoTab {
                         // nobody here asked for — the paced fetch — counts
                         // here.
                         self.unsettle(id);
+                        self.started_unshown(id, kind);
                         self.replaying = kind.replays_history();
                         self.busy_op = kind.label().to_string();
                         // Whatever the last write left standing, this one
@@ -249,42 +256,110 @@ impl RepoTab {
                         self.settle_write(id, kind, error, report, head_seq, reads_from);
                     }
                 }
-                // The last of the three boundaries: everything the write
-                // invalidated has been read again and published. An unasked
-                // fetch settles too, under an id nothing here started.
-                // Published in the models too, not only sent: each feed push
-                // posts its model's drain queued, and Qt delivers posted
-                // events of one priority in posting order (qthread.cpp,
-                // `QPostEventList::addEvent` appends), so the models' drains
-                // run before this one. Drawn is not promised (`AutoShotDriver`).
-                TabMsg::WriteSettled { id, .. } => {
-                    self.write_watch.settled(id);
-                    self.settled.push_back(id);
-                    if self.settled.len() > KEEP_SETTLED {
-                        self.settled.pop_front();
-                    }
-                    if let Some(at) = self.unsettled.iter().position(|out| *out == id) {
-                        self.unsettled.remove(at);
-                        if self.unsettled.is_empty()
-                            && let Some(feed) = &self.feed
-                        {
-                            // On this tab's own feed: the drains of the other
-                            // models' re-reads were posted before this settle,
-                            // so a menu standing again behind it reads them.
-                            // Not `Qt.callLater`: it shares one engine-wide
-                            // tick and rides one posted earlier, so it orders
-                            // nothing.
-                            feed.push(TabMsg::ReadsDrained);
-                        }
-                    }
-                }
-                // A write asked for since keeps the tab settling.
-                TabMsg::ReadsDrained => self.settling = !self.unsettled.is_empty(),
+                // The last of the three boundaries as the session says it;
+                // the tab's own comes a call later (`settle_heard`). An
+                // unasked fetch settles too, under an id nothing here
+                // started.
+                TabMsg::WriteSettled { id } => self.settle_heard(id),
                 TabMsg::PressLetGo => {
+                    self.read_writes_out(false);
+                }
+                TabMsg::StatusUnread { id } => {
+                    crate::hub::stage_ahead(self.tab_id, |ahead| ahead.read_failed(id));
                     self.read_writes_out(false);
                 }
             }
         }
+    }
+
+    /// The session says the write under `id` settled: everything it
+    /// invalidated has been read again and published — onto the feeds,
+    /// which is not yet into the models.
+    ///
+    /// Each of those publishes posted its model's drain before the settle
+    /// was pushed, but the drain handing the settle over may have been
+    /// posted ahead of them all: a drain takes whatever its feed holds when
+    /// it runs, not what it held when it was posted (`hub::Feed`). So the
+    /// write is not through here. The tab posts itself a call instead
+    /// (`readsDrained`), which Qt delivers behind everything posted by now
+    /// — posted events of one priority go out in posting order (qthread.cpp,
+    /// `QPostEventList::addEvent` appends) — and the write is through where
+    /// that call runs ([`Self::settle_drained`]). Not a message on this
+    /// tab's feed: the next of its drains takes that, and one more may be
+    /// standing ahead of the models'. Not `Qt.callLater`: it shares one
+    /// engine-wide tick and rides one posted earlier, so it orders nothing.
+    ///
+    /// The id is kept for the log's receipts at once (`settled`): a
+    /// completion read between here and the call still waits on that
+    /// receipt.
+    ///
+    /// The name is the slot's (`RepoTab::reads_drained`, camel-cased by the
+    /// bridge), spelled twice: `#[qslot(qml_name = …)]` takes a literal, not
+    /// a constant. Nothing fails to build or to test where the two part —
+    /// the tab's unit tests have no QObject to post through — and the tab
+    /// would stay settling for good (stash, the stopped operation's ways
+    /// out, the push's doors, the menus all grey), so a call Qt did not
+    /// queue is said. The tab is alive here, its own drain running: a
+    /// `false` is a name or an argument Qt found no slot for.
+    fn settle_heard(&mut self, id: u64) {
+        self.settled.push_back(id);
+        if self.settled.len() > KEEP_SETTLED {
+            self.settled.pop_front();
+        }
+        if let Some(me) = &self.self_invoker
+            && !qtbridge::invoke_method!(me, "readsDrained", bridge_id(id))
+        {
+            tracing::warn!(id, "readsDrained was not queued: the tab stays settling");
+        }
+    }
+
+    /// Behind `readsDrained`, the call [`Self::settle_heard`] posted for
+    /// `id`: every drain carrying what that write left has run, so its
+    /// reads are in the models — the run's watch opens on it (by id), the
+    /// tab stops settling for it, and the ring of a fetch or a push stops
+    /// turning for it (`unshown`). Drawn is not promised
+    /// (`AutoShotDriver`), and a read the settle does not wait for — the
+    /// tip's reach (`session::write::settle_after`) — may land after. A
+    /// write asked for since keeps the tab settling.
+    pub(super) fn settle_drained(&mut self, id: u64) {
+        self.write_watch.settled(id);
+        self.unsettled.retain(|out| *out != id);
+        self.settling = !self.unsettled.is_empty();
+        self.unshown.retain(|(out, _)| *out != id);
+        self.read_unshown();
+    }
+
+    /// The same from the slot, telling QML what moved. A number that names
+    /// no write is nobody's call.
+    pub(super) fn settle_drained_told(&mut self, id: i32) {
+        let Ok(id) = u64::try_from(id) else {
+            return;
+        };
+        self.telling_waits(|tab| tab.settle_drained(id));
+    }
+
+    /// A write has started, whoever asked for it: what it leaves is on
+    /// its way to the screen until [`Self::settle_drained`] (`unshown`).
+    fn started_unshown(&mut self, id: u64, kind: OperationKind) {
+        if !self.unshown.iter().any(|(out, _)| *out == id) {
+            self.unshown.push((id, kind));
+        }
+        self.read_unshown();
+    }
+
+    /// Copies what `unshown` holds into the two members the toolbar's
+    /// rings bind to. Whoever moved it tells (`telling_waits`).
+    pub(super) fn read_unshown(&mut self) {
+        self.fetching = self.unshown.iter().any(|(_, kind)| {
+            matches!(
+                kind,
+                OperationKind::Fetch | OperationKind::AutoFetch | OperationKind::OpenFetch
+            )
+        });
+        self.pushing = self
+            .unshown
+            .iter()
+            .any(|(_, kind)| *kind == OperationKind::Push);
     }
 
     /// Where the answer to the write with this id stands in this

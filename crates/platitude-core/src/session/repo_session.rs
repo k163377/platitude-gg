@@ -160,6 +160,10 @@ pub struct RepoSession {
     /// Fingerprint of the last status read, so a tick that finds the same
     /// files in the same states reads no diffs at all.
     pub(super) status_key: Mutex<Option<u64>>,
+    /// The status told last, and the lock every status is told under — a
+    /// read's, and the one a commit leaves, worked out at git's answer
+    /// (`session::foretold`).
+    pub(super) status_told: Mutex<super::foretold::StatusTold>,
     /// Fingerprint of the last refs read (see `joins::refs_keys`), so a
     /// refresh can tell an external commit / fetch / switch from a quiet
     /// re-read.

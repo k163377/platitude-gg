@@ -27,7 +27,58 @@ struct StandingOp {
     incoming: Option<Vec<Oid>>,
 }
 
+/// What a status read's record says it moved ([`RepoSession::record_status`]).
+struct Recorded {
+    /// The worktree row turned, or a standing merge changed what it brings
+    /// in: the graph is rebuilt.
+    flipped: bool,
+    /// The line-ending marks are read again: the status moved, or they were
+    /// marked stale.
+    marks: bool,
+}
+
 impl RepoSession {
+    /// What a status read leaves in the record beside HEAD — the worktree
+    /// row, the sides a standing merge brings in, the status `key` and the
+    /// amend in view — `None` where a write has ended behind the read
+    /// (`Standing::current`), and nothing is recorded.
+    ///
+    /// Asked under the lock the statuses are told under: a commit answering
+    /// after the read last looked tells what it left under the same lock,
+    /// with the worktree row and the amend set from that
+    /// (`RepoSession::tell_what_it_left`), and a read that looked before the
+    /// commit is not to put the ones from before it back. Asked outside it,
+    /// the read could pass the question and record after the commit had.
+    fn record_status(
+        self: &Arc<Self>,
+        looked: u64,
+        status: &WorktreeStatus,
+        dirty: bool,
+        incoming: Option<Vec<Oid>>,
+        key: u64,
+    ) -> Option<Recorded> {
+        let _told = relock(&self.status_told);
+        if !self.standing.current(looked) {
+            return None;
+        }
+        // Both halves are recorded whatever the other says: a `||` would
+        // skip the second and leave its baseline behind.
+        let dirt_flipped = self.standing.set_wip_dirty(dirty);
+        // A read that could not tell keeps the sides it had; taking them
+        // away would rebuild the graph without its dotted edges for one
+        // tick.
+        let merge_moved = incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
+        // The pending diffs scale with the change, so they are read only
+        // when status moved or were marked stale.
+        let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
+        let moved = relock(&self.status_key).replace(key) != Some(key);
+        self.amend_status(status);
+        Some(Recorded {
+            flipped: dirt_flipped || merge_moved,
+            marks: stale || moved,
+        })
+    }
+
     /// Publishes what operation is standing and how far it has got, and
     /// nothing else.
     ///
@@ -258,49 +309,40 @@ impl RepoSession {
                 };
                 let (push_remote, upstream_here, push_track) =
                     self.read_status_push(&workdir, &mut status, &cancel).await;
-                if !self.standing.current(looked) {
-                    self.read_status_again();
-                    return Reread::Same;
-                }
                 // Into the HEAD record before anything below is sent, so the
                 // counts never arrive ahead of their branch; `head_seq`
-                // names the report they belong beside.
+                // names the report they belong beside. A read a write has
+                // ended behind reports nothing (`Standing::offer_head`).
                 self.observe_head(looked, &status.head());
                 let head_seq = self.standing.head_seq();
                 // The reader showing this status asks the same function, so
                 // what the rows hold and what the window expects agree.
                 let dirty = crate::graph::wip_row_stands(&status, &op_state);
-                // Both halves are recorded whatever the other says: a `||`
-                // would skip the second and leave its baseline behind.
-                let dirt_flipped = self.standing.set_wip_dirty(dirty);
-                // A read that could not tell keeps the sides it had; taking
-                // them away would rebuild the graph without its dotted edges
-                // for one tick.
-                let merge_moved =
-                    incoming.is_some_and(|sides| self.standing.set_merge_incoming(sides));
-                let flipped = dirt_flipped || merge_moved;
-                // The pending diffs scale with the change, so they are read
-                // only when status moved or were marked stale. The status key
-                // covers what the lines cannot say: a working-tree change
-                // saved over in place keeps its line, so the key also hashes
-                // each such file's length and modification time
-                // (`status_key`); the index cannot change without its line.
-                let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
+                // The status key covers what the lines cannot say: a
+                // working-tree change saved over in place keeps its line, so
+                // the key also hashes each such file's length and
+                // modification time (`status_key`); the index cannot change
+                // without its line. Worked out ahead of the lock it is
+                // recorded under: it asks the disk.
                 let key = status_key(&workdir, &status);
-                let moved = relock(&self.status_key).replace(key) != Some(key);
-                self.amend_status(&status);
+                let Some(Recorded { flipped, marks }) =
+                    self.record_status(looked, &status, dirty, incoming, key)
+                else {
+                    self.read_status_again();
+                    return Reread::Same;
+                };
                 let (eol_marks, lfs) = tokio::join!(
                     async {
-                        if stale || moved {
+                        if marks {
                             self.settle_eol_marks(&workdir, &status, &cancel).await
                         } else {
                             self.eol_marks()
                         }
                     },
-                    self.lfs_needs(&workdir, &status, stale || moved, &cancel),
+                    self.lfs_needs(&workdir, &status, marks, &cancel),
                 );
-                self.sink.event(SessionEvent::StatusLoaded {
-                    status,
+                let told = self.tell_status(super::foretold::Told {
+                    status: Arc::new(status),
                     head_seq,
                     looked,
                     op_state,
@@ -316,6 +358,12 @@ impl RepoSession {
                     not_copied: lfs.not_copied,
                     stop,
                 });
+                // Fenced while the marks were read: read again, as above.
+                if !told {
+                    self.read_status_again();
+                }
+                // The record took this read's word above, told or not: a
+                // worktree row it turned is walked for either way.
                 if flipped { Reread::Moved } else { Reread::Same }
             }
             Err(e) => {

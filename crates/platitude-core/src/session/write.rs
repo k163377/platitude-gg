@@ -12,6 +12,11 @@
 //! request carries the id, so a consumer matches its own write by id, not
 //! by arrival order (`crate::operation`).
 //!
+//! **A commit's status is told at its answer**, worked out and not read
+//! (`session::foretold`): behind `WriteFinished`, ahead of every read. The
+//! reads behind the write follow as behind any, and the walk among them
+//! goes ahead of the status read ([`RepoSession::read_behind_told`]).
+//!
 //! **The reads are made once behind a burst.** A write waiting as the one in
 //! front answers starts at once, where its kind joins a burst
 //! ([`OperationKind::joins_a_burst`]) and the tree's next turn is its own
@@ -43,6 +48,7 @@
 //! * the reads behind a write are the writing session's own, and a closed
 //!   session makes none — the next holder of the tree reads what it left.
 
+use super::refresh::Listed;
 use super::*;
 
 impl RepoSession {
@@ -449,7 +455,7 @@ impl RepoSession {
                 head_seq: fence.head_seq,
                 reads_from: fence.reads_from,
             });
-            burst.answered(held, None);
+            burst.answered(held, None, false);
             return;
         };
         self.sink.event(SessionEvent::WriteStarted { id, kind });
@@ -470,8 +476,10 @@ impl RepoSession {
         // a compound write is several rows under one id in the log.
         let result = run(exec.under(id), info, cancel).await;
         self.git_answered(lane);
-        // Nothing is read behind a write cancelled with the session.
-        if !result.as_ref().is_err_and(GitError::is_cancelled) {
+        // Only a network write is cancelled (a local token is nobody's to
+        // cancel): the session is closing, and nothing is read behind it.
+        let cancelled = result.as_ref().is_err_and(GitError::is_cancelled);
+        if !cancelled {
             self.note_unread(after);
         }
         // From here only reads begun after the write speak for the
@@ -479,53 +487,39 @@ impl RepoSession {
         // The fence's numbers travel with the write's answer, for a
         // consumer landing on what the write left.
         let fence = self.standing.fence();
+        // The boundaries balance whatever the answer — the UI counts
+        // Started/Finished, and an unmatched start pins the count. The
+        // typed report travels beside git's words: the screen makes a
+        // report of the one and logs the other.
+        let (error, report) = match &result {
+            Ok(()) => (None, None),
+            Err(error) if cancelled => (Some(error.to_string()), None),
+            Err(error) => (Some(error.to_string()), error.report().cloned()),
+        };
+        self.sink.event(SessionEvent::WriteFinished {
+            id,
+            kind,
+            error,
+            report,
+            head_seq: fence.head_seq,
+            reads_from: fence.reads_from,
+        });
+        if cancelled {
+            burst.answered(held, None, false);
+            return;
+        }
+        let landed = result.is_ok();
         let walk = match result {
+            // The rest walk where a read behind them moved (`settle_after`)
+            // — or where they took rows off at the press: the reads behind
+            // a removed worktree can find nothing moved, its holds having
+            // gone at the press (`RepoSession::note_worktrees_going`), yet
+            // the record still holds its commits (`Leaving::unwalked`).
             Ok(()) => {
-                self.sink.event(SessionEvent::WriteFinished {
-                    id,
-                    kind,
-                    error: None,
-                    report: None,
-                    head_seq: fence.head_seq,
-                    reads_from: fence.reads_from,
-                });
-                // The rest walk where a read behind them moved
-                // (`settle_after`) — or where they took rows off at the
-                // press: the reads behind a removed worktree can find
-                // nothing moved, its holds having gone at the press
-                // (`RepoSession::note_worktrees_going`), yet the record still
-                // holds its commits (`Leaving::unwalked`).
                 matches!(after, AfterWrite::Graph | AfterWrite::Name { .. }) || self.takes_rows(id)
-            }
-            // Only a network write lands here (a local token is nobody's
-            // to cancel): the session is closing. The boundaries must
-            // still balance — the UI counts Started/Finished, and an
-            // unmatched start pins the count. Nothing is read behind it.
-            Err(error) if error.is_cancelled() => {
-                self.sink.event(SessionEvent::WriteFinished {
-                    id,
-                    kind,
-                    error: Some(error.to_string()),
-                    report: None,
-                    head_seq: fence.head_seq,
-                    reads_from: fence.reads_from,
-                });
-                burst.answered(held, None);
-                return;
             }
             Err(error) => {
                 tracing::warn!(?operation, %error, "write failed");
-                // The typed report travels beside git's words: the screen
-                // makes a report of the one and logs the other.
-                let report = error.report().cloned();
-                self.sink.event(SessionEvent::WriteFinished {
-                    id,
-                    kind,
-                    error: Some(error.to_string()),
-                    report,
-                    head_seq: fence.head_seq,
-                    reads_from: fence.reads_from,
-                });
                 // A refused delete's commits come back with its rows, before
                 // anything is read (`session::leaving`).
                 self.leaving_refused(id);
@@ -535,16 +529,19 @@ impl RepoSession {
                 false
             }
         };
+        // Behind the answer, ahead of every read: a write that committed the
+        // index tells the status it left (`session::foretold`).
+        let moved_rows = ReadsOwed::of(after).tree == TreeRead::Always;
+        let told = self.tell_what_it_left(id, landed, moved_rows, &fence);
         self.forget_what_it_reached(after);
-        burst.answered(held, Some((after, walk)));
+        burst.answered(held, Some((after, walk)), told);
     }
 
     /// Says which reads the queue is sure to make behind a write that
     /// invalidated `after` (`RepoSession::unread_tree`) — ahead of the
     /// write's fence, which is what sends a read to ask.
     fn note_unread(&self, after: AfterWrite) {
-        let mut left = ReadsOwed::default();
-        left.add(after, false);
+        let left = ReadsOwed::of(after);
         if left.tree == TreeRead::Always {
             self.unread_tree.store(true, Ordering::SeqCst);
         }
@@ -577,40 +574,100 @@ impl RepoSession {
     /// walk asked for began after every write of the burst.
     async fn settle_after(self: &Arc<Self>, burst: &Burst) -> (Vec<FollowUp>, u64) {
         let owed = burst.owed;
-        // Every read that decides the walk comes before it — the tree, the
-        // refs and the listings each can move a row — so one walk answers
-        // for the burst, over the repository as its writes left it. A listing
-        // read after the walk would make two: one with the old holders (a
-        // removed worktree still in them), one on the listing's news.
-        //
-        // An index-only write reads the tree alone: the refs are where they
-        // were, and theirs is the longest read (`AfterWrite::Tree`).
-        //
-        // A write that cannot reach index or tree reads the refs first and
-        // the tree only where they moved, the one thing a status could then
-        // report differently (`AfterWrite::Refs`) — in series on purpose: a
-        // join would run the read the series saves.
-        //
-        // A delete moves a ref every time, so it is told at acceptance
-        // whether the tree is owed a read, and reads none otherwise
-        // (`AfterWrite::Name`).
-        //
-        // The listings are read with the rest, and the stashes they list go
-        // to the walk, which reads none of its own (`walk_inputs`). They are
-        // awaited: `WriteSettled` is only worth sending once all have
-        // published, and a listing still out when a later delete answers
-        // lets that one's refusal put the first one's row back on screen —
-        // the app stands rows in under one write at a time (`ops::StandIn`),
-        // which is why no delete joins a burst
-        // (`OperationKind::joins_a_burst`).
+        let Behind {
+            tree,
+            refs,
+            stashes,
+            listed,
+            ahead,
+        } = self.read_behind(burst).await;
         let mut failed = Vec::new();
-        let listings = async {
-            match owed.listings {
-                Listings::None => Default::default(),
-                Listings::Worktrees => (StashRead::default(), self.read_worktrees().await),
-                Listings::Both => self.read_listings().await,
+        if tree == Reread::Failed {
+            note_failed(&mut failed, FollowUp::Status);
+        }
+        if refs == Reread::Failed {
+            note_failed(&mut failed, FollowUp::Refs);
+        }
+        for read in listed.failed {
+            note_failed(&mut failed, read);
+        }
+        let refs_moved = refs == Reread::Moved;
+        let (walk, walked_from) = match ahead {
+            // The walk ahead answered for the refs, the listings and the
+            // tree as it was told at the answer. What is left to walk for is
+            // a tree the read found otherwise: the worktree row turned
+            // against what was told. Of the two walks the later then says
+            // whether the repository reached the screen —
+            // `RepoSession::graph_answer`'s decision for a walk another
+            // takes over, held to two walked one after the other. With no
+            // second one the first's answer is the write's.
+            Some(ahead) => {
+                let again = tree == Reread::Moved;
+                if !again && !ahead.landed {
+                    note_failed(&mut failed, FollowUp::Graph);
+                }
+                (again, ahead.from)
+            }
+            None => {
+                // A stash moved by a write — or outside, beside it — moves
+                // no ref the refs read lists: the listing is its only word.
+                let moved = tree == Reread::Moved || refs_moved || stashes.moved || listed.walk;
+                let walk = self.walk_owed(owed, moved, &mut failed).await;
+                // Every walk asked for from here on began after the writes
+                // landed.
+                (walk, self.graph_passes.next_ask())
             }
         };
+        if walk && !self.walk_behind(stashes).await {
+            note_failed(&mut failed, FollowUp::Graph);
+        }
+        // Head reach is asked here because a stash push, pop or drop moves
+        // no ref (so the refs read will not ask), yet changes whether
+        // anything else holds the tip. An index-only write, a fetch and a
+        // config write change none of it.
+        if owed.reach && !refs_moved {
+            self.settle_head_reach();
+        }
+        if owed.author {
+            self.read_author_behind(burst, &mut failed).await;
+        }
+        (failed, walked_from)
+    }
+
+    /// The snapshot reads a burst is owed ([`ReadsOwed`]), every one of them
+    /// landed or failed before this answers.
+    ///
+    /// Every read that decides the walk comes before it — the tree, the
+    /// refs and the listings each can move a row — so one walk answers for
+    /// the burst, over the repository as its writes left it. A listing read
+    /// after the walk would make two: one with the old holders (a removed
+    /// worktree still in them), one on the listing's news.
+    ///
+    /// An index-only write reads the tree alone: the refs are where they
+    /// were, and theirs is the longest read (`AfterWrite::Tree`).
+    ///
+    /// A write that cannot reach index or tree reads the refs first and the
+    /// tree only where they moved, the one thing a status could then report
+    /// differently (`AfterWrite::Refs`) — in series on purpose: a join
+    /// would run the read the series saves.
+    ///
+    /// A delete moves a ref every time, so it is told at acceptance whether
+    /// the tree is owed a read, and reads none otherwise
+    /// (`AfterWrite::Name`).
+    ///
+    /// The listings are read with the rest, and the stashes they list go to
+    /// the walk, which reads none of its own (`walk_inputs`). They are
+    /// awaited: `WriteSettled` is only worth sending once all have
+    /// published, and a listing still out when a later delete answers lets
+    /// that one's refusal put the first one's row back on screen — the app
+    /// stands rows in under one write at a time (`ops::StandIn`), which is
+    /// why no delete joins a burst (`OperationKind::joins_a_burst`).
+    async fn read_behind(self: &Arc<Self>, burst: &Burst) -> Behind {
+        let owed = burst.owed;
+        if burst.told_ahead && owed.walk && owed.tree == TreeRead::Always {
+            return self.read_behind_told(owed).await;
+        }
+        let listings = self.read_listings_owed(owed.listings);
         let (tree, refs, (stashes, listed)) = match owed.tree {
             TreeRead::WhereRefsMoved => {
                 let ((tree, refs), listings) = tokio::join!(self.read_refs_then_tree(), listings);
@@ -624,36 +681,91 @@ impl RepoSession {
                         Reread::Same
                     }
                 },
-                async {
-                    if owed.refs {
-                        self.read_refs().await
-                    } else {
-                        Reread::Same
-                    }
-                },
+                self.read_refs_owed(owed.refs),
                 listings,
             ),
         };
-        if tree == Reread::Failed {
-            note_failed(&mut failed, FollowUp::Status);
+        Behind {
+            tree,
+            refs,
+            stashes,
+            listed,
+            ahead: None,
         }
-        if refs == Reread::Failed {
-            note_failed(&mut failed, FollowUp::Refs);
+    }
+
+    /// [`Self::read_behind`] for a burst whose tree is told already — a
+    /// commit's, worked out at its answer (`session::foretold`, whose
+    /// decision this is the other half of): the history is walked as soon
+    /// as the refs and the listings are in, beside the status read and not
+    /// behind it, so the commit's row does not wait for the longest read.
+    ///
+    /// The tree's word is in for that walk: it lays the worktree row from
+    /// what was told (`Standing::wip_dirty`). A status read that finds the
+    /// row otherwise answers `Reread::Moved`, and the caller walks again.
+    ///
+    /// Not where the refs read failed: HEAD is then where the record had it
+    /// before the commit (`known_head_tip`) — the status read is the only
+    /// other one that reports it — and a walk ahead would hang the worktree
+    /// row on the commit before, which a status finding the row as told
+    /// walks nothing more for. The walk waits for that read instead, as
+    /// behind any write (`ahead` left `None`): one walk, laid on the HEAD
+    /// the status read reported, rather than a second one behind a wrong
+    /// graph drawn first.
+    async fn read_behind_told(self: &Arc<Self>, owed: ReadsOwed) -> Behind {
+        let walked = async {
+            let (refs, (stashes, listed)) = tokio::join!(
+                self.read_refs_owed(owed.refs),
+                self.read_listings_owed(owed.listings),
+            );
+            if refs == Reread::Failed {
+                return (refs, stashes, listed, None);
+            }
+            // Before the walk is asked for: it began after the writes
+            // landed, as every one asked for from here on.
+            let from = self.graph_passes.next_ask();
+            let landed = self.walk_behind(stashes.clone()).await;
+            (refs, stashes, listed, Some(Ahead { from, landed }))
+        };
+        let (tree, (refs, stashes, listed, ahead)) = tokio::join!(self.read_status(), walked);
+        Behind {
+            tree,
+            refs,
+            stashes,
+            listed,
+            ahead,
         }
-        for read in listed.failed {
-            note_failed(&mut failed, read);
+    }
+
+    /// The refs read where a burst is owed it.
+    async fn read_refs_owed(self: &Arc<Self>, owed: bool) -> Reread {
+        if owed {
+            self.read_refs().await
+        } else {
+            Reread::Same
         }
-        let refs_moved = refs == Reread::Moved;
-        // A stash moved by a write — or outside, beside it — moves no ref
-        // the refs read lists: the listing is its only word.
-        let moved = tree == Reread::Moved || refs_moved || stashes.moved;
-        let mut walk = owed.walk || moved || listed.walk;
-        // A fetch that left the refs where they were has nothing new to
-        // walk — unless the graph is behind: a read beside the fetch may
-        // have seen its refs move first, and walks them itself (waited for,
-        // so the write settles behind it), or a walk failed earlier and
-        // `STALE GRAPH` stands
-        // (`a_fetch_that_brings_nothing_down_walks_a_graph_left_behind`).
+    }
+
+    /// The listings a burst is owed, with the stashes they list.
+    async fn read_listings_owed(self: &Arc<Self>, listings: Listings) -> (StashRead, Listed) {
+        match listings {
+            Listings::None => Default::default(),
+            Listings::Worktrees => (StashRead::default(), self.read_worktrees().await),
+            Listings::Both => self.read_listings().await,
+        }
+    }
+
+    /// Whether the history is walked behind a burst: its writes ask for it
+    /// whatever the reads found (`ReadsOwed::walk`), or a read behind it
+    /// `moved`.
+    ///
+    /// A fetch that left the refs where they were has nothing new to walk —
+    /// unless the graph is behind: a read beside the fetch may have seen
+    /// its refs move first, and walks them itself (waited for, so the write
+    /// settles behind it), or a walk failed earlier and `STALE GRAPH`
+    /// stands (`a_fetch_that_brings_nothing_down_walks_a_graph_left_behind`).
+    async fn walk_owed(&self, owed: ReadsOwed, moved: bool, failed: &mut Vec<FollowUp>) -> bool {
+        let mut walk = owed.walk || moved;
         if owed.behind_a_fetch && !walk {
             self.wait_for_graph_passes().await;
             walk = self.graph_stale.load(Ordering::SeqCst);
@@ -661,55 +773,51 @@ impl RepoSession {
             // over — that would stop it while the streak lasts: the graph
             // has not landed.
             if !walk && self.graph_silent.load(Ordering::SeqCst) {
-                note_failed(&mut failed, FollowUp::Graph);
+                note_failed(failed, FollowUp::Graph);
             }
         }
-        // Every walk asked for from here on began after the writes landed.
-        let walked_from = self.graph_passes.next_ask();
-        if walk {
-            let reads = match self.workdir() {
-                Some(workdir) => {
-                    self.pass_reads_listed(&workdir, &self.root_cancel, stashes)
-                        .await
-                }
-                None => None,
-            };
-            // Off-screen rebuild: the old graph stays until the new one
-            // swaps in, or nothing repaints if unchanged. Awaited, or a
-            // later write or test barrier could overtake and cancel the
-            // refresh it follows.
-            if !self.settle_graph_with(reads).await.landed() {
-                note_failed(&mut failed, FollowUp::Graph);
+        walk
+    }
+
+    /// Walks the history behind a burst, with the stashes its listing read
+    /// where they still stand, and answers whether the walk landed.
+    ///
+    /// Off-screen rebuild: the old graph stays until the new one swaps in,
+    /// or nothing repaints if unchanged. Awaited, or a later write or test
+    /// barrier could overtake and cancel the refresh it follows.
+    async fn walk_behind(self: &Arc<Self>, stashes: StashRead) -> bool {
+        let reads = match self.workdir() {
+            Some(workdir) => {
+                self.pass_reads_listed(&workdir, &self.root_cancel, stashes)
+                    .await
             }
-        }
-        // Head reach is asked here because a stash push, pop or drop moves
-        // no ref (so the refs read will not ask), yet changes whether
-        // anything else holds the tip. An index-only write, a fetch and a
-        // config write change none of it.
-        if owed.reach && !refs_moved {
-            self.settle_head_reach();
-        }
-        if owed.author
-            && let Some(task) = self.refresh_author()
-        {
-            match task.await {
-                Ok(more) => {
-                    for read in more {
-                        note_failed(&mut failed, read);
-                    }
-                }
-                // The task unwound: nothing it was to publish did.
-                Err(error) => {
-                    tracing::warn!(
-                        writes = ?burst.writes,
-                        %error,
-                        "the author read behind the writes did not finish"
-                    );
-                    note_failed(&mut failed, FollowUp::Author);
+            None => None,
+        };
+        self.settle_graph_with(reads).await.landed()
+    }
+
+    /// The author configuration read again behind `burst`, the reads of it
+    /// that did not land noted.
+    async fn read_author_behind(self: &Arc<Self>, burst: &Burst, failed: &mut Vec<FollowUp>) {
+        let Some(task) = self.refresh_author() else {
+            return;
+        };
+        match task.await {
+            Ok(more) => {
+                for read in more {
+                    note_failed(failed, read);
                 }
             }
+            // The task unwound: nothing it was to publish did.
+            Err(error) => {
+                tracing::warn!(
+                    writes = ?burst.writes,
+                    %error,
+                    "the author read behind the writes did not finish"
+                );
+                note_failed(failed, FollowUp::Author);
+            }
         }
-        (failed, walked_from)
     }
 
     /// The refs, and the tree only where they moved — the series a write
@@ -787,6 +895,14 @@ struct ReadsOwed {
 }
 
 impl ReadsOwed {
+    /// What one write that invalidated `after` leaves to be read on its
+    /// own, the walk aside.
+    fn of(after: AfterWrite) -> Self {
+        let mut owed = Self::default();
+        owed.add(after, false);
+        owed
+    }
+
     /// Adds what a write that invalidated `after` left; `walk` is whether
     /// it asks for the history whatever the reads find.
     fn add(&mut self, after: AfterWrite, walk: bool) {
@@ -813,6 +929,26 @@ impl ReadsOwed {
         );
         self.author |= after == AfterWrite::Author;
     }
+}
+
+/// What the snapshot reads behind a burst found
+/// (`RepoSession::read_behind`).
+struct Behind {
+    tree: Reread,
+    refs: Reread,
+    stashes: StashRead,
+    listed: Listed,
+    /// The walk made ahead of the tree's read, where the tree was told at
+    /// the answer (`RepoSession::read_behind_told`).
+    ahead: Option<Ahead>,
+}
+
+/// A walk made behind a burst before its tree was read.
+struct Ahead {
+    /// The number from which a walk asked for began after the burst's
+    /// writes — this one's among them.
+    from: u64,
+    landed: bool,
 }
 
 /// A write git has answered, its turn in the trees it wrote still held
@@ -844,18 +980,26 @@ struct Burst {
     /// The last of them, its places held until the burst is read behind or
     /// the next write of the burst takes its turn.
     last: Option<Held>,
+    /// The status the last of them left was told at its answer, worked out
+    /// and not read (`session::foretold`): the walk behind the burst need
+    /// not wait for the tree's read (`RepoSession::read_behind_told`). The
+    /// last one's only — a write answering behind it moves the tree again,
+    /// and what that one left is the reads' to say.
+    told_ahead: bool,
 }
 
 impl Burst {
     /// git answered a write: it joins the burst with what it left to be
-    /// read — nothing where nothing is read behind it.
-    fn answered(&mut self, held: Held, left: Option<(AfterWrite, bool)>) {
+    /// read — nothing where nothing is read behind it — and whether the
+    /// status it left was `told` at the answer.
+    fn answered(&mut self, held: Held, left: Option<(AfterWrite, bool)>, told: bool) {
         self.since.get_or_insert_with(tokio::time::Instant::now);
         self.writes.push(held.operation);
         if let Some((after, walk)) = left {
             self.owed.add(after, walk);
         }
         self.last = Some(held);
+        self.told_ahead = told;
     }
 
     /// Whether the queue starts `next` without reading behind this burst:
@@ -989,9 +1133,7 @@ mod tests {
     use super::*;
 
     fn left(after: AfterWrite) -> ReadsOwed {
-        let mut owed = ReadsOwed::default();
-        owed.add(after, false);
-        owed
+        ReadsOwed::of(after)
     }
 
     /// A burst of one reads exactly what its write's `AfterWrite` names.
@@ -1097,6 +1239,7 @@ mod tests {
                 into: Vec::new(),
             },
             Some((AfterWrite::Graph, true)),
+            false,
         );
 
         let (another_sessions, _) = write_order::take_places(Some(&there), &[]);
@@ -1126,6 +1269,26 @@ mod tests {
         }
     }
 
+    /// The walk goes ahead of the tree's read only behind the write whose
+    /// status was told: a write answering behind it has moved the tree
+    /// again, and the burst waits for the read as any does.
+    #[test]
+    fn a_write_behind_the_one_told_ahead_has_the_burst_wait_for_the_tree() {
+        let mut burst = Burst::default();
+        burst.answered(
+            answered(OperationKind::Commit),
+            Some((AfterWrite::Graph, true)),
+            true,
+        );
+        assert!(burst.told_ahead);
+        burst.answered(
+            answered(OperationKind::Stage),
+            Some((AfterWrite::Tree, false)),
+            false,
+        );
+        assert!(!burst.told_ahead);
+    }
+
     /// On a paused clock, so both edges are judged: a burst takes a stage one
     /// instant short of the ceiling and none once it is reached — counted
     /// from its first write's answer, whatever answered in it since. Counted
@@ -1142,11 +1305,13 @@ mod tests {
         burst.answered(
             answered(OperationKind::Commit),
             Some((AfterWrite::Graph, true)),
+            false,
         );
         tokio::time::advance(half).await;
         burst.answered(
             answered(OperationKind::Stage),
             Some((AfterWrite::Tree, false)),
+            false,
         );
 
         tokio::time::advance(unread_ceiling() - half - an_instant).await;

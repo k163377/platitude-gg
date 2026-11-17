@@ -43,7 +43,7 @@ fn status_of(
     items: Vec<StatusItem>,
 ) -> StateMsg {
     StateMsg::Status(Box::new(StatusMsg {
-        status: WorktreeStatus {
+        status: Arc::new(WorktreeStatus {
             branch_oid: None,
             branch_head: Some(branch.to_string()),
             upstream: upstream.map(str::to_string),
@@ -52,7 +52,7 @@ fn status_of(
             behind: 0,
             items,
             staged_print: 0,
-        },
+        }),
         head_seq,
         looked: 0,
         op_state: platitude_core::opstate::OpState::default(),

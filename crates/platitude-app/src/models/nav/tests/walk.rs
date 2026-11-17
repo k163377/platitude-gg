@@ -181,7 +181,10 @@ fn a_walk_crossing_into_a_bucket_lands_at_the_end_it_comes_in_by() {
     assert_eq!(*model.edge(1), landed(0, "staged", "d.txt"));
     assert_eq!(*model.edge(-1), landed(1, "staged", "src/b.txt"));
 
-    let mut empty = worktree("conflicts", Source::files(Default::default()));
+    let mut empty = worktree(
+        "conflicts",
+        Source::files(platitude_core::status::WorktreeStatus::default()),
+    );
     empty.arrange();
     assert!(empty.edge(1).is_none());
     assert!(empty.edge(-1).is_none());

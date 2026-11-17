@@ -18,9 +18,12 @@ pub(super) enum Source {
         current: String,
     },
     /// The pending changes and the pane's order. A row is a bucket and an
-    /// entry: an `MM` entry is one row under each side.
+    /// entry: an `MM` entry is one row under each side. The status is the
+    /// one the session sent, shared with the other readers
+    /// (`StatusMsg::status`) — or this list's own, where it is a picture
+    /// with the stage presses in it or another worktree's.
     Files {
-        status: platitude_core::status::WorktreeStatus,
+        status: Arc<platitude_core::status::WorktreeStatus>,
         order: Vec<FileAt>,
     },
 }
@@ -34,7 +37,7 @@ impl platitude_core::mem::Footprint for Source {
             Self::Stashes(list) => list.heap_bytes(),
             Self::Worktrees { list, current } => list.heap_bytes() + current.heap_bytes(),
             Self::Files { status, order } => {
-                status.heap_bytes() + order.capacity() * size_of::<FileAt>()
+                crate::hub::own_status_bytes(status) + order.capacity() * size_of::<FileAt>()
             }
         }
     }
@@ -264,7 +267,10 @@ impl Source {
     }
 
     /// The same status as one list of paths ([`Bucket::Whole`]).
-    pub(super) fn whole_files(status: platitude_core::status::WorktreeStatus) -> Self {
+    pub(super) fn whole_files(
+        status: impl Into<Arc<platitude_core::status::WorktreeStatus>>,
+    ) -> Self {
+        let status = status.into();
         let mut order: Vec<FileAt> = (0..status.items.len())
             .map(|at| FileAt {
                 bucket: Bucket::Whole,
@@ -275,7 +281,10 @@ impl Source {
         Self::Files { status, order }
     }
 
-    pub(super) fn files(status: platitude_core::status::WorktreeStatus) -> Self {
+    /// The rows of `status` under their headings: handed the status as it
+    /// was sent, shared, or one of the caller's own.
+    pub(super) fn files(status: impl Into<Arc<platitude_core::status::WorktreeStatus>>) -> Self {
+        let status = status.into();
         let mut order = Vec::new();
         // The heading being filled and where its rows began: buckets
         // sharing a `Bucket::run` are sorted as one list once it is whole.

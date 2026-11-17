@@ -192,6 +192,239 @@ fn the_press_is_let_go_once_every_reader_has_drawn_past_it() {
     assert!(!ahead.unseen());
 }
 
+/// The status read behind a landed press failed, and every picture drawn of
+/// the press moved every row it names: the doors go, and its row stays drawn
+/// where the press put it until the next status that lands, which lets the
+/// press go as any does.
+#[test]
+fn a_failed_status_lets_the_doors_go_for_a_press_that_moved_every_row() {
+    let (mut ahead, base) = staged_a();
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt")]
+    );
+    ahead.answered(OURS, false, FENCE);
+    assert!(ahead.index_unseen(), "landed, its status not yet drawn");
+    ahead.read_failed(OURS);
+    assert!(
+        !ahead.index_unseen(),
+        "every row it names is the press's word on screen"
+    );
+    assert!(ahead.unseen(), "the press still stands over the old status");
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt")],
+        "and its row stays where the press put it"
+    );
+    every_reader_drew(&mut ahead, AFTERWARDS);
+    assert!(!ahead.unseen(), "the next status that lands lets it go");
+}
+
+/// A press naming several paths, every one of them moved — an edit, a
+/// deletion and an untracked file — lets the doors go past a failed read as
+/// a press of one does.
+#[test]
+fn a_failed_status_lets_the_doors_go_for_a_press_of_several_paths_that_all_moved() {
+    let mut ahead = StageAhead::default();
+    ahead.asked(Side::Stage, paths(&["a.txt", "b.txt", "c.txt"]), Some(OURS));
+    let base = status(vec![
+        tracked('.', 'M', "a.txt"),
+        tracked('.', 'D', "b.txt"),
+        untracked("c.txt"),
+    ]);
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [
+            tracked('M', '.', "a.txt"),
+            tracked('D', '.', "b.txt"),
+            tracked('A', '.', "c.txt"),
+        ]
+    );
+    ahead.answered(OURS, false, FENCE);
+    assert!(ahead.index_unseen());
+    ahead.read_failed(OURS);
+    assert!(!ahead.index_unseen(), "every path it names moved");
+}
+
+/// An unstage moves its rows as a stage does — an edit back unstaged, an
+/// addition back untracked — and lets the doors go past a failed read the
+/// same way.
+#[test]
+fn a_failed_status_lets_the_doors_go_for_an_unstage_that_moved_every_row() {
+    let mut ahead = StageAhead::default();
+    ahead.asked(Side::Unstage, paths(&["a.txt", "new.txt"]), Some(OURS));
+    let base = status(vec![
+        tracked('M', '.', "a.txt"),
+        tracked('A', '.', "new.txt"),
+    ]);
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('.', 'M', "a.txt"), untracked("new.txt")]
+    );
+    ahead.answered(OURS, false, FENCE);
+    assert!(ahead.index_unseen());
+    ahead.read_failed(OURS);
+    assert!(!ahead.index_unseen(), "every row it names moved");
+}
+
+/// A press that left one of its rows to the status holds the doors past a
+/// failed read: that row is still drawn as it was before the press, so the
+/// index holds what no row shows. The next status that lands lets it go.
+#[test]
+fn a_press_that_left_a_row_to_the_status_holds_the_doors_past_a_failed_status() {
+    let mut ahead = StageAhead::default();
+    ahead.asked(Side::Stage, paths(&["a.txt", "split.txt"]), Some(OURS));
+    let base = status(vec![
+        tracked('.', 'M', "a.txt"),
+        tracked('M', 'M', "split.txt"),
+    ]);
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt"), tracked('M', 'M', "split.txt")],
+        "the one-sided row moved, the other waits for the status"
+    );
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(OURS);
+    assert!(ahead.index_unseen(), "a row it names shows no press");
+    every_reader_drew(&mut ahead, AFTERWARDS);
+    assert!(!ahead.index_unseen());
+}
+
+/// Every kind of row a press leaves to the status holds the doors the same
+/// way (`moved`'s list), and so does a path the status drawn has no row for.
+#[test]
+fn each_kind_of_row_left_to_the_status_holds_the_doors_past_a_failed_status() {
+    let renamed = StatusItem::Tracked {
+        staged: 'R',
+        unstaged: '.',
+        path: "new.txt".to_string(),
+        orig_path: Some("old.txt".to_string()),
+    };
+    let conflicted = StatusItem::Unmerged {
+        ours: 'U',
+        theirs: 'U',
+        path: "both.txt".to_string(),
+    };
+    let base = status(vec![
+        tracked('.', 'M', "a.txt"),
+        renamed,
+        conflicted,
+        tracked('.', 'M', "vendor/nest"),
+        tracked('D', '.', "twice.txt"),
+        untracked("twice.txt"),
+    ]);
+    for (side, left) in [
+        (Side::Unstage, "new.txt"),
+        (Side::Stage, "both.txt"),
+        (Side::Stage, "vendor/nest"),
+        (Side::Stage, "twice.txt"),
+        (Side::Stage, "no-row.txt"),
+    ] {
+        let mut ahead = StageAhead::default();
+        ahead.asked(side, paths(&[left]), Some(OURS));
+        ahead.picture(IN_FLIGHT, &base, &[], |path| path == "vendor/nest");
+        ahead.answered(OURS, false, FENCE);
+        ahead.read_failed(OURS);
+        assert!(ahead.index_unseen(), "{left} was left to the status");
+    }
+}
+
+/// A whole bucket's press holds the doors whatever it moved: `git add --all`
+/// takes files no status listed.
+#[test]
+fn a_whole_bucket_press_holds_the_doors_past_a_failed_status() {
+    let mut ahead = StageAhead::default();
+    ahead.asked(Side::Stage, Reach::All, Some(OURS));
+    let base = status(vec![tracked('.', 'M', "a.txt")]);
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt")]
+    );
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(OURS);
+    assert!(ahead.index_unseen());
+    every_reader_drew(&mut ahead, AFTERWARDS);
+    assert!(!ahead.index_unseen());
+}
+
+/// The readers hold a status each, and a press is every picture drawn of it:
+/// one that left a row is enough to hold the doors, whatever the others drew.
+#[test]
+fn one_picture_that_left_a_row_holds_the_doors_whatever_the_others_drew() {
+    let (mut ahead, base) = staged_a();
+    let edited_since = status(vec![tracked('M', 'M', "a.txt")]);
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &base),
+        [tracked('M', '.', "a.txt")]
+    );
+    assert_eq!(
+        drawn(&mut ahead, IN_FLIGHT, &edited_since),
+        edited_since.items,
+        "another reader holds a status the press moves nothing in"
+    );
+    drawn(&mut ahead, IN_FLIGHT, &base);
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(OURS);
+    assert!(ahead.index_unseen());
+}
+
+/// A press no reader has drawn has moved nothing on screen: it holds the
+/// doors past a failed read, and the first picture that moves every row it
+/// names lets them go — the tab is told, as it is of a press let go.
+#[test]
+fn a_press_no_reader_has_drawn_holds_the_doors_until_it_is_drawn() {
+    let (mut ahead, base) = staged_a();
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(OURS);
+    assert!(ahead.index_unseen(), "nothing on screen is its word yet");
+    assert!(!ahead.take_notice());
+    drawn(&mut ahead, IN_FLIGHT, &base);
+    assert!(!ahead.index_unseen());
+    assert!(
+        ahead.take_notice(),
+        "the doors moved under a reader's picture"
+    );
+}
+
+/// A picture drawn after the failure was told counts as the earlier ones do:
+/// one that leaves a row takes the doors back, and the tab is told.
+#[test]
+fn a_picture_that_leaves_a_row_after_the_failure_takes_the_doors_back() {
+    let (mut ahead, base) = staged_a();
+    drawn(&mut ahead, IN_FLIGHT, &base);
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(OURS);
+    assert!(!ahead.index_unseen());
+    drawn(&mut ahead, IN_FLIGHT, &base);
+    assert!(!ahead.take_notice(), "the same picture moves no door");
+    let edited_since = status(vec![tracked('M', 'M', "a.txt")]);
+    drawn(&mut ahead, IN_FLIGHT, &edited_since);
+    assert!(ahead.index_unseen());
+    assert!(ahead.take_notice());
+}
+
+/// Only the press whose own read failed: one git has not answered, and one
+/// whose status is still on its way, go on holding the doors.
+#[test]
+fn a_failed_status_speaks_for_its_own_press_alone() {
+    let (mut ahead, _) = staged_a();
+    ahead.asked(Side::Stage, paths(&["b.txt"]), Some(NEXT));
+    let base = status(vec![tracked('.', 'M', "a.txt"), tracked('.', 'M', "b.txt")]);
+    drawn(&mut ahead, IN_FLIGHT, &base);
+    ahead.read_failed(NEXT);
+    ahead.answered(OURS, false, FENCE);
+    ahead.read_failed(SOMEBODY_ELSE);
+    ahead.read_failed(OURS);
+    assert!(ahead.index_unseen(), "the second press is still out");
+    ahead.answered(NEXT, false, FENCE);
+    assert!(
+        ahead.index_unseen(),
+        "landed, its status not yet drawn: a failure told before git answered was none of its"
+    );
+    ahead.read_failed(NEXT);
+    assert!(!ahead.index_unseen());
+}
+
 /// Two presses on one row compose in the order they were made — the order the
 /// queue runs them in — whichever of them git has answered.
 #[test]

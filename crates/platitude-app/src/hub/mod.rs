@@ -42,6 +42,7 @@ pub use feed::{Feed, Feeds, attach_feed, attached};
 pub use msg::{
     CarriedStatusMsg, CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, HeadMsg, OpProgressMsg,
     OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg, WorktreeList,
+    own_status_bytes,
 };
 pub use prefs::AvatarUrls;
 pub use tabs::{

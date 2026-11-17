@@ -555,10 +555,10 @@ pub fn stage_ahead<R: Default>(tab_id: i32, f: impl FnOnce(&mut crate::ops::Stag
     .unwrap_or_default()
 }
 
-/// [`stage_ahead`] for a status reader, which is not the tab: where a press
-/// was let go with it (`ops::StageAhead::take_notice`), the tab is told on its
-/// own feed (`TabMsg::PressLetGo`) — the reader cannot reach it, and the
-/// tab's Commit button waits on the presses.
+/// [`stage_ahead`] for a status reader, which is not the tab: where what it
+/// drew moved the presses (`ops::StageAhead::take_notice`), the tab is told
+/// on its own feed (`TabMsg::PressLetGo`) — the reader cannot reach it, and
+/// the tab's Commit button waits on the presses.
 fn stage_ahead_drawing<R: Default>(
     tab_id: i32,
     f: impl FnOnce(&mut crate::ops::StageAhead) -> R,
@@ -622,9 +622,11 @@ pub fn status_picture(
     if !stage_ahead(tab_id, |ahead| ahead.unseen()) {
         return None;
     }
-    // A picture lets no press go: only a drawing does (`status_drawn`).
+    // A picture lets no press go: only a drawing does (`status_drawn`). It
+    // can move the doors of a press whose status read failed, which the tab
+    // is told as it is of a drawing's news.
     let workdir = from_session(tab_id, |s| s.workdir()).flatten();
-    stage_ahead(tab_id, |ahead| {
+    stage_ahead_drawing(tab_id, |ahead| {
         ahead.picture(looked, base, marks, |path| {
             directory_in(workdir.as_deref(), path)
         })

@@ -16,6 +16,7 @@ mod carry_integrate;
 mod carry_move;
 mod carry_rewrite;
 mod command_log;
+mod commit_told;
 mod delete_reads;
 mod delete_stand_in;
 mod details;

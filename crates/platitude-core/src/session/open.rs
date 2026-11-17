@@ -188,6 +188,7 @@ impl RepoSession {
             lfs_unsettled: std::sync::atomic::AtomicBool::new(false),
             lfs_runs: Derived::default(),
             status_key: Mutex::new(None),
+            status_told: Mutex::default(),
             refs_key: Mutex::new(None),
             join_key: Mutex::new(None),
             last_snapshot: Mutex::new(None),

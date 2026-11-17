@@ -143,8 +143,8 @@ impl RepoTab {
         Member = commit_waits,
         Notify = commit_waits_changed
     );
-    // A press that writes the index the screen has not caught up with —
-    // Commit waits on it (`ops::StageAhead::index_unseen`).
+    // A press that writes the index holds the writes that take it whole
+    // back — Commit waits on it (which press: `ops::StageAhead::index_unseen`).
     qproperty!("stagingUnseen", Member = staging_unseen, Notify = changed);
     // Anything on screen still a press's word, a discard's too
     // (`ops::StageAhead::ahead_unseen`).
@@ -314,11 +314,10 @@ impl RepoTab {
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
     qproperty!("moveAskLost", Member = move_ask_lost, Notify = changed);
     qproperty!("moveAskSeq", Member = move_ask_seq, Notify = changed);
-    qproperty!(
-        "autoFetchRunning",
-        Member = auto_fetch_running,
-        Notify = changed
-    );
+    // A fetch, whoever asked for it, and a push: started, and what it left
+    // not in the models yet (`RepoTab::unshown`).
+    qproperty!("fetching", Member = fetching, Notify = unshown_changed);
+    qproperty!("pushing", Member = pushing, Notify = unshown_changed);
     qproperty!("autoFetchSeq", Member = auto_fetch_seq, Notify = changed);
     qproperty!("fetchFailures", Member = fetch_failures, Notify = changed);
     qproperty!(
@@ -344,6 +343,12 @@ impl RepoTab {
     /// stands from the slot that pressed (`pressed_ahead`).
     #[qsignal]
     pub(super) fn commit_waits_changed(&mut self);
+
+    /// `fetching` or `pushing` moved. Its own: they fall in the call the
+    /// tab posts itself (`readsDrained`), outside any drain, where
+    /// `changed` would have the page read the last drain's answers again.
+    #[qsignal]
+    pub(super) fn unshown_changed(&mut self);
 
     /// The worktree this tab stands in would not open, and the repository has
     /// its own to stand in instead (`Hub::home_worktree`); the strip moves the
@@ -481,9 +486,10 @@ impl RepoTab {
     }
 
     /// Whether the watched write is through both boundaries: git answered
-    /// it, and everything it invalidated has been read again and
-    /// published. Matched by id (`write_watch`) — another write moves
-    /// every count and flag and leaves this false.
+    /// it, and everything it invalidated has been read again and drained
+    /// into the models (`drain::settle_heard`). Matched by id
+    /// (`write_watch`) — another write moves every count and flag and
+    /// leaves this false.
     #[qslot]
     pub(crate) fn wrote_through(&self) -> bool {
         self.write_watch.through()
@@ -637,6 +643,13 @@ impl RepoTab {
     #[qslot]
     fn drain(&mut self) {
         self.take_feed()
+    }
+
+    /// The call the tab posts itself on hearing the write `id` settle,
+    /// queued behind every drain posted by then (`drain::settle_heard`).
+    #[qslot]
+    fn reads_drained(&mut self, id: i32) {
+        self.settle_drained_told(id);
     }
 
     /// Refs, status, the listings and a pass over the other worktrees, with
@@ -887,7 +900,7 @@ impl RepoTab {
     /// `reset_author` only means anything on an amend: it puts the current
     /// identity on a commit written under another one.
     ///
-    /// Not while a stage or unstage press stands (`commitWaits`;
+    /// Not while a stage or unstage press holds it back (`commitWaits`;
     /// `commit_from_fields` is the belt).
     #[qslot]
     fn commit(&mut self, subject: String, body: String, amend: bool, reset_author: bool) {
