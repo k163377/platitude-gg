@@ -356,5 +356,4 @@ fn hunk_agrees(hunk: &DiffHunk, lines: &[&str], start: usize, new_side: bool) ->
 }
 
 #[cfg(test)]
-#[path = "patch/tests.rs"]
 mod tests;

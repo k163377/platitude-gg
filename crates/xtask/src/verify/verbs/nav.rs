@@ -822,7 +822,7 @@ pub(super) const TABLE: &[Verb] = &[
             // (`Folder is gone`) is git's state name, left to the picture.
             // No claim for a lock (`worktree:3`): a lock draws no line
             // (`tst_navfacts.qml`) and `Role::Change` carrying `LOCKED` is
-            // `models::nav::field_tests`'.
+            // `models::nav::tests::field`'.
             (
                 Arg::Is("worktree:2"),
                 "says=gone local= track=0/0 held= up= gone=false branch=gone/branch state=PRUNABLE",

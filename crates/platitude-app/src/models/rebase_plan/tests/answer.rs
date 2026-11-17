@@ -2,8 +2,8 @@
 //! (`answer.rs`): the content fixed at the press, given once to its own
 //! ticket, and gone for good with a plan put away.
 
-use super::answer::Answer;
-use super::{PlanStepItem, RebasePlanModel};
+use super::super::answer::Answer;
+use super::super::{PlanStepItem, RebasePlanModel};
 
 fn step(oid: &str, action: &str) -> PlanStepItem {
     PlanStepItem {

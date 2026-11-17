@@ -1,7 +1,7 @@
 //! What a section's source answers about the refs it holds.
 
-use super::testkit::*;
-use super::*;
+use super::super::testkit::*;
+use super::super::*;
 
 /// A remote named `my` is not `my/fork`'s: its branches and the commits
 /// they stand on are cut by the configured names, not by the first slash.

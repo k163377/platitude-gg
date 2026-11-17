@@ -1,7 +1,7 @@
 //! Which answer is the plain delete's that a menu stands for, and what
 //! is left for the card to read at each of its moments.
 
-use super::*;
+use super::super::*;
 
 /// The ids of the plain delete and of the fetch running behind it.
 const OURS: u64 = 7;

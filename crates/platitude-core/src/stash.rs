@@ -340,3 +340,6 @@ async fn run_selector(
     let cmd = GitCommand::new().cwd(workdir).args(["stash", op, selector]);
     executor.run(cmd, cancel).await.map(|_| ())
 }
+
+#[cfg(test)]
+mod tests;

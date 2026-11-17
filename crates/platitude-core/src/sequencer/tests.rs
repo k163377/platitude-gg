@@ -3,6 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
+use super::{plan::has_parent_header, run::sh_quote, todo::parse_todo};
 use crate::sequencer::*;
 
 #[test]

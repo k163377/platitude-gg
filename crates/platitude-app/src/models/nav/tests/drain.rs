@@ -1,7 +1,7 @@
 //! What the feeds settle onto the model's own properties.
 
-use super::testkit::*;
-use super::*;
+use super::super::testkit::*;
+use super::super::*;
 
 /// The stand-in's pair (`HeadPinRow`) comes off the snapshot by name, so
 /// it matches its row and outlives the row being filtered away — when

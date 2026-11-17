@@ -20,7 +20,7 @@
 //! below (`footer_without`), where a deleted remote branch changes a
 //! row's "on the remote" mark, and where commits of the same second come
 //! out of a walk in another order — only ever into the right picture.
-//! Pinned by `leaving_tests` and `session_integration::delete_stand_in`, which holds git at
+//! Pinned by `session::tests::leaving` and `session_integration::delete_stand_in`, which holds git at
 //! `reference-transaction` / `pre-receive` barriers to see the order.
 
 use std::collections::HashSet;

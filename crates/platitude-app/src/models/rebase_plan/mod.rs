@@ -8,19 +8,12 @@ use crate::hub::{Feed, PlanMsg};
 use super::qml_register;
 
 mod answer;
-#[cfg(test)]
-#[path = "tests/answer.rs"]
-mod answer_tests;
 mod drain;
-#[cfg(test)]
-#[path = "tests/drain.rs"]
-mod drain_tests;
 mod qobject;
 #[cfg(test)]
-#[path = "tests/steps.rs"]
-mod steps_tests;
+mod tests;
 
-/// For `repo_tab::drain_report_tests`, which holds both doors to one
+/// For `repo_tab::tests::drain_report`, which holds both doors to one
 /// spelling per refused history — test-only, since nothing else imports it.
 #[cfg(test)]
 pub(in crate::models) use drain::refusal_kind;

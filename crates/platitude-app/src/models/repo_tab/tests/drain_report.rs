@@ -2,8 +2,8 @@
 //! saying — the kind the page picks its two lines from, and the names
 //! the first of them is written from (`drain::settle_write`).
 
+use super::super::*;
 use super::drain_inputs::{no_answer, reported, settle};
-use super::*;
 use platitude_core::OperationKind as K;
 use platitude_core::RemoteWhy;
 

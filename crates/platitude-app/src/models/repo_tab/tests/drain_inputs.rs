@@ -1,7 +1,7 @@
 //! What the drain tests hand a tab: feed messages as the bridge carries
 //! them, and a write's answer settled straight in.
 
-use super::*;
+use super::super::*;
 use platitude_core::OperationKind as K;
 
 /// The id the queue gave the press under test, and one it gave somebody else.

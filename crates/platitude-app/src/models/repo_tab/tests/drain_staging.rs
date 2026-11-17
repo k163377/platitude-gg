@@ -1,16 +1,16 @@
 //! The tab's own half of a stage pressed ahead of git: what the Commit button
 //! waits on (`commit_waits`, `staging_unseen`) and the notify that has
 //! the page draw the presses again (`staging_seq`). The presses are the hub's
-//! (`ops::StageAhead`, tested in `ops::stage_ahead_tests`): a hub is installed
+//! (`ops::StageAhead`, tested in `ops::tests::stage_ahead`): a hub is installed
 //! on the test's thread with one tab and no session, so nothing reaches git —
 //! a write asked at the door is accepted by nobody, and a press is written
 //! down as the door would.
 
 use std::collections::HashSet;
 
+use super::super::ops_stage::Spot;
+use super::super::*;
 use super::drain_inputs::started;
-use super::ops_stage::Spot;
-use super::*;
 use crate::ops::{Reach, Reader, Side};
 use platitude_core::OperationKind as K;
 

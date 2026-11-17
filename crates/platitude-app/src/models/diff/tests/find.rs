@@ -2,9 +2,9 @@
 
 use platitude_core::textfind::Options;
 
-use super::DiffModel;
-use super::Runs;
-use super::selection_tests::{model, split_model};
+use super::super::DiffModel;
+use super::super::Runs;
+use super::selection::{model, split_model};
 
 /// The runs as the tests read them: `from:len,…`, `""` for none.
 fn said(runs: &Runs) -> String {

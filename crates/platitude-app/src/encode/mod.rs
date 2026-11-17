@@ -17,11 +17,7 @@ mod wire;
 mod words;
 
 #[cfg(test)]
-#[path = "tests/rows.rs"]
-mod rows_tests;
-#[cfg(test)]
-#[path = "tests/wire_qml.rs"]
-mod wire_qml;
+mod tests;
 
 pub use columns::{Candidates, widest_lines};
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};

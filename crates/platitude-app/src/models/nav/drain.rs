@@ -280,5 +280,4 @@ impl NavSectionModel {
 }
 
 #[cfg(test)]
-#[path = "drain/tests.rs"]
-mod staging_tests;
+mod tests;

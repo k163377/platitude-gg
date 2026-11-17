@@ -61,7 +61,7 @@ Item {
             //
             // One run covers the three refusal shapes: they share this road and differ only in the heading, which
             // `tst_reportdress.qml` reads; the shapes are pinned by `integrate_integration/plan.rs` and
-            // `rebase_plan::drain_tests`. The row has to be named (`row:0`): the commit no branch of `one-commit`
+            // `rebase_plan::tests::drain`. The row has to be named (`row:0`): the commit no branch of `one-commit`
             // sees is not under the tip, and opened from the tip the plan simply opens. No `--allow-write-failure`:
             // the preview refuses, and nothing enters the write's road. The `rewrite-merge` / `shallow` presets stay
             // for shooting the other two shapes by hand.

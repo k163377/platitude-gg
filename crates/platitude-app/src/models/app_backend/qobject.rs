@@ -183,7 +183,7 @@ impl AppBackend {
         Member = restart_wanted,
         Notify = git_path_changed
     );
-    // Through a getter: a value QML wrote would not reach Rust (encode::wire_qml).
+    // Through a getter: a value QML wrote would not reach Rust (encode::tests::wire_qml).
     qproperty!("avatars", Read = avatars, Notify = avatars_changed);
     fn avatars(&self) -> &Assignments {
         &self.avatars

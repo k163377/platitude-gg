@@ -1,8 +1,8 @@
 //! The walk the arrow keys take over the file rows, and what a bucket
 //! list answers about the files it is not showing.
 
-use super::testkit::*;
-use super::*;
+use super::super::testkit::*;
+use super::super::*;
 
 fn landed(row: i32, bucket: &str, path: &str) -> Option<Landing> {
     Some(Landing {

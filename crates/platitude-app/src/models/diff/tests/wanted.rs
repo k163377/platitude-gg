@@ -7,7 +7,7 @@ use platitude_core::details::DiffTarget;
 use crate::encode::diff_key;
 use crate::hub::DiffMsg;
 
-use super::diff::wanted;
+use super::super::wanted;
 
 fn target(path: &str) -> DiffTarget {
     DiffTarget::Unstaged {

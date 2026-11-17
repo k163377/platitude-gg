@@ -361,12 +361,15 @@ fn runner_prefix(root: &Path) -> Result<String, String> {
 }
 
 /// Whether a Rust file is test code from top to bottom by where it stands
-/// or what it is called (structure.md §分割). A test file under another
-/// name is known by the `#[cfg(test)] mod` that declares it
-/// ([`declared_test_files`]).
+/// or what it is called: under a `tests/` directory — an integration
+/// binary's, or a module's `tests` split by subject — or a module's
+/// `tests.rs` (rules-refs/structure.md「`mod tests` を専用ファイルへ出す時の
+/// 置き場」). A test file under another name is known by the
+/// `#[cfg(test)] mod` that declares it ([`declared_test_files`]).
 fn whole_test_file(relative: &str) -> bool {
-    let name = relative.rsplit('/').next().unwrap_or_default();
-    relative.split('/').nth(2) == Some("tests") || name == "tests.rs" || name.ends_with("_tests.rs")
+    let mut parts = relative.split('/');
+    let name = parts.next_back().unwrap_or_default();
+    name == "tests.rs" || parts.any(|dir| dir == "tests")
 }
 
 fn collect(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
@@ -509,7 +512,7 @@ mod tests {
     #[test]
     fn a_whole_test_file_is_named_by_where_it_stands_or_what_it_is_called() {
         assert!(whole_test_file("crates/x/tests/gate/support.rs"));
-        assert!(whole_test_file("crates/x/src/session/state_tests.rs"));
+        assert!(whole_test_file("crates/x/src/session/tests/state.rs"));
         assert!(whole_test_file("crates/x/src/corpus/stream/tests.rs"));
         assert!(!whole_test_file("crates/x/src/session/read_flight.rs"));
     }

@@ -76,7 +76,7 @@ fn read(root: &Path, relative: &str) -> Result<String, String> {
 /// the root, text), in path order.
 fn workflow_files(root: &Path) -> Result<Vec<(String, String)>, String> {
     // In pieces: whole, the name would make this file a reader of CI's,
-    // and an edit there would reach the runner (`graph::tests::
+    // and an edit there would reach the runner (`graph::tests::edges::
     // nothing_reads_a_file_of_cis`). This check is an always-step: it
     // runs whatever the edit.
     let github = root.join(format!(".{}", "github"));

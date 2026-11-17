@@ -199,7 +199,7 @@ pub(super) fn found(driver_text: &str, verbs_text: &str) -> Vec<(String, usize, 
         ("src/ui/Other.qml".to_string(), OTHER.to_string()),
     ];
     let machinery = ["Awaited.qml", "StageTimer.qml", "AutoActDriver.qml"];
-    super::findings(&harness, &product, &[RUST.to_string()], &machinery)
+    super::super::findings(&harness, &product, &[RUST.to_string()], &machinery)
         .into_iter()
         .map(|f| {
             let file = f.file.rsplit('/').next().unwrap_or_default().to_string();

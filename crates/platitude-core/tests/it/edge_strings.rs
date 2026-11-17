@@ -185,9 +185,9 @@ async fn a_pasted_paragraph_survives_the_walk_and_the_trailer_after_it() {
 
 /// git's side: a path of kanji and spaces through `status::load`, and the
 /// empty `%s` / `%aE`. Our parsers read those from the committed `-z`
-/// fixture (`status_tests::committed_status_fixture_parses`) and from
-/// hand-written bytes (`log_tests::empty_subject_is_preserved`,
-/// `log_tests::an_empty_address_is_kept_as_one`) before every merge, so
+/// fixture (`status::tests::committed_status_fixture_parses`) and from
+/// hand-written bytes (`parse::log::tests::empty_subject_is_preserved`,
+/// `parse::log::tests::an_empty_address_is_kept_as_one`) before every merge, so
 /// the full gate runs these (`-- --ignored ::periodic::`), not every change.
 mod periodic {
     use super::*;

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use platitude_core::parse::diff::parse_patch;
 
-use super::{DiffModel, LayoutPosition, LineSpan, SourcePosition, Washed};
+use super::super::{DiffModel, LayoutPosition, LineSpan, SourcePosition, Washed};
 use crate::encode::Optional;
 
 /// The two positions the way the slots build them, from the signed values
@@ -44,7 +44,7 @@ pub(super) fn model(patch: &str, coloured: bool) -> DiffModel {
         Default::default()
     };
     DiffModel {
-        lines: super::rows::line_items(&patches, true, &colors, None, false, None),
+        lines: super::super::rows::line_items(&patches, true, &colors, None, false, None),
         shown: Some(Arc::new(patches)),
         ..DiffModel::default()
     }
@@ -369,7 +369,7 @@ pub(super) fn split_model(patch: &str) -> DiffModel {
     let colors = platitude_core::highlight::colors(&patches, None);
     DiffModel {
         split: true,
-        lines: super::rows::line_items(&patches, true, &colors, None, true, None),
+        lines: super::super::rows::line_items(&patches, true, &colors, None, true, None),
         shown: Some(Arc::new(patches)),
         ..DiffModel::default()
     }
@@ -492,7 +492,7 @@ fn a_place_on_the_right_side_is_a_byte_of_the_line_on_the_right() {
 fn a_row_names_a_line_only_on_the_sides_that_hold_one() {
     use platitude_core::parse::diff::DiffLineLocation;
 
-    use super::RIGHT;
+    use super::super::RIGHT;
 
     // Two removed against one added, then another file's added line with
     // nothing across from it.
@@ -624,7 +624,7 @@ index 1111111,2222222..0000000
 ++>>>>>>> topic
 ",
     );
-    let marks: Vec<super::super::super::encode::Marks> =
+    let marks: Vec<super::super::super::super::encode::Marks> =
         model.lines.iter().map(|row| (*row.marks).clone()).collect();
     let context = &marks[1];
     assert!(
@@ -872,7 +872,7 @@ fn a_double_click_on_the_old_column_takes_a_word_of_the_removed_line() {
     let mut model = one_change_split();
     assert_eq!(word_at(&mut model, 0, 2, 12), "1", "the old file's");
     assert_eq!(
-        word_at(&mut model, super::RIGHT, 2, 12),
+        word_at(&mut model, super::super::RIGHT, 2, 12),
         "2",
         "the new file's"
     );

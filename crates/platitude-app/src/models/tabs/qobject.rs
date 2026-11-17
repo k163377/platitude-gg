@@ -32,7 +32,7 @@ impl TabsModel {
 
     // Its own signal: a name settling or a carry changes it without moving
     // the front.
-    // Through a getter: a value QML wrote would not reach Rust (encode::wire_qml).
+    // Through a getter: a value QML wrote would not reach Rust (encode::tests::wire_qml).
     qproperty!("openRepos", Read = open_repos, Notify = open_repos_changed);
     fn open_repos(&self) -> &OpenRepos {
         &self.open_repos

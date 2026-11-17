@@ -2,7 +2,7 @@
 //! decide it — the press, the answer, and the status whose counts can
 //! speak for that answer, in either order.
 
-use super::*;
+use super::super::*;
 
 /// This stash's id and somebody else's — a pop pressed from the details
 /// band, or the fetch running behind the press.

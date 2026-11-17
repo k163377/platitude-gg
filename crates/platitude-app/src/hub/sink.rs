@@ -500,7 +500,7 @@ impl SessionSink for BridgeSink {
             // Ordered by the ask, like details: with a plain replace the
             // older answer can be the one left to drain, which the model
             // drops as stale (`asked_from`) and the screen waits forever
-            // (`hub/plan_tests.rs`).
+            // (`hub/tests/plan.rs`).
             SessionEvent::RebasePlanLoaded {
                 generation,
                 preview,

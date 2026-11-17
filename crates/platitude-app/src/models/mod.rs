@@ -9,9 +9,6 @@ mod clone;
 mod commands;
 mod details;
 mod diff;
-#[cfg(test)]
-#[path = "diff/tests/wanted.rs"]
-mod diff_tests;
 mod discards;
 mod facts;
 mod graph;
@@ -24,9 +21,6 @@ mod repo_config;
 mod repo_tab;
 mod tab_name;
 mod tabs;
-#[cfg(test)]
-#[path = "tabs/tests.rs"]
-mod tabs_tests;
 mod text_position;
 mod worktree;
 

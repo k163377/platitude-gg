@@ -1,7 +1,7 @@
 //! What a drag over the log takes, and where the wash it leaves is drawn.
 
-use super::selection::{AT_CLOCK, AT_CMD, AT_GAP_CMD, AT_GAP_OUT, AT_OUT, clock_of};
-use super::*;
+use super::super::selection::{AT_CLOCK, AT_CMD, AT_GAP_CMD, AT_GAP_OUT, AT_OUT, clock_of};
+use super::super::*;
 
 /// The two positions the way the slots build them, from the signed values
 /// QML hands.

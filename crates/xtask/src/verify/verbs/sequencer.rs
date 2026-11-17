@@ -120,7 +120,7 @@ pub(super) const TABLE: &[Verb] = &[
     // core, core withholding the write, a bar coming down with the report
     // (デザイン規約 §答えの要らない報せ). Which refusal it was is not a
     // window's to say: the conditions are read by `integrate_integration`,
-    // the kind by `repo_tab::drain_report_tests`, the sentence by
+    // the kind by `repo_tab::tests::drain_report`, the sentence by
     // `tst_reportdress.qml` — so the cheapest history stands for them, a
     // branch of one commit. `said=` is the row menu's shared heading; the
     // reason is the second line, left to the picture. The other three

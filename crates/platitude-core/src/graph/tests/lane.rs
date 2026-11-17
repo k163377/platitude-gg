@@ -1,7 +1,7 @@
 //! Which lane a row takes, and when a lane is freed for reuse.
 
-use super::testkit::{build, commit, oid, render};
-use super::*;
+use super::super::testkit::{build, commit, oid, render};
+use super::super::*;
 use crate::model::StrPool;
 
 #[test]

@@ -54,7 +54,7 @@ impl GraphModel {
         Notify = stats_changed
     );
     // The three wire values through getters: a value QML wrote would not
-    // reach Rust (encode::wire_qml).
+    // reach Rust (encode::tests::wire_qml).
     qproperty!("tailGeometry", Read = tail_geometry, Notify = stats_changed);
     fn tail_geometry(&self) -> &crate::encode::Lanes {
         &self.tail_geometry

@@ -6,8 +6,8 @@
     reason = "the scale measurement reports its number to whoever ran it"
 )]
 
-use super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
-use super::*;
+use super::super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
+use super::super::*;
 use crate::remote::AdvertisedTag;
 
 /// One worktree: no branch is held anywhere else.
@@ -324,7 +324,7 @@ fn a_worktree_standing_on_no_branch_gets_a_chip_of_its_own() {
     let refs = vec![branch("main", oid(1)), tag("v1", oid(2), false)];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
-    held.detached.push(super::joins::DetachedCheckout {
+    held.detached.push(super::super::joins::DetachedCheckout {
         oid: oid(2),
         name: crate::Name::const_new("spike"),
         locked: true,
@@ -368,7 +368,7 @@ fn the_repositorys_own_worktree_standing_on_no_branch_says_it_is_home() {
     let refs = vec![branch("main", oid(1))];
     let remote_tags = index_of("origin", Vec::new());
     let mut held = WorktreeHolders::default();
-    held.detached.push(super::joins::DetachedCheckout {
+    held.detached.push(super::super::joins::DetachedCheckout {
         oid: oid(2),
         name: crate::Name::const_new("repo"),
         locked: false,

@@ -4,7 +4,8 @@
 //!
 //! What it reads is every statement of test code — the integration
 //! suites with their support modules, the `#[cfg(test)]` blocks (a
-//! `mod`, a `fn` or an `impl`) and `*_tests.rs` files of every crate,
+//! `mod`, a `fn` or an `impl`) and the `tests.rs` files and `tests/`
+//! directories of every crate,
 //! the QtTest files, and the app's own automation harness — and what it
 //! names is these shapes (.claude/rules/core.md §非同期・並行テスト):
 //!

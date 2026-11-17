@@ -5,9 +5,6 @@
 
 mod child;
 mod contract;
-#[cfg(test)]
-#[path = "tests.rs"]
-mod contract_tests;
 mod coverage;
 mod faults;
 pub(crate) mod git_shim;
@@ -25,6 +22,8 @@ mod seed;
 mod shim;
 mod shot_check;
 mod stages;
+#[cfg(test)]
+mod tests;
 mod verbs;
 mod wedge;
 

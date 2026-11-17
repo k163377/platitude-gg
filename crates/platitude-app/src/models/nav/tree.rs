@@ -90,7 +90,7 @@ impl NavSectionModel {
     /// remote's menu answer as in the tree; `tree_named` stays true for
     /// remotes either way (a leaf's `Role::Full` is the whole name a menu
     /// names), and `shown()` counts the remote rows. Picture `nav-filter
-    /// feat`, model `view_tests`.
+    /// feat`, model `nav::tests::view`.
     pub(super) fn build_remote_groups(&self, needle: &str) -> Vec<Arranged> {
         let Source::Remotes(snapshot) = &self.all else {
             return Vec::new();

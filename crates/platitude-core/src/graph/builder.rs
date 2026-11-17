@@ -245,7 +245,7 @@ impl GraphBuilder {
         // stash on the same commit), the commit comes out in that lane's
         // colour anyway: a fresh one from the round robin would reach no
         // chain and shift every later chain along the palette
-        // (`leash_tests`). Where nothing waits, this row takes the colour
+        // (`graph::tests::leash`). Where nothing waits, this row takes the colour
         // the tip would have, and the tip inherits it.
         let color = match self.color_waiting_for(parent) {
             Some(borrowed) => borrowed,

@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use super::relay::{Standing, lay, still_where_the_listing_says};
-use super::{Carried, LogRow};
+use super::super::relay::{Standing, lay, still_where_the_listing_says};
+use super::super::{Carried, LogRow};
 use crate::graph::GraphBuilder;
 use crate::oid::Oid;
 use crate::status::Kinds;
@@ -169,16 +169,16 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
     let readings = vec![reading("/tmp/a", 1), reading("/tmp/b", 2)];
 
     let listed = std::collections::HashMap::from([
-        (super::joins::same_path_key("/tmp/a"), oid(1)),
+        (super::super::joins::same_path_key("/tmp/a"), oid(1)),
         // b committed since its reading was taken.
-        (super::joins::same_path_key("/tmp/b"), oid(9)),
+        (super::super::joins::same_path_key("/tmp/b"), oid(9)),
     ]);
     let current = still_where_the_listing_says(&readings, &listed);
     assert_eq!(current.len(), 1, "the reading left behind was kept");
     assert_eq!(current[0].path, "/tmp/a");
 
     let unlisted =
-        std::collections::HashMap::from([(super::joins::same_path_key("/tmp/a"), oid(1))]);
+        std::collections::HashMap::from([(super::super::joins::same_path_key("/tmp/a"), oid(1))]);
     assert_eq!(
         still_where_the_listing_says(&readings, &unlisted).len(),
         2,

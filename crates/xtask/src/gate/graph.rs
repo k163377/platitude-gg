@@ -1709,11 +1709,10 @@ pub(crate) fn complaints(g: &Graph) -> Vec<String> {
             .get(&file)
             .into_iter()
             .flatten()
-            // A directory node reads everything under it, the
-            // `*_tests.rs` siblings a root declares read its scope with
-            // `use super::*`, and an integration binary names files in
-            // its fixtures — none is a helper on the root.
-            .filter(|r| !r.ends_with('/') && !r.ends_with("_tests.rs"))
+            // A directory node reads everything under it, and an
+            // integration binary names files in its fixtures — neither is
+            // a helper on the root.
+            .filter(|r| !r.ends_with('/'))
             .filter(|r| g.modules.get(*r).is_none_or(|m| m.test_binary.is_none()))
             // A reader that takes a name the root re-exports reads the
             // root's `pub use` alone (`Resolved`), not a helper on it.
@@ -1759,9 +1758,4 @@ pub(crate) fn collect(
 mod built;
 
 #[cfg(test)]
-#[path = "graph/tests/bindings.rs"]
-mod bindings;
-
-#[cfg(test)]
-#[path = "graph/tests/edges.rs"]
 mod tests;

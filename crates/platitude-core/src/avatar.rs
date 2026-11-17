@@ -313,5 +313,4 @@ fn is_safe_file_name(file: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "avatar/tests.rs"]
 mod tests;

@@ -1,7 +1,7 @@
 //! A write's records in the log: its rows under its id, and the receipt
 //! that says all of them are in (`CommandMsg::Settled`).
 
-use super::*;
+use super::super::*;
 
 fn started(id: u64, operation: u64) -> CommandMsg {
     CommandMsg::Started {

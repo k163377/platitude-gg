@@ -61,7 +61,7 @@ macro_rules! field_by_bridge {
 }
 // A `String` field reads through the bridge's own conversion, `String::from(&QString)`, which
 // reads the UTF-16 straight (`from_utf16_lossy`, no `QByteArray` between: upstream's intended
-// form); an unpaired surrogate comes out as U+FFFD (`wire_qml`). Not counting the UTF-8 length
+// form); an unpaired surrogate comes out as U+FFFD (`encode::tests::wire_qml`). Not counting the UTF-8 length
 // first to allocate once: quicker on a short CJK string, slower on a long one (two scans), and no
 // difference told on the product's path (`GitFacts.chipsShown`, 1 to 30 chips, ASCII and CJK —
 // ci/baseline/code-costs-windows-x64.md §橋の値の組み立て).
@@ -488,7 +488,7 @@ mod tests {
 
     /// The two conversions the bridge runs for a slot's argument, back to
     /// back in Rust — no meta-call and no QML engine. What QML hands a
-    /// slot, and makes of its answer, is `wire_qml`'s.
+    /// slot, and makes of its answer, is `encode::tests::wire_qml`'s.
     fn through_a_slot<W: QMetaTypeCompatible>(value: &W) -> W {
         W::from_compatible(&value.to_compatible())
     }

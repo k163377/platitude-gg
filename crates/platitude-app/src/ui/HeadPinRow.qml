@@ -59,7 +59,7 @@ Rectangle {
                                    ? (headPin.underRow + 1) * Theme.rowHeight + headPin.roomAbove
                                    : headPin.branchesModel.headRow * Theme.rowHeight
     /// The upstream is gone, read off the model since a stand-in has no row (`models::nav::drain` の
-    /// `settle_head_marks`). No preset puts the stand-in on a gone upstream; `models::nav::drain_tests`'
+    /// `settle_head_marks`). No preset puts the stand-in on a gone upstream; `models::nav::tests::drain`'
     /// `the_stand_in_carries_the_upstream_that_is_not_here` holds it.
     readonly property bool goneUpstream: headPin.branchesModel.headUpstreamGone !== ""
     /// The branch is there but its row is not (a filter or a folded folder). Asks for a seat, which a list with no rows

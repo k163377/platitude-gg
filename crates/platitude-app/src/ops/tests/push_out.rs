@@ -1,7 +1,7 @@
 //! Whose push an answer was, and which branch it was about — at the
 //! press, at the answer, and across the presses that follow.
 
-use super::*;
+use super::super::*;
 
 /// This push's id and somebody else's — a remote branch's replace, which
 /// also answers as a push, or the fetch running behind the press.

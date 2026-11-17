@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use super::pace::*;
+use super::super::pace::*;
 
 fn ms(n: u64) -> Duration {
     Duration::from_millis(n)

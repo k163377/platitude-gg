@@ -2,7 +2,7 @@
 //! press, git's answer, and the list that draws the reading proving the
 //! row gone.
 
-use super::*;
+use super::super::*;
 
 /// A press's id and somebody else's; any two different numbers do.
 const OURS: u64 = 7;

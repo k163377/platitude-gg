@@ -9,7 +9,7 @@ use platitude_core::session::EolMark;
 use platitude_core::stage::DiscardSide;
 use platitude_core::status::{StatusItem, WorktreeStatus};
 
-use super::*;
+use super::super::*;
 
 const OURS: u64 = 7;
 const NEXT: u64 = 8;

@@ -3,8 +3,8 @@
 //! waits for by name, the notify's list of answers, and the answer handed
 //! back to the press that sent it.
 
+use super::super::*;
 use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, no_answer, reported, settle, started};
-use super::*;
 use platitude_core::OperationKind as K;
 
 // ---- the group: what the last answer nobody named says ---------------

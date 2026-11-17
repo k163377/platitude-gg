@@ -4,7 +4,7 @@
 //! in a beat and a report, and the forms Qt runs (`tst_reachforms.qml`)
 //! judged as they stand there.
 
-use super::tests::{driver, found, in_report, indented, rules, verbs};
+use super::rule::{driver, found, in_report, indented, rules, verbs};
 
 #[test]
 fn lexical_bindings_and_all_writes_keep_the_state_they_can_change() {
@@ -261,7 +261,7 @@ fn a_pattern_binds_its_names_by_where_they_stand() {
     let tokens = |text: &str| crate::lex::tokens(text, crate::lex::Lang::Qml);
     let names = |text: &str| -> Vec<(String, Option<usize>, Vec<usize>)> {
         let tokens = tokens(text);
-        super::parse::pattern_names(&tokens, 0)
+        super::super::parse::pattern_names(&tokens, 0)
             .bound
             .into_iter()
             .map(|b| {
@@ -344,11 +344,11 @@ fn a_functions_parameters_are_bound_from_their_own_arguments() {
     );
     assert!(own.is_empty(), "{own:?}");
     let tokens = crate::lex::tokens("[a, b], c = d, ...rest", crate::lex::Lang::Qml);
-    let super::parse::UnitParams {
+    let super::super::parse::UnitParams {
         params,
         bound,
         evaluated,
-    } = super::parse::unit_params(&tokens, 0);
+    } = super::super::parse::unit_params(&tokens, 0);
     assert_eq!((evaluated.len(), evaluated.first()), (1, Some(&(8..9))));
     assert_eq!(params, ["", "c", ""]);
     let bound: Vec<_> = bound

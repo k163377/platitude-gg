@@ -13,13 +13,9 @@ use crate::hub::{CommandMsg, Feed};
 use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
 use super::{impl_notify_runs, push_run, qml_register};
 
-#[cfg(test)]
-#[path = "tests/records.rs"]
-mod records_tests;
 mod selection;
 #[cfg(test)]
-#[path = "tests/selection.rs"]
-mod selection_tests;
+mod tests;
 
 use selection::clock_of;
 
@@ -525,7 +521,3 @@ impl platitude_core::mem::Footprint for CommandItem {
             + self.sel.heap_bytes()
     }
 }
-
-#[cfg(test)]
-#[path = "tests/durations.rs"]
-mod tests;

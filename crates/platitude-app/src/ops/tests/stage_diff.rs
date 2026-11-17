@@ -9,7 +9,7 @@ use std::sync::Arc;
 use platitude_core::parse::diff::{FilePatch, parse_patch};
 use platitude_core::parts::{Moves, Part as Placed, after};
 
-use super::*;
+use super::super::*;
 
 const KEY: &str = "unstaged:a.txt";
 const HEAD: &str =
@@ -39,8 +39,8 @@ const FIRST: Placed = Placed {
 };
 
 /// Hunk 0 staged, pressed on the read drawn as `print`.
-fn hunk(print: u64) -> super::Part {
-    super::Part {
+fn hunk(print: u64) -> super::super::Part {
+    super::super::Part {
         verb: PartVerb::Stage,
         path: "a.txt".to_string(),
         whole: false,

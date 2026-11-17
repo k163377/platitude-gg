@@ -8,7 +8,7 @@
 //! write's bookkeeping), and the page has the lists, the counts and the open
 //! diff draw again whenever what it holds moves (`staging_seq`). When the
 //! moved rows go back or are let go of is the owner's (tested in
-//! `ops::stage_ahead_tests` / `ops::stage_parts_tests`); this file is the
+//! `ops::tests::stage_ahead` / `ops::tests::stage_parts`); this file is the
 //! wiring.
 
 use platitude_core::details::DiffTarget;

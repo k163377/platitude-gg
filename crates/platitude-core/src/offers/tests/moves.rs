@@ -1,7 +1,7 @@
 //! The rules a press on a ref answers to: where it lands, what stands in
-//! its way, and what leaving that costs ([`super::moves`]).
+//! its way, and what leaving that costs ([`super::super::moves`]).
 
-use super::*;
+use super::super::*;
 use crate::integrate::InProgress;
 use crate::opstate::OpState;
 use crate::status::Counts;

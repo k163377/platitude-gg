@@ -98,7 +98,6 @@ fn touched(path: &std::path::Path) -> String {
 /// step starts and now — holds, and fails the probe after a minute
 /// without.
 fn once_the_processes(owner: u32, start: u64, changed: &str) -> String {
-    // waits(paced): a poll of the listing, spaced so its own listings leave the processors to the work it watches — the condition ends it
     format!(
         "function Get-Under {{ return [PggProcesses]::new().Tree({owner}, {start}, [int64]::MaxValue) }}; \
          $sw = [Diagnostics.Stopwatch]::StartNew(); $first = Get-Under; \

@@ -1,7 +1,7 @@
 //! The plan's own arithmetic: what counts as dirty, how display rows turn
 //! back into git's todo, and the fold the oldest row cannot carry.
 
-use super::{PlanStepItem, RebasePlanModel};
+use super::super::{PlanStepItem, RebasePlanModel};
 use platitude_core::sequencer::TodoAction;
 
 fn step(oid: &str, subject: &str) -> PlanStepItem {

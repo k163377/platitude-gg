@@ -4,10 +4,12 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use super::leaving::{Going, Holders, Walked, doomed, footer_without, lay_walked};
-use super::model::LabelIndex;
-use super::relay::Standing;
-use super::{BranchItem, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowPrint};
+use super::super::leaving::{Going, Holders, Walked, doomed, footer_without, lay_walked};
+use super::super::model::LabelIndex;
+use super::super::relay::Standing;
+use super::super::{
+    BranchItem, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowPrint,
+};
 use crate::graph::GraphBuilder;
 use crate::oid::Oid;
 

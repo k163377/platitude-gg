@@ -27,10 +27,9 @@ use crate::hub::{Feed, Hub};
 use super::qml_register;
 
 mod qobject;
-mod work;
 #[cfg(test)]
-#[path = "tests.rs"]
-mod work_tests;
+mod tests;
+mod work;
 
 /// What a spawned read or write sends back.
 enum ConfigMsg {

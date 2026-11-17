@@ -12,10 +12,9 @@ use crate::hub::{DetailsMsg, Feed, Hub};
 use super::pathtree::DirNode;
 use super::qml_register;
 
-#[cfg(test)]
-#[path = "tests.rs"]
-mod details_tests;
 mod qobject;
+#[cfg(test)]
+mod tests;
 mod tree;
 
 #[derive(QModelItem, Default, Clone)]

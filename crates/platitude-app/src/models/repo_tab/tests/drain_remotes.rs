@@ -2,7 +2,7 @@
 //! saying — where pushes go and which remote wears the origin mark
 //! (`TabMsg::Remotes` in `drain::absorb`).
 
-use super::*;
+use super::super::*;
 
 fn remotes(names: &[&str], push_default: &str, checkout_default: &str) -> TabMsg {
     TabMsg::Remotes {

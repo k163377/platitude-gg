@@ -15,7 +15,7 @@ Item {
     property string asked: ""
 
     /// Core's words (`offers::RefMenuOffers::words`) for a tag on each of its sides — data; the mapping is tested in
-    /// `offers::tests::each_delete_row_needs_the_side_it_names`.
+    /// `offers::tests::ref_menu::each_delete_row_needs_the_side_it_names`.
     readonly property var here: ["branch-here", "integrate", "delete", "push-tag"]
     readonly property var overThere: ["branch-here", "integrate", "delete-remote-tag"]
     readonly property var both: ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag",

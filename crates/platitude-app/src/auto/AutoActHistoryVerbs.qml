@@ -45,7 +45,7 @@ Item {
     function run(act, arg) {
         if (act === "squash" || act === "fold-first-commit") {
             // The fold, and the one refusal a window is still asked for (`report::fold_first_commit`); the other
-            // refusal shapes take the same road and are held by `repo_tab::drain_report_tests` and
+            // refusal shapes take the same road and are held by `repo_tab::tests::drain_report` and
             // `tst_reportdress.qml`.
             // Opened first: the fold is a replay that stashes the work while it runs, and whether a graph pass
             // catches it half-way (reader lands on a commit) or not (reader stays on the worktree row) is the

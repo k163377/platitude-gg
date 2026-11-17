@@ -1,8 +1,8 @@
 //! The synthetic dashed edges (WIP to HEAD, stash to base) and what
 //! real history may not take from them.
 
-use super::testkit::{commit, oid};
-use super::*;
+use super::super::testkit::{commit, oid};
+use super::super::*;
 use crate::model::StrPool;
 use crate::oid::Oid;
 use crate::opstate::OpState;

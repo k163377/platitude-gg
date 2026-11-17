@@ -1,5 +1,5 @@
 //! Adversarial delivery orders at the core-to-UI boundary.
-use super::*;
+use super::super::*;
 use platitude_core::Oid;
 use platitude_core::details::CommitDetails;
 use sink::BridgeSink;

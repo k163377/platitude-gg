@@ -389,7 +389,7 @@ impl WorktreeModel {
     qproperty!("wipRowStands", Member = wip_row_stands, Notify = changed);
     // The fields above the menus read, as one value (`encode::TreeReading`)
     // — built as it is read, from the fields, and behind a getter: a value
-    // QML wrote would not reach Rust (`encode::wire_qml`). Kept in a `var`
+    // QML wrote would not reach Rust (`encode::tests::wire_qml`). Kept in a `var`
     // property, a read is what the property held then
     // (`RepoPage.treeAtAsk`). Read as a menu opens or stands again, never by
     // a binding: it carries `notCopied`, as long as the pending files a
@@ -903,5 +903,4 @@ impl WorktreeModel {
 qml_register!(WorktreeModel, "WorktreeModel", singleton = false);
 
 #[cfg(test)]
-#[path = "worktree/tests.rs"]
 mod tests;

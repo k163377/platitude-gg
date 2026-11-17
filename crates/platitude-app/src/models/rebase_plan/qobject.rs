@@ -49,8 +49,8 @@ impl RebasePlanModel {
     /// (`Words.planRefused` / `Words.writeReported`) and the line's colour
     /// differ. Four layers of nets: the shapes on real git
     /// (`integrate_integration/plan.rs`), the screen's names and "the plan
-    /// does not open" (`rebase_plan::drain_tests`), both doors calling it by
-    /// one name (`repo_tab::drain_report_tests`), the headings and the line
+    /// does not open" (`rebase_plan::tests::drain`), both doors calling it by
+    /// one name (`repo_tab::tests::drain_report`), the headings and the line
     /// (`tst_reportdress.qml`). Headless: only `plan-off-branch row:0`.
     #[qsignal]
     pub(super) fn refused_plan(&mut self, kind: String);

@@ -154,6 +154,7 @@ pub(super) fn end_the_holder(dir: &Path, unwinding: bool) {
     // — and that one started after the name was last written. A name gone
     // since it was read was the holder's own, cleared as it quits.
     let named_it = |pid: u32| {
+        // waits(measured): a name gone since it was read stands as written now — compared with a start, awaited by nothing
         let named = modified(&holder_path(dir)).unwrap_or_else(std::time::SystemTime::now);
         started(pid).is_some_and(|started| started <= named)
     };
@@ -627,6 +628,7 @@ fn a_reserved_name_starts_no_second_holder_until_it_goes_stale() {
         .write(true)
         .open(holder_path(&dir))
         .and_then(|name| {
+            // waits(measured): a date handed to the files under test, awaited by nothing
             name.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
         })
         .expect("the reservation, gone stale");
@@ -1090,6 +1092,7 @@ fn a_name_left_by_an_ended_process_ends_no_later_one() {
     (&name)
         .write_all(pid.to_string().as_bytes())
         .expect("the pid");
+    // waits(measured): a date handed to the files under test, awaited by nothing
     name.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(60))
         .expect("the name written before the powershell started");
     drop(name);

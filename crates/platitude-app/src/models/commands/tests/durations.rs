@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 #[test]
 fn durations_read_in_the_unit_they_belong_to() {
     assert_eq!(humanize(0), "0 ms");

@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 /// An idle, open repository on `main`; the cases below bend one input at
 /// a time.

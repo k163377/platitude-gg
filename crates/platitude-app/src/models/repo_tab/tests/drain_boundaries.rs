@@ -3,8 +3,8 @@
 //! (`unsettle`, `TabMsg::ReadsDrained`), and which settled ids the tab
 //! keeps for the log's receipts.
 
+use super::super::*;
 use super::drain_inputs::{OURS, SOMEBODY_ELSE, answered, started};
-use super::*;
 use platitude_core::OperationKind as K;
 
 /// The last boundary. A settle carries only the id; `_kind` keeps the

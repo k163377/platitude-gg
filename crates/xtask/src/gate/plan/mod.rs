@@ -10,8 +10,7 @@ mod steps;
 mod urls;
 
 #[cfg(test)]
-#[path = "tests.rs"]
-mod controls;
+mod tests;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

@@ -22,10 +22,5 @@ pub use todo::{MergedTodo, RebaseStep, TodoAction, TodoLine, merge_todo, render_
 
 pub(crate) use plan::{Base, base_of, range_arg};
 
-// Reached only from `crate::sequencer_tests`.
 #[cfg(test)]
-pub(crate) use plan::has_parent_header;
-#[cfg(test)]
-pub(crate) use run::sh_quote;
-#[cfg(test)]
-pub use todo::parse_todo;
+mod tests;

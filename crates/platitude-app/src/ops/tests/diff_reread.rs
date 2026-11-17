@@ -1,6 +1,6 @@
 //! Which status a re-read of the open file already answers for.
 
-use super::*;
+use super::super::*;
 
 /// Reports of HEAD either side of the write's end — the fence its answer
 /// named, a read that was already in flight when it ended, and the one

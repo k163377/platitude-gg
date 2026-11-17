@@ -223,32 +223,19 @@ impl From<platitude_core::session::BranchPushFacts> for BranchPush {
 mod attach;
 mod card;
 mod drain;
-#[cfg(test)]
-#[path = "tests/drain.rs"]
-mod drain_tests;
 mod field;
-#[cfg(test)]
-#[path = "tests/field.rs"]
-mod field_tests;
 mod item;
 mod qmodel;
 mod qobject;
 mod role;
 mod source;
 #[cfg(test)]
-#[path = "tests/source.rs"]
-mod source_tests;
-#[cfg(test)]
 mod testkit;
+#[cfg(test)]
+mod tests;
 mod tree;
 mod view;
-#[cfg(test)]
-#[path = "tests/view.rs"]
-mod view_tests;
 mod walk;
-#[cfg(test)]
-#[path = "tests/walk.rs"]
-mod walk_tests;
 mod worktree_card;
 
 use card::CardRows;

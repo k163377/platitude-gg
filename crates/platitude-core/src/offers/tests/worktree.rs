@@ -1,4 +1,4 @@
-use super::*;
+use super::super::*;
 
 /// A worktree's row on an idle repository on `main`: `holder` is the
 /// worktree's own path where it is another worktree, empty where the tab

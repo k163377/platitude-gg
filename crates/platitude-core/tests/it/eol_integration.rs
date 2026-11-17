@@ -105,8 +105,8 @@ async fn a_path_marked_as_not_text_is_left_alone() {
 
 /// That git still prints the patch shapes the unit tests beside
 /// [`platitude_core::eol`] read (e.g.
-/// `read_tests::a_file_with_no_ending_at_all_reports_its_first`,
-/// `read_tests::losing_the_final_newline_is_not_an_ending_change`). That
+/// `eol::tests::a_file_with_no_ending_at_all_reports_its_first`,
+/// `eol::tests::losing_the_final_newline_is_not_an_ending_change`). That
 /// moves only with git, so the full gate (`-- --ignored ::periodic::`)
 /// runs these, not every change.
 mod periodic {

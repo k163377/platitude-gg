@@ -2,7 +2,7 @@
 //! (`RefsSnapshot::branch_push`): the toolbar's table, read off the row,
 //! the branch's own mark and the counts of where a mark sends it.
 
-use super::{BranchItem, BranchPushFacts, RefsSnapshot};
+use super::super::{BranchItem, BranchPushFacts, RefsSnapshot};
 use crate::oid::Oid;
 use crate::remote::{BranchPushRemote, PushDefault, PushStanding, PushTrack};
 

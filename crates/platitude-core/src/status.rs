@@ -421,3 +421,6 @@ async fn load_listing(
         message: e.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests;

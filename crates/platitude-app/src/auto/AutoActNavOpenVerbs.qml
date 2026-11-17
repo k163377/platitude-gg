@@ -384,7 +384,7 @@ Item {
         /// (`head::1 --preset nested`: row 1 is `team`, over HEAD's `team/backend/api/fix-auth`; the same preset's
         /// `head:main` is the filter side, the tree flattened and the seat at the list's head). A fold that does not
         /// close over the current branch (`team/web`) leaves its row in the list, no stand-in comes, and the run waits
-        /// out the ceiling — that case is `view_tests`' `the_stand_in_follows_whichever_fold_closed_over_it`.
+        /// out the ceiling — that case is `nav::tests::view`' `the_stand_in_follows_whichever_fold_closed_over_it`.
         property int fold: -1
         /// Whether the row rested on is the last of its section, the list taken to its end first
         /// (_PGG_AUTO_ACT=nav-open-foot). Scrolled once — not re-applied under a hand that has arrived.

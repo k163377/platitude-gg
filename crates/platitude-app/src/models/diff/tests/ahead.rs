@@ -6,7 +6,7 @@
 use platitude_core::parse::diff::parse_patch;
 use platitude_core::parts::{Moves, Part};
 
-use super::ahead::{laid, takes_all};
+use super::super::ahead::{laid, takes_all};
 use crate::encode::flatten_after;
 use crate::ops::DiffPart;
 

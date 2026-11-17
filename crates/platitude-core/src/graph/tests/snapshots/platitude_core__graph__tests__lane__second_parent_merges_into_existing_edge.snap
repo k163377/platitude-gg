@@ -1,5 +1,5 @@
 ---
-source: crates/platitude-core/src/graph/lane_tests.rs
+source: crates/platitude-core/src/graph/tests/lane.rs
 expression: render(&rows)
 ---
   0 *\ lane=0 color=0

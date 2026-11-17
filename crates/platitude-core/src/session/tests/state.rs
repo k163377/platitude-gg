@@ -1,10 +1,10 @@
-//! Tests of [`super::state`]'s derived reads, in a file of their own
+//! Tests of [`super::super::state`]'s derived reads, in a file of their own
 //! (structure.md §分割).
 
 // Both globs: `Arc` / `AtomicU64` / `Ordering` come off the session's
 // prelude, as in `state` (the `use` block of `session/mod.rs`).
-use super::state::*;
-use super::*;
+use super::super::state::*;
+use super::super::*;
 
 /// Two callers miss at once: the second, driven by hand past the fast-path
 /// miss onto the gate the first holds ([`crate::wait::poll_once`]), is

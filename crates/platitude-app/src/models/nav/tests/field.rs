@@ -1,7 +1,7 @@
 //! Tests of the sidebar row's field answers.
 
-use super::testkit::*;
-use super::*;
+use super::super::testkit::*;
+use super::super::*;
 
 #[test]
 fn a_tag_row_reads_out_of_the_snapshot() {

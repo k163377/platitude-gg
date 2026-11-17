@@ -55,8 +55,8 @@ async fn capture_fixtures() {
 
 /// What the pre-merge run leaves out: the fixtures' two scenarios read
 /// live. The parsers read the committed bytes pre-merge
-/// (`status_tests::committed_status_fixture_parses`,
-/// `stash_tests::committed_stash_fixture_parses`) and every session open
+/// (`status::tests::committed_status_fixture_parses`,
+/// `stash::tests::committed_stash_fixture_parses`) and every session open
 /// reads both live, so what is left is whether git still writes those bytes.
 mod periodic {
     use super::*;

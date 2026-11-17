@@ -2,10 +2,10 @@
 
 use platitude_core::highlight::DiffColors;
 
-use super::*;
+use super::super::*;
 use platitude_core::parse::diff::parse_patch;
 
-use super::markup::{Run, Runs};
+use super::super::markup::{Run, Runs};
 
 #[test]
 fn rows_carry_the_markup_the_theme_gave_them() {

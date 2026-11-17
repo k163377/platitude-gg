@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
 
-// The forms the reach rule judges (`waits::reach::bindings` reads each body out
+// The forms the reach rule judges (`waits::reach::tests::bindings` reads each body out
 // of this file and judges it as a beat and as a report), run by Qt: each
 // `staged_` and `unread_` form changes `acts.ticks` through what it reaches,
 // each `own_` form changes only what it made. The prefix is what the rule

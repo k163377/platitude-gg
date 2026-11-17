@@ -1,7 +1,7 @@
 //! Which answer about a commit's signature the pane is left reading
 //! (`drain::settle_signature`).
 
-use super::*;
+use super::super::*;
 
 /// The row the reader is on, and the selection the page made on its way
 /// there.

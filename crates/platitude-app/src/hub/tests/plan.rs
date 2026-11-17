@@ -1,8 +1,8 @@
 //! Delivery orders for the interactive-rebase plan, as
-//! [`super::details_tests`] for commit details: the read walks
+//! [`super::details`] for commit details: the read walks
 //! `from^..HEAD`, so a deep click answers later than a shallow one, and
 //! the screen must still get the answer to the click it waits on.
-use super::*;
+use super::super::*;
 use platitude_core::rebase_plan::{PlanPreview, PlanRefusal, PlanRow};
 use sink::BridgeSink;
 

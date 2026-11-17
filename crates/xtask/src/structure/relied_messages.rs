@@ -105,9 +105,14 @@ fn strays(text: &str) -> (Vec<usize>, usize) {
     (lines, readers)
 }
 
+/// Whether a file is test code from top to bottom: a module's `tests` —
+/// `tests.rs`, or any file under a `tests/` directory
+/// (rules-refs/structure.md「`mod tests` を専用ファイルへ出す時の置き場」) —
+/// or the helpers several of them share (`testkit.rs`).
 fn is_test_file(shown: &str) -> bool {
-    let name = shown.rsplit('/').next().unwrap_or(shown);
-    name.ends_with("_tests.rs") || name == "tests.rs" || name == "testkit.rs"
+    let mut parts = shown.split('/');
+    let name = parts.next_back().unwrap_or(shown);
+    name == "tests.rs" || name == "testkit.rs" || parts.any(|dir| dir == "tests")
 }
 
 /// A function's lines: its number, the code (comments and the inside of
@@ -343,7 +348,15 @@ fn matches_a_literal(code: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{code_of, names_gits_words, strays};
+    use super::{code_of, is_test_file, names_gits_words, strays};
+
+    #[test]
+    fn a_test_file_is_known_by_its_name_or_a_tests_directory() {
+        assert!(is_test_file("refs/tests.rs"));
+        assert!(is_test_file("session/tests/state.rs"));
+        assert!(is_test_file("graph/testkit.rs"));
+        assert!(!is_test_file("session/state.rs"));
+    }
 
     #[test]
     fn a_literal_matched_against_gits_words_is_found_and_a_named_message_is_not() {

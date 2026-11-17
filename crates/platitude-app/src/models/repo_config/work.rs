@@ -1,7 +1,7 @@
 //! The reads and the write, spawned against a path, and what comes back.
 //!
 //! The transitions (asks and saves numbered, answers taken or dropped)
-//! are plain methods so `work_tests` can drive them without Qt or a
+//! are plain methods so `repo_config::tests` can drive them without Qt or a
 //! repository; the spawns and `changed()` are the thin wrap around them.
 
 use super::*;
@@ -288,7 +288,7 @@ impl RepoConfigModel {
                     // answer later in this very drain, before the re-read
                     // is numbered — retired here so it is refused: taken,
                     // its stale `ReadFailed` would replace the save's error
-                    // (netted in `work_tests.rs`).
+                    // (netted in `repo_config/tests.rs`).
                     self.retire_read();
                     self.save_pending = None;
                     self.write_busy = false;

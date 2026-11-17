@@ -1,8 +1,8 @@
 //! What the rows come out as once a filter, a fold and a tree have had
 //! their say.
 
-use super::testkit::*;
-use super::*;
+use super::super::testkit::*;
+use super::super::*;
 use crate::models::notify::{Edit, runs_of};
 
 /// The match reads the whole name, and the row is still named to git by

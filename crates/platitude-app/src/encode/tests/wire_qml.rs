@@ -25,7 +25,7 @@ use std::process::{Child, Command, Stdio};
 use qtbridge::qtbridge_type_lib::{QGuiApplication, QQmlApplicationEngine, QVariantMap};
 use qtbridge::{QListModel, QModelItem, QmlElement, qobject};
 
-use super::wire::{Fields, Listed, One, Optional, Record, field};
+use super::super::wire::{Fields, Listed, One, Optional, Record, field};
 
 /// Three fields of three kinds.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -525,7 +525,7 @@ fn start(child: &str) -> Running {
     std::fs::write(&file, child_qml(child)).expect("the QML");
     let child = Command::new(std::env::current_exe().expect("this test binary"))
         .args([
-            "encode::wire_qml::qml_side",
+            "encode::tests::wire_qml::qml_side",
             "--exact",
             "--ignored",
             "--nocapture",

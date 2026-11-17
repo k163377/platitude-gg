@@ -9,7 +9,7 @@ use platitude_core::eol::{Eol, Notice};
 use platitude_core::session::EolMark;
 use platitude_core::status::{StatusItem, WorktreeStatus};
 
-use super::*;
+use super::super::*;
 
 /// A press's id and somebody else's; any two different numbers do.
 const OURS: u64 = 7;

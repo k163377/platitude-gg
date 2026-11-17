@@ -78,9 +78,9 @@ Menu {
     /// started it and still stand for git's answer (`BranchDeleteRow`'s plain delete): greyed live, that row would grey
     /// before the answer and blank its hold (`AppMenuItem.onBlockedChanged`). A replay's `heldReason`, by contrast, is
     /// bundled live. Nets: `tst_commitrowmenu` / `tst_menuwait` /
-    /// `drain_tests::a_write_settles_after_its_answer_not_at_it`; headless `menu-wait` / `menu-wait after`
-    /// (`--preset slowhook`), `menu-wait stash` / `stash-ref` (`--preset stashes`), `menu-wait replay`
-    /// (`--preset replay`).
+    /// `repo_tab::tests::drain_boundaries::a_write_settles_after_its_answer_not_at_it`; headless `menu-wait` /
+    /// `menu-wait after` (`--preset slowhook`), `menu-wait stash` / `stash-ref` (`--preset stashes`),
+    /// `menu-wait replay` (`--preset replay`).
     property string runningWhy: ""
     /// Opened while `runningWhy` stood, and it has not ended since.
     property bool waiting: false

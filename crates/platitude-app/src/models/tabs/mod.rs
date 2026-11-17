@@ -38,10 +38,11 @@ impl Record for OpenRepo {
 
 mod qobject;
 mod strip;
+#[cfg(test)]
+mod tests;
 
-pub(super) use strip::index_after_move;
 // The siblings reach these through `use super::*`.
-use strip::{Landing, landing_for, title_of};
+use strip::{Landing, index_after_move, landing_for, title_of};
 
 // ---------------------------------------------------------------------------
 // TabsModel: open repositories (the tab strip)

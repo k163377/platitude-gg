@@ -1,7 +1,7 @@
 //! Which answer is one press's own, at each of its moments — the press,
 //! the answer, and the notify that carried neither.
 
-use super::*;
+use super::super::*;
 
 /// This press's id and somebody else's; any two different numbers do.
 const OURS: u64 = 7;

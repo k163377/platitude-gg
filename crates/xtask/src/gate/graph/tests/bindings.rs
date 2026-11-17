@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::{Carried, build, complaints};
+use super::super::{Carried, build, complaints};
 
 /// A workspace laid out for one test and taken away after it.
 struct Tree(PathBuf);
@@ -51,7 +51,7 @@ const DIRECT: &str = "crates/tool/src/direct.rs";
 const INLINE: &str = "crates/tool/src/inline.rs";
 
 /// A path of the probe tree's product crates, spelled in pieces so that
-/// this file names nothing of the real product ([`super::is_product`]).
+/// this file names nothing of the real product ([`super::super::is_product`]).
 fn core(rest: &str) -> String {
     format!("crates/{}/{rest}", "platitude-core")
 }
@@ -111,7 +111,7 @@ fn facade(bound_to: &str) -> String {
     )
 }
 
-fn reach_of(g: &super::Graph, file: &str) -> super::Reach {
+fn reach_of(g: &super::super::Graph, file: &str) -> super::super::Reach {
     g.reach(&[file.to_string()])
 }
 

@@ -176,7 +176,6 @@ fn stream(dir: &std::path::Path, held: bool, events: usize) -> Vec<u64> {
     if held {
         body = body.replace("$holding = $false", "$holding = $true");
     }
-    // waits(measured): the stand-in for the holder's `Start-Sleep` — nothing sleeps; the wait asked for moves the probe's clock and is printed
     let stubs = format!(
         "$script:asked = 0\n\
          function Wait-Event {{\n  param($Timeout)\n  \
@@ -268,7 +267,6 @@ fn a_command_started_once_the_owners_are_listed_keeps_its_call() {
         ),
     )
     .expect("the stopped session's open call");
-    // waits(paced): the probe's wait for the test's go-ahead — the file ends it
     let race = "if (-not $script:raced) { $script:raced = $true; \
                 [IO.File]::WriteAllText(\"$dir\\listed\", ''); \
                 while (-not (Test-Path -LiteralPath \"$dir\\started\")) { Start-Sleep -Milliseconds 20 } }";
@@ -823,6 +821,7 @@ fn a_build_in_use_or_a_stale_holder_keeps_a_holder_standing() {
     heard(&stale, revision, long_ago());
     other_holder(&stale, revision + 1, crate::awake::now_ms());
     let beat = crate::awake::HOLDER_STALE + std::time::Duration::from_secs(60);
+    // waits(measured): a date handed to the files under test, awaited by nothing
     std::fs::File::options()
         .write(true)
         .open(stale.join(format!("holder-r{}", revision + 1)))

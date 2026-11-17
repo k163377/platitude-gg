@@ -48,12 +48,11 @@ pub(crate) mod permit;
 mod python;
 mod repeat;
 mod review;
-#[cfg(test)]
-#[path = "tests.rs"]
-mod runner;
 mod seat;
 mod shell;
 mod still;
+#[cfg(test)]
+mod tests;
 mod write;
 
 pub(crate) static HOOK: crate::command::Command = crate::command::Command {

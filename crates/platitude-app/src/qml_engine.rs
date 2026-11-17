@@ -51,7 +51,7 @@ pub fn load(mut engine: Pin<&mut QQmlApplicationEngine>, url: &str) -> Result<()
 }
 
 /// [`load`] against a real engine, offscreen, in a copy of this binary
-/// started for it (as `encode::wire_qml`): a root that does not load is
+/// started for it (as `encode::tests::wire_qml`): a root that does not load is
 /// named, a later one that does is not, and the engine and the
 /// application come down in `main`'s order after either.
 #[cfg(test)]

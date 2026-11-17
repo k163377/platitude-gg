@@ -239,3 +239,6 @@ pub async fn take_side(
         .args(specs.iter().map(String::as_str));
     executor.run(add, cancel).await.map(drop)
 }
+
+#[cfg(test)]
+mod tests;

@@ -136,7 +136,7 @@ FocusScope {
     /// the rows the menu has with nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing
     /// reads the worktree, and one up as it goes null stands again on it (`CommitMenuState.follow`, …). The model's
     /// `reading` kept in a `var` property is what the property held then: kept in a JS variable, it would read what the
-    /// property holds now (`encode::wire_qml`).
+    /// property holds now (`encode::tests::wire_qml`).
     property var treeAtAsk: null
     onRunningWhyChanged: {
         if (page.runningWhy === "")
@@ -530,8 +530,8 @@ FocusScope {
     /// the tree and the entry goes, so the box is the one place left to hold it. An `apply` keeps the entry, so its
     /// name stays there. Only a name somebody gave (`stash::label_in`): `WIP on <branch>: <sha> <subject>` is about
     /// the commit the work stood on. The entry is looked up whatever the list's filter (`NavSectionModel.nameOfFull`).
-    /// Nets: core's `session_integration::operations`, the app's `drain_tests`. Headless: `stash-pop-row`, whose
-    /// `graph_settled … back=` reads the box's `subjectText`.
+    /// Nets: core's `session_integration::operations`, the app's `repo_tab::tests::drain`. Headless: `stash-pop-row`,
+    /// whose `graph_settled … back=` reads the box's `subjectText`.
     function popStash(selector) {
         page.pendingPopLabel = GitFacts.stashLabel(stashesModel.nameOfFull(selector))
         page.pendingPopId = repoTab.popStash(selector)

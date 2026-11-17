@@ -862,7 +862,7 @@ async fn a_drift_is_listed_by_remote_with_the_commit_a_lease_would_name() {
 /// git's answer to deleting a name the remote has not got, behind the
 /// command line the delete above holds; and the drifted tag's two graph
 /// rows through a whole session, whose labels are
-/// `session::join_tests::a_drifted_tag_stands_on_both_rows`. Only the full
+/// `session::tests::join::a_drifted_tag_stands_on_both_rows`. Only the full
 /// gate runs these.
 mod periodic {
     use super::*;

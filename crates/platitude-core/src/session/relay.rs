@@ -11,7 +11,7 @@
 //! (`LogRow::parents`) and whether it is a stash (`stash_ref`), so
 //! laying out again costs a pass over the window and no git
 //! (`GraphBuilder::push_ids`). A synthetic row coming or going moves no
-//! lane or colour of the history below (`graph::leash_tests` pins it by
+//! lane or colour of the history below (`graph::tests::leash` pins it by
 //! equality), so laying out again moves only the synthetic rows and the
 //! rows their leash crosses. Not dropped at paint time instead: the rows
 //! below own that column's segments, and edges would be left leading

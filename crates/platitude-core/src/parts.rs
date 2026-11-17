@@ -378,3 +378,6 @@ fn start(first: i64, count: u32) -> u32 {
 fn number(no: i64) -> Option<u32> {
     u32::try_from(no).ok()
 }
+
+#[cfg(test)]
+mod tests;

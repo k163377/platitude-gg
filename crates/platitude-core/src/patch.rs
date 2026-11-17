@@ -221,3 +221,6 @@ fn classify(line: &[u8]) -> Option<Body> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,7 +1,7 @@
 //! The rows a commit row's own menu offers — apart from the ref menu's
-//! [`super::tests`], as the two share nothing (structure.md §分割).
+//! [`super::ref_menu`], as the two share nothing (structure.md §分割).
 
-use super::*;
+use super::super::*;
 
 /// An idle tree on `main` with HEAD at `head`.
 fn main_at(head: &str) -> TreeStanding {

@@ -8,9 +8,6 @@ pub mod branch;
 pub mod commit;
 pub(crate) mod config;
 pub mod conflict;
-#[cfg(test)]
-#[path = "conflict/tests.rs"]
-mod conflict_tests;
 pub mod details;
 pub mod discards;
 pub mod eol;
@@ -30,13 +27,7 @@ pub mod operation;
 pub mod opstate;
 pub mod parse;
 pub mod parts;
-#[cfg(test)]
-#[path = "parts/tests.rs"]
-mod parts_tests;
 pub mod patch;
-#[cfg(test)]
-#[path = "patch/tests.rs"]
-mod patch_tests;
 pub mod picture;
 pub mod preview;
 pub mod process;
@@ -52,20 +43,11 @@ pub mod repo;
 pub mod report;
 pub(crate) mod scratch;
 pub mod sequencer;
-#[cfg(test)]
-#[path = "sequencer/tests.rs"]
-mod sequencer_tests;
 pub mod session;
 pub mod settings;
 pub mod stage;
 pub mod stash;
-#[cfg(test)]
-#[path = "stash/tests.rs"]
-mod stash_tests;
 pub mod status;
-#[cfg(test)]
-#[path = "status/tests.rs"]
-mod status_tests;
 pub mod tag;
 #[cfg(test)]
 mod temp;

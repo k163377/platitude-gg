@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use super::testkit::{commit, oid, render};
-use super::*;
+use super::super::testkit::{commit, oid, render};
+use super::super::*;
 use crate::model::{CommitMeta, StrPool};
 use crate::oid::Oid;
 

@@ -1,4 +1,4 @@
-use super::{
+use super::super::{
     Carried, bin_exe_names, build, defines_tests, literal_paths, mod_declaration, paths_in,
     reexports_in, string_bodies, strip_comments,
 };
@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 
 #[test]
 fn markdown_never_enters_a_test_or_directory_dependency() {
-    let mut graph = super::Graph::default();
+    let mut graph = super::super::Graph::default();
     for reader in ["src/notice.rs", "src/"] {
         for document in ["docs/rules.md", "src/README.MD"] {
             graph.edge(reader, document);
@@ -27,7 +27,7 @@ fn a_test_of_any_runtime_counts_and_a_cfg_guard_does_not() {
         "#[tokio::test(flavor = \"multi_thread\")]\nasync fn t() {}\n"
     ));
     assert!(defines_tests("#[cfg(test)]\nmod tests {\n}\n"));
-    assert!(!defines_tests("#[cfg(test)]\nmod state_tests;\n"));
+    assert!(!defines_tests("#[cfg(test)]\nmod tests;\n"));
 }
 
 #[test]
@@ -242,8 +242,8 @@ fn a_test_that_shoots_a_binary_reads_the_binary() {
 
 /// The graph `code` and `data` draw, read both ways, with the
 /// integration binaries' modules named.
-fn drawn(code: &[(&str, &str)], data: &[(&str, &str)], sandboxed: &[&str]) -> super::Graph {
-    let mut g = super::Graph::default();
+fn drawn(code: &[(&str, &str)], data: &[(&str, &str)], sandboxed: &[&str]) -> super::super::Graph {
+    let mut g = super::super::Graph::default();
     for (from, to) in code {
         g.edge(from, to);
     }
@@ -253,7 +253,7 @@ fn drawn(code: &[(&str, &str)], data: &[(&str, &str)], sandboxed: &[&str]) -> su
     for file in sandboxed {
         g.modules.insert(
             (*file).to_string(),
-            super::Module {
+            super::super::Module {
                 krate: "probe".to_string(),
                 path: Vec::new(),
                 package: "probe".to_string(),
@@ -394,7 +394,10 @@ fn the_apps_window_owes_the_composition_tests_and_not_the_gates_sandbox() {
     for named in [&hook, &runner] {
         assert!(inputs.contains(named), "{named}: {inputs:?}");
     }
-    let product: Vec<&String> = inputs.iter().filter(|f| super::is_product(f)).collect();
+    let product: Vec<&String> = inputs
+        .iter()
+        .filter(|f| super::super::is_product(f))
+        .collect();
     assert!(product.is_empty(), "{product:?}");
 }
 
@@ -404,7 +407,7 @@ fn the_apps_window_owes_the_composition_tests_and_not_the_gates_sandbox() {
 fn the_crate_roots_have_no_readers_and_every_path_resolves() {
     let root = crate::tree::workspace_root();
     let g = build(&root).expect("the graph of this tree");
-    assert_eq!(super::complaints(&g), Vec::<String>::new());
+    assert_eq!(super::super::complaints(&g), Vec::<String>::new());
     // A file two crates declare by `#[path]` is one node (`lexical`).
     let doubled: Vec<&String> = g.modules.keys().filter(|f| f.contains("/../")).collect();
     assert!(doubled.is_empty(), "{doubled:?}");
@@ -427,7 +430,7 @@ fn nothing_reads_a_file_of_cis() {
             if path.is_dir() {
                 dirs.push(path);
             } else {
-                files.push(super::rel(&root, &path));
+                files.push(super::super::rel(&root, &path));
             }
         }
     }
@@ -511,7 +514,7 @@ fn agent_control_changes_do_not_change_the_app_driver() {
 /// names it; any other says nothing of the system.
 #[test]
 fn a_cfg_on_the_system_is_read_and_any_other_is_not() {
-    use super::cfg_holds;
+    use super::super::cfg_holds;
     assert_eq!(cfg_holds("windows", "windows"), Some(true));
     assert_eq!(cfg_holds("windows", "linux"), Some(false));
     assert_eq!(cfg_holds("unix", "macos"), Some(true));
@@ -656,11 +659,11 @@ fn what_names_a_file_taken_out_is_read_off_its_strings() {
 fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
     use std::path::{Path, PathBuf};
     assert_eq!(
-        super::lexical(Path::new("crates/x/tests/gate/../../src/wait.rs")),
+        super::super::lexical(Path::new("crates/x/tests/gate/../../src/wait.rs")),
         PathBuf::from("crates/x/src/wait.rs")
     );
     assert_eq!(
-        super::lexical(Path::new("crates/x/src/./y.rs")),
+        super::super::lexical(Path::new("crates/x/src/./y.rs")),
         PathBuf::from("crates/x/src/y.rs")
     );
 }
