@@ -91,6 +91,11 @@ Item {
             graphPanTimer.order = act === "middle-scroll" ? ["scrolled"]
                                 : act === "graph-bar-away" ? ["sent", "left"] : ["sent"]
             graphPanTimer.start()
+        } else if (act === "graph-node-reveal") {
+            // Lanes overflowing their column, pulled in as for `graph-bar`.
+            page.setGraphColumns(graphPane.labelWManual,
+                                 Metrics.laneInset + 2 * Metrics.laneW)
+            nodeRevealTimer.start()
         } else if (act === "pane-bar" || act === "pane-bar-away") {
             // The details pane's bar, which a page opened on a dirty tree is not showing (`RepoPage.trySelectDefault`);
             // HEAD is the commit `--preset long` gives its eighty files.
@@ -493,7 +498,7 @@ Item {
             if (op.at("start")) {
                 op.input("sent", () => {
                     graphPane.restPointer(true)
-                    graphPane.graphX = graphPane.graphXMax / 2
+                    graphPane.metrics.panTo(graphPane.graphXMax / 2)
                 })
                 return
             }
@@ -510,6 +515,147 @@ Item {
                 "report": () => "graph_bar shown=" + graphPane.laneBarShown
                                 + " ink=" + Math.round(graphPane.laneBarInk * 100) / 100
                                 + " overflow=" + Math.round(graphPane.graphXMax) })
+        }
+    }
+    // _PGG_AUTO_ACT=graph-node-reveal [lanes|keys|right|menukey|jump|chosen|find]: a commit clicked, stepped onto or
+    // jumped to whose node lies past the lane column's edge glides the lanes to it (`GraphColumnMetrics.revealLane`)
+    // — the row's own press (`GraphRowDelegate.leftClick`); with `lanes` the lane strip's click, a press and a release
+    // that did not travel (`GraphLanePan.clickAt`); with `keys` an arrow press onto the row from the one above it, or
+    // below for the first (`GraphPane.stepRow`, the step the arrows' handlers take — the row it steps from is put down
+    // without a move, `setCurrentRow`); with `right` the row's right-click (`GraphRowDelegate.askMenu`, the handler's
+    // body) and with `menukey` the menu key on it (`GraphPane.menuFromKeys`), each menu put away before the next
+    // (`CommitRowMenu.dismiss`, as the second press would close it); with `jump` the door the left panel, a card's name
+    // and a parent's link share (`RepoPage.jumpToRef`); with `chosen` a click in the right pane's list of held commits
+    // (`RepoPage.showChosen`); with `find` the row's subject typed into the find card (`GraphFind.goToMatch`). The lanes
+    // go to the far end first, so the first lands on a lane-0 row past the left edge (back to rest) and the second on
+    // a row of the farthest lane past the right edge (out to the end again): both edges, and the picture is the lanes
+    // panned with that row's node whole. `--preset stashes` has three lanes, one past the two the column is pulled in
+    // to. `*_was` is witnessed before each, `*_glides` in its press (on its way, not there yet), `*_shown` / `*_x` once
+    // the glide is over (`GraphPane.placing`).
+    PageStage {
+        id: nodeRevealTimer
+        name: "node_reveal"
+        order: ["panned", "near", "far"]
+        readonly property string via: Harness.autoActArg === "" ? "row" : Harness.autoActArg
+        /// The farthest lane the history draws.
+        function farLane() {
+            return graphModel.maxLanes - 1
+        }
+        /// The first commit row on screen whose node stands on `lane`, or null.
+        function rowOnLane(lane) {
+            const view = graphPane.view
+            for (let i = 0; i < view.count; i++) {
+                const item = view.itemAtIndex(i)
+                if (item && !item.isWip && !item.carried && item.node_lane === lane)
+                    return item
+            }
+            return null
+        }
+        /// Whether the node on `lane` lies whole in the lane column as the lanes stand — `GraphLaneCell`'s node.
+        function nodeWhole(lane) {
+            const mid = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2 - graphPane.graphX
+            return mid - Metrics.nodeIcon / 2 >= 0 && mid + Metrics.nodeIcon / 2 <= graphPane.graphColW
+        }
+        function click(item) {
+            if (nodeRevealTimer.via === "keys") {
+                const from = item.index > 0 ? item.index - 1 : item.index + 1
+                graphPane.setCurrentRow(from)
+                return graphPane.stepRow(item.index - from, false)
+            }
+            if (nodeRevealTimer.via === "lanes") {
+                const strip = graphPane.lanePan
+                return strip.clickAt(Qt.point(1, item.mapToItem(strip, Qt.point(0, item.height / 2)).y))
+            }
+            if (nodeRevealTimer.via === "right" || nodeRevealTimer.via === "menukey") {
+                if (acts.driver.commitMenu.visible)
+                    acts.driver.commitMenu.dismiss()
+                if (nodeRevealTimer.via === "right") {
+                    item.askMenu()
+                    return true
+                }
+                graphPane.view.takeKeyboard()
+                graphPane.setCurrentRow(item.index)
+                return graphPane.menuFromKeys()
+            }
+            if (nodeRevealTimer.via === "jump")
+                page.jumpToRef(item.oid_hex)
+            else if (nodeRevealTimer.via === "chosen")
+                page.showChosen(item.oid_hex)
+            else if (nodeRevealTimer.via === "find") {
+                // Assigning the text runs the search a keystroke runs (the `find` verb).
+                page.startFind()
+                graphPane.findCard.query = item.subject
+            } else
+                item.leftClick(Qt.NoModifier)
+            return true
+        }
+        onTriggered: {
+            const op = nodeRevealTimer
+            const near = op.rowOnLane(0)
+            const far = op.rowOnLane(op.farLane())
+            if (op.at("start")) {
+                if (!Awaited.all("node_reveal_ready", {
+                    "overflow": graphPane.graphXMax > 0,
+                    "rows": !!near && !!far && op.farLane() > 1,
+                    "page": PageSettled.settled(page) }))
+                    return
+                op.input("panned", () => {
+                    graphPane.metrics.panTo(graphPane.graphXMax)
+                })
+                return
+            }
+            if (op.at("panned")) {
+                if (!Awaited.all("node_reveal_near", { "row": !!near }))
+                    return
+                if (!op.kept("near_was"))
+                    op.witness("near_was", op.nodeWhole(0))
+                op.input("near", () => {
+                    if (!op.click(near))
+                        return false
+                    op.witness("near_glides", graphPane.metrics.lanesGliding)
+                    return true
+                })
+                return
+            }
+            if (op.at("near")) {
+                // Inside the double-click window a second click would be half a double-click; inside the arrows'
+                // settle a second step would be read only once the settle ran out (`GraphRowWalk.noteStep`); the
+                // near node is read once its glide is over.
+                if (!Awaited.all("node_reveal_far", {
+                    "row": !!far,
+                    "window": !graphPane.view.clickGuarded,
+                    "settle": !graphPane.stepSettling,
+                    "glided": !graphPane.placing }))
+                    return
+                if (!op.kept("near_shown")) {
+                    op.witness("near_shown", op.nodeWhole(0))
+                    op.witness("near_x", Math.round(graphPane.graphX))
+                    op.witness("far_was", op.nodeWhole(op.farLane()))
+                }
+                op.input("far", () => {
+                    if (!op.click(far))
+                        return false
+                    op.witness("far_glides", graphPane.metrics.lanesGliding)
+                    return true
+                })
+                return
+            }
+            // `page` holds the glide too (`GraphPane.placing`): `far_shown` is read where it landed.
+            op.complete({
+                "name": "node_reveal_landed",
+                "when": () => ({ "page": PageSettled.settled(page), "settle": !graphPane.stepSettling }),
+                "report": () => "graph_node_reveal via=" + op.via
+                                + " near_was=" + op.witnessed("near_was")
+                                + " near_glides=" + op.witnessed("near_glides")
+                                + " near_shown=" + op.witnessed("near_shown")
+                                + " near_x=" + op.witnessed("near_x")
+                                + " far_was=" + op.witnessed("far_was")
+                                + " far_glides=" + op.witnessed("far_glides")
+                                + " far_shown=" + op.nodeWhole(op.farLane())
+                                + " at_end=" + (Math.round(graphPane.graphX) === Math.round(graphPane.graphXMax))
+                                + " lane=" + op.farLane()
+                                + " x=" + Math.round(graphPane.graphX)
+                                + " max=" + Math.round(graphPane.graphXMax) })
         }
     }
     // The panels' own bar (`PaneScrollBar`): bright while the reader sends the list, back to the divider ink once they

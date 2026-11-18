@@ -37,8 +37,7 @@ AutoScrollBar {
         laneBar.moved()
         if (!pressed)
             return
-        laneBar.columns.graphX = Math.max(0, Math.min(position * laneBar.columns.graphFullW,
-                                                      laneBar.columns.graphXMax))
+        laneBar.columns.panTo(position * laneBar.columns.graphFullW)
     }
     /// The bar's height, for the list's run-out (`GraphColumnMetrics.laneBarRoom`).
     Binding {

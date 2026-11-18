@@ -90,6 +90,10 @@ QtObject {
     // How long a wheel notch takes to land, so the eye can follow the rows across. Chromium's own
     // (`scroll_offset_animation_curve.cc`: 9 frames / 60); `WheelGlide` draws its ease-in-out.
     readonly property int wheelGlideMs: 150
+    // How long the lanes take to glide sideways to a node a press, a step or a jump lands on, on the wheel's curve
+    // (`GraphColumnMetrics.laneGlide`). Shorter than a notch (user decision — ask before changing): the lanes answer a
+    // press rather than pace a reading, and at a notch's length they trail the hand that sent them.
+    readonly property int laneGlideMs: 50
     // A scroll bar's arrow: a press sends one step, glided like a notch (`wheelGlideMs`); held, a run starts after a
     // pause and goes at one speed until the hand lets go or leaves the arrow. All three are Chromium's Fluent bar,
     // measured: the same whatever the view's height, and whether it is the page or a box inside it.

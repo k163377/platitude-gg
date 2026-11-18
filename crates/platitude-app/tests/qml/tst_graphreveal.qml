@@ -34,6 +34,10 @@ Item {
         function rowOnScreen(row) {
             return true
         }
+        // The lanes' half of a reveal is tst_lanereveal.qml's; here it goes nowhere.
+        readonly property QtObject columns: QtObject {
+            function revealLane(lane) {}
+        }
     }
     // The current branch's stand-in cut down to what the walk asks of it (`GraphHeadPin.topBand` / `aboveAt`).
     readonly property QtObject pin: QtObject {
@@ -55,6 +59,9 @@ Item {
             }
             function rowOf(oidHex) {
                 return -1
+            }
+            function laneAt(row) {
+                return 0
             }
         }
         asking: false

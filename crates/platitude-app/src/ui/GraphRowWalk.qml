@@ -124,14 +124,25 @@ Item {
         walk.landStep()
         stepTimer.restart()
     }
-    /// A step went by unread; without it the settle behind a single press would read the row twice.
+    /// A step went by unread; without it the settle behind a single press would read the row twice. While it stands
+    /// the highlight is the current row's, not the choice's (`GraphList.stepsUnread`): the choice moves only when a row
+    /// is read, and a held key's highlight runs ahead of that (規約 §矢印で履歴を辿る).
     property bool stepPending: false
+    /// The row is read, and its node comes into the lane column (`revealNode`) with the read, not with each step: the
+    /// highlight runs, the lanes do not swing at the repeat rate under it, and where the run stops they glide once.
     function landStep() {
         // Read the row as it stands now: a background rebuild during the settle rewrites rows in place.
         const row = walk.view.currentIndex
+        walk.revealNode(row)
         const oidHex = walk.graphModel.oidAt(row)
         if (oidHex !== "")
             walk.activated(oidHex, row)
+    }
+    /// Sends the lanes to `row`'s node as a click on it does (`GraphColumnMetrics.revealLane`): where the arrows read
+    /// a row (`landStep`) and where a jump lands (`jumpToRow`, `revealRow`). The menu key's comes with the row's own
+    /// right-click (`GraphRowDelegate.askMenu`). The lane is the model's, since the row may not be built yet.
+    function revealNode(row) {
+        walk.view.columns.revealLane(walk.graphModel.laneAt(row))
     }
     /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
     /// OS's first-repeat delay would, before sending the repeats.
@@ -146,14 +157,18 @@ Item {
         onTriggered: {
             if (!walk.stepPending)
                 return
-            walk.stepPending = false
+            // Read before the highlight goes back to the choice: the read moves the choice onto the current row, so
+            // the highlight stays where it ran to.
             walk.landStep()
+            walk.stepPending = false
         }
     }
+    /// A jump: the row selected, centred, and its node brought on (`revealNode`).
     function jumpToRow(row) {
         walk.view.haltGlide()
         walk.view.currentIndex = row
         walk.view.positionViewAtIndex(row, ListView.Center)
+        walk.revealNode(row)
     }
     /// Re-centers on the current row a beat from now: a model reset zeroes contentY in the polish after our handlers.
     function anchorSoon() {
@@ -276,10 +291,14 @@ Item {
     }
     /// Brings `row` into the open and touches nothing else — not the selection, not `currentIndex`: a row standing
     /// whole in the view and clear of the current branch's stand-in stays where it is; one cut by an edge, under the
-    /// stand-in or out of sight is centred (デザイン規約 §複数のコミットを選ぶ). What a click on a held commit asks
-    /// (`RepoPage.showChosen`). -1 is no row.
+    /// stand-in or out of sight is centred (デザイン規約 §複数のコミットを選ぶ). Its node comes on either way
+    /// (`revealNode`): a row in the open with its node past the lane column's edge is not there to see. What a click on
+    /// a held commit asks (`RepoPage.showChosen`). -1 is no row.
     function revealRow(row) {
-        if (row < 0 || walk.rowInTheOpen(row))
+        if (row < 0)
+            return
+        walk.revealNode(row)
+        if (walk.rowInTheOpen(row))
             return
         walk.view.haltGlide()
         walk.view.positionViewAtIndex(row, ListView.Center)

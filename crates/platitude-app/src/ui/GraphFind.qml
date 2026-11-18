@@ -75,8 +75,9 @@ FindBar {
     function findPrevious() {
         find.goToMatch(find.graphModel.matchBefore(find.view.currentIndex))
     }
-    /// Puts the search on `row`, moving the viewport only when the row is off screen. `atMatch` is not assigned here —
-    /// that would break its binding, and the count would stop following a background refresh.
+    /// Puts the search on `row`, moving the viewport only when the row is off screen, and the lanes only when its node
+    /// lies past the lane column's edge (`GraphColumnMetrics.revealLane`, as a jump brings it). `atMatch` is not
+    /// assigned here — that would break its binding, and the count would stop following a background refresh.
     function goToMatch(row) {
         if (row < 0)
             return
@@ -85,6 +86,7 @@ FindBar {
             find.view.haltGlide()
             find.view.positionViewAtIndex(row, ListView.Center)
         }
+        find.view.columns.revealLane(find.graphModel.laneAt(row))
         find.landed(find.graphModel.oidAt(row))
     }
 

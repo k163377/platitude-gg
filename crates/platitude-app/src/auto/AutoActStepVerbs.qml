@@ -213,8 +213,10 @@ Item {
     }
     // The arrow held down: the opening press, then the repeats once its settle has expired, as an OS's first repeat
     // always arrives after it (`GraphRowWalk.noteStep`). `reads=` is the claim — a held walk reads two rows, its start
-    // and its end — and no picture holds it. The hand off the key: the selection landed and the card caught up — the
-    // pair `graph_step` waits on.
+    // and its end — and no picture holds it. `lit=` is the other half: the row the repeats ran to wears the highlight
+    // before it is read (`GraphRowDelegate.selected`, read off the row in the repeats' press — a picture comes after
+    // the read, where the choice has caught up either way). The hand off the key: the selection landed and the card
+    // caught up — the pair `graph_step` waits on.
     PageStage {
         id: graphHoldTimer
         name: "graph_hold"
@@ -241,6 +243,7 @@ Item {
                    + " steps=" + op.steps
                    + " reads=" + (acts.holdReads - op.witnessed("readsFrom"))
                    + " refused=" + op.witnessed("refused")
+                   + " lit=" + op.witnessed("lit")
                    + " selected=" + (page.selectedOid === graphModel.oidAt(at))
                    + " card=" + (detailsModel.shaHex === page.selectedOid)
         }
@@ -272,6 +275,8 @@ Item {
                             refused++
                     }
                     op.witness("refused", refused)
+                    const ran = graphPane.view.itemAtIndex(graphPane.view.currentIndex)
+                    op.witness("lit", !!ran && ran.selected)
                 })
                 return
             }

@@ -176,10 +176,10 @@ Item {
         }
     }
     /// The page's reads a picture waits out, never named by the verb. Each can be owed again after the completion's
-    /// hold has passed it: `placing` (the view re-centring after `Metrics.anchorDelayMs`), `readings` (the pacer's
-    /// reads of other worktrees) and `records` (the command log's receipt for a write that settles after the
-    /// completion: a fetch nobody pressed, a tab's on opening or the interval's, or the run's own where its verb
-    /// completes with the write still out — `arriving`).
+    /// hold has passed it: `placing` (the view re-centring after `Metrics.anchorDelayMs`, or the lanes gliding to a
+    /// node), `readings` (the pacer's reads of other worktrees) and `records` (the command log's receipt for a write
+    /// that settles after the completion: a fetch nobody pressed, a tab's on opening or the interval's, or the run's own
+    /// where its verb completes with the write still out — `arriving`).
     ///
     /// `records` is owed where the tab has heard of a settle and the log has not taken its receipt: the two travel on
     /// feeds of their own, and no contract of theirs rules that order out (`xtask::verify::records_check` forces it on

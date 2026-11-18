@@ -24,10 +24,10 @@ import platitude.ui.hover
 /// other term, so without it a run reads settled before and after the move (`AutoActCompletion.owesStatus`). What
 /// this holds is a verb's completion (`complete … page=`, `CompletionRoute`), never the moment a picture is taken.
 ///
-/// A move the view is owed is the page still arriving (`placing` = `GraphRowWalk.placing`, where the rule for a new
-/// delay that writes the view's `contentY` stands). The default landing (`RepoPage.trySelectDefault`) centres the row
-/// a beat after picking it: a page that answered settled on its reads alone would have that centring pull the view
-/// back after the run moved it.
+/// A move the view is owed is the page still arriving (`placing` = `GraphPane.placing`: `GraphRowWalk.placing`, where
+/// the rule for a new delay that writes the view's `contentY` stands, and the lanes' glide to a node). The default
+/// landing (`RepoPage.trySelectDefault`) centres the row a beat after picking it: a page that answered settled on its
+/// reads alone would have that centring pull the view back after the run moved it.
 ///
 /// So is a hover decision on its way (`hover:<key>`): a seat resting before it opens a card, a list or a tooltip
 /// under the hand, or beating before it takes one down (`Hovers.deciding`). What stands at the completion would not

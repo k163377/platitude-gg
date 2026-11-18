@@ -69,7 +69,7 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "graph-step-hold",
         when: &[],
-        plain: "reads=2 refused=0 selected=true card=true",
+        plain: "reads=2 refused=0 lit=true selected=true card=true",
     },
     // The refusing half: `back=true` (nothing moved) is worth nothing
     // without `refused=`. Read beside `graph-step` — a step that always

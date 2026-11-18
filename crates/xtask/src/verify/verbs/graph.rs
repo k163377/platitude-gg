@@ -870,6 +870,18 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "graph_bar shown=false",
     },
+    // A commit clicked, stepped onto or jumped to whose node lies past the
+    // lane column's edge glides the lanes to it: lane 0 back to rest, the
+    // farthest lane out to the end. `*_was=false` says each one had a node
+    // to bring on, `*_glides=true` that it went by a glide, not a jump; the
+    // argument (`lanes`, `keys`, `right`, `menukey`, `jump`, `chosen`,
+    // `find`) only changes which input lands on the row.
+    Verb {
+        name: "graph-node-reveal",
+        when: &[],
+        plain: "near_was=false near_glides=true near_shown=true near_x=0 \
+                far_was=false far_glides=true far_shown=true at_end=true",
+    },
     // Which column the middle click landed in: lanes carried sideways,
     // or (`message`) left where they were. The argument picks the half.
     Verb {

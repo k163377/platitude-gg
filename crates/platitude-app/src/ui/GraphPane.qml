@@ -58,9 +58,18 @@ Rectangle {
     /// standing where no box opened (`RepoPage.dropWithheld`), stepped or not.
     signal keyReached()
     /// How the graph's rows answer a click, for the card that stands on them (`RowHoverHost`) — one door, so the two
-    /// cannot disagree on "the same target".
+    /// cannot disagree on "the same target". The node comes with it, as with the row's own press (`revealNode`).
     function noteRowClick(oidHex, chip) {
+        graphArea.revealNode(oidHex)
         return graphList.noteClick(oidHex, chip)
+    }
+    /// A click on a commit made from something standing over its row (a card): the node is brought on as the row's
+    /// own press brings it (`GraphRowDelegate.revealNode`). Nothing for a row scrolled off — nothing over it was
+    /// clicked.
+    function revealNode(oidHex) {
+        const row = graphList.itemAtIndex(graphArea.graphModel.rowOf(oidHex))
+        if (row)
+            row.revealNode()
     }
     function dropRowRename() {
         graphList.dropRename()
@@ -73,9 +82,10 @@ Rectangle {
         graphList.hushClicks()
     }
     /// A press on the current branch's stand-in (`GraphHeadPin`) or on the card its chip unfolds into
-    /// (`RefListPopup.standInPressed`): brings the off-screen row on, then picks it with the modifiers the rows read.
-    /// The stand-in goes once its row is on screen, so **the row now under the hand is not what the hand was on**
-    /// (`hushRowClicks`, and the hand held still) — a double-click there would move the worktree.
+    /// (`RefListPopup.standInPressed`): brings the off-screen row on, its node too (`GraphRowWalk.jumpToRow`), then
+    /// picks it with the modifiers the rows read. The stand-in goes once its row is on screen, so **the row now under
+    /// the hand is not what the hand was on** (`hushRowClicks`, and the hand held still) — a double-click there would
+    /// move the worktree.
     function pinPressed(row, modifiers) {
         graphArea.hushRowClicks()
         // The stand-in going is the rows moving under the hand, whether or not the jump scrolls.
@@ -385,8 +395,9 @@ Rectangle {
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
     /// Automation only: whether a step is still waiting to be read (`GraphRowWalk.settling`).
     readonly property alias stepSettling: rowWalk.settling
-    /// Automation only: whether the view still has a move owed to it (`GraphRowWalk.placing`).
-    readonly property alias placing: rowWalk.placing
+    /// Automation only: whether the view still has a move owed to it — the walk's (`GraphRowWalk.placing`) or the
+    /// lanes' glide to a node (`GraphColumnMetrics.lanesGliding`).
+    readonly property bool placing: rowWalk.placing || metrics.lanesGliding
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
     function revealRow(row) { rowWalk.revealRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
@@ -409,7 +420,8 @@ Rectangle {
     readonly property alias graphColWMin: metrics.graphColWMin
     readonly property alias graphColWMax: metrics.graphColWMax
     readonly property alias graphColW: metrics.graphColW
-    property alias graphX: metrics.graphX
+    /// Read-only: the lanes move through `metrics.panTo`, which stops a node's glide in flight.
+    readonly property alias graphX: metrics.graphX
     readonly property alias graphXMax: metrics.graphXMax
     readonly property alias subjectTextX: metrics.subjectTextX
 
@@ -486,6 +498,7 @@ Rectangle {
         findOn: findSeat.item !== null && findSeat.item.findOn
         chosenOids: graphArea.chosenOids
         chosenCount: graphArea.chosenCount
+        stepsUnread: rowWalk.stepPending
         listKey: graphArea.listKey
         cardKey: graphArea.cardKey
         hand: paneHand
@@ -543,8 +556,7 @@ Rectangle {
                 graphArea.createBranchRequested(oidHex, name)
         }
         onNamingCancelled: graphArea.stopNaming()
-        onWheelPanned: delta => graphArea.graphX = Math.max(0,
-            Math.min(graphArea.graphX - delta / 2, graphArea.graphXMax))
+        onWheelPanned: delta => metrics.panTo(metrics.graphX - delta / 2)
     }
     /// Whether a middle-click autoscroll is under way, and whether it carries the lanes sideways as well (automation).
     readonly property alias autoScrolling: autoScroll.scrolling
@@ -581,7 +593,7 @@ Rectangle {
         onDrifted: (dy, dx) => {
             graphList.contentY = graphList.clampY(graphList.contentY + dy)
             if (dx !== 0)
-                graphArea.graphX = Math.max(0, Math.min(graphArea.graphX + dx, graphArea.graphXMax))
+                metrics.panTo(metrics.graphX + dx)
         }
     }
     GraphLanePan {

@@ -663,6 +663,17 @@ impl GraphModel {
             .unwrap_or_default()
     }
 
+    /// The lane a row's node stands on, -1 past the rows — asked of a row
+    /// the view may not have built yet, whose node an arrow or a jump brings
+    /// into the lane column (`GraphRowWalk.revealNode`, `GraphFind.goToMatch`).
+    #[qslot]
+    fn lane_at(&self, row: i32) -> i32 {
+        usize::try_from(row)
+            .ok()
+            .and_then(|i| self.rows.get(i))
+            .map_or(-1, |r| r.node_lane)
+    }
+
     /// The chips of a row, as its delegate hands them to the chip column —
     /// read when a menu opens on the row (`CommitRowMenu`).
     #[qslot]

@@ -1662,6 +1662,10 @@ FocusScope {
     function openRowMenu(oidHex, chip, onList) {
         if (graphModel.provisionalMenuShutAt(graphModel.rowOf(oidHex)))
             return
+        // A right-click in the chip's card is one on its row: the node comes on before the menu, as the row's own
+        // right-click brings it (`GraphRowDelegate.askMenu`) — and, as there, not on a row that answers with no menu.
+        if (onList === true)
+            graphPane.revealNode(oidHex)
         page.noteMenuDoor(onList === true ? "refList" : "graph", oidHex)
         const named = graphModel.provisionalOn ? null : chip === undefined ? page.rowChipAt(oidHex) : chip
         commitMenuSeat.active = true
@@ -1916,6 +1920,9 @@ FocusScope {
         // card's sentence is gone by the time the reader arrives (デザイン規約 §hover のツールチップ「送った先は名乗る」).
         onMessageAsked: (oidHex, atRow) => {
             page.activateRow(oidHex, atRow)
+            // From a graph row's card, the row's node comes with the click as with the row's own (`revealNode`).
+            if (atRow >= 0)
+                graphPane.revealNode(oidHex)
             detailsPane.callAttention()
         }
         onRecordMenuAsked: (oidHex, chip) => page.openRowMenu(oidHex, chip, true)

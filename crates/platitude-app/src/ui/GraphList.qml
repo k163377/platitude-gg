@@ -153,6 +153,9 @@ AppListView {
     /// the worktree's row is shown — it is no commit and never joins a choice.
     property var chosenOids: ({})
     property int chosenCount: 0
+    /// The arrows have walked onto rows not read yet (`GraphRowWalk.stepPending`): the rows light the current row, not
+    /// the choice, until the read catches up (`GraphRowDelegate.selected`).
+    property bool stepsUnread: false
     /// A row was clicked, with the modifiers held and the row it sits on (`RepoPage.activateRow`).
     signal rowSelected(string oidHex, int atRow, int modifiers)
     /// A row was right-clicked. `chip` is the name its chip draws (`encode::Chip`), null where it draws none

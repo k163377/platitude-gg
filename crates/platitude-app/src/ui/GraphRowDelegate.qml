@@ -80,8 +80,11 @@ Item {
     height: Theme.graphRowHeight
 
     /// This row is one of the commits being held (デザイン規約 §複数のコミットを選ぶ). **A non-empty choice is the whole
-    /// highlight**; with nothing held, the current item — the worktree's row, where a person lands — is.
+    /// highlight**; with nothing held, the current item — the worktree's row, where a person lands — is. So is it while
+    /// a held arrow runs past rows it does not read (`GraphList.stepsUnread`): the choice moves only with a read, and
+    /// the highlight runs ahead of it (規約 §矢印で履歴を辿る).
     readonly property bool selected: rowItem.ListView.view && rowItem.ListView.view.chosenCount > 0
+                                     && !rowItem.ListView.view.stepsUnread
         ? rowItem.ListView.view.chosenOids[rowItem.oid_hex] === true
         : rowItem.ListView.isCurrentItem
     // The top row's highlight and hit area bleed over the list's top margin: hovering or selecting the first commit
@@ -585,8 +588,15 @@ Item {
     /// A left press, as this row answers one — **at the press, not at the release**: answered at the release, the row
     /// sits unlit while the button is down. And a double-click is measured press to press (`tst_pressorder`): the light
     /// answer (what is read) at the release and the heavy one (`switch`) at the press would make the light one the
-    /// slower. Named so that a run with no pointer can press the row itself.
+    /// slower. Named so that a run with no pointer can press the row itself. **The node comes with the press**: one
+    /// past the lane column's edge is brought on (`revealNode`), so what was clicked is there to see.
     function leftClick(modifiers) {
+        rowItem.pickAtPress(modifiers)
+        rowItem.revealNode()
+    }
+    /// The choice half of a press, without the node: the lane strip answers its press with this and brings the node on
+    /// only at a release that did not travel — a press there may be a pan's grab (`GraphLanePan.releaseLanded`).
+    function pickAtPress(modifiers) {
         // Another worktree's row: the page is handed the row number, since every uncommitted row carries the same
         // all-zero id (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
         if (rowItem.carried) {
@@ -607,6 +617,11 @@ Item {
         if (!rowItem.ListView.view.noteClick(rowItem.oid_hex, rowItem.nameChip))
             return
         rowItem.claimRow(Qt.NoModifier)
+    }
+    /// Sends the lanes sideways to this row's node when it lies past the lane column's edge
+    /// (`GraphColumnMetrics.revealLane`).
+    function revealNode() {
+        rowItem.ListView.view.columns.revealLane(rowItem.node_lane)
     }
     /// A double-click, as this row answers one — also called from the lane column's own strip over the list
     /// (`GraphLanePan`, which hands `modifiers` on), so where a row leads is decided in one place. The chip's card
@@ -655,11 +670,13 @@ Item {
         const model = rowItem.ListView.view.model
         return model.provisionalOn === true && model.provisionalMenuShutAt(rowItem.index)
     }
-    /// A right-click on this row, and the menu key on it (`GraphRowWalk.menuFromKeys`).
+    /// A right-click on this row, and the menu key on it (`GraphRowWalk.menuFromKeys`). The node comes on before the
+    /// menu, as with a left press (`revealNode`): either click is on this commit.
     function askMenu() {
         // Not a press at all: the selection stays on what the right pane is reading of the entry.
         if (rowItem.menuShut())
             return
+        rowItem.revealNode()
         // **Inside a choice of two the choice stands**: its menu holds what takes the pair, and the page falls back to
         // the one-commit menu where nothing does (デザイン規約 §複数のコミットを選ぶ). The keyboard still comes here.
         const view = rowItem.ListView.view

@@ -35,7 +35,7 @@ Item {
     /// Identicon code of the first co-author, or 0 when nobody is credited.
     readonly property int mateFace: laneCell.coAuthors.length === 0 ? 0 : laneCell.coAuthors[0].face
     /// The node's centre and the co-author badge's — one set for the punch and the ink. GraphColumnMetrics.graphColWMin
-    /// mirrors this geometry: move one, move both.
+    /// and `revealLane` mirror this geometry: move one, move all.
     readonly property real nodeMidX: Metrics.laneInset + laneCell.nodeLane * Metrics.laneW + Metrics.laneW / 2
     readonly property point badgeCentre: Qt.point(laneCell.nodeMidX + Metrics.nodeIcon / 2 - 2 * Theme.borderWidth,
                                                   Theme.graphRowHeight / 2 + Metrics.nodeIcon / 2)

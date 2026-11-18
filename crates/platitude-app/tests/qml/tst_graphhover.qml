@@ -146,6 +146,11 @@ Item {
             readonly property var dividers: QtObject {
                 readonly property bool lineWanted: false
             }
+            // A press brings the row's node on (`GraphRowDelegate.revealNode`); the lanes' half is
+            // tst_lanereveal.qml's, and here it goes nowhere.
+            readonly property var columns: QtObject {
+                function revealLane(lane) {}
+            }
             property Item shield: null
             property bool keepingRows: false
             property bool rereading: false
