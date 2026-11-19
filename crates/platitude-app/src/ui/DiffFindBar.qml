@@ -64,6 +64,8 @@ Rectangle {
     /// its width at all.
     readonly property real boxScrolled: fieldView.contentX
     readonly property bool boxOverflows: fieldView.contentWidth > fieldView.width + 0.5
+    /// The box's floor: `Metrics.findBoxW`, or under four of it the strip's `Metrics.findBoxShare`.
+    readonly property real boxMinWidth: Math.min(Metrics.findBoxW, bar.width * Metrics.findBoxShare)
 
     signal dismissed()
     /// Enter and Shift+Enter: on to the next hit, back to the previous.
@@ -120,7 +122,6 @@ Rectangle {
 
     /// The air over and under a one-line box inside the band's height.
     readonly property real inset: (Theme.headerHeight - Theme.iconLg) / 2
-    readonly property real boxMinWidth: 160
     /// One line of the box, paddings included — what the box is tall with one line in it, and the marks' seats'
     /// side, so they stand the same above and below the letters on every face (a fixed `iconLg - 2` is a pixel off
     /// over and under on a face whose line is 19px).
@@ -145,8 +146,8 @@ Rectangle {
         Rectangle {
             id: box
             Layout.fillWidth: true
-            // A search box's fixed width (デザイン規約 §レイアウト初期値), here its floor; and four of them its
-            // ceiling — past that a line is read sideways, and the controls would stand a pane away from the box.
+            // A find box at rest (デザイン規約 §レイアウト初期値), here its floor; and four of them its ceiling — past
+            // that a line is read sideways, and the controls would stand a pane away from the box.
             Layout.minimumWidth: bar.boxMinWidth
             Layout.maximumWidth: 4 * bar.boxMinWidth
             Layout.alignment: Qt.AlignTop

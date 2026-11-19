@@ -235,6 +235,10 @@ QtObject {
     // 設定画面: the category rail (デザイン規約 §レイアウト初期値 — not the sidebar's 260). The longest label likely to
     // come (`Keyboard shortcuts`-sized) is in the 120s px; with the row's inner 8 on both sides, 160.
     readonly property int settingsRailWidth: 160
+    // 設定画面: a number box's share of the chapter column (デザイン規約 §レイアウト初期値; user decision): the box
+    // narrows with the column, where a fixed width runs the REFRESH row out of it. A quarter: that row's three boxes
+    // and their words fit the column on any window down to its floor; at `textWidth`, 160.
+    readonly property real settingsBoxShare: 0.25
     // 破棄記録の帯 (デザイン規約 §窓の床; user decision — ask before changing): git puts no ceiling on the branches one
     // rebase moves, and the band stands over the graph it describes. A one-line heading, the date and five one-line
     // parts fit in Noto Sans JP; more scroll.

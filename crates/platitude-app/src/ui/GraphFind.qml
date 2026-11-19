@@ -91,6 +91,7 @@ FindBar {
     }
 
     loaded: find.graphModel.rowTotal
+    placeWidth: find.view.width
     // Bound: a background refresh re-marks the rows without anybody typing.
     matches: find.graphModel.matchCount
     atMatch: find.graphModel.matchCount > 0 ? find.graphModel.matchOrdinal(find.view.currentIndex) : 0

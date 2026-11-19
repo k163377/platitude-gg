@@ -110,6 +110,14 @@ QtObject {
     readonly property int graphDefaultLanes: 12
     readonly property int messageMinW: 160
     readonly property int askFieldMinW: 160
+    // A find box's own width (デザイン規約 §レイアウト初期値; user decision): the letters' size times the characters a
+    // query is expected to run to. There is no font size to set, so one width on every screen — a wider screen gives
+    // the box nothing to hold. The graph's box rests at it and the query grows it; the diff strip's box takes it as its
+    // floor and fills the strip up to four of it.
+    readonly property int findBoxW: 160
+    // The share of its place a find box gives way to once the place is under four `findBoxW` (user decision): a quarter
+    // keeps three of the graph's list uncovered by the card that hangs over it.
+    readonly property real findBoxShare: 0.25
     readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
     readonly property int anchorDelayMs: 50

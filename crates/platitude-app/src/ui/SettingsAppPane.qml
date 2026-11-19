@@ -17,6 +17,10 @@ ColumnLayout {
     property string prefillName: ""
     property string prefillEmail: ""
 
+    /// The number boxes' width: their share of the chapter column, which the pane fills (`Theme.settingsBoxShare`).
+    /// The REFRESH chapter's chooser takes it too.
+    readonly property real boxWidth: pane.width * Theme.settingsBoxShare
+
     /// Enter in one of the number fields. The way out belongs to the screen, so it is asked for.
     signal accepted()
 
@@ -500,7 +504,7 @@ ColumnLayout {
                 spacing: Theme.spaceSm
                 FormField {
                     id: fetchField
-                    implicitWidth: 160
+                    implicitWidth: pane.boxWidth
                     placeholder: qsTr("off")
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
@@ -549,7 +553,7 @@ ColumnLayout {
                 }
                 FormField {
                     id: refreshFloorField
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
@@ -564,7 +568,7 @@ ColumnLayout {
                 }
                 FormField {
                     id: refreshCeilingField
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
@@ -588,7 +592,7 @@ ColumnLayout {
                 // Picking only: these three are the whole set (デザイン規約 §選ぶ欄と打つ欄).
                 AppCombo {
                     id: worktreesChooser
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     pickOnly: true
                     model: pane.worktreesWords
                     wanted: pane.worktreesWords[Math.max(0, pane.worktreesValues.indexOf(AppBackend.worktreesReading))]
@@ -599,7 +603,7 @@ ColumnLayout {
                 FormField {
                     id: worktreesFloorField
                     visible: AppBackend.worktreesReading === "auto"
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
@@ -616,7 +620,7 @@ ColumnLayout {
                 FormField {
                     id: worktreesCeilingField
                     visible: worktreesFloorField.visible
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.paceMinSecs
@@ -628,7 +632,7 @@ ColumnLayout {
                 FormField {
                     id: worktreesField
                     visible: AppBackend.worktreesReading === "fixed"
-                    implicitWidth: fetchField.implicitWidth
+                    implicitWidth: pane.boxWidth
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
                         bottom: AppBackend.worktreesIntervalMin
@@ -664,7 +668,7 @@ ColumnLayout {
                 spacing: Theme.spaceSm
                 FormField {
                     id: concurrencyField
-                    implicitWidth: 160
+                    implicitWidth: pane.boxWidth
                     placeholder: String(AppBackend.gitConcurrencyDefault)
                     inputMethodHints: Qt.ImhDigitsOnly
                     validator: IntValidator {
@@ -700,7 +704,7 @@ ColumnLayout {
                 spacing: Theme.spaceSm
                 FormField {
                     id: commitsField
-                    implicitWidth: 160
+                    implicitWidth: pane.boxWidth
                     // Disabled, not cleared, under the whole history (§無効): unchecking gives the number back.
                     enabled: !wholeHistoryBox.checked
                     placeholder: String(AppBackend.initialCommitsDefault)

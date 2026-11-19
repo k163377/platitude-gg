@@ -30,6 +30,8 @@ Rectangle {
     property string unansweredAction: ""
     /// How wide the card may grow before it covers a subject's first character; the owner measures it.
     property real maxWidth: 0
+    /// The searched list's width: under four `Metrics.findBoxW` it takes the box down to `Metrics.findBoxShare` of it.
+    required property real placeWidth
     /// A note on what was typed, hung under the card once the typing stops and gone with the next keystroke
     /// (§コミットを探す). Empty: nothing to note.
     property string hint: ""
@@ -126,8 +128,8 @@ Rectangle {
         readonly property real fixedWidth:
             widest.implicitWidth + findRow.spacing + closeButton.implicitWidth + findRow.spacing
 
-        // A search box's fixed width (デザイン規約 §レイアウト初期値), here its floor.
-        readonly property real fieldMinWidth: 160
+        // The box at rest (デザイン規約 §レイアウト初期値), here its floor: the query grows it from there.
+        readonly property real fieldMinWidth: Math.min(Metrics.findBoxW, findBar.placeWidth * Metrics.findBoxShare)
 
         SlimField {
             id: field
