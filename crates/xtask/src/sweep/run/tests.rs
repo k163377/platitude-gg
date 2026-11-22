@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use super::{
-    Alive, CANONICAL, Gone, HARNESS, IF_MOVED, ONLY_IF_MOVED, Tail, asks, crate_of, generation,
-    profiles_in, read_artifacts, stamp, stamped, sweep_profile, unit_key,
+    Alive, CANONICAL, Gone, HARNESS, ONLY_IF_MOVED, Tail, asks, crate_of, generation, profiles_in,
+    read_artifacts, stamp, stamped, sweep_profile, unit_key,
 };
+use crate::sweep::IF_MOVED;
 use crate::yard::Yard;
 
 /// Writers only this suite needs, so they live here, not in [`crate::yard`].
