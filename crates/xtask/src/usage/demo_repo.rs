@@ -185,8 +185,10 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   not from a push (push-tag v1)
         publish-unreachable  unpublished, origin nowhere to be reached
                   (publish)
-        slowhook  a pre-commit hook that takes its time, over something
-                  staged — a write provably in flight (quit-waits, quit-locked)
+        slowhook  a pre-commit hook that holds the commit until the run
+                  lets it go (two seconds when opened by hand), over
+                  something staged — a write provably in flight (quit-waits,
+                  quit-locked, menu-wait)
         slowmerge  main and side each a commit ahead, and a
                   prepare-commit-msg hook that holds the merge commit with
                   MERGE_HEAD standing (menu-wait merge)

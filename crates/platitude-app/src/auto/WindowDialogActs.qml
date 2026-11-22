@@ -492,10 +492,12 @@ Item {
         }
     }
 
-    // _PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the sleeping
-    // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up.
+    // _PGG_AUTO_ACT=quit-waits / quit-locked: the close while git is still writing — the commit is held by the
+    // pre-commit hook of `--preset slowhook`, so the gate turns the close away and stands the wait dialog up. The hook
+    // holds until the run lets it go or the app is on its way out (`demo::remote::slowhook`).
     // `quit-waits` photographs that — the loading shape with no buttons, the dialog in overlay.png and its seat over
-    // the window in scene.png; `quit-locked` closes a second time, then watches the held write land.
+    // the window in scene.png — and never lets it go; `quit-locked` closes a second time, lets the hook go, then
+    // watches the held write land.
     //
     // The first close goes through `window.close()`, as the ✕ and Exit do; the second through
     // `AppBackend.exitRequested`, as a stop from outside does (`console.rs`, `signals.rs`). Once the modal stands
@@ -508,7 +510,8 @@ Item {
     WindowStage {
         id: quitTimer
         name: "quit"
-        order: Harness.autoAct === "quit-locked" ? ["committed", "closed", "retried"] : ["committed", "closed"]
+        order: Harness.autoAct === "quit-locked" ? ["committed", "closed", "retried", "released"]
+                                                 : ["committed", "closed"]
         running: Harness.autoAct === "quit-waits" || Harness.autoAct === "quit-locked"
         onTriggered: {
             const op = quitTimer
@@ -526,8 +529,8 @@ Item {
                 return
             }
             if (op.at("committed")) {
-                // Only while the hook holds the write: it sleeps longer than a beat, so a risen busy count is still up
-                // when the close lands.
+                // Only while the hook holds the write: nothing lets it go before the close, so a risen busy count is
+                // still up when the close lands.
                 if (!Awaited.all("quit_held", { "ready": !(page === null),
                                                 "held": tab !== null && tab.busyCount !== 0 }))
                     return
@@ -556,6 +559,13 @@ Item {
                 op.input("retried", () => {
                     AppBackend.exitRequested()
                 })
+                return
+            }
+            if (op.at("retried")) {
+                // The second close in with the write still held, which only this lets go: the write lands under the
+                // lock. A mark that could not be left is said with the stage.
+                op.input("released", () => Harness.letHookGo(),
+                         why => why === "" ? "" : "quit_lock let go " + why)
                 return
             }
             // The held write landed under the lock: `writeSeq` past `seqBefore` is its answer, busy at zero the queue

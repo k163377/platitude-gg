@@ -12,6 +12,12 @@ use qtbridge::qobject;
 use crate::hub::Hub;
 use crate::models::qml_register;
 
+/// The mark [`Harness::let_hook_go`] leaves beside the pictures. The hooks
+/// of `--preset slowhook` and `slowmerge` look for it by this name, which
+/// xtask copies as `xtask::verify::LET_GO_FILE`
+/// (`xtask::demo::remote::held_until_let_go` reads the copy).
+const LET_GO_FILE: &str = "let-go.txt";
+
 /// Everything a run was told to do, read once at startup (`super::knobs`).
 pub struct Harness {
     /// The one operation this run is to make, and its argument. A bare
@@ -174,6 +180,24 @@ impl Harness {
         match std::fs::write(&path, text.as_bytes()) {
             Ok(()) => String::new(),
             Err(e) => format!("{path}: {e}"),
+        }
+    }
+
+    /// Lets go of the git hook the run's preset holds (`--preset slowhook`):
+    /// leaves [`LET_GO_FILE`] beside the pictures, which the hook looks for
+    /// between its looks at the trail. For a verb whose subject is the held
+    /// write landing with the window still up; with no mark the hold lasts
+    /// until the app is on its way out. Says why it could not, "" when it
+    /// did.
+    #[qslot]
+    fn let_hook_go(&self) -> String {
+        if self.shot_dir.is_empty() {
+            return "no shot directory to leave the mark in".into();
+        }
+        let path = std::path::Path::new(&self.shot_dir).join(LET_GO_FILE);
+        match std::fs::write(&path, b"") {
+            Ok(()) => String::new(),
+            Err(e) => format!("{}: {e}", path.display()),
         }
     }
 

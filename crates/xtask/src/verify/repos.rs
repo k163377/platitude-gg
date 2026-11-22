@@ -220,8 +220,7 @@ const SEEDED_TOOL: &str = "demo-editor";
 /// (`AutoActDriver.writeBarrier` and `treeBarrier`), where the length buys
 /// only a wait a person watching can see; `menu-wait conflict`'s while it
 /// sleeps, where it holds the write across the beats that raise the menu
-/// and photograph it — the two seconds `--preset slowhook`'s hook holds.
-/// Every run pays it.
+/// and photograph it. Every run pays it.
 const TOOL_CMD: &str = "sleep 2";
 
 /// Names a tool in the repository's own config, for the verbs whose

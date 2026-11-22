@@ -380,7 +380,7 @@ Item {
         }
     }
 
-    // `menu-wait` / `menu-wait after`, over `--preset slowhook`'s sleeping pre-commit hook: the graph row's menu raised
+    // `menu-wait` / `menu-wait after`, over `--preset slowhook`'s holding pre-commit hook: the graph row's menu raised
     // while that commit is out keeps the rows the same row offers with nothing running, every one greyed for it, and
     // gives them back once what the commit left is read — the same menu, still up, stood again on that reading
     // (デザイン規約 §メニュー). `same=` holds the rows to a count taken off the menu raised and put down on that row
@@ -675,9 +675,10 @@ Item {
             // (`arriving`).
             const landed = driver.wroteAndSettled()
             if (op.at("pressed")) {
-                // The hook holds the commit — for seconds, the merge form's until the app is on its way out
-                // (`demo::remote::slowmerge`) — so it is still out when the menu goes up. One that has landed
-                // already left no moment to raise it in. A replay's menu goes up once the rewrite shows mid-way — HEAD
+                // A hook holds the commit of the plain form, `after` and the merge form until the run lets it go or the
+                // app is on its way out (`demo::remote::slowhook` / `slowmerge`) — `after` lets it go once the menu is
+                // up, the other two never — so it is still out when the menu goes up. One that has landed already
+                // left no moment to raise it in. A replay's menu goes up once the rewrite shows mid-way — HEAD
                 // detached, `REBASING` counted — which is what a menu standing on the worktree as it is would lose its
                 // rows to (`RepoPage.treeAtAsk`).
                 if (landed) {
@@ -695,7 +696,8 @@ Item {
             }
             if (op.mode === "" || op.mode === "conflict") {
                 // The menu stands over the write still out; the reads the press invalidated (the selected commit's
-                // own, the lists' rows) land under the hook's or the tool's sleep, and the picture is of them landed.
+                // own, the lists' rows) land while the hook holds the commit or the tool sleeps, and the picture is of
+                // them landed.
                 if (landed) {
                     op.complete({ "name": "menu_wait_during", "when": () => ({ "landed": driver.wroteAndSettled() }),
                                   "report": () => op.missed("its reads could settle under the menu"),
@@ -741,6 +743,13 @@ Item {
                     return
                 op.complete({ "name": "menu_wait_row", "when": () => acts.replayRow(),
                               "report": () => op.line("during"), "arriving": ["*"] })
+                return
+            }
+            if (op.mode === "after" && op.at("raised")) {
+                // The menu up over the commit, which only this lets go: the commit lands under the menu. A mark that
+                // could not be left is said with the stage.
+                op.input("released", () => Harness.letHookGo(),
+                         why => why === "" ? "" : "menu_wait let go " + why)
                 return
             }
             // `after`, the stash forms and the replay's stop: the menu's own word that it stood again, beside the

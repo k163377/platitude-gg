@@ -55,7 +55,8 @@ pub(crate) const REPORT_FILE: &str = "wedge.txt";
 /// ended the run — [`REPORT_FILE`] needs a process still able to write.
 /// Read by the parent at a ceiling (`xtask::verify::wedge`), and by what
 /// holds a write until the app is on its way out: `--slow-git … until=`
-/// and `--preset slowmerge`'s hook. A station's slug is theirs to match.
+/// and the hooks of `--preset slowmerge` and `slowhook`. A station's slug
+/// is theirs to match.
 const TRAIL_FILE: &str = "stations.txt";
 
 /// The places a run passes through that a wedge can be in: a coarse,

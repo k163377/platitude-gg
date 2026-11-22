@@ -113,6 +113,7 @@ pub(super) fn run_app(start: &Start<'_>) -> Result<Ran, String> {
     let mut cmd = compose(start)?;
     let _held = hold_the_store(start.config_dir, &start.opts.verb)?;
     super::wedge::clear_any_account(start.shot_dir);
+    clear_any_let_go(start.shot_dir);
 
     let mut wait = Wait::new(
         format!("the app running {}", start.opts.verb),
@@ -388,6 +389,26 @@ pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
 /// `Hub::shutdown` starts joining the writes still out, so the join lets it
 /// go — the held save, and the held `git add` (`super::run::slow_git_for`).
 pub(crate) const WRITES_JOINING: &str = "writes-joining";
+/// The mark a run's driver leaves beside its pictures to let a preset's
+/// hook go before the app is on its way out — a copy of the app's
+/// `harness::singleton::LET_GO_FILE` (xtask is std-only), looked for by
+/// `crate::demo::remote::held_until_let_go`. A drift holds the write to
+/// the way out, and the verbs that watch it land wait out their watchdog.
+pub(crate) const LET_GO_FILE: &str = "let-go.txt";
+
+/// Clears the mark the last run in `shot_dir` left: a named `--shot-dir`
+/// outlives its run, and the mark would let this run's hook go at once.
+fn clear_any_let_go(shot_dir: &Path) {
+    let mark = shot_dir.join(LET_GO_FILE);
+    if let Err(error) = std::fs::remove_file(&mark)
+        && error.kind() != std::io::ErrorKind::NotFound
+    {
+        println!(
+            "  note: {} could not be cleared ({error}) — a held hook here lets go at once",
+            mark.display()
+        );
+    }
+}
 
 /// Whether this verb's subject is a second process finding the settings
 /// held. Every other run's config directory is its own, so a taken store
@@ -409,4 +430,30 @@ fn hold_the_store(config_dir: &Path, verb: &str) -> Result<Option<crate::locks::
         .map_err(|e| format!("could not hold {}: {e}", path.display()))?;
     println!("holding: {}", path.display());
     Ok(Some(crate::locks::Locked::new(file)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LET_GO_FILE, clear_any_let_go};
+    use crate::yard::Yard;
+
+    /// A named `--shot-dir` keeps the last run's mark: this run starts
+    /// without it, so its hook holds until this run lets it go.
+    #[test]
+    fn the_mark_the_last_run_left_is_gone_before_this_one_starts() {
+        let dir = Yard::new("let-go-stale");
+        std::fs::write(dir.join(LET_GO_FILE), "").expect("a mark from the run before");
+
+        clear_any_let_go(&dir);
+
+        assert!(!dir.join(LET_GO_FILE).exists());
+    }
+
+    /// Clearing what is not there is what every fresh run does.
+    #[test]
+    fn clearing_a_mark_nobody_left_is_quiet() {
+        let dir = Yard::new("let-go-none");
+        clear_any_let_go(&dir);
+        assert!(!dir.join(LET_GO_FILE).exists());
+    }
 }

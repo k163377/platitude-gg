@@ -27,7 +27,10 @@ use std::time::Duration;
 /// drift reads as a bare `exit 97` with no account beside it.
 const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
-const TRAIL_FILE: &str = "stations.txt";
+/// The trail the app keeps beside the pictures — a copy of its
+/// `harness::deadline::TRAIL_FILE`, read here at a ceiling and by the
+/// preset hooks that hold a write (`crate::demo::remote::held_until_let_go`).
+pub(crate) const TRAIL_FILE: &str = "stations.txt";
 
 /// The ledger the machine's budget stands in, beside the repository's
 /// `.git` (`crate::budget`).

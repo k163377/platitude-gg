@@ -27,7 +27,7 @@ mod tests;
 mod verbs;
 mod wedge;
 
-pub(crate) use child::WRITES_JOINING;
+pub(crate) use child::{LET_GO_FILE, WRITES_JOINING};
 pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
 pub(crate) use look::look_into;
@@ -39,6 +39,7 @@ pub(crate) use records_check::{lines as records_lines, run as records_check};
 pub use run::run;
 pub(crate) use shot_check::{lines as shot_lines, run as shot_check};
 pub(crate) use verbs::judgment_of;
+pub(crate) use wedge::TRAIL_FILE;
 
 use crate::command::{self, Permission, Where};
 
