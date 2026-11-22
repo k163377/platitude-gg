@@ -506,7 +506,6 @@ impl DiffModel {
         self.changed();
     }
 
-    #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;

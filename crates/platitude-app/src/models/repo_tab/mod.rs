@@ -29,8 +29,8 @@ impl Record for RemoteBranchAsked {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             target: RemoteBranch {
                 remote: field(map, "remote")?,
                 branch: field(map, "branch")?,

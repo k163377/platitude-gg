@@ -201,8 +201,8 @@ impl Record for DiscardRow {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             key: field(map, "key")?,
             kind: field(map, "kind")?,
             name: field(map, "name")?,
@@ -233,8 +233,8 @@ impl Record for DiscardPart {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             restore: field(map, "restore")?,
             name: field(map, "name")?,
             with: field(map, "with")?,

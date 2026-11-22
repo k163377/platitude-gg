@@ -40,8 +40,8 @@ impl Record for WorktreeRow {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             name: field(map, "name")?,
             full: field(map, "full")?,
             branch: field(map, "branch")?,
@@ -85,8 +85,8 @@ impl Record for NewWorktree {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             path: field(map, "path")?,
             name: field(map, "name")?,
             taken: field(map, "taken")?,

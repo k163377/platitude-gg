@@ -734,8 +734,8 @@ impl Record for LinkAt {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             held: field(map, "held")?,
             at: field(map, "at")?,
         })

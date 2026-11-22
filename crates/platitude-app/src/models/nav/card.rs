@@ -58,8 +58,8 @@ impl Record for CardRow {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             name: field(map, "name")?,
             full: field(map, "full")?,
             depth: field(map, "depth")?,

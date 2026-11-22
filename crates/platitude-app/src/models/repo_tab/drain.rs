@@ -5,7 +5,7 @@ use platitude_core::RemoteWhy;
 use platitude_core::discards::Restored;
 
 impl RepoTab {
-    pub(super) fn take_feed(&mut self) {
+    pub(super) fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
         };
@@ -298,8 +298,9 @@ impl RepoTab {
         if self.settled.len() > KEEP_SETTLED {
             self.settled.pop_front();
         }
+        // Where the call runs, the tab tells QML what moved.
         if let Some(me) = &self.self_handle {
-            me.invoke_mut(move |tab| tab.settle_drained_told(bridge_id(id)));
+            me.invoke_mut(move |tab| tab.telling_waits(|tab| tab.settle_drained(id)));
         }
     }
 
@@ -317,15 +318,6 @@ impl RepoTab {
         self.settling = !self.unsettled.is_empty();
         self.unshown.retain(|(out, _)| *out != id);
         self.read_unshown();
-    }
-
-    /// The same from the slot, telling QML what moved. A number that names
-    /// no write is nobody's call.
-    pub(super) fn settle_drained_told(&mut self, id: i32) {
-        let Ok(id) = u64::try_from(id) else {
-            return;
-        };
-        self.telling_waits(|tab| tab.settle_drained(id));
     }
 
     /// A write has started, whoever asked for it: what it leaves is on

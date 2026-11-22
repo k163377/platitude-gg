@@ -27,8 +27,8 @@ impl Record for TextEnd {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             side: field(map, "side")?,
             row: field(map, "row")?,
             place: field(map, "place")?,

@@ -116,8 +116,8 @@ impl Record for Run {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             from: field(map, "from")?,
             len: field(map, "len")?,
         })

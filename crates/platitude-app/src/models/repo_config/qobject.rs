@@ -55,10 +55,4 @@ impl RepoConfigModel {
     fn save(&mut self, name: String, email: String) {
         self.write_repo(name, email)
     }
-
-    /// The only slot an invoker ever calls (`models::mod`).
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feed()
-    }
 }

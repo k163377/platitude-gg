@@ -236,7 +236,7 @@ impl RepoTab {
     /// within this drain, so its one notify tells the refusal about rows
     /// already back on screen; landed, they stay where they went.
     ///
-    /// No notify of its own: this runs inside the drain (`take_feed`).
+    /// No notify of its own: this runs inside `drain`.
     pub(super) fn write_answered(&mut self, id: u64, failed: bool, reads_from: u64) {
         self.outstanding.retain(|out| *out != id);
         let moved =

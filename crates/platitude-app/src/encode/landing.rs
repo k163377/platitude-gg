@@ -26,8 +26,8 @@ impl Record for Landing {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             row: field(map, "row")?,
             bucket: field(map, "bucket")?,
             path: field(map, "path")?,

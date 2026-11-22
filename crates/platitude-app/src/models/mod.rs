@@ -2,7 +2,8 @@
 //! models and properties (swappable, 実装計画 §2).
 //!
 //! - per-tab objects wire themselves with `attach(tabId)` and consume their
-//!   feed in `drain` (the only slot ever called through an invoker)
+//!   feed in `drain`, which the feed posts them (`hub::Wake`) and QML never
+//!   calls
 
 mod app_backend;
 mod clone;

@@ -219,7 +219,8 @@ impl RepoConfigModel {
         Some(self.saves_asked)
     }
 
-    pub(super) fn take_feed(&mut self) {
+    /// What the feed posts its consumer (`hub::Wake`).
+    fn drain(&mut self) {
         let reread = self.absorb(self.feed.drain());
         self.changed();
         if reread {

@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use cxx_qt_lib::{QString, QUrl};
+use qtbridge::qtbridge_type_lib::{QString, QUrl};
 
 /// The local path a `file:` URL names: a dialog's answer, or a URL this
 /// side made. Anything that names no local file is empty — none of the

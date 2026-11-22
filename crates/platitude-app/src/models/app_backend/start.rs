@@ -23,8 +23,8 @@ impl Record for Assignment {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             email: field(map, "email")?,
             name: field(map, "name")?,
             url: field(map, "url")?,

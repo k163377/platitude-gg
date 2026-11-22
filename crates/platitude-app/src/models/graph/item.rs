@@ -145,8 +145,8 @@ impl Record for Tally {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             added: field(map, "added")?,
             modified: field(map, "modified")?,
             deleted: field(map, "deleted")?,
@@ -173,8 +173,8 @@ impl Record for RemoteTip {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             oid: field(map, "oid")?,
             owner: field(map, "owner")?,
         })
@@ -228,8 +228,8 @@ impl Record for ChosenRow {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             oid_hex: field(map, "oid")?,
             sha8: field(map, "sha8")?,
             subject: field(map, "subject")?,

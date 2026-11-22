@@ -247,7 +247,7 @@ fn every_answer_rewrites_the_whole_group() {
 // ---- the notify's list of answers ------------------------------------
 
 /// A run's answer and the fetch the freeze left running, in one drain
-/// (`take_feed` drains the queue whole and notifies once).
+/// (`drain` takes the queue whole and notifies once).
 fn a_run_and_the_fetch_behind_it() -> Vec<TabMsg> {
     vec![
         TabMsg::WriteStopped,

@@ -345,7 +345,7 @@ impl RepoTab {
     pub(super) fn commit_waits_changed(&mut self);
 
     /// `fetching` or `pushing` moved. Its own: they fall in the call the
-    /// tab posts itself (`readsDrained`), outside any drain, where
+    /// tab posts itself (`drain::settle_heard`), outside any drain, where
     /// `changed` would have the page read the last drain's answers again.
     #[qsignal]
     pub(super) fn unshown_changed(&mut self);
@@ -638,18 +638,6 @@ impl RepoTab {
     #[qslot]
     fn draft_amending(&self) -> bool {
         self.held_draft().amending
-    }
-
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feed()
-    }
-
-    /// The call the tab posts itself on hearing the write `id` settle,
-    /// queued behind every drain posted by then (`drain::settle_heard`).
-    #[qslot]
-    fn reads_drained(&mut self, id: i32) {
-        self.settle_drained_told(id);
     }
 
     /// Refs, status, the listings and a pass over the other worktrees, with

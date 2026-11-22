@@ -47,8 +47,8 @@ fn put_standing(fields: Fields, standing: &TreeStanding) -> Fields {
         .put("pullBlocked", &standing.diverged)
 }
 
-fn read_standing(map: &QVariantMap) -> Result<TreeStanding, ()> {
-    Ok(TreeStanding {
+fn read_standing(map: &QVariantMap) -> Option<TreeStanding> {
+    Some(TreeStanding {
         branch: field(map, "branch")?,
         detached: field(map, "detached")?,
         head_oid: field(map, "headOid")?,
@@ -67,7 +67,7 @@ impl Record for TreeStanding {
         put_standing(Fields::new(), self).done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
         read_standing(map)
     }
 }
@@ -85,8 +85,8 @@ impl Record for TreeReading {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             standing: read_standing(map)?,
             conflict_count: field(map, "conflictCount")?,
             unborn: field(map, "unborn")?,

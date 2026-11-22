@@ -80,8 +80,8 @@ impl Record for CommandWash {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             clock: field(map, "clock")?,
             command: field(map, "command")?,
             outcome: field(map, "outcome")?,
@@ -376,7 +376,6 @@ impl CommandsModel {
         i32::try_from(rows).unwrap_or(i32::MAX)
     }
 
-    #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;

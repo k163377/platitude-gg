@@ -136,7 +136,7 @@ impl LineEndingsModel {
         }
     }
 
-    pub(super) fn take_feed(&mut self) {
+    fn drain(&mut self) {
         let mut reread = false;
         for msg in self.feed.drain() {
             // An answer for a repository the reader has moved off is

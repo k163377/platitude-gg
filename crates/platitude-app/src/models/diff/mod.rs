@@ -162,8 +162,8 @@ impl Record for Washed {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             whole: field(map, "whole")?,
             runs: field(map, "runs")?,
         })
@@ -204,8 +204,8 @@ impl Record for LineSpan {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             newer: field(map, "newer")?,
             first: field(map, "first")?,
             last: field(map, "last")?,

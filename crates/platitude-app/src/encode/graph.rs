@@ -43,11 +43,11 @@ impl Record for Segment {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
-            kind: kind_from_word(&field::<String>(map, "kind")?).ok_or(())?,
-            lane: u16::try_from(field::<i32>(map, "lane")?).map_err(|_| ())?,
-            color: u8::try_from(field::<i32>(map, "color")?).map_err(|_| ())?,
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            kind: kind_from_word(&field::<String>(map, "kind")?)?,
+            lane: u16::try_from(field::<i32>(map, "lane")?).ok()?,
+            color: u8::try_from(field::<i32>(map, "color")?).ok()?,
             dashed: field(map, "dashed")?,
         })
     }
@@ -180,17 +180,17 @@ mod tests {
         );
         // The words the canvas branches on, spelled out whole.
         let first = lanes[0].to_map();
-        assert_eq!(field::<String>(&first, "kind"), Ok("through".into()));
-        assert_eq!(field::<i32>(&first, "lane"), Ok(0));
-        assert_eq!(field::<i32>(&first, "color"), Ok(3));
-        assert_eq!(field::<bool>(&first, "dashed"), Ok(false));
+        assert_eq!(field::<String>(&first, "kind"), Some("through".into()));
+        assert_eq!(field::<i32>(&first, "lane"), Some(0));
+        assert_eq!(field::<i32>(&first, "color"), Some(3));
+        assert_eq!(field::<bool>(&first, "dashed"), Some(false));
         assert_eq!(
             field::<String>(&lanes[1].to_map(), "kind"),
-            Ok("into".into())
+            Some("into".into())
         );
         assert_eq!(
             field::<String>(&lanes[2].to_map(), "kind"),
-            Ok("out".into())
+            Some("out".into())
         );
         assert_eq!(
             <Lanes as QVariantConvertible>::try_from_qvariant(&lanes_of(&[]).to_qvariant()),

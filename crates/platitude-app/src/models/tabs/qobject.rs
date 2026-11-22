@@ -127,7 +127,6 @@ impl TabsModel {
         self.ask(path, false);
     }
 
-    #[qslot]
     pub(super) fn drain(&mut self) {
         for msg in self.asks.drain() {
             // One ask is out at a time (`TabsModel::asking`).

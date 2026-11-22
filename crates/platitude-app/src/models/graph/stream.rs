@@ -9,7 +9,7 @@
 use super::*;
 
 impl GraphModel {
-    pub(super) fn take_feed(&mut self) {
+    pub(super) fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
         };

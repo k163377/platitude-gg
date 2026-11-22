@@ -53,7 +53,7 @@ pub(crate) fn open_installed_tab(id: i32) {
 }
 
 /// What the installed hub has queued on tab `id`'s own feed — the
-/// messages its tab drains (`RepoTab::take_feed`), taken off the feed.
+/// messages its tab drains (`RepoTab::drain`), taken off the feed.
 pub(crate) fn tab_feed_drained(id: i32) -> Vec<TabMsg> {
     Hub::with(|hub| hub.tabs.get(&id).map(|tab| tab.feeds.tab.drain()))
         .flatten()

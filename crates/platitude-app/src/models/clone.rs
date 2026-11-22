@@ -94,7 +94,6 @@ impl CloneModel {
         self.settle(false);
     }
 
-    #[qslot]
     fn drain(&mut self) {
         for msg in self.feed.drain() {
             self.cancel = None;

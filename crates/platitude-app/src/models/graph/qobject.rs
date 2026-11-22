@@ -1,5 +1,6 @@
-//! Everything QML sees of the graph: the properties it binds to, the
-//! feed it drains, and the questions it asks of the loaded rows.
+//! Everything QML sees of the graph: the properties it binds to and the
+//! questions it asks of the loaded rows. What its feed hands it is
+//! `drain`'s (`stream`).
 //!
 //! One `#[qobject]` block, and it cannot be split further
 //! (structure.md「1 型 1 ファイルから動かせない」).
@@ -240,11 +241,6 @@ impl GraphModel {
         self.stale = false;
         self.silent = false;
         self.stats_changed();
-    }
-
-    #[qslot]
-    fn drain(&mut self) {
-        self.take_feed();
     }
 
     /// The tail was pressed: load the next step of history. Refused for an

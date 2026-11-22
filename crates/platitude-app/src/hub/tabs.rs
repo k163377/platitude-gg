@@ -319,7 +319,7 @@ impl Hub {
                 // for it (`preview_images`).
                 crate::preview_images::release_tab(id);
             }
-            // The invokers stay: the page attaches once, when built, and
+            // The wakes stay: the page attaches once, when built, and
             // would be left attached to nothing. Queued reads are the old
             // worktree's; the log's messages stay.
             PageAfter::Standing => tab.feeds.clear_queued_reads(),

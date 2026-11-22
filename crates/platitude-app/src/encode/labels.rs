@@ -222,9 +222,9 @@ impl Record for Chip {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
-            kind: kind_from_word(&field::<String>(map, "kind")?).ok_or(())?,
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            kind: kind_from_word(&field::<String>(map, "kind")?)?,
             name: field(map, "name")?,
             is_head: field(map, "isHead")?,
             has_remote: field(map, "hasRemote")?,
@@ -334,16 +334,16 @@ mod tests {
             ..label("main", LabelKind::LocalBranch)
         }]);
         let map = chip[0].to_map();
-        assert_eq!(field::<String>(&map, "kind"), Ok("branch".into()));
-        assert_eq!(field::<String>(&map, "name"), Ok("main".into()));
-        assert_eq!(field::<bool>(&map, "isHead"), Ok(true));
-        assert_eq!(field::<bool>(&map, "hasRemote"), Ok(true));
-        assert_eq!(field::<bool>(&map, "hasPr"), Ok(false));
-        assert_eq!(field::<bool>(&map, "here"), Ok(true));
-        assert_eq!(field::<bool>(&map, "held"), Ok(false));
-        assert_eq!(field::<bool>(&map, "locked"), Ok(false));
-        assert_eq!(field::<String>(&map, "remote"), Ok(String::new()));
-        assert_eq!(field::<String>(&map, "key"), Ok("branch:main".into()));
+        assert_eq!(field::<String>(&map, "kind"), Some("branch".into()));
+        assert_eq!(field::<String>(&map, "name"), Some("main".into()));
+        assert_eq!(field::<bool>(&map, "isHead"), Some(true));
+        assert_eq!(field::<bool>(&map, "hasRemote"), Some(true));
+        assert_eq!(field::<bool>(&map, "hasPr"), Some(false));
+        assert_eq!(field::<bool>(&map, "here"), Some(true));
+        assert_eq!(field::<bool>(&map, "held"), Some(false));
+        assert_eq!(field::<bool>(&map, "locked"), Some(false));
+        assert_eq!(field::<String>(&map, "remote"), Some(String::new()));
+        assert_eq!(field::<String>(&map, "key"), Some("branch:main".into()));
         for (kind, word) in [
             (LabelKind::Head, "head"),
             (LabelKind::LocalBranch, "branch"),

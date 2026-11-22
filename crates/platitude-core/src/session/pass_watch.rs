@@ -155,8 +155,8 @@ impl Drop for PassWatch<'_> {
         }
         tracing::error!("the graph walk ended without an answer");
         // **Caught**: this runs inside the unwind it reports, and a second
-        // panic there is an abort — the way out reaches a feed and a QML
-        // invoker this side does not own.
+        // panic there is an abort — the way out reaches a feed and the QML
+        // object it wakes, neither of which this side owns.
         let told = &self.told;
         let session = self.session;
         let reported = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match told {

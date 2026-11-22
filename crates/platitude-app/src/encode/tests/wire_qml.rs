@@ -54,8 +54,8 @@ impl Record for Sample {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             word: field(map, "word")?,
             count: field(map, "count")?,
             on: field(map, "on")?,
@@ -80,8 +80,8 @@ impl Record for Nest {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             name: field(map, "name")?,
             inner: field(map, "inner")?,
             one: field(map, "one")?,

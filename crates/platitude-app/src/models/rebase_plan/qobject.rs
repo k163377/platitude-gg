@@ -79,7 +79,6 @@ impl RebasePlanModel {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.plan, consumer);
     }
 
-    #[qslot]
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;

@@ -99,8 +99,8 @@ impl Record for LineMarks {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             fence: field(map, "fence")?,
             no_newline: field(map, "noNewline")?,
             side: field(map, "side")?,
@@ -128,7 +128,7 @@ impl Record for Marks {
         .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
         let own = LineMarks::from_map(&field(map, "own")?)?;
         // A right side that is absent is a row with one line; one that
         // is there but does not read is a refusal, like any field.
@@ -137,7 +137,7 @@ impl Record for Marks {
         } else {
             None
         };
-        Ok(Self { own, pair })
+        Some(Self { own, pair })
     }
 }
 

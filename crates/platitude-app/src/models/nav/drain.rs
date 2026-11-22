@@ -4,7 +4,7 @@
 use super::*;
 
 impl NavSectionModel {
-    pub(super) fn take_feeds(&mut self) {
+    pub(super) fn drain(&mut self) {
         // Every push queues its own `drain`, so a call can find the queue
         // already emptied by the one before.
         let mut arrived = false;
@@ -257,7 +257,7 @@ impl NavSectionModel {
 
     /// Settles `home_branch` off a worktree listing: the branch the
     /// repository's own worktree keeps, where that worktree is not
-    /// `current` (this window's, spelled as `take_feeds` spells it).
+    /// `current` (this window's, spelled as `drain` spells it).
     /// Answers whether it moved.
     pub(super) fn settle_home_branch(
         &mut self,

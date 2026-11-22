@@ -42,8 +42,8 @@ impl Record for Mate {
             .done()
     }
 
-    fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
             name: field(map, "name")?,
             email: field(map, "email")?,
             face: field(map, "face")?,

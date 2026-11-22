@@ -451,7 +451,6 @@ impl WorktreeModel {
         }
     }
 
-    #[qslot]
     fn drain(&mut self) {
         let progressed = self.drain_progress();
         let Some(feed) = self.feed.clone() else {

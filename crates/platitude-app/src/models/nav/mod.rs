@@ -36,8 +36,8 @@ impl Record for TagCarrier {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             remote: field(map, "remote")?,
             apart: field(map, "apart")?,
         })
@@ -61,8 +61,8 @@ impl Record for NameClashed {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             kind: field(map, "kind")?,
             with: field(map, "with")?,
         })
@@ -105,8 +105,8 @@ impl Record for HeldMark {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             by: field(map, "by")?,
             path: field(map, "path")?,
             here: field(map, "here")?,
@@ -142,8 +142,8 @@ impl Record for TagMenu {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             push_remote: field(map, "pushRemote")?,
             lease: field(map, "lease")?,
             reach: field(map, "reach")?,
@@ -199,8 +199,8 @@ impl Record for BranchPush {
             .done()
     }
 
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Result<Self, ()> {
-        Ok(Self {
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
             state: field(map, "state")?,
             target: field(map, "target")?,
             lease: field(map, "lease")?,

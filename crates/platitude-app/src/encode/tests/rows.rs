@@ -572,11 +572,11 @@ fn the_marks_round_trip_with_and_without_a_right_side() {
         own: own.clone(),
         pair: Some(pair),
     };
-    assert_eq!(Marks::from_map(&both.to_map()), Ok(both.clone()));
+    assert_eq!(Marks::from_map(&both.to_map()), Some(both.clone()));
     let alone = Marks { own, pair: None };
-    assert_eq!(Marks::from_map(&alone.to_map()), Ok(alone.clone()));
+    assert_eq!(Marks::from_map(&alone.to_map()), Some(alone.clone()));
 
     let mut broken = alone.to_map();
     broken.insert(QString::from("pair"), QVariant::from(&7i32));
-    assert_eq!(Marks::from_map(&broken), Err(()));
+    assert_eq!(Marks::from_map(&broken), None);
 }

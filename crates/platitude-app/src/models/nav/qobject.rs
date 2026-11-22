@@ -185,11 +185,6 @@ impl NavSectionModel {
         self.changed();
     }
 
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feeds();
-    }
-
     /// The stage presses out over this tree moved (`RepoTab.stagingSeq`): a
     /// press moved rows at once, or git's answer put them back. Draws the
     /// status this list holds again, on the same turn — a status read's own

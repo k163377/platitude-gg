@@ -169,7 +169,7 @@ impl RepoTab {
     /// (`ops::StandIn`).
     pub(super) fn delete_answered(&mut self, id: u64, failed: bool, reads_from: u64) {
         // No notify: this runs inside the drain, and one raised mid-batch
-        // would show a half-drained tab (`take_feed`).
+        // would show a half-drained tab (`drain`).
         self.stand_in(|gone| gone.answered(id, failed, reads_from));
     }
 

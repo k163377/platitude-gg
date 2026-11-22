@@ -125,7 +125,8 @@ impl DiscardModel {
         self.changed();
     }
 
-    fn take_feed(&mut self) {
+    /// What the feed posts its consumer (`hub::Wake`).
+    fn drain(&mut self) {
         for msg in self.feed.drain() {
             match msg {
                 DiscardMsg::Read { generation, .. } | DiscardMsg::Failed { generation, .. }

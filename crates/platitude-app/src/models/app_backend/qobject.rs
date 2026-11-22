@@ -597,10 +597,5 @@ impl AppBackend {
     fn save_identity(&mut self, name: String, email: String) {
         self.write_identity(name, email)
     }
-
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feed()
-    }
 }
 qml_register!(AppBackend, "AppBackend", singleton = true);

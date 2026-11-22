@@ -36,9 +36,4 @@ impl LineEndingsModel {
     fn save(&mut self, value: String) {
         self.write_value(value)
     }
-
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feed()
-    }
 }

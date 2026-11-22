@@ -5,7 +5,7 @@
 //! settled ids the tab keeps for the log's receipts.
 //!
 //! No test here has the QObject the tab posts itself through, so the call
-//! it posts on hearing a settle (`readsDrained`) is made by hand, where Qt
+//! it posts on hearing a settle (`settle_heard`) is made by hand, where Qt
 //! would deliver it: behind every drain posted by then.
 
 use super::super::*;

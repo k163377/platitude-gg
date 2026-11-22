@@ -167,7 +167,7 @@ impl AppBackend {
         }
     }
 
-    pub(super) fn take_feed(&mut self) {
+    fn drain(&mut self) {
         let mut check_identity = false;
         let mut wrote = false;
         let mut probed = false;

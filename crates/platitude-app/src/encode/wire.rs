@@ -28,8 +28,8 @@ use super::metatype;
 /// its own type.
 pub trait Record: Sized {
     fn to_map(&self) -> QVariantMap;
-    /// The inverse. A missing or mistyped field is `Err`.
-    fn from_map(map: &QVariantMap) -> Result<Self, ()>;
+    /// The inverse. A missing or mistyped field is `None`.
+    fn from_map(map: &QVariantMap) -> Option<Self>;
 }
 
 /// What one field of a record may hold, as QML reads it.
@@ -38,9 +38,9 @@ pub(crate) trait FieldValue {
 }
 
 /// The inverse of [`FieldValue`]: a value of another type that does not
-/// convert is `Err` (`QVariant::canConvert`, then the value).
+/// convert is `None` (`QVariant::canConvert`, then the value).
 pub(crate) trait FieldRead: Sized {
-    fn read(variant: &QVariant) -> Result<Self, ()>;
+    fn read(variant: &QVariant) -> Option<Self>;
 }
 
 /// Every type the bridge itself carries by value, and the three wrappers.
@@ -53,8 +53,8 @@ macro_rules! field_by_bridge {
         }
 
         impl<$($generic)*> FieldRead for $ty {
-            fn read(variant: &QVariant) -> Result<Self, ()> {
-                QVariantConvertible::try_from_qvariant(variant).ok_or(())
+            fn read(variant: &QVariant) -> Option<Self> {
+                QVariantConvertible::try_from_qvariant(variant)
             }
         })*
     };
@@ -94,8 +94,8 @@ impl FieldValue for QVariantMap {
 }
 
 impl FieldRead for QVariantMap {
-    fn read(variant: &QVariant) -> Result<Self, ()> {
-        variant.value::<QVariantMap>().ok_or(())
+    fn read(variant: &QVariant) -> Option<Self> {
+        variant.value::<QVariantMap>()
     }
 }
 
@@ -116,9 +116,9 @@ impl Fields {
     }
 }
 
-/// One named field read back. An absent one is `Err`.
-pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Result<T, ()> {
-    T::read(&map.get(&key_of(key)).ok_or(())?)
+/// One named field read back. An absent one is `None`.
+pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Option<T> {
+    T::read(&map.get(&key_of(key))?)
 }
 
 /// Whether the record has a field `key` holding something — what a field
@@ -219,13 +219,13 @@ impl<T: Record> Listed<T> {
         list
     }
 
-    /// A missing or mistyped field in any element is `Err`.
-    fn read(list: &QVariantList) -> Result<Vec<T>, ()> {
+    /// A missing or mistyped field in any element is `None`.
+    fn read(list: &QVariantList) -> Option<Vec<T>> {
         let mut out = Vec::with_capacity(usize::try_from(list.len()).unwrap_or(0));
         for element in list {
-            out.push(T::from_map(&element.value::<QVariantMap>().ok_or(())?)?);
+            out.push(T::from_map(&element.value::<QVariantMap>()?)?);
         }
-        Ok(out)
+        Some(out)
     }
 }
 
@@ -243,9 +243,7 @@ impl<T: Record> QVariantConvertible for Listed<T> {
     }
 
     fn try_from_qvariant(value: &QVariant) -> Option<Self> {
-        Self::read(&value.value::<QVariantList>()?)
-            .ok()
-            .map(Self::new)
+        Self::read(&value.value::<QVariantList>()?).map(Self::new)
     }
 }
 
@@ -267,7 +265,7 @@ impl<T: Record> QMetaTypeCompatible for Listed<T> {
         for (i, element) in wire.0.iter().enumerate() {
             match element
                 .value::<QVariantMap>()
-                .and_then(|map| T::from_map(&map).ok())
+                .and_then(|map| T::from_map(&map))
             {
                 Some(record) => out.push(record),
                 None => tracing::warn!(
@@ -315,9 +313,7 @@ impl<T: Record> QVariantConvertible for One<T> {
     }
 
     fn try_from_qvariant(value: &QVariant) -> Option<Self> {
-        T::from_map(&value.value::<QVariantMap>()?)
-            .ok()
-            .map(Self::new)
+        T::from_map(&value.value::<QVariantMap>()?).map(Self::new)
     }
 }
 
@@ -333,7 +329,7 @@ impl<T: Record + Default> QMetaTypeCompatible for One<T> {
     #[expect(unsafe_code, reason = "as for `Listed`")]
     unsafe fn from_compatible(wire: &MapWire) -> Self {
         T::from_map(&wire.0).map_or_else(
-            |()| {
+            || {
                 tracing::warn!(
                     record = std::any::type_name::<T>(),
                     "a record handed back from QML did not read"
@@ -408,9 +404,7 @@ impl<T: Record> QVariantConvertible for Optional<T> {
         if !value.is_valid() {
             return Some(Self::none());
         }
-        T::from_map(&value.value::<QVariantMap>()?)
-            .ok()
-            .map(Self::some)
+        T::from_map(&value.value::<QVariantMap>()?).map(Self::some)
     }
 }
 
@@ -468,8 +462,8 @@ mod tests {
                 .done()
         }
 
-        fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-            Ok(Self {
+        fn from_map(map: &QVariantMap) -> Option<Self> {
+            Some(Self {
                 word: field(map, "word")?,
                 count: field(map, "count")?,
                 on: field(map, "on")?,
@@ -541,8 +535,8 @@ mod tests {
             .get(0)
             .and_then(|element| element.value::<QVariantMap>())
             .map(|map| Probe::from_map(&map));
-        assert_eq!(first, Some(Ok(probes().remove(0))));
-        assert_eq!(Listed::<Probe>::read(&copied), Ok(probes()));
+        assert_eq!(first, Some(Some(probes().remove(0))));
+        assert_eq!(Listed::<Probe>::read(&copied), Some(probes()));
     }
 
     #[test]
@@ -573,10 +567,10 @@ mod tests {
     #[test]
     fn a_missing_field_is_a_refusal_and_not_a_default() {
         let short = Fields::new().put("word", "x").done();
-        assert_eq!(Probe::from_map(&short), Err(()));
+        assert_eq!(Probe::from_map(&short), None);
         let mut list = QVariantList::default();
         list.append(QVariant::from(&short));
-        assert_eq!(Listed::<Probe>::read(&list), Err(()));
+        assert_eq!(Listed::<Probe>::read(&list), None);
         // The slot road leaves such an element out instead.
         assert_eq!(from_a_slot::<Listed<Probe>>(&ListWire(list)).len(), 0);
         assert_eq!(
@@ -629,8 +623,8 @@ mod tests {
                 .done()
         }
 
-        fn from_map(map: &QVariantMap) -> Result<Self, ()> {
-            Ok(Self {
+        fn from_map(map: &QVariantMap) -> Option<Self> {
+            Some(Self {
                 name: field(map, "name")?,
                 inner: field(map, "inner")?,
                 one: field(map, "one")?,
@@ -645,7 +639,7 @@ mod tests {
             inner: Listed::new(probes()),
             one: One::new(probes().remove(0)),
         };
-        assert_eq!(Nest::from_map(&nest.to_map()), Ok(nest.clone()));
+        assert_eq!(Nest::from_map(&nest.to_map()), Some(nest.clone()));
         let nested = Listed::new(vec![nest.clone(), Nest::default()]);
         assert_eq!(through_a_slot(&nested), nested);
     }

@@ -96,10 +96,4 @@ impl DiscardModel {
         self.restore(index, part)
             .map_or(0, |id| i32::try_from(id.as_u64()).unwrap_or(i32::MAX))
     }
-
-    /// The only slot an invoker ever calls (`models::mod`).
-    #[qslot]
-    pub(super) fn drain(&mut self) {
-        self.take_feed()
-    }
 }

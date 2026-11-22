@@ -123,7 +123,7 @@ impl<T> Feed<T> {
         s.consumer = Some(consumer);
     }
 
-    /// Takes everything queued (called from the consumer's `drain` slot).
+    /// Takes everything queued (the consumer's `drain`, which [`Wake`] posts).
     pub fn drain(&self) -> Vec<T> {
         self.lock().queue.drain(..).collect()
     }
