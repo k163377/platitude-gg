@@ -239,6 +239,25 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     std::fs::hard_link(&linked, &running).expect("the slot cargo links to it");
     let left_behind = slot.join(format!("xtask-inflight-424242{suffix}"));
     std::fs::write(&left_behind, b"an earlier landing's image").expect("what Windows leaves");
+    // Images that are not the running one stay where cargo put them:
+    // another unit's build of the runner, and the `--bin xtask` unit-test
+    // harness in a unit of its own.
+    let units = slot.join("build").join("xtask");
+    let other_build = units
+        .join("0f1e2d3c4b5a6978")
+        .join("out")
+        .join(format!("xtask{suffix}"));
+    let harness = units
+        .join("8899aabbccddeeff")
+        .join("out")
+        .join(format!("xtask-8899aabbccddeeff{suffix}"));
+    for (image, bytes) in [
+        (&other_build, &b"another build of the runner"[..]),
+        (&harness, &b"the unit-test harness"[..]),
+    ] {
+        std::fs::create_dir_all(image.parent().expect("its out/")).expect("its unit");
+        std::fs::write(image, bytes).expect("an image cargo wrote");
+    }
 
     let (ok, text) = sb.land_from(&running, "worktree-a");
     assert!(ok && text.contains("landed worktree-a"), "{text}");
@@ -255,6 +274,10 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     assert!(
         !left_behind.exists(),
         "an earlier landing's image was left in the slot's directory:\n{text}"
+    );
+    assert!(
+        other_build.exists() && harness.exists(),
+        "a unit's image that is not the running one was moved out of its `out/`:\n{text}"
     );
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
 }

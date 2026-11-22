@@ -703,7 +703,7 @@ fn in_unit(lifted: &str) -> String {
 
 /// Whether two names are one file: the same length, written at the same
 /// moment, which the two names of a hard link read alike.
-fn same_file(one: &Path, other: &Path) -> bool {
+pub(crate) fn same_file(one: &Path, other: &Path) -> bool {
     let (Ok(one), Ok(other)) = (std::fs::metadata(one), std::fs::metadata(other)) else {
         return false;
     };

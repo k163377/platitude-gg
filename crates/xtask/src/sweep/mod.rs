@@ -21,7 +21,7 @@ use crate::command::{self, Permission, Where};
 mod run;
 
 pub use run::run;
-pub(crate) use run::{Tail, at_a_tail};
+pub(crate) use run::{Tail, at_a_tail, same_file};
 
 pub(crate) static SWEEP: command::Command = command::Command {
     id: "sweep.now",

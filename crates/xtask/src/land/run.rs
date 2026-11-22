@@ -448,16 +448,15 @@ fn unit_outs(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
         .collect()
 }
 
-/// Every name in this tree's build directory that cargo writes this
-/// binary under: the slot the run was started from, and the names in the
-/// units' `outs` one of which the slot is linked to.
+/// Every name in this tree's build directory that is this binary's image:
+/// the slot the run was started from, and the name in a unit's `outs` the
+/// slot is a hard link to.
 ///
-/// By name, not by inode: Windows offers one only through an unstable
-/// interface. So names of other binaries go too: the `xtask` of a unit not
-/// in use is another build of this binary, and `xtask-<hash>` is the
-/// `--bin xtask` unit-test harness in a unit of its own — cargo relinks
-/// either, and a harness running then cannot start itself again by
-/// `current_exe()`.
+/// Chosen by what the file is, not by what cargo calls it (user
+/// decision): a name in a unit's `out/` is this image when it is the same
+/// file as the slot ([`crate::sweep::same_file`]). So the images that are
+/// not this one stay where cargo put them — another unit's build of this
+/// binary, and the `--bin xtask` unit-test harness in a unit of its own.
 fn names_of_this_image(
     exe: &std::path::Path,
     outs: &[std::path::PathBuf],
@@ -468,24 +467,12 @@ fn names_of_this_image(
             continue;
         };
         for entry in entries.flatten() {
-            if cargo_writes_this_binary_at(&entry.file_name().to_string_lossy()) {
+            if crate::sweep::same_file(&entry.path(), exe) {
                 names.push(entry.path());
             }
         }
     }
     names
-}
-
-/// Whether a name in a unit's `out/` is `xtask` or `xtask-<hash>` with
-/// the executable suffix alone — not the `.d` / `.pdb` beside it, nor an
-/// earlier landing's aside (already swept).
-fn cargo_writes_this_binary_at(name: &str) -> bool {
-    let Some(stem) = name.strip_suffix(std::env::consts::EXE_SUFFIX) else {
-        return false;
-    };
-    (stem == "xtask" || stem.starts_with("xtask-"))
-        && !stem.contains('.')
-        && !name.starts_with(INFLIGHT)
 }
 
 /// Moves one name off the image. `at` keeps the asides of one image apart.
