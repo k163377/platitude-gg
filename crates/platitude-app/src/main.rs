@@ -6,6 +6,7 @@
 mod encode;
 mod harness;
 mod hub;
+mod inherited;
 mod logsink;
 mod models;
 mod ops;
@@ -32,6 +33,10 @@ use qtbridge::qtbridge_type_lib::{QGuiApplication, QQmlApplicationEngine, QStrin
 fn main() {
     harness::start_clock();
     init_tracing();
+    // Before the first thread or child process of this run (`inherited`).
+    if let Err(error) = inherited::keep_from_children() {
+        tracing::warn!(%error, "a child of this run may hold what the run was started with");
+    }
     // Before anything that can wedge: the QML watchdog cannot fire once the
     // event loop stops turning or is left (`harness::deadline`).
     harness::watch_deadline();
