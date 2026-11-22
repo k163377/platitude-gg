@@ -60,6 +60,8 @@ Item {
     /// Where the ink ends — the whole column once there is a cut in the name, the name's own width while there is not.
     /// What a mark on the name's shoulder is placed against.
     readonly property real inkWidth: cut.cutting ? cut.width : headLabel.implicitWidth
+    /// The cut mark's width (`CutMark`): the least a holder hands a name it lets cut, so the cut still says so.
+    readonly property real markWidth: markLabel.implicitWidth
 
     function relayout() {
         const whole = cut.text
@@ -152,8 +154,9 @@ Item {
             if (!grew)
                 break
         }
-        cut.headText = whole.substring(0, head)
-        cut.tailText = tail > 0 ? whole.substring(whole.length - tail) : ""
+        // No space beside the mark: a cut landing on a word's edge would read as a gap beside the `…`.
+        cut.headText = whole.substring(0, head).replace(/\s+$/, "")
+        cut.tailText = tail > 0 ? whole.substring(whole.length - tail).replace(/^\s+/, "") : ""
         cut.cutting = true
     }
 

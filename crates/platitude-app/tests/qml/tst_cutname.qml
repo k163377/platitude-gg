@@ -30,6 +30,35 @@ Item {
         text: "fatal: the first of more lines"
         pixelSize: Theme.fontSm
     }
+    // Words cut at their end, in no column: a heading of the right pane.
+    CutName {
+        id: words
+        y: 20
+        height: 20
+        closed: true
+        cutAt: "end"
+        text: "UNSTAGED FILES AND MORE"
+        pixelSize: Theme.fontMd
+    }
+    // The same words cut at their start and in their middle: the tail keeps no space after the mark either.
+    CutName {
+        id: wordsFromStart
+        y: 40
+        height: 20
+        closed: true
+        cutAt: "start"
+        text: words.text
+        pixelSize: Theme.fontMd
+    }
+    CutName {
+        id: wordsInMiddle
+        y: 60
+        height: 20
+        closed: true
+        cutAt: "middle"
+        text: words.text
+        pixelSize: Theme.fontMd
+    }
     // The same name as a line in no column.
     CutName {
         id: standing
@@ -102,6 +131,35 @@ Item {
             verify(firstLine.cutting, "the mark is drawn")
             compare(firstLine.headText, firstLine.text, "the line whole")
             compare(firstLine.tailText, "")
+        }
+
+        // A cut that lands on a word's edge keeps no space before its mark: at every width the head ends on a letter.
+        function test_no_space_stands_before_the_mark() {
+            let landed = false
+            for (let box = 30; box < words.implicitWidth; box++) {
+                words.width = box
+                verify(words.cutting, "cut at " + box)
+                verify(!/\s$/.test(words.headText), "at " + box + " the head ends on a space: '" + words.headText + "'")
+                landed = landed || words.text.charAt(words.headText.length) === " "
+            }
+            verify(landed, "some width cut on a word's edge")
+        }
+
+        // The same for the tail of a cut at the start or in the middle: at every width it starts on a letter.
+        function test_no_space_stands_after_the_mark_data() {
+            return [{ "tag": "start", "item": wordsFromStart }, { "tag": "middle", "item": wordsInMiddle }]
+        }
+        function test_no_space_stands_after_the_mark(data) {
+            const item = data.item
+            let landed = false
+            for (let box = 30; box < item.implicitWidth; box++) {
+                item.width = box
+                verify(item.cutting, data.tag + " cut at " + box)
+                verify(!/^\s/.test(item.tailText),
+                       data.tag + " at " + box + ": the tail starts on a space: '" + item.tailText + "'")
+                landed = landed || item.text.charAt(item.text.length - item.tailText.length - 1) === " "
+            }
+            verify(landed, data.tag + ": some width cut on a word's edge")
         }
     }
 }

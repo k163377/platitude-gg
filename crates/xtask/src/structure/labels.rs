@@ -19,9 +19,10 @@
 //!   is the base's to pin;
 //! * input bound where no format can be named — `placeholderText`, which
 //!   the style draws, and the `text` of the controls that leave their
-//!   words to the style (`HoverToolButton`, `AppCheckBox`, a bare
-//!   `ToolButton` or `CheckBox`). A box that shows input draws its own
-//!   `placeholder` with a `PlainTextLabel`.
+//!   words to the style (`HoverToolButton`, a bare `ToolButton` or
+//!   `CheckBox`; `AppCheckBox` draws its own through a `CutName`). A box
+//!   that shows input draws its own `placeholder` with a
+//!   `PlainTextLabel`.
 //!
 //! And two more, about what a label draws rather than its format — a cut
 //! drawn with the font's `…`, whose form the face, the locale and the
@@ -60,7 +61,7 @@ const NAMING: &[&str] = &[
 /// Qt's labels, which guess their format.
 const BARE: &[&str] = &["Label", "Text"];
 /// The controls whose words the style draws, so no format can be named.
-const UNPINNABLE: &[&str] = &["HoverToolButton", "AppCheckBox", "ToolButton", "CheckBox"];
+const UNPINNABLE: &[&str] = &["HoverToolButton", "ToolButton", "CheckBox"];
 /// The property the style draws as a `Text` of its own.
 const PLACEHOLDER: &str = "placeholderText";
 /// The file that may spell a lone `…`: the face's measures of the font's.
@@ -633,7 +634,7 @@ mod tests {
     #[test]
     fn input_where_no_format_can_be_named_is_found() {
         let qml = "Item {\n    SlimField {\n        placeholderText: box.standing\n    }\n    HoverToolButton {\n        \
-                   text: qsTr(\"Clear\")\n    }\n    AppCheckBox {\n        text: row.word\n    }\n}\n";
+                   text: qsTr(\"Clear\")\n    }\n    CheckBox {\n        text: row.word\n    }\n}\n";
         let found = findings("Pane.qml", qml);
         let lines: Vec<usize> = found.iter().map(|f| f.line).collect();
         assert_eq!(

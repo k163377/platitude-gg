@@ -11,6 +11,13 @@ import platitude.ui
 // Headless: `amend-author` / `remote-url origin:marked` / `commands`.
 CheckBox {
     id: appCheck
+
+    /// The least a holder that lets the words give way hands the box: its seat, the cut mark, so words cut to nothing
+    /// still say they were cut (`CutName.markWidth`), and the style's right padding past it, which the words' box
+    /// stands inside as it does past whole words.
+    readonly property real leastWidth:
+        appCheck.indicator.width + appCheck.spacing + Math.ceil(boxWords.markWidth) + appCheck.rightPadding
+
     font.pixelSize: Theme.fontMd
     // Users keep this default; only the band's `Background reads` (`CommandsPane`) drops to `iconLg`.
     implicitHeight: Theme.controlHeight
@@ -36,6 +43,25 @@ CheckBox {
             kind: "check"
             visible: appCheck.checked
             tint: appCheck.enabled ? Theme.textOnAccent : Theme.textMuted
+        }
+    }
+    // The words after the box's seat, as the style's label lays them, but cut at their end with the cut mark when a
+    // holder hands the box less than they take (`CutName`, 規約 §寸法「省略の印は描く」): the style's label would type
+    // the font's `…`. A line in no column (`closed`).
+    contentItem: Item {
+        implicitWidth: appCheck.indicator.width + appCheck.spacing + boxWords.implicitWidth
+        implicitHeight: boxWords.implicitHeight
+        CutName {
+            id: boxWords
+            x: appCheck.indicator.width + appCheck.spacing
+            width: Math.max(0, parent.width - x)
+            anchors.verticalCenter: parent.verticalCenter
+            text: appCheck.text
+            cutAt: "end"
+            closed: true
+            pixelSize: appCheck.font.pixelSize
+            weight: appCheck.font.weight
+            color: appCheck.palette.windowText
         }
     }
 }
