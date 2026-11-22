@@ -153,6 +153,48 @@ fn a_picture_is_named_on_one_line_before_it_is_copied() {
     assert_eq!(picture_name(std::path::Path::new("..")), "shot.png");
 }
 
+/// What answers a proposal (`hook::proposal`): this seat's runs since the
+/// moment, read abreast with something to read against — not a lone
+/// picture, not another seat's pair, not a pair from before.
+#[test]
+fn a_comparison_is_a_seats_pictures_abreast_since_the_moment() {
+    let yard = crate::yard::Yard::new("shots-compared");
+    let repo = crate::seats::slashed(yard.as_ref());
+    assert!(crate::subprocess::git_query(&repo, &["init", "-q"]).is_some());
+    let runs = yard.join(".shots/runs");
+    std::fs::create_dir_all(&runs).expect("the board's runs");
+    let run = |label: &str, seat: &str, at, pictures: usize, abreast| Run {
+        label: label.to_string(),
+        verb: String::new(),
+        seat: seat.to_string(),
+        at,
+        side_by_side: abreast,
+        shots: (0..pictures)
+            .map(|n| Shot {
+                file: format!("img/{n}.png"),
+                from: "app.png".to_string(),
+                caption: String::new(),
+                width: 1,
+                height: 1,
+            })
+            .collect(),
+    };
+    for (stem, put) in [
+        ("2-d-old", run("1. old pair", "d", 2, 2, true)),
+        ("5-d-pair", run("2. pair", "d", 5, 2, true)),
+        ("6-d-lone", run("3. lone", "d", 6, 1, false)),
+        ("7-d-part", run("4. one part", "d", 7, 1, true)),
+        ("8-e-pair", run("5. other seat", "e", 8, 2, true)),
+    ] {
+        write_run(&runs, stem, &put).expect("the run is written");
+    }
+    assert_eq!(super::compared_since(&repo, "d", 3), ["2. pair"]);
+    assert_eq!(
+        super::put_up_since(&repo, "d", 3),
+        ["2. pair", "3. lone", "4. one part"]
+    );
+}
+
 /// The reading order, whatever order the directory lists the files in.
 #[test]
 fn runs_come_back_in_the_order_they_went_up() {

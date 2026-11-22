@@ -24,7 +24,7 @@ pub(crate) use claim::{
 };
 pub(crate) use commands::COMMANDS;
 pub(crate) use handout::{carrying, conversation_seat, how_claims_move, take, treeless};
-pub(crate) use pictures::may_picture;
+pub(crate) use pictures::{holds, may_picture};
 pub(crate) use survey::{Seat, run, survey};
 pub(crate) use worktrees::{
     RIG, SEATS, SeatEntry, WorktreeBlock, commits_in, dirty_lines, has_a_directory, in_rig,

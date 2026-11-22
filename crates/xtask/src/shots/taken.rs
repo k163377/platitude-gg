@@ -23,6 +23,14 @@ pub(crate) struct Run {
     pub(crate) shots: Vec<Shot>,
 }
 
+impl Run {
+    /// Whether the run sets pictures against each other: read abreast,
+    /// with a second picture to read the first against.
+    pub(crate) fn compares(&self) -> bool {
+        self.side_by_side && self.shots.len() >= 2
+    }
+}
+
 /// One picture on the board.
 pub(crate) struct Shot {
     /// Board-relative: the page points at the files, so index.html stays

@@ -23,6 +23,19 @@ pub(crate) fn may_picture(seat: &str) -> Result<(), String> {
     picture_verdict(seat, &me, standing)
 }
 
+/// Whether `session` holds the seat `cwd` stands in: [`may_picture`]'s
+/// question, asked for the session a hook speaks for rather than the
+/// process it runs in (`hook::proposal`).
+pub(crate) fn holds(cwd: &str, session: &str) -> bool {
+    worktree_root(cwd).is_some_and(|root| {
+        let me = Identity::current(Some(session));
+        matches!(
+            standing(lock_reason(&root), &me, Held::BySession),
+            Standing::Ours
+        )
+    })
+}
+
 /// [`may_picture`]'s rule, apart from the git that read the claim.
 fn picture_verdict(seat: &str, me: &Identity, standing: Standing) -> Result<(), String> {
     if me.session.trim().is_empty() {

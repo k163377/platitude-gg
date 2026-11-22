@@ -221,13 +221,30 @@ pub(super) fn load_runs(runs: &Path) -> Vec<Run> {
 /// what a landing would take off the board before anybody was asked
 /// about it (`land`). A board that cannot be read holds none.
 pub(crate) fn put_up_since(dir: &str, seat: &str, since: u128) -> Vec<String> {
+    runs_since(dir, seat, since)
+        .into_iter()
+        .map(|run| run.label)
+        .collect()
+}
+
+/// [`put_up_since`], of the runs read abreast alone — two pictures or more
+/// side by side, which is how a problem and its fix are put in front of
+/// the user (`hook::proposal`).
+pub(crate) fn compared_since(dir: &str, seat: &str, since: u128) -> Vec<String> {
+    runs_since(dir, seat, since)
+        .into_iter()
+        .filter(Run::compares)
+        .map(|run| run.label)
+        .collect()
+}
+
+fn runs_since(dir: &str, seat: &str, since: u128) -> Vec<Run> {
     let Ok(board) = board_dir_of(dir) else {
         return Vec::new();
     };
     load_runs(&board.join("runs"))
         .into_iter()
         .filter(|run| run.seat == seat && run.at > since)
-        .map(|run| run.label)
         .collect()
 }
 
