@@ -17,6 +17,7 @@ Item {
     readonly property var repoTab: driver.repoTab
     readonly property var worktree: driver.worktree
     readonly property var branchesModel: driver.branchesModel
+    readonly property var remotesModel: driver.remotesModel
     readonly property var stashesModel: driver.stashesModel
     readonly property var graphPane: driver.graphPane
     readonly property var sidebarPane: driver.sidebarPane
@@ -123,20 +124,32 @@ Item {
             // What the remote does with the new name. The bar comes down once git says the local rename landed, so
             // the run completes on the bar settling — at the write barrier its height is still nothing.
             // Argument `<新しい名前>[:<選ぶ答え>]` (`replace` / `add` / `leave`; none = as it opens). "-go" answers it.
+            // `gone` picks nothing: once the bar stands, the old upstream's remote-tracking ref is taken away from
+            // outside, as a prune takes it, and the bar is read as it turned (`RenameCarryFlow.gone`) — "-go" then
+            // answers with what it offers first, the upstream's setting alone.
             const want = arg.split(":")
             const goes = act.endsWith("-go")
+            const gone = want.length > 1 && want[1] === "gone"
             // "-go" with no answer named takes `add`: `replace` would delete the remote's HEAD branch, which git
             // refuses (that write is `replace-remote-go`'s). "-tip" points at the pill; only `replace` has a tip.
             const points = act.endsWith("-tip")
             localUpstreamAskTimer.pick = points ? "replace" : want.length > 1 ? want[1] : (goes ? "add" : "")
             localUpstreamAskTimer.answers = goes
             localUpstreamAskTimer.points = points
+            localUpstreamAskTimer.gone = gone
             // The pick, then the hand on the pill and its tip standing, then the bar said as it stands and answered —
             // each where asked.
-            localUpstreamAskTimer.order = (localUpstreamAskTimer.pick !== "" ? ["picked"] : [])
+            localUpstreamAskTimer.order = (gone ? ["removed", "reread", "turned"]
+                                           : localUpstreamAskTimer.pick !== "" ? ["picked"] : [])
                 .concat(points ? ["pointed", "tipped"] : [])
                 .concat(goes ? ["said", "answered"] : [])
             const local = worktree.branch
+            // Read before the rename, as `RepoPage.renameRow` reads its own: afterwards the row answers to the new
+            // name.
+            localUpstreamAskTimer.spokenFor = branchesModel.upstreamOf(local)
+            localUpstreamAskTimer.lost = branchesModel.upstreamGoneOf(local) !== ""
+            localUpstreamAskTimer.comes = !gone ? ""
+                : GitFacts.remoteRefBeside(localUpstreamAskTimer.spokenFor, want[0], repoTab.remoteNames)
             sidebarPane.beginRename("branch", local, local)
             sidebarPane.submitEdit(want[0])
             localUpstreamAskTimer.start()
@@ -269,15 +282,34 @@ Item {
     PageStage {
         id: localUpstreamAskTimer
         name: "local_upstream_ask"
-        /// Which of the three answers the run picks, empty for the bar as it comes down.
+        /// Which of the three answers the run picks — or `gone`, which picks none —, empty for the bar as it comes
+        /// down.
         property string pick: ""
         /// Whether the picked answer is then given to the bar.
         property bool answers: false
         /// Whether a hand goes on the pill (`-tip`) — a beat after the pick, so the tip sits against the picked word.
         property bool points: false
+        /// Whether the old upstream's row is taken away while the bar stands (`:gone`), and that row's name.
+        property bool gone: false
+        property string spokenFor: ""
+        /// Whether that upstream was gone from the list before the rename (`--preset gone-out`): the bar comes down
+        /// on the two answers.
+        property bool lost: false
+        /// …and the remote branch the new name would be (`:gone`).
+        property string comes: ""
+        /// What the answer to the turned bar wrote, read off the listing behind it: the upstream the branch names
+        /// now — no row answers to it, so it is the gone one's seat —, and whether anything went up.
+        function written() {
+            return !localUpstreamAskTimer.gone ? ""
+                 : " upstream=" + branchesModel.upstreamGoneOf(worktree.branch)
+                   + " sent=" + (acts.remotesModel.oidOfName(localUpstreamAskTimer.comes) !== "")
+        }
         function line() {
             return driver.carryWords("branch", localUpstreamAskTimer.pick)
                    + (localUpstreamAskTimer.points ? " tip=" + graphPane.askCard.tipStanding : "")
+                   // The line under the heading is the gone pair's own: `rows=` alone could be a list not yet in.
+                   + (localUpstreamAskTimer.gone || localUpstreamAskTimer.lost
+                      ? " line=" + (graphPane.askDetail !== "") : "")
         }
         /// The bar settled, and the tip up for a run that points at the pill.
         function standing() {
@@ -295,7 +327,31 @@ Item {
             if (!op.at("said")) {
                 if (!Awaited.all("local_upstream_ask_ready", { "bar": graphPane.askCard.settled }))
                     return
-                if (op.pick !== "" && op.at("start")) {
+                if (op.gone && op.at("start")) {
+                    // As a terminal would, with nothing of the window's asked: the ref the old upstream's row is.
+                    op.input("removed", () => Harness.runGit(
+                        repoTab.repoPath,
+                        ["update-ref", "-d", "refs/remotes/" + op.spokenFor].join("\n")).startsWith("0 "))
+                    return
+                }
+                if (op.gone && op.at("removed")) {
+                    // The read that notices it, asked for once: nothing of the window's wrote.
+                    op.input("reread", () => {
+                        repoTab.refreshQuick()
+                        return true
+                    })
+                    return
+                }
+                if (op.gone && op.at("reread")) {
+                    // The row out of the list, and the bar turned with it and at rest again.
+                    if (!Awaited.all("local_upstream_gone", {
+                        "row": acts.remotesModel.oidOfName(op.spokenFor) === "",
+                        "line": graphPane.askDetail !== "",
+                        "bar": graphPane.askCard.settled })
+                        || !op.advance("turned", () => "rename_carry step=turned gone=" + op.spokenFor))
+                        return
+                }
+                if (op.pick !== "" && !op.gone && op.at("start")) {
                     // Through the field's own door (`RenameCarryFlow.pickChoice` — no injected click opens a popup
                     // offscreen), re-applied until it takes: the form's `Loader` is a frame behind the bar. The beats
                     // after it are the bar re-dressing around the choice.
@@ -325,7 +381,8 @@ Item {
                 if (!Awaited.all("local_upstream_ask_ready", op.standing()) || !op.advance("said", () => op.line()))
                     return
                 op.witness("bar", op.line())
-                driver.reportAtCompletion(() => localUpstreamAskTimer.witnessed("bar"))
+                driver.reportAtCompletion(() => localUpstreamAskTimer.witnessed("bar")
+                                                + localUpstreamAskTimer.written())
             }
             // Held or clicked, as the bar asks; a press that did not take is pressed again on the next beat.
             const held = graphPane.askHold

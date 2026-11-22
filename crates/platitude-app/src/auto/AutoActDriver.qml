@@ -395,14 +395,15 @@ Item {
         return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
     }
 
-    /// The row a word names in the rename's remote chooser (`RenameCarryFlow.choices`): `replace` makes one name and
-    /// takes the other away, `add` leaves the other, `leave` writes nothing.
+    /// The row a word names in the rename's remote chooser while it offers its three answers
+    /// (`RenameCarryFlow.answers`): `replace` makes one name and takes the other away, `add` leaves the other, `leave`
+    /// writes nothing.
     function carryChoiceIndex(word) {
         return word === "replace" ? 0 : word === "add" ? 1 : word === "leave" ? 2 : -1
     }
     /// What that bar is saying, for the two runs that raise it. Read off the control and the bar, not the flow that
-    /// dressed them, so a pick that never reached the form answers `shown=false`. `pick=` says which of the three
-    /// dressings was expected.
+    /// dressed them, so a pick that never reached the form answers `shown=false`. `pick=` says which dressing was
+    /// expected: one of the three answers', or `gone`, the bar turned by its old remote branch leaving.
     function carryWords(kind, pick) {
         const field = driver.graphPane.askForm ? driver.graphPane.askForm.pick : null
         return "rename_carry kind=" + kind

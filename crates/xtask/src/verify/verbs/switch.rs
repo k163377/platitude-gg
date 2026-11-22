@@ -96,6 +96,22 @@ pub(super) const TABLE: &[Verb] = &[
                 "rename_carry kind=branch rows=3 pick=leave shown=true answerable=true \
                  hold=false neutral=true pill=Leave",
             ),
+            // The old upstream's row taken away while the bar stands: the
+            // two answers left, the upstream's setting worn, and the line
+            // that says why.
+            (
+                Arg::Ends(":gone"),
+                "rename_carry kind=branch rows=2 pick=gone shown=true answerable=true hold=false \
+                 neutral=true pill=Set line=true",
+            ),
+            // …and one gone before the rename (`--preset gone-out`): the
+            // bar comes down on the two answers and their line from its
+            // first frame.
+            (
+                Arg::IsOn("release-1.3", "gone-out"),
+                "rename_carry kind=branch rows=2 pick=none shown=true answerable=true hold=false \
+                 neutral=true pill=Set line=true",
+            ),
         ],
         // `pick=none` picks nothing: the chooser opens on the answer that
         // takes nothing away, so `shown=true` and the pill is live from the
@@ -117,11 +133,20 @@ pub(super) const TABLE: &[Verb] = &[
     // naming no answer takes `add`.
     Verb {
         name: "rename-local-upstream-go",
-        when: &[(
-            Arg::Ends(":leave"),
-            "rename_carry kind=branch rows=3 pick=leave shown=true answerable=true hold=false \
-             neutral=true pill=Leave",
-        )],
+        when: &[
+            (
+                Arg::Ends(":leave"),
+                "rename_carry kind=branch rows=3 pick=leave shown=true answerable=true hold=false \
+                 neutral=true pill=Leave",
+            ),
+            // …and what `Set` wrote: the upstream on the new name, nothing
+            // sent.
+            (
+                Arg::Ends(":gone"),
+                "rename_carry kind=branch rows=2 pick=gone shown=true answerable=true hold=false \
+                 neutral=true pill=Set line=true upstream=origin/main-renamed sent=false",
+            ),
+        ],
         plain: "rename_carry kind=branch rows=3 pick=add shown=true answerable=true hold=false \
                 neutral=true pill=Create",
     },

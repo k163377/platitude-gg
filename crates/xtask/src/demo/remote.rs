@@ -12,6 +12,7 @@ pub(super) fn build(preset: &str, repo: &mut DemoRepo) -> Option<Result<(), Stri
         "others-merging" => others_merging(repo),
         "unpublished" => unpublished(repo),
         "gone" => gone(repo),
+        "gone-out" => gone_out(repo),
         "forkmark" => forkmark(repo),
         "forkdiverged" => forkdiverged(repo),
         "localbase" => localbase(repo),
@@ -289,6 +290,14 @@ pub(super) fn gone(repo: &mut DemoRepo) -> Result<(), String> {
     repo.git(&["push", "origin", "--delete", "release-1.2"])?;
     repo.git(&["fetch", "--prune", "origin"])?;
     repo.git(&["switch", "main"])?;
+    Ok(())
+}
+
+/// [`gone`] with that branch the one checked out: what is asked of the
+/// worktree's own branch is asked of one whose upstream is gone.
+pub(super) fn gone_out(repo: &mut DemoRepo) -> Result<(), String> {
+    gone(repo)?;
+    repo.git(&["switch", "release-1.2"])?;
     Ok(())
 }
 

@@ -100,6 +100,9 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
         gone      a branch whose upstream the far side deleted: git answers
                   [gone] for it, and the row has a remote branch to name
                   with nothing behind it (nav-open)
+        gone-out  the same, with that branch checked out: its rename asks
+                  about an upstream that was gone before it
+                  (rename-local-upstream release-1.3)
         forkmark  a fork checkout: fetches from origin, and the branch's
                   own mark sends every push of it to the fork instead
         forkdiverged  the same, with the fork's main fetched and holding a

@@ -244,7 +244,7 @@
 - `replace-remote`(引数 `<remote>/<old>:<new>`。**質問で止まる** — 書き込みは `-go` だけ。詳細は `AutoActNavBoxVerbs.qml` の `replaceAskTimer`、判定は `verify/verbs/switch.rs`)
 - `replace-remote-go`(回数押しを最後まで進めて実行。**向こうが立っているブランチは渡せない**(`origin/feature/topic-a` のような別の行で撃つ)— 詳細は `AutoActNavBoxVerbs.qml`)
 - `replace-remote-tip`(引数は `replace-remote` と同じ。同じ質問の pill に手を置いた時のツールチップ = 回数押しの理由と走る順(overlay.png)— 詳細は `AutoActNavBoxVerbs.qml` の `replaceAskTimer`)
-- `rename-local-upstream` / `rename-local-upstream-go`(引数 `<新しい名前>[:replace|add|leave]`。今立っているブランチを改名した後に降りる、リモート側をどうするかの質問。答えを省くとバーは既定の `add` のまま、`-go` は `replace` を撃てない — 詳細は `AutoActSwitchVerbs.qml`、判定は `verify/verbs/switch.rs`)
+- `rename-local-upstream` / `rename-local-upstream-go`(引数 `<新しい名前>[:replace|add|leave|gone]`。`gone` は答えを選ばず、質問が立った後に旧 upstream の追跡 ref を外から消して、バーが 2 択と理由の行に変わった所を読む(`-go` はそこで `Set` を押す)。改名の前から消えていた upstream は `release-1.3 --preset gone-out`。今立っているブランチを改名した後に降りる、リモート側をどうするかの質問。答えを省くとバーは既定の `add` のまま、`-go` は `replace` を撃てない — 詳細は `AutoActSwitchVerbs.qml`、判定は `verify/verbs/switch.rs`)
 - `rename-local-upstream-tip`(引数は新しい名前だけ、**答えは `replace` に固定**。その pill のツールチップ(overlay.png)— 詳細は同上)
 - `rename-tag-remote` / `rename-tag-remote-go`(引数 `<tag>:<新しい名前>[:replace|add|leave]`、preset `basic` なら `v0.2:v0.2.1`。両側が持つタグを改名した後の同じ質問 — こちらは `replace` も撃てる(`-go` の既定)。詳細は `AutoActNavBoxVerbs.qml` の `tagRemoteRenameTimer`、判定は `verify/verbs/nav.rs`)
 - `rename-tag-remote-tip`(引数 `<tag>:<新しい名前>`、**答えは `replace` に固定**。その pill のツールチップ(overlay.png)— 詳細は同上)
