@@ -22,6 +22,16 @@
 //!
 //! A whole run has a job object of its own. git is created suspended and
 //! let go once it is in the job, so every process it starts is born in it.
+//! Until it is let go, the job ends git when this process ends: a git whose
+//! parent went (a crash, a kill) before letting it go would sit suspended
+//! for good, holding its folder and every handle it was handed. Once let
+//! go, git runs on by itself when this process ends, as it does off
+//! Windows — a write the window went down in the middle of still finishes.
+//! The span from git's creation to its joining the job (std's and tokio's
+//! spawn, then the assignment) stays open: closing it takes creating git
+//! inside its job (`PROC_THREAD_ATTRIBUTE_JOB_LIST`), which std passes only
+//! through the unstable `raw_attribute` — or a spawn of this crate's own in
+//! place of std's.
 
 use tokio::process::{Child, Command};
 
@@ -161,6 +171,33 @@ mod win32 {
     const ERROR_MORE_DATA: i32 = 234;
     /// `JobObjectBasicProcessIdList`.
     const BASIC_PROCESS_ID_LIST: i32 = 3;
+    /// `JobObjectExtendedLimitInformation`: the only class that takes
+    /// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
+    const EXTENDED_LIMIT_INFORMATION: i32 = 9;
+    const KILL_ON_JOB_CLOSE: u32 = 0x2000;
+
+    /// `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`. Only `flags` is set: a limit
+    /// whose flag is clear is not read.
+    #[repr(C)]
+    #[derive(Default)]
+    struct ExtendedLimits {
+        per_process_user_time: i64,
+        per_job_user_time: i64,
+        flags: u32,
+        minimum_working_set: usize,
+        maximum_working_set: usize,
+        active_processes: u32,
+        affinity: usize,
+        priority_class: u32,
+        scheduling_class: u32,
+        io_counters: [u64; 6],
+        process_memory: usize,
+        job_memory: usize,
+        peak_process_memory: usize,
+        peak_job_memory: usize,
+    }
+
+    const _: () = assert!(size_of::<ExtendedLimits>() == 144);
 
     // SAFETY: the signatures are transcribed from the Win32 headers
     // (jobapi2.h, processthreadsapi.h, synchapi.h, winbase.h); the
@@ -169,6 +206,12 @@ mod win32 {
     unsafe extern "system" {
         fn CreateJobObjectW(attributes: *const c_void, name: *const u16) -> RawHandle;
         fn AssignProcessToJobObject(job: RawHandle, process: RawHandle) -> i32;
+        fn SetInformationJobObject(
+            job: RawHandle,
+            class: i32,
+            info: *const c_void,
+            length: u32,
+        ) -> i32;
         fn TerminateJobObject(job: RawHandle, code: u32) -> i32;
         fn QueryInformationJobObject(
             job: RawHandle,
@@ -203,6 +246,9 @@ mod win32 {
         }
         // SAFETY: a handle just created, owned by nothing else.
         let job = Arc::new(unsafe { OwnedHandle::from_raw_handle(raw) });
+        // Every handle to the job is this process's, so the job closes when
+        // it ends, however it ends.
+        kill_on_close(&job, true)?;
         command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
         let child = command.spawn()?;
         let mut family = Family {
@@ -221,15 +267,15 @@ mod win32 {
         // child is not reaped until it has run.
         let put = unsafe { AssignProcessToJobObject(job.as_raw_handle(), process) } != 0;
         let refused = if put {
-            // SAFETY: as above.
-            let status = unsafe { NtResumeProcess(process) };
-            (status < 0).then(|| io::Error::other(format!("NtResumeProcess: {status:#010x}")))
+            let_go(&job, process).err()
         } else {
             Some(io::Error::last_os_error())
         };
         if let Some(error) = refused {
-            // Never ran a single instruction: ended where it stands, and gone
-            // before the error is told.
+            // Ended where it stands — before its first instruction, or at its
+            // start when the job would not let go of it — and gone before the
+            // error is told. Whatever it could have started is the job's,
+            // which still ends what it holds as it closes here.
             // SAFETY: as above.
             let gone = unsafe {
                 TerminateProcess(process, 1) != 0
@@ -242,6 +288,44 @@ mod win32 {
             return Err(error);
         }
         Ok((child, family))
+    }
+
+    /// Lets git run, and from then on leaves it running should this process
+    /// end first. A test leaves git where it stands instead, to end its
+    /// process on a git never let go (mry).
+    #[mry::mry(skip_args(OwnedHandle, RawHandle))]
+    fn let_go(job: &OwnedHandle, process: RawHandle) -> io::Result<()> {
+        // SAFETY: the caller's process handle is live: the child is not
+        // reaped until it has run.
+        let status = unsafe { NtResumeProcess(process) };
+        if status < 0 {
+            return Err(io::Error::other(format!("NtResumeProcess: {status:#010x}")));
+        }
+        kill_on_close(job, false)
+    }
+
+    /// Whether the job ends what it holds once its last handle closes. The
+    /// job has no other limit, so the flag is the whole of what is set.
+    fn kill_on_close(job: &OwnedHandle, on: bool) -> io::Result<()> {
+        let limits = ExtendedLimits {
+            flags: if on { KILL_ON_JOB_CLOSE } else { 0 },
+            ..ExtendedLimits::default()
+        };
+        // SAFETY: the job handle is live, borrowed from the caller; the
+        // structure is as long as the length says, and only read.
+        let set = unsafe {
+            SetInformationJobObject(
+                job.as_raw_handle(),
+                EXTENDED_LIMIT_INFORMATION,
+                std::ptr::from_ref(&limits).cast(),
+                size_of::<ExtendedLimits>() as u32,
+            )
+        } != 0;
+        if set {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
     }
 
     /// Stops every process in the job and answers once each is gone.
@@ -395,4 +479,7 @@ mod win32 {
             return Ok((assigned, held));
         }
     }
+
+    #[cfg(test)]
+    mod tests;
 }
