@@ -51,7 +51,7 @@ pub(super) fn carried(repo: &mut DemoRepo) -> Result<(), String> {
     // Clean: a worktree with nothing to say draws no row at all.
     repo.git(&["worktree", "add", "-b", "side/quiet", "../quiet"])?;
 
-    // A name past the pane's 300px floor in any font, so the band, the
+    // A name past the right pane's floor in any font, so the band, the
     // block and the diff's own header are read cut on this one
     // (`carried-read` on this worktree).
     repo.git(&[

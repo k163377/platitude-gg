@@ -813,6 +813,39 @@ ColumnLayout {
     /// (`_PGG_AUTO_ACT=window-floor wip`).
     readonly property bool blockScrolls: commitBlock.blockScrolls
     readonly property bool descKeeps: commitBlock.descKeeps
+    /// The heading at its least that is still read: the caption's first word whole and the mark after it
+    /// (`firstWordRoom` / `cutMarkRoom`, the caption's own cut), a count of up to three digits (`countRoom`) and the
+    /// toggle — the right pane's floor (`PageLayout.rightFloorWidth`; user decision — ask before changing: a narrow
+    /// pane cuts the headings' words, never their counts, and three digits still leave the first word). Read off the
+    /// top heading alone: the buckets' headings under it cut their words the same way, their counts and buttons kept,
+    /// and another worktree's pane says the same words in `DetailsChangesBand`. Read off the face the platform sets it
+    /// in, not a number taken in one. The count is held to its budget so the floor does not move as files change; past
+    /// three digits a pane at its floor cuts the first word. Each width taken up to a whole pixel, as the row takes its
+    /// children's (rules-refs/app-ui.md「子の入札から自分の幅を決める入れ物は `Math.ceil` で受ける」).
+    readonly property real headingFloorWidth: headingRow.anchors.leftMargin + headingRow.anchors.rightMargin
+        + 3 * headingRow.spacing + Math.ceil(firstWordRoom.advanceWidth) + Math.ceil(cutMarkRoom.advanceWidth)
+        + Math.ceil(countRoom.advanceWidth) + Math.ceil(headingToggle.implicitWidth)
+    readonly property TextMetrics countRoom: TextMetrics {
+        font: headingCount.font
+        text: "(999)"
+    }
+    /// Automation (`window-fill`'s `headed=`): the caption reads at least its first word — whole, or cut past it. A
+    /// caption squeezed to no width reads nothing, though it cuts nothing either (`CutName.cutting`).
+    readonly property bool headingReads: wipCaption.width > 0
+        && (!wipCaption.cutting || wipCaption.headText.startsWith(firstWordRoom.text))
+    // In the caption's face (`CutName`'s labels: the UI family at the caption's size and weight).
+    readonly property TextMetrics firstWordRoom: TextMetrics {
+        font.family: Theme.uiFamily
+        font.pixelSize: wipCaption.pixelSize
+        font.weight: wipCaption.weight
+        text: wipCaption.text.split(" ")[0]
+    }
+    readonly property TextMetrics cutMarkRoom: TextMetrics {
+        font.family: Theme.uiFamily
+        font.pixelSize: wipCaption.pixelSize
+        font.weight: wipCaption.weight
+        text: WordFace.cutGlyph
+    }
     /// The bare bottom edge the page's corner text steps aside by — none: the commit block is pinned there and never
     /// empty, so the git version in the corner has no seat on this pane (`GitVersionCorner`;
     /// `DetailsPane.bottomRoom` is the one that answers).
@@ -822,28 +855,37 @@ ColumnLayout {
 
     Rectangle {
         id: headerBand
-        /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+        /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDropOf`; デザイン規約
         /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
-        readonly property real capsLift: -WordFace.capitalDrop(wipCaption)
+        readonly property real capsLift:
+            -WordFace.capitalDropOf(wipCaption.baselineOffset, wipCaption.pixelSize, wipCaption.height)
         Layout.fillWidth: true
         implicitHeight: Theme.headerHeight
         color: Theme.bgElevated
         BandRule { z: 1 }
         RowLayout {
+            id: headingRow
             anchors.fill: parent
             anchors.leftMargin: Theme.spaceXs
             anchors.rightMargin: Theme.spaceXs
             spacing: Theme.spaceXs
-            Label {
+            // The words give way to a narrow pane, the count and the toggle never do (デザイン規約 §窓の床).
+            CutName {
                 id: wipCaption
+                // A line in no column (`closed`): the mark straight after the word it cut.
+                closed: true
+                Layout.fillWidth: true
+                Layout.maximumWidth: wipCaption.implicitWidth
                 transform: Translate { y: headerBand.capsLift }
                 text: qsTr("UNCOMMITTED CHANGES")
-                font.pixelSize: Theme.fontMd
-                font.weight: Theme.fontWeightStrong
+                cutAt: "end"
+                pixelSize: Theme.fontMd
+                weight: Theme.fontWeightStrong
                 color: Theme.textSecondary
             }
             // The count stands at the caption's own step, as in every heading band (see DetailsChangesBand's).
             PlainTextLabel {
+                id: headingCount
                 transform: Translate { y: headerBand.capsLift }
                 text: "(" + wipPane.unstagedModel.total + ")"
                 font.pixelSize: Theme.fontMd
@@ -851,6 +893,7 @@ ColumnLayout {
             }
             Item { Layout.fillWidth: true }
             TreeViewToggle {
+                id: headingToggle
                 treeView: wipPane.unstagedModel.treeView
                 onChosen: tree => wipPane.treeViewChosen(tree)
             }

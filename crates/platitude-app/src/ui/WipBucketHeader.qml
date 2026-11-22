@@ -25,9 +25,10 @@ Rectangle {
     /// An external merge tool holds the write queue until it is closed.
     readonly property bool waitingForTool: bucketHeader.section === "conflicts"
         && bucketHeader.repoTab.busyOp === "mergetool"
-    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDrop`; デザイン規約
+    /// How far the caption moves up to stand its capitals on the band's middle (`WordFace.capitalDropOf`; デザイン規約
     /// §アイコンの席「大文字だけの見出しの語」); its count goes with it.
-    readonly property real capsLift: -WordFace.capitalDrop(bucketCaption)
+    readonly property real capsLift:
+        -WordFace.capitalDropOf(bucketCaption.baselineOffset, bucketCaption.pixelSize, bucketCaption.height)
 
     /// Automation: whether the whole-bucket button takes a press, and whether it has words for the hand, as drawn — a
     /// whole bucket's press out holds both down and silent (`stage-all`).
@@ -49,16 +50,22 @@ Rectangle {
         anchors.leftMargin: Theme.spaceXs
         anchors.rightMargin: Theme.spaceXs
         spacing: Theme.spaceXs
-        Label {
+        // The words give way to a narrow pane before the count and the button do (デザイン規約 §窓の床).
+        CutName {
             id: bucketCaption
+            // A line in no column (`closed`): the mark straight after the word it cut.
+            closed: true
+            Layout.fillWidth: true
+            Layout.maximumWidth: bucketCaption.implicitWidth
             transform: Translate { y: bucketHeader.capsLift }
             text: bucketHeader.section === "staged"
                   ? qsTr("STAGED FILES")
                   : bucketHeader.section === "unstaged"
                   ? qsTr("UNSTAGED FILES")
                   : Words.badgeConflicts
-            font.pixelSize: Theme.fontMd
-            font.weight: Theme.fontWeightStrong
+            cutAt: "end"
+            pixelSize: Theme.fontMd
+            weight: Theme.fontWeightStrong
             color: bucketHeader.section === "conflicts" ? Theme.danger : Theme.textSecondary
         }
         // The count in its own label at the caption's step (デザイン規約 §タイポグラフィ). The conflicted bucket has

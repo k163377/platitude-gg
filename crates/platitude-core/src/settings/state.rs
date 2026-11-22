@@ -141,7 +141,10 @@ impl State {
             state.layout = LayoutState {
                 sidebar_width: int_in(l, "sidebar_width", 180..=4_000, d.sidebar_width),
                 sidebar_collapsed: flag(l, "sidebar_collapsed", d.sidebar_collapsed),
-                details_width: int_in(l, "details_width", 300..=4_000, d.details_width),
+                // The right pane's floor is the app's, answered by its headings in the window's face
+                // (`PageLayout.rightFloorWidth`; 220 on Windows); the pane holds a saved width to it, so the
+                // range only drops what no floor could be.
+                details_width: int_in(l, "details_width", 160..=4_000, d.details_width),
                 graph_labels_width: width_or_auto(l, "graph_labels_width"),
                 graph_lanes_width: width_or_auto(l, "graph_lanes_width"),
                 commands_height: int_in(l, "commands_height", 120..=4_000, d.commands_height),
@@ -331,6 +334,17 @@ colour = "midnight"
         assert!(!text.contains("\nheight = "), "{text}");
         let back = store.load_state().window;
         assert_eq!((back.width, back.height), (None, None));
+    }
+
+    /// A right pane dragged to its floor stands there again after a restart.
+    #[test]
+    fn a_right_pane_at_its_floor_survives_a_restart() {
+        let dir = crate::temp::dir();
+        let store = dir_store(dir.path());
+        let mut state = State::default();
+        state.layout.details_width = 220;
+        store.save_state(&state).expect("save");
+        assert_eq!(store.load_state().layout.details_width, 220);
     }
 
     /// [`AUTO_WIDTH`] has to survive the same range check that throws out

@@ -474,6 +474,17 @@ impl AppBackend {
     }
 
     #[qslot]
+    fn start_right_dragged_width(&self) -> f64 {
+        self.right_dragged_width
+    }
+
+    /// Reported beside the layout's flags, as the list's hold is.
+    #[qslot]
+    fn save_right_dragged_width(&mut self, width: f64) {
+        self.right_dragged_width = width;
+    }
+
+    #[qslot]
     fn start_tags_shown(&self) -> bool {
         with_flag(|l| l.tags_shown)
     }

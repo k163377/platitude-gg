@@ -211,6 +211,11 @@ pub struct AppBackend {
     /// flag is: the window is the same, so the next tab's list stays open
     /// too until the window has room again.
     list_held_open: bool,
+    /// The width the right pane was dragged to under the list's fold for
+    /// the room (`PageLayout.rightDraggedWidth`), 0 for none, handed over
+    /// between tabs as the list's hold is: the next tab stands on the same
+    /// fold.
+    right_dragged_width: f64,
     check_feed: Arc<Feed<AppMsg>>,
     stop_listener: Option<stop::Listener>,
 }

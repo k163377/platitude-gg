@@ -194,6 +194,7 @@ impl Default for AppBackend {
             held_elsewhere: Hub::with(|hub| hub.held_elsewhere().to_string()).unwrap_or_default(),
             commands_shown: false,
             list_held_open: false,
+            right_dragged_width: 0.0,
             check_feed: Arc::new(Feed::default()),
             stop_listener: None,
         }

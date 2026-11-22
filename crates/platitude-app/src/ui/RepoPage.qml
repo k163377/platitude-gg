@@ -72,6 +72,8 @@ FocusScope {
     onListCrowdedChanged: if (!page.listCrowded) page.listHeldOpen = false
     /// The fold the diff put on: closing the diff takes back only that; a fold by hand stays.
     property bool foldedByDiff: false
+    /// The reader's own fold — not the diff's nor the plan's, which give theirs back (`PageLayout.foldedForOther`).
+    readonly property bool foldedByHand: page.sidebarCollapsed && !page.foldedByDiff && !page.foldedByPlan
     function foldForDiff(open) {
         if (open) {
             if (page.sidebarCollapsed)
@@ -3147,7 +3149,6 @@ FocusScope {
         recoverBand: recoverBand
         wipPane: wipPane
         detailsPane: detailsPane
-        gitCorner: gitCorner
         repoTab: repoTab
         unstagedModel: unstagedModel
         detailsModel: detailsModel
@@ -4106,9 +4107,10 @@ FocusScope {
                 // Right side: worktree ⇄ commit details
                 Rectangle {
                     id: rightPane
-                    // Where it starts; `applySavedLayout` assigns over this with the width the window is set to.
+                    // Where it starts; `applySavedLayout` assigns over this with the reader's saved width
+                    // (`AppBackend.startDetailsWidth`), which a narrow window squeezes without overwriting.
                     SplitView.preferredWidth: 400
-                    SplitView.minimumWidth: pageLayout.rightMinWidth
+                    SplitView.minimumWidth: pageLayout.rightFloorWidth
                     color: Theme.bgSurface
 
                     GitVersionCorner {
@@ -4121,6 +4123,7 @@ FocusScope {
                         // worktree's is asked for its own room**: the tree's pane never lends the corner (its foot is
                         // the commit button's), so read through it a reader of another worktree would get no version
                         // at all.
+                        roomAcross: rightPane.width
                         roomLeft: !page.wipShown ? detailsPane.bottomRoom
                                 : page.wipWritable ? wipPane.bottomRoom
                                 : carriedSeat.item !== null ? carriedSeat.item.bottomRoom : 0
@@ -4334,6 +4337,7 @@ FocusScope {
             return
         }
         splitWatch.holdSplitBar(bar, held)
+        pageLayout.holdSplitBar(bar, held)
     }
 
     /// Automation: the drag past whichever boundary `which` names, and whether that boundary is still drawn

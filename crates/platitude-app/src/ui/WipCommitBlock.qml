@@ -176,10 +176,15 @@ Flickable {
                 spacing: Theme.spaceXs
                 // Nothing to amend before the first commit, nor in a stopped merge.
                 visible: block.worktree.headOid !== "" && !block.composeHidden && !block.amendBarred
+                // The words give way before the note does, cut at their end (`AppCheckBox`): at the right pane's floor
+                // the note's warning is the one thing on the row that may not go unread.
                 AppCheckBox {
                     id: amendBox
                     text: qsTr("Amend the last commit")
                     font.pixelSize: Theme.fontSm
+                    Layout.fillWidth: true
+                    Layout.maximumWidth: amendBox.implicitWidth
+                    Layout.minimumWidth: amendBox.leastWidth
                     onToggled: block.amendToggled(checked)
                 }
                 Item { Layout.fillWidth: true }
@@ -207,9 +212,9 @@ Flickable {
             // differs from the user's — someone else's commit, or one written under another identity, is the only
             // place it means anything — and unchecked whenever it goes away. Checked, the author date is now too
             // (`commit --amend --reset-author`). On its own line: beside the amend box, the row's three labels touch
-            // the default 400 pane and overflow the 300 floor, and none elides — and as a `RowLayout`'s floor
-            // becomes the `ColumnLayout`'s implicit width, what overflows is the whole block (summary, description
-            // and the commit button's right edge past the pane, as in `details-fit`). A dependent choice stacks under
+            // the default 400 pane and run past the right pane's floor — and as a `RowLayout`'s floor becomes the
+            // `ColumnLayout`'s implicit width, what overflows is the whole block (summary, description and the commit
+            // button's right edge past the pane, as in `details-fit`). A dependent choice stacks under
             // the box it hangs off (`spaceXs`, no indent). No preset stands all three at once: to judge the room,
             // shoot with a throwaway patch that pins `visible` true.
             AppCheckBox {
@@ -229,7 +234,7 @@ Flickable {
             // The toolbar's framed button, so its frame, tone and `!` say its state in a vocabulary already read.
             // One sentence says it all — `commit` `n files to` `<branch>` `by <face>` `+N`: the command run, how much,
             // the ref it lands on and who is recorded are everything a commit records, so the pane needs no other line
-            // for them. What gives when it is short of room is `ActionButtonLabel.phraseFixed`'s.
+            // for them. What gives when it is short of room, and in what order, is `ActionButtonLabel.given`'s.
             ActionButton {
                 id: commitButton
                 visible: !block.composeHidden
