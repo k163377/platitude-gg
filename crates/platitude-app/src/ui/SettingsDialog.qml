@@ -151,10 +151,30 @@ AppDialog {
     readonly property int unsavedIdentities: gitPane.unsavedIdentities
     /// The screen's one block, centred (user decision — ask before changing): `spaceXxl` + rail + `spaceLg` + line +
     /// `spaceLg` + chapters + `spaceXxl`, the same air at both ends so the ink centres with the block; the right
-    /// `spaceXxl` is the bar's lane. A narrowing window loses the outer air first; the block is a ceiling. The title
+    /// `spaceXxl` is the bar's lane. The block is a ceiling; what a narrower window gives up is `railRoom`'s. The title
     /// shares it; the exit stays at the window edge.
     readonly property real blockWidth: 2 * Theme.spaceXxl + Theme.settingsRailWidth + 2 * Theme.spaceLg
                                        + Theme.borderWidth + Theme.textWidth
+    /// The narrowest the chapters lay out at: the `Application` category's REFRESH rows, the screen's widest floor.
+    /// One floor for both categories, so the rail does not move on a category change.
+    readonly property real chapterFloor: appPane.floorWidth
+    /// What a window narrower than the block gives up, in this order (user decision — ask before changing): the air
+    /// outside the block, then the chapters' column down to `chapterFloor`, then the air left of the rail down to the
+    /// `✕`'s inset on the right (`railLead`), then the rail down to its words (`railWidth`). The bar's lane on the
+    /// right is kept to the end: only a window past all four runs the content into it. This is the room the rail and
+    /// its lead have once the chapters hold their floor and the bar its lane.
+    readonly property real railRoom: blockRow.width - 2 * Theme.spaceLg - Theme.borderWidth - Theme.spaceXxl
+                                     - settingsDialog.chapterFloor
+    /// The air left of the rail — and of the title, which starts level with it (`SettingsHeader.lead`). Never under the
+    /// `✕`'s inset from the right edge (`SettingsHeader.exitInset`): the two ends of the band stand off the window
+    /// alike, and nothing touches the left edge.
+    readonly property real railLead: Math.max(settingsHeader.exitInset,
+                                              Math.min(Theme.spaceXxl,
+                                                       settingsDialog.railRoom - Theme.settingsRailWidth))
+    /// `settingsRailWidth`, down to the widest row's words in a window that has spent the lead.
+    readonly property real railWidth: Math.max(railColumn.implicitWidth,
+                                               Math.min(Theme.settingsRailWidth,
+                                                        settingsDialog.railRoom - settingsDialog.railLead))
 
     /// A way out over an unsaved identity was turned down once: the mark is armed and the next press goes through.
     property bool askingLeave: false
@@ -241,7 +261,9 @@ AppDialog {
 
         // ---- the header band -------------------------------------------------
         SettingsHeader {
+            id: settingsHeader
             blockWidth: settingsDialog.blockWidth
+            lead: settingsDialog.railLead
             word: settingsDialog.categoryWord
             categoryIcon: settingsDialog.categoryIcon
             unsaved: settingsDialog.unsavedIdentities > 0
@@ -255,8 +277,9 @@ AppDialog {
         }
 
         // ---- the categories and their chapters -------------------------------
-        // Centred with `blockWidth` as the ceiling: a narrowing window eats the side air first, then the column.
+        // Centred with `blockWidth` as the ceiling; a narrower window gives up what `railRoom` says, in its order.
         RowLayout {
+            id: blockRow
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.maximumWidth: settingsDialog.blockWidth
@@ -266,13 +289,14 @@ AppDialog {
             spacing: Theme.spaceLg
 
             // The categories, dressed as the sidebar's rows (規約 §左メニューの所作): `rowHeight`, `bgSelected` for the
-            // one showing, `bgHover`, `fontMd`; only the width is the screen's own (`settingsRailWidth`).
+            // one showing, `bgHover`, `fontMd`; only the width is the screen's own (`railWidth`).
             // `fillWidth: false`: a nested layout fills by default, and a rail taking what the chapters leave would
             // move on every category change.
             ColumnLayout {
+                id: railColumn
                 Layout.fillWidth: false
-                Layout.leftMargin: Theme.spaceXxl
-                Layout.preferredWidth: Theme.settingsRailWidth
+                Layout.leftMargin: settingsDialog.railLead
+                Layout.preferredWidth: settingsDialog.railWidth
                 Layout.alignment: Qt.AlignTop
                 spacing: 0
                 Repeater {
@@ -294,6 +318,11 @@ AppDialog {
                             settingsDialog.category = categoryRow.modelData.key
                         }
                         Layout.fillWidth: true
+                        // The row's words, the mark on their shoulder and the inset on their right: the narrowest the
+                        // rail goes (`railWidth`).
+                        implicitWidth: (categoryBang.visible ? categoryBang.x + categoryBang.width
+                                                            : categoryWord.x + categoryWord.implicitWidth)
+                                       + Theme.spaceSm
                         implicitHeight: Theme.rowHeight
                         color: categoryRow.current
                                ? Theme.bgSelected
@@ -329,6 +358,7 @@ AppDialog {
                         // other two marks (`escapeOut`). On the word's right shoulder, as `NameCell` seats a file's
                         // mark (規約 §git 用語のコード表記「`!` の席」).
                         NavIcon {
+                            id: categoryBang
                             x: categoryWord.x + categoryWord.implicitWidth - Theme.spaceXs / 2
                             y: categoryWord.y
                             width: Theme.iconSm
@@ -353,10 +383,11 @@ AppDialog {
                 color: Theme.borderSubtle
             }
 
-            // The chapters scroll — `Git` holds two groups. The bar stands at the window's edge with the band's right
-            // inset spent inside the view, out of the content's width: a 9px gutter dodging the thumb would set the bar
-            // 1px off the words with 32px free to their right. So the chapters' right edge lines up with the `✕`, a
-            // band's width of air before the bar, and no `scrollBarGutter` on this side either. Its left air is the
+            // The chapters scroll — `Git` holds two groups. The bar stands at the block's right edge, the window's once
+            // the window is no wider than the block, with the band's right inset spent inside the view, out of the
+            // content's width: a 9px gutter dodging the thumb would set the bar 1px off the words with 32px free to
+            // their right. So a band's width of air stands before the bar — the chapters' right edge lines up with the
+            // `✕` where the block fills the window — and no `scrollBarGutter` on this side either. Its left air is the
             // row's `spacing`: an extra margin here would set the chapters further from the line than the rail.
             Flickable {
                 id: chapters

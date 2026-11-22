@@ -10,8 +10,13 @@ import platitude.ui
 Item {
     id: head
 
-    /// The screen's block width (`SettingsDialog.blockWidth`), so the title starts level with the rail.
+    /// The screen's block width (`SettingsDialog.blockWidth`) and the air left of the rail inside it
+    /// (`SettingsDialog.railLead`), so the title starts level with the rail.
     required property real blockWidth
+    required property real lead
+    /// How far in from the band's right edge the `✕`'s mark stands: the least `lead` a narrow window leaves, so the
+    /// title stands off the left edge as the exit does off the right (`SettingsDialog.railLead`).
+    readonly property real exitInset: (closeMark.seat - closeMark.markSize) / 2
     /// The category showing, for the second half of the title (`SettingsDialog.categories`).
     required property string word
     /// That category's mark, off the same list.
@@ -31,7 +36,7 @@ Item {
         // The block's left edge plus the rail's lane, set here: a margin on the band would fall outside the centred
         // width and shift the title off the rail.
         anchors.left: parent.left
-        anchors.leftMargin: Math.max(0, (head.width - head.blockWidth) / 2) + Theme.spaceXxl
+        anchors.leftMargin: Math.max(0, (head.width - head.blockWidth) / 2) + head.lead
         anchors.right: closeMark.left
         anchors.rightMargin: Theme.spaceSm
         anchors.verticalCenter: parent.verticalCenter

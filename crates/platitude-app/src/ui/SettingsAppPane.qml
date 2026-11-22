@@ -20,6 +20,13 @@ ColumnLayout {
     /// The number boxes' width: their share of the chapter column, which the pane fills (`Theme.settingsBoxShare`).
     /// The REFRESH chapter's chooser takes it too.
     readonly property real boxWidth: pane.width * Theme.settingsBoxShare
+    /// The narrowest the pane lays out at (`SettingsDialog.chapterFloor`): the `Current worktree` row, whose three
+    /// boxes (its word stands in the chooser's width) take shares of the pane while its two words and five gaps do not,
+    /// and a pixel a box on top — the boxes are laid out in whole pixels. Read off those words, not the row's width,
+    /// which follows the pane's: under this floor the pane takes the row's width and the row the pane's, and the two
+    /// step down a polish pass at a time.
+    readonly property real floorWidth: (refreshTo.implicitWidth + refreshSeconds.implicitWidth
+                                        + 5 * refreshRow.spacing + 3) / (1 - 3 * Theme.settingsBoxShare)
 
     /// Enter in one of the number fields. The way out belongs to the screen, so it is asked for.
     signal accepted()
@@ -542,7 +549,9 @@ ColumnLayout {
         // not a disabled chooser, nor an item nobody can pick.
         LabeledField {
             caption: qsTr("Current worktree")
+            // `floorWidth` counts this row's boxes, words and gaps: a part added or taken away here is one there too.
             RowLayout {
+                id: refreshRow
                 Layout.fillWidth: true
                 spacing: Theme.spaceSm
                 LineText {
@@ -563,6 +572,7 @@ ColumnLayout {
                     onAccepted: pane.accepted()
                 }
                 LineText {
+                    id: refreshTo
                     text: qsTr("to")
                     color: Theme.textSecondary
                 }
@@ -578,6 +588,7 @@ ColumnLayout {
                     onAccepted: pane.accepted()
                 }
                 LineText {
+                    id: refreshSeconds
                     text: qsTr("seconds")
                     color: Theme.textSecondary
                 }

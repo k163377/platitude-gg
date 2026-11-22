@@ -12,6 +12,7 @@ Item {
         SettingsHeader {
             blockWidth: 2 * Theme.spaceXxl + Theme.settingsRailWidth + 2 * Theme.spaceLg
                         + Theme.borderWidth + Theme.textWidth
+            lead: Theme.spaceXxl
             word: "Application"
             categoryIcon: "app-window"
             unsaved: false

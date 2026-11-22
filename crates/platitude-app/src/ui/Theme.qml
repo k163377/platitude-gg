@@ -233,7 +233,8 @@ QtObject {
     // read. Two thirds of the initial window.
     readonly property int gateWidth: 960
     // 設定画面: the category rail (デザイン規約 §レイアウト初期値 — not the sidebar's 260). The longest label likely to
-    // come (`Keyboard shortcuts`-sized) is in the 120s px; with the row's inner 8 on both sides, 160.
+    // come (`Keyboard shortcuts`-sized) is in the 120s px; with the row's inner 8 on both sides, 160. A ceiling: a
+    // narrow window takes the rail down to its words (`SettingsDialog.railWidth`).
     readonly property int settingsRailWidth: 160
     // 設定画面: a number box's share of the chapter column (デザイン規約 §レイアウト初期値; user decision): the box
     // narrows with the column, where a fixed width runs the REFRESH row out of it. A quarter: that row's three boxes
