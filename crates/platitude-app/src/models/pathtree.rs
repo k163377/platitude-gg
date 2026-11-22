@@ -33,7 +33,7 @@ impl<T> DirNode<T> {
     /// a list would disagree with what the press does.
     pub(super) fn insert(&mut self, path: &str, make: impl FnOnce(usize) -> T) {
         let mut node = self;
-        let mut rest = path.strip_suffix('/').unwrap_or(path);
+        let mut rest = path.trim_suffix('/');
         let mut from = 0;
         while let Some((dir, tail)) = rest.split_once('/') {
             node = node.dirs.entry(dir.to_string()).or_default();

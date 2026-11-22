@@ -180,7 +180,7 @@ impl<'a> Walk<'a> {
         for (style, piece) in HighlightIterator::new(&mut state.highlight, &ops, &buf, highlighter)
         {
             // The terminator was ours to add and is not part of the row.
-            let len = piece.strip_suffix('\n').unwrap_or(piece).len();
+            let len = piece.trim_suffix('\n').len();
             if len == 0 {
                 continue;
             }

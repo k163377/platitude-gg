@@ -50,7 +50,7 @@ impl Heard {
 /// Watches `heard` and tells `hush` once git has been silent for its
 /// budget; never ends, so it stands beside the run until the run does. A
 /// budget already spent is told on the first poll, without a timer.
-async fn watch_silence(hush: Option<Hush<'_>>, heard: &Heard) -> Never {
+async fn watch_silence(hush: Option<Hush<'_>>, heard: &Heard) -> ! {
     if let Some(hush) = hush {
         loop {
             let due = heard.at() + hush.after;
@@ -63,9 +63,6 @@ async fn watch_silence(hush: Option<Hush<'_>>, heard: &Heard) -> Never {
     }
     std::future::pending().await
 }
-
-/// What a future that never ends answers.
-enum Never {}
 
 /// Where a run's stdout goes.
 pub(super) enum Out<'a> {

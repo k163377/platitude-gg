@@ -258,7 +258,7 @@ async fn parent_is_unfetched(
 /// root is the costly direction.
 pub(crate) fn has_parent_header(object: &[u8]) -> bool {
     for line in object.split(|b| *b == b'\n') {
-        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = line.trim_suffix(b"\r");
         if line.is_empty() {
             return false;
         }

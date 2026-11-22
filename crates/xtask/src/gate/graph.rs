@@ -136,8 +136,7 @@ fn as_data(file: &str, reader: &str) -> bool {
 }
 
 fn rel(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
+    path.trim_prefix(root)
         .display()
         .to_string()
         .replace('\\', "/")

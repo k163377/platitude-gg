@@ -125,7 +125,7 @@ fn split_record(bytes: &[u8]) -> Option<(&[u8], &[u8])> {
         end += bytes[end..].iter().position(|b| *b == 0)? + 1;
     }
     let (record, rest) = bytes.split_at(end);
-    Some((record, rest.strip_prefix(b"\n").unwrap_or(rest)))
+    Some((record, rest.trim_prefix(b"\n")))
 }
 
 fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
@@ -226,8 +226,8 @@ async fn union_chunk(
     for record in out.stdout.split(|b| *b == UNION_MARK).skip(1) {
         // `log` puts `\0\n` between the format expansion and the file
         // list; the newline would otherwise glue onto the first status.
-        let files = record.strip_prefix(b"\0").unwrap_or(record);
-        let files = files.strip_prefix(b"\n").unwrap_or(files);
+        let files = record.trim_prefix(b"\0");
+        let files = files.trim_prefix(b"\n");
         changes.extend(
             parse_name_status(files).map_err(|e| GitError::UnexpectedOutput {
                 command: "git log --no-walk --name-status".to_string(),

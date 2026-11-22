@@ -151,10 +151,7 @@ fn read(file: &Path) -> Result<String, String> {
 }
 
 fn name_of(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root)
-        .unwrap_or(file)
-        .to_string_lossy()
-        .replace('\\', "/")
+    file.trim_prefix(root).to_string_lossy().replace('\\', "/")
 }
 
 /// One document: every span held to the catalogue, and the text as
@@ -165,7 +162,7 @@ fn markdown(text: &str, catalogue: &[&'static Command], named: &str, held: &mut 
     for (index, line) in text.lines().enumerate() {
         let number = index + 1;
         if line.trim_start().starts_with("```") {
-            fenced = !fenced;
+            fenced.toggle();
             push(&mut out, line, text);
             continue;
         }

@@ -573,7 +573,7 @@ fn note(root: &Path, path: &str, live: &mut BTreeMap<String, Alive>) {
 fn unit_key(file_name: &str) -> String {
     match file_name.rsplit_once('.') {
         Some((stem, extension)) if LIB_PREFIXED.contains(&extension) => {
-            stem.strip_prefix("lib").unwrap_or(stem).to_string()
+            stem.trim_prefix("lib").to_string()
         }
         Some((stem, _)) => stem.to_string(),
         // A Unix executable, which has no extension at all.

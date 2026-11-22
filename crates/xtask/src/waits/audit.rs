@@ -64,11 +64,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
 
     let mut sources = Vec::new();
     for file in &files {
-        let relative = file
-            .strip_prefix(&root)
-            .unwrap_or(file)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let relative = file.trim_prefix(&root).to_string_lossy().replace('\\', "/");
         let Some(lang) = language_of(&relative) else {
             continue;
         };
@@ -157,11 +153,7 @@ fn reached(
     let mut product = Vec::new();
     let mut rust = Vec::new();
     for file in files {
-        let relative = file
-            .strip_prefix(root)
-            .unwrap_or(file)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let relative = file.trim_prefix(root).to_string_lossy().replace('\\', "/");
         if relative.split('/').nth(1) != Some(crate_dir.as_str()) {
             continue;
         }
@@ -206,7 +198,7 @@ fn module_files(declaring: &str, module: &source::Declared) -> Vec<String> {
     match module {
         source::Declared::Path(path) => vec![joined(dir, path)],
         source::Declared::Named(name) => {
-            let stem = file.strip_suffix(".rs").unwrap_or(file);
+            let stem = file.trim_suffix(".rs");
             let base = if matches!(stem, "mod" | "lib" | "main") {
                 dir.to_string()
             } else {

@@ -242,6 +242,6 @@ fn spent_in(log: &Path) -> String {
     };
     text.lines()
         .find(|line| line.starts_with("spent "))
-        .map(|line| line.trim_start_matches("spent ").to_string())
+        .map(|line| line.trim_prefix("spent ").to_string())
         .unwrap_or_default()
 }

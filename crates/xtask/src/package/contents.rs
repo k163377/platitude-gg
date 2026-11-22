@@ -269,7 +269,7 @@ pub(super) fn goes(name: &str) -> Goes {
 fn plugin_of(qmldir: &str) -> Option<&str> {
     qmldir.lines().find_map(|line| {
         let line = line.trim();
-        let rest = line.strip_prefix("optional ").unwrap_or(line);
+        let rest = line.trim_prefix("optional ");
         rest.strip_prefix("plugin ")?.split_whitespace().next()
     })
 }

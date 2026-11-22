@@ -210,8 +210,7 @@ fn image_in(said: &str) -> Option<String> {
 /// The path as the person reading the gate's line is standing: inside
 /// the tree if it is inside it.
 fn shown(tree: &Path, path: &Path) -> String {
-    path.strip_prefix(tree)
-        .unwrap_or(path)
+    path.trim_prefix(tree)
         .display()
         .to_string()
         .replace('\\', "/")

@@ -73,7 +73,7 @@ pub(super) fn parse(path: &str, text: &str) -> Doc {
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or(path)
-        .trim_end_matches(".qml")
+        .trim_suffix(".qml")
         .to_string();
     let mut doc = Doc {
         path: path.to_string(),

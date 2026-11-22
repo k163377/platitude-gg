@@ -749,7 +749,7 @@ fn grepped(said: &str, rev: &str, prefix: &str) -> Held {
         .filter_map(|row| {
             let (name, line) = row.split_once('\0')?;
             let path = name.strip_prefix(rev)?.strip_prefix(':')?;
-            let path = path.strip_prefix(prefix).unwrap_or(path);
+            let path = path.trim_prefix(prefix);
             Some((path.to_string(), line.trim().to_string()))
         })
         .collect()

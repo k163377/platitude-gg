@@ -156,10 +156,9 @@ fn decide_push(
     }
 
     let remote_branch = match (&tracks, &merge) {
-        (Some(tracks), Some(merge)) if *tracks == remote => merge
-            .strip_prefix("refs/heads/")
-            .unwrap_or(merge)
-            .to_string(),
+        (Some(tracks), Some(merge)) if *tracks == remote => {
+            merge.trim_prefix("refs/heads/").to_string()
+        }
         _ => branch.to_string(),
     };
 

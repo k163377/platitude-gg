@@ -175,11 +175,7 @@ fn read_each(root: &Path, files: &[PathBuf]) -> Result<(Vec<String>, Vec<String>
     let mut over: Vec<String> = Vec::new();
     for file in files {
         let text = std::fs::read_to_string(file).map_err(|e| format!("{}: {e}", file.display()))?;
-        let relative = file
-            .strip_prefix(root)
-            .unwrap_or(file)
-            .to_string_lossy()
-            .replace('\\', "/");
+        let relative = file.trim_prefix(root).to_string_lossy().replace('\\', "/");
         for found in breaks(&text) {
             torn.push(format!("{relative}:{}: {}", found.line, found.kind.say()));
         }
@@ -200,10 +196,7 @@ fn written(root: &Path, held: commands::Held, sync: bool) -> Result<commands::He
         std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))?;
         println!(
             "docs: {} rewritten — its command references now quote the catalogue",
-            path.strip_prefix(root)
-                .unwrap_or(path)
-                .to_string_lossy()
-                .replace('\\', "/")
+            path.trim_prefix(root).to_string_lossy().replace('\\', "/")
         );
     }
     Ok(commands::Held {
@@ -327,7 +320,7 @@ fn breaks(text: &str) -> Vec<Break> {
         let bare = line.trim_start();
 
         if bare.starts_with("```") {
-            fenced = !fenced;
+            fenced.toggle();
             blank_above = false;
             continue;
         }

@@ -303,10 +303,7 @@ fn documents(root: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 fn relative(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root)
-        .unwrap_or(file)
-        .to_string_lossy()
-        .replace('\\', "/")
+    file.trim_prefix(root).to_string_lossy().replace('\\', "/")
 }
 
 #[cfg(test)]

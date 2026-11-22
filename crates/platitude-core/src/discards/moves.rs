@@ -41,7 +41,7 @@ pub(super) fn parse_lines(text: &str) -> Vec<(String, Line)> {
             let mut fields = line.splitn(3, '\u{1f}');
             let new = Oid::from_hex_str(fields.next()?).ok()?;
             let (reference, at) = selector(fields.next()?)?;
-            let reference = reference.strip_prefix("refs/heads/").unwrap_or(reference);
+            let reference = reference.trim_prefix("refs/heads/");
             let message = fields.next().unwrap_or_default().to_string();
             Some((reference.to_string(), Line { new, at, message }))
         })

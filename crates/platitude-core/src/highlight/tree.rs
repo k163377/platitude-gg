@@ -202,7 +202,7 @@ fn split_source(out: &mut Vec<Vec<Span>>, line: &mut Vec<Span>, piece: &str, col
     let mut rest = piece;
     while let Some(nl) = rest.find('\n') {
         let head = &rest[..nl];
-        let head = head.strip_suffix('\r').unwrap_or(head);
+        let head = head.trim_suffix('\r');
         push_run(line, head.len(), color);
         out.push(std::mem::take(line));
         rest = &rest[nl + 1..];

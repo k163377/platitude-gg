@@ -64,7 +64,7 @@ pub fn folder_name_for(url: &str) -> String {
         .trim();
     // One suffix only: a repository really called `repo.git.git`
     // is served from `repo.git.git.git`.
-    last.strip_suffix(".git").unwrap_or(last).to_string()
+    last.trim_suffix(".git").to_string()
 }
 
 #[cfg(test)]

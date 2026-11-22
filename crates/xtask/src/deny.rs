@@ -58,7 +58,7 @@ fn installed() -> Result<(), String> {
         Ok(out) if out.status.success() => Ok(()),
         _ => Err(
             "cargo-deny is missing, and the dependency policy needs it: \
-                  `cargo install --locked cargo-deny`"
+                  `cargo install cargo-deny`"
                 .into(),
         ),
     }

@@ -32,7 +32,7 @@ pub fn github_repo(url: &str) -> Option<String> {
         return None;
     }
     let path = path.trim_matches('/');
-    let path = path.strip_suffix(".git").unwrap_or(path);
+    let path = path.trim_suffix(".git");
     let (owner, repo) = path.split_once('/')?;
     if !is_name(owner) || !is_name(repo) {
         return None;

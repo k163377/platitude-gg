@@ -124,10 +124,7 @@ pub async fn branch_before(
     }
     let upstream = remote.zip(merge).map(|(remote, merge)| RemoteBranch {
         remote,
-        branch: merge
-            .strip_prefix("refs/heads/")
-            .unwrap_or(&merge)
-            .to_string(),
+        branch: merge.trim_prefix("refs/heads/").to_string(),
     });
     Ok(Some(BranchBefore {
         name: name.to_string(),

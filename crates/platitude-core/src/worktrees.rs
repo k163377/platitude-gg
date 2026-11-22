@@ -122,12 +122,7 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
             entry.head_hex = Some(head.trim().to_string());
         } else if let Some(branch) = line.strip_prefix("branch ") {
             let branch = branch.trim();
-            entry.branch = Some(
-                branch
-                    .strip_prefix("refs/heads/")
-                    .unwrap_or(branch)
-                    .to_string(),
-            );
+            entry.branch = Some(branch.trim_prefix("refs/heads/").to_string());
         } else if line.as_ref() == "bare" {
             entry.bare = true;
         } else if line.as_ref() == "detached" {
@@ -219,7 +214,7 @@ pub fn held_at(git_dir: &Path) -> Option<Held> {
         return None;
     }
     let start = read("BISECT_START")?;
-    let branch = start.strip_prefix("refs/heads/").unwrap_or(&start);
+    let branch = start.trim_prefix("refs/heads/");
     let detached = branch.len() >= 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
     (!branch.is_empty() && !detached && !branch.starts_with("refs/"))
         .then(|| held(branch, HeldBy::Bisect))
@@ -435,7 +430,7 @@ fn lock_reason(said: &str) -> Option<&str> {
     let reason = reason
         .rsplit_once(relied_messages::REMOVE_ADVICE.text())
         .map_or(reason, |(reason, _)| reason);
-    Some(reason.strip_suffix('.').unwrap_or(reason))
+    Some(reason.trim_suffix('.'))
 }
 
 /// Where the worktree at `from` goes when its folder is renamed `name`:

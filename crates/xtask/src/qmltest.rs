@@ -547,7 +547,7 @@ fn chosen(every: &[String], args: &[String]) -> Result<Vec<String>, String> {
     let mut picked = Vec::new();
     for arg in args {
         let want = arg.replace('\\', "/");
-        let stem = want.trim_end_matches(".qml");
+        let stem = want.trim_suffix(".qml");
         let found = every
             .iter()
             .find(|test| test == &&want || test.ends_with(&format!("/{stem}.qml")))
@@ -600,7 +600,7 @@ fn stage(root: &Path, work: &Path) -> Result<PathBuf, String> {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         std::fs::copy(&stub, app.join(&name)).map_err(|e| format!("{name}: {e}"))?;
-        let stem = name.trim_end_matches(".qml");
+        let stem = name.trim_suffix(".qml");
         qmldir.push_str(&format!("singleton {stem} 1.0 {name}\n"));
     }
     std::fs::write(app.join("qmldir"), qmldir).map_err(|e| format!("{APP_MODULE}/qmldir: {e}"))?;
@@ -784,7 +784,7 @@ fn runner(setup: &Setup, input: &str, log: &str, runs: &Mutex<Vec<Ran>>) -> Resu
 
 /// The stderr kept beside `log` ([`runner`]).
 fn stderr_of(log: &str) -> String {
-    format!("{}.stderr.txt", log.trim_end_matches(".txt"))
+    format!("{}.stderr.txt", log.trim_suffix(".txt"))
 }
 
 /// How many of a red runner's last stderr lines its red says.
@@ -864,8 +864,7 @@ fn with_evidence(
     match keep(setup, tests, group, runs, name) {
         Ok(dir) => {
             let shown = dir
-                .strip_prefix(setup.root)
-                .unwrap_or(&dir)
+                .trim_prefix(setup.root)
                 .display()
                 .to_string()
                 .replace('\\', "/");

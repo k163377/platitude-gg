@@ -10,7 +10,7 @@ pub(super) fn fetched_into<'a>(
     refspecs: impl Iterator<Item = &'a str> + Clone,
     src: &str,
 ) -> Option<String> {
-    let specs = refspecs.map(|spec| spec.strip_prefix('+').unwrap_or(spec));
+    let specs = refspecs.map(|spec| spec.trim_prefix('+'));
     if specs
         .clone()
         .filter_map(|spec| spec.strip_prefix('^'))

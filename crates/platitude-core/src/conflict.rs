@@ -198,7 +198,7 @@ async fn name_of(
 }
 
 fn short_ref(full: &str) -> String {
-    full.strip_prefix("refs/heads/").unwrap_or(full).to_string()
+    full.trim_prefix("refs/heads/").to_string()
 }
 
 /// Resolves a conflict by taking one side wholesale.

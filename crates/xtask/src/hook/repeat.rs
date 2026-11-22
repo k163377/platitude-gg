@@ -57,7 +57,7 @@ pub(super) fn session_end(input: &str) {
         return;
     };
     let own = own.to_string_lossy().into_owned();
-    let subagents = format!("{}.", own.trim_end_matches(".tsv"));
+    let subagents = format!("{}.", own.trim_suffix(".tsv"));
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };

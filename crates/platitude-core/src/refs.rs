@@ -396,9 +396,7 @@ pub async fn head_state(
     let sym = sym?;
     let branch = (sym.code == 0).then(|| {
         let full = sym.stdout_utf8().trim().to_string();
-        full.strip_prefix("refs/heads/")
-            .unwrap_or(&full)
-            .to_string()
+        full.trim_prefix("refs/heads/").to_string()
     });
 
     Ok(HeadState::of(branch, oid?))

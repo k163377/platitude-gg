@@ -53,7 +53,7 @@ pub(super) fn parse_side_path(rest: &str, prefix: &str) -> Option<String> {
     if cleaned == "/dev/null" {
         return None;
     }
-    let path = cleaned.strip_prefix(prefix).unwrap_or(cleaned);
+    let path = cleaned.trim_prefix(prefix);
     Some(path.to_string())
 }
 

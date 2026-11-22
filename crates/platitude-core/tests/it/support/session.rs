@@ -514,7 +514,7 @@ impl PassHooks for PassDoors {
 /// builder put first (`-c key=value`), so a test reads the subcommand
 /// (`rebase --interactive …`) rather than a pin.
 pub fn command_words(display: &str) -> &str {
-    let mut words = display.strip_prefix("git ").unwrap_or(display);
+    let mut words = display.trim_prefix("git ");
     while let Some(after) = words.strip_prefix("-c ") {
         words = after.split_once(' ').map_or("", |(_, rest)| rest);
     }

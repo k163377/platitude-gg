@@ -126,7 +126,7 @@ impl<'a> RefJoins<'a> {
         if !r.upstream_is_here() || !self.local_commit.contains_key(up) {
             return crate::Name::default();
         }
-        crate::Name::from(up.strip_prefix("refs/heads/").unwrap_or(up))
+        crate::Name::from(up.trim_prefix("refs/heads/"))
     }
 
     /// The local branch configured against this remote-tracking ref (the

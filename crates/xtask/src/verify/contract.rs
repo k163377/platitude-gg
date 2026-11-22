@@ -99,7 +99,7 @@ fn saved_artifact(line: &str) -> Option<&'static str> {
 
 /// The capture protocol, optionally prefixed by Qt's `qml:`. A bench note quoting it is not a capture.
 pub(super) fn capture_text(line: &str) -> Option<&str> {
-    let text = line.strip_prefix("qml: ").unwrap_or(line);
+    let text = line.trim_prefix("qml: ");
     ["screenshot saved=", "overlay saved=", "scene saved="]
         .iter()
         .any(|prefix| text.starts_with(prefix))

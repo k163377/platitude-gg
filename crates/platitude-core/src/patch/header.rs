@@ -72,7 +72,7 @@ pub(super) fn fitted<'a>(
     };
 
     // git appends a tab to a name with a space in it, on these lines only.
-    let bare = name.strip_suffix(b"\t").unwrap_or(name);
+    let bare = name.trim_suffix(b"\t");
     let mut out = Vec::with_capacity(header.len());
     for &line in header {
         if line.starts_with(emptied)

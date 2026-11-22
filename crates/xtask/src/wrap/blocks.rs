@@ -320,13 +320,13 @@ fn setext_underline(bare: &str) -> bool {
 /// and no `|` needs its colon, as a bare `---` is a setext underline.
 fn delimiter_row(bare: &str) -> bool {
     let line = trimmed(bare);
-    let inner = line.strip_prefix('|').unwrap_or(line);
-    let inner = inner.strip_suffix('|').unwrap_or(inner);
+    let inner = line.trim_prefix('|');
+    let inner = inner.trim_suffix('|');
     (line.contains('|') || line.contains(':'))
         && inner.split('|').all(|cell| {
             let cell = trimmed(cell);
-            let cell = cell.strip_prefix(':').unwrap_or(cell);
-            let cell = cell.strip_suffix(':').unwrap_or(cell);
+            let cell = cell.trim_prefix(':');
+            let cell = cell.trim_suffix(':');
             !cell.is_empty() && cell.chars().all(|c| c == '-')
         })
 }

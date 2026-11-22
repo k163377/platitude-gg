@@ -37,7 +37,7 @@ impl From<regex::Error> for QueryError {
     fn from(error: regex::Error) -> Self {
         let text = error.to_string();
         let last = text.lines().last().unwrap_or("").trim();
-        let reason = last.strip_prefix("error: ").unwrap_or(last);
+        let reason = last.trim_prefix("error: ");
         let mut chars = reason.chars();
         Self(match chars.next() {
             Some(first) => first.to_uppercase().chain(chars).collect(),

@@ -272,7 +272,7 @@ pub(super) const ENTRIES: &str =
       licenses: advisories fetches the RustSec database from github.com
       and stage 2 stays offline, so only CI's deny job
       (.github/workflows/ci.yml) runs all four. Needs cargo-deny installed
-      (`cargo install --locked cargo-deny`), and says so when it is
+      (`cargo install cargo-deny`), and says so when it is
       missing. `gate` runs this when deny.toml, a manifest or another
       build input (the lock, the toolchain, cargo's configuration, a
       vendored crate) moved — every way the closure can change.

@@ -61,7 +61,7 @@ pub fn rename_source<'a>(orig_path: &'a str, path: &str, cut: usize) -> &'a str 
     let Some(prefix) = path.get(..cut) else {
         return orig_path;
     };
-    orig_path.strip_prefix(prefix).unwrap_or(orig_path)
+    orig_path.trim_prefix(prefix)
 }
 
 /// Human-readable byte size ("67 B", "1.5 KB", "234 KB", "1.2 MB").

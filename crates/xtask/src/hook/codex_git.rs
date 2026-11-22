@@ -221,7 +221,7 @@ fn sets_or_removes(before: &str, after: &str) -> bool {
     let first = words.first().copied().unwrap_or_default();
     let last = words.last().copied().unwrap_or_default();
     let after = after.trim_start();
-    let after = after.strip_prefix('}').unwrap_or(after).trim_start();
+    let after = after.trim_prefix('}').trim_start();
     let read = before.ends_with('$') || before.ends_with("${") || before.ends_with('%');
     let assigns =
         after.starts_with('=') && !after.starts_with("==") && !read && !is_a_reader(&words);

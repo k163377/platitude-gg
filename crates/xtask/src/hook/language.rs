@@ -167,7 +167,7 @@ fn prose(text: &str) -> String {
     let mut fenced = false;
     for line in text.lines() {
         if line.trim_start().starts_with("```") {
-            fenced = !fenced;
+            fenced.toggle();
             continue;
         }
         if fenced {

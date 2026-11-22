@@ -394,7 +394,7 @@ fn the_forms_qt_runs_are_judged_by_what_they_change() {
             .expect("each form closes at its own indent");
         let body = lines[at + 1..at + end]
             .iter()
-            .map(|line| line.strip_prefix("        ").unwrap_or(line))
+            .map(|line| line.trim_prefix("        "))
             .collect::<Vec<_>>()
             .join("\n");
         judged.push((name, prefix, body));

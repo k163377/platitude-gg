@@ -287,5 +287,5 @@ pub(super) fn text_after(line: &[u8], prefix: &[u8]) -> Option<String> {
 
 fn strip_side_prefix(path: &str, prefix: &str) -> String {
     let cleaned = path.trim_end_matches('\t');
-    cleaned.strip_prefix(prefix).unwrap_or(cleaned).to_string()
+    cleaned.trim_prefix(prefix).to_string()
 }

@@ -118,7 +118,7 @@ fn resolve(tokens: &mut BTreeMap<String, Token>) {
         .map(|(name, token)| (name.clone(), token.rhs.clone()))
         .collect();
     for token in tokens.values_mut() {
-        let referred = token.rhs.strip_prefix("Theme.").unwrap_or(&token.rhs);
+        let referred = token.rhs.trim_prefix("Theme.");
         if referred.contains(|c: char| !c.is_alphanumeric() && c != '_') {
             continue;
         }

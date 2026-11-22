@@ -109,11 +109,7 @@ fn workflow_files(root: &Path) -> Result<Vec<(String, String)>, String> {
     paths
         .into_iter()
         .map(|path| {
-            let relative = path
-                .strip_prefix(root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .replace('\\', "/");
+            let relative = path.trim_prefix(root).to_string_lossy().replace('\\', "/");
             let text = std::fs::read_to_string(&path)
                 .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
             Ok((relative, text))
@@ -257,7 +253,7 @@ fn runner_names(line: &str) -> Vec<(&'static str, String)> {
 /// (`docker://…`) are not pinned here.
 fn action_use(line: &str) -> Option<(String, String)> {
     let line = line.trim_start();
-    let line = line.strip_prefix("- ").unwrap_or(line).trim_start();
+    let line = line.trim_prefix("- ").trim_start();
     let value = line.strip_prefix("uses:")?;
     let (spec, comment) = value.split_once('#').unwrap_or((value, ""));
     let spec = spec.trim().trim_matches(|c| c == '"' || c == '\'');
