@@ -1,5 +1,6 @@
-//! Everything QML sees of one commit: the fields the card binds to, the
-//! feed it drains, and the questions it asks of the changed files.
+//! Everything QML sees of one commit: the fields the card binds to and the
+//! questions it asks of the changed files. What its feed hands it is
+//! `drain`'s.
 //!
 //! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
 //! built per file (structure.md §分割).

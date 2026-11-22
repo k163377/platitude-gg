@@ -1,5 +1,6 @@
-//! Everything QML sees of the plan: the header fields, the feed it
-//! drains, the verbs and reorders the rows take, and the run.
+//! Everything QML sees of the plan: the header fields, the verbs and
+//! reorders the rows take, and the run. What its feed hands it is
+//! `drain`'s.
 
 use super::*;
 

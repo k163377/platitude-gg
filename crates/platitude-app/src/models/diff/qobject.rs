@@ -1,5 +1,5 @@
-//! Everything QML sees of the diff pane: the properties it binds to, the
-//! file reads it asks for, and the feed it drains.
+//! Everything QML sees of the diff pane: the properties it binds to and
+//! the file reads it asks for. What its feed hands it is `drain`'s.
 //!
 //! One `#[qobject]` block, and it cannot be split further — QMetaInfo is
 //! built per file (structure.md §分割).
