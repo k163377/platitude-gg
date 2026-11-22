@@ -40,6 +40,7 @@ BranchBothDeleteRow 1.0 BranchBothDeleteRow.qml
 BranchDeleteRow 1.0 BranchDeleteRow.qml
 BranchPushRow 1.0 BranchPushRow.qml
 BranchRemoteDeleteRow 1.0 BranchRemoteDeleteRow.qml
+BuildLine 1.0 BuildLine.qml
 CoAuthorCard 1.0 CoAuthorCard.qml
 CoAuthorLine 1.0 CoAuthorLine.qml
 ChosenCommitRow 1.0 ChosenCommitRow.qml

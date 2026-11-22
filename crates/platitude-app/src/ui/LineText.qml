@@ -118,6 +118,12 @@ Item {
         const at = WordFace.cutPoint(line.text, elided)
         return at >= 0 ? elided.substring(0, at) : ""
     }
+    /// Where the character at `index` starts in the value as laid out, for a holder that cuts it back to a head of its
+    /// own choosing and sizes the line to that head and the mark (`BuildLine.cutWidth`). A call: the holder reads
+    /// `implicitWidth` beside it to hear a new layout (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    function edgeAt(index) {
+        return field.positionToRectangle(index).x
+    }
 
     // ---- driven from outside ----------------------------------------
     // For words a control stands over: the press's owner hands the gesture down in its own coordinates.

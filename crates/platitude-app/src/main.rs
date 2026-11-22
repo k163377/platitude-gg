@@ -147,6 +147,7 @@ fn main() {
     qrc::embed!("ui/BranchDeleteRow.qml");
     qrc::embed!("ui/BranchPushRow.qml");
     qrc::embed!("ui/BranchRemoteDeleteRow.qml");
+    qrc::embed!("ui/BuildLine.qml");
     qrc::embed!("ui/CardText.qml");
     qrc::embed!("ui/CarriedPane.qml");
     qrc::embed!("ui/CoAuthorCard.qml");
