@@ -1,4 +1,14 @@
 {
+  "enableArtifact": false,
+  "permissions": {
+    "deny": [
+      "ScheduleWakeup",
+      "SuggestPluginInstall",
+      "SearchPlugins",
+      "SuggestSkills",
+      "mcp__1a59c906-04da-521d-bda7-7f71b9f9e01c"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {

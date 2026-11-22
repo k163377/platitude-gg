@@ -51,6 +51,8 @@ pub(super) fn tool_start(input: &str) {
             },
         );
     }
+    // This repository's settings deny ScheduleWakeup; a session started
+    // with that line taken out still calls it.
     if call.name == "ScheduleWakeup" {
         let asked = own_value_field(input, "tool_input").unwrap_or("");
         let scheduled = if bool_field(asked, "stop") == Some(true) {
