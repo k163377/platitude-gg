@@ -59,7 +59,7 @@ pub(super) struct Leaving {
 pub(super) enum LeavingRef<'a> {
     Branch(&'a str),
     /// The remote-tracking branch of a branch on a remote.
-    Remote(&'a remote::RemoteBranch),
+    Remote(&'a remote::TrackedBranch),
     Tag(&'a str),
     /// A worktree, by its path as git lists it. Only one on no branch
     /// stands on anything here: a branch it has out stays.
@@ -378,7 +378,7 @@ impl RepoSession {
                     pending.take_ref(format!("refs/heads/{branch}"), tip.map(|item| item.oid));
                 }
                 LeavingRef::Remote(target) => {
-                    let tip = snapshot.and_then(|s| s.remote_named(&target.to_string()));
+                    let tip = snapshot.and_then(|s| s.remote_named(target.short()));
                     pending.take_ref(target.tracking_ref(), tip.map(|item| item.oid));
                 }
                 LeavingRef::Tag(tag) => {

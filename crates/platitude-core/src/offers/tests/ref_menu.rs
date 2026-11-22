@@ -1,11 +1,11 @@
+use super::super::testkit::target;
 use super::super::*;
 
 /// An idle, open repository on `main`; the cases below bend one input at
 /// a time.
 fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
     ref_menu(
-        kind,
-        full,
+        target(kind, full),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -21,8 +21,7 @@ fn offers_on(kind: RefKind, full: &str) -> RefMenuOffers {
 #[test]
 fn a_branch_someone_else_is_not_on_offers_everything() {
     let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -72,8 +71,7 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
 fn only_a_branch_with_an_upstream_has_one_to_take_off() {
     let on = |kind, tracked, default_remote| {
         ref_menu(
-            kind,
-            "feat",
+            target(kind, "feat"),
             "abc123",
             true,
             &TreeStanding::on("main"),
@@ -108,8 +106,7 @@ fn only_a_branch_with_an_upstream_has_one_to_take_off() {
 #[test]
 fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
     let current = ref_menu(
-        RefKind::Branch,
-        "main",
+        target(RefKind::Branch, "main"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -125,8 +122,7 @@ fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
         "this writes configuration, not the branch"
     );
     let held = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -161,8 +157,7 @@ fn only_a_local_branch_is_measured_against_anything() {
 #[test]
 fn there_is_nothing_to_be_measured_against_without_a_remote() {
     let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -189,8 +184,7 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
 #[test]
 fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
     let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -228,7 +222,16 @@ fn a_branch_out_in_another_worktree_asks_nothing_while_moves_are_blocked() {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
             let asks = |held: &str| {
                 ref_menu(
-                    kind, full, "abc123", true, &tree, held, "", false, false, "origin", "here",
+                    target(kind, full),
+                    "abc123",
+                    true,
+                    &tree,
+                    held,
+                    "",
+                    false,
+                    false,
+                    "origin",
+                    "here",
                 )
                 .switch_asks
             };
@@ -246,8 +249,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     // `push --delete` touches nothing on this machine, so a local hold
     // does not bar it.
     let offers = ref_menu(
-        RefKind::Remote,
-        "origin/feat",
+        target(RefKind::Remote, "origin/feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -271,8 +273,7 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
 #[test]
 fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
     let drifted = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -295,8 +296,7 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
 fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
     let standing = |detached: bool| {
         ref_menu(
-            RefKind::Branch,
-            "feat",
+            target(RefKind::Branch, "feat"),
             "abc123",
             true,
             &if detached {
@@ -343,8 +343,7 @@ fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
 #[test]
 fn a_blocked_move_asks_with_no_operation_standing() {
     let offers = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding {
@@ -370,8 +369,7 @@ fn a_blocked_move_asks_with_no_operation_standing() {
 fn the_mark_follows_the_blocked_move_and_not_the_badge() {
     let under_the_badge = |moves_blocked: bool| {
         ref_menu(
-            RefKind::Branch,
-            "feat",
+            target(RefKind::Branch, "feat"),
             "abc123",
             true,
             &TreeStanding {
@@ -401,8 +399,7 @@ fn the_mark_follows_the_blocked_move_and_not_the_badge() {
 #[test]
 fn detached_or_unborn_has_no_branch_to_integrate_into() {
     let detached = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::detached(),
@@ -416,8 +413,7 @@ fn detached_or_unborn_has_no_branch_to_integrate_into() {
     assert!(!detached.integrate_from);
     assert!(detached.switch_to, "the way back out of detached");
     let unborn = ref_menu(
-        RefKind::Branch,
-        "feat",
+        target(RefKind::Branch, "feat"),
         "abc123",
         true,
         &TreeStanding::default(),
@@ -443,8 +439,7 @@ fn a_tag_moves_nowhere_but_starts_branches_and_deletes() {
 /// its own rows: where the pushes go, and which sides the name stands on.
 fn tag_offers(sides: &str, default_remote: &str) -> RefMenuOffers {
     ref_menu(
-        RefKind::Tag,
-        "v1.0",
+        target(RefKind::Tag, "v1.0"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -517,8 +512,7 @@ fn each_delete_row_needs_the_side_it_names() {
 #[test]
 fn a_tag_the_remote_has_elsewhere_loses_both_rows_that_reach_it() {
     let drifted = ref_menu(
-        RefKind::Tag,
-        "v1.0",
+        target(RefKind::Tag, "v1.0"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -561,8 +555,7 @@ fn no_remote_leaves_the_tag_only_its_local_delete() {
 #[test]
 fn a_stopped_operation_does_not_hold_a_tag_back() {
     let offers = ref_menu(
-        RefKind::Tag,
-        "v1.0",
+        target(RefKind::Tag, "v1.0"),
         "abc123",
         true,
         &TreeStanding::on("main").standing("REBASING"),
@@ -581,6 +574,21 @@ fn a_stopped_operation_does_not_hold_a_tag_back() {
 #[test]
 fn a_stash_is_nobodys_history_to_branch_from() {
     assert!(!offers_on(RefKind::Stash, "stash@{0}").branch_here);
+}
+
+#[test]
+fn a_row_is_a_kind_and_a_name() {
+    assert_eq!(
+        RefTarget::new(RefKind::Branch, ""),
+        None,
+        "no name is no row"
+    );
+    assert_eq!(RefTarget::from_words("HEAD", "main"), None);
+    assert_eq!(RefTarget::from_words("branch", ""), None);
+    assert_eq!(
+        RefTarget::from_words("remote", "origin/feat"),
+        RefTarget::new(RefKind::Remote, "origin/feat")
+    );
 }
 
 #[test]

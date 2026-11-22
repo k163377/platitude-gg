@@ -20,6 +20,7 @@ mod refspec;
 mod refusal;
 mod standing;
 mod tags;
+mod tracked;
 mod unreached;
 
 pub use self::branch::{
@@ -48,6 +49,7 @@ pub use self::tags::{
     AdvertisedTag, HeldTag, RemoteTag, RemoteTagRef, delete_remote_tag, list_tags,
     parse_ls_remote_tags, push_tag, replace_remote_tag,
 };
+pub use self::tracked::TrackedBranch;
 pub use self::unreached::{Unreached, unreached};
 
 /// Default time budget for commands that talk to a remote.

@@ -14,6 +14,27 @@ use crate::oid::Oid;
 /// `crate::Name` everywhere.
 pub type Name = compact_str::CompactString;
 
+/// How far a branch stands from the ref it is measured against, as of the
+/// last fetch: the commits it has that the other lacks, and the other's
+/// that it lacks.
+///
+/// The counts alone: 0/0 is level with that ref. Whether there is one to
+/// measure against at all is the holder's to say (an `Option` of these, or
+/// [`crate::refs::RefEntry::counts`]'s own rule).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub struct AheadBehind {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+impl AheadBehind {
+    /// Each side has commits the other lacks: neither a push nor a
+    /// fast-forward brings the two together.
+    pub fn is_diverged(self) -> bool {
+        self.ahead > 0 && self.behind > 0
+    }
+}
+
 /// Interning pool for strings that repeat heavily (author names): commits
 /// store a `u32` id.
 #[derive(Debug, Default)]
@@ -83,6 +104,15 @@ pub struct CommitMeta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_commits_on_both_sides_are_a_divergence() {
+        let stands = |ahead, behind| AheadBehind { ahead, behind }.is_diverged();
+        assert!(stands(1, 1));
+        assert!(!stands(3, 0), "ahead alone is a push away");
+        assert!(!stands(0, 3), "behind alone is a fast-forward away");
+        assert!(!stands(0, 0));
+    }
 
     #[test]
     fn intern_deduplicates() {

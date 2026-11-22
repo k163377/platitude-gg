@@ -333,8 +333,7 @@ pub(super) fn refs_keys(refs: &[RefEntry], head: &HeadState) -> RefsKeys {
         entry.upstream.hash(&mut rest);
         entry.is_head.hash(&mut rest);
         entry.created_unix.hash(&mut rest);
-        entry.ahead.hash(&mut rest);
-        entry.behind.hash(&mut rest);
+        entry.counts.hash(&mut rest);
     }
     head.branch.hash(&mut walk);
     head.oid.hash(&mut walk);
@@ -415,8 +414,7 @@ pub(super) fn build_snapshot(
                     held_elsewhere: joins.held_elsewhere(r),
                     // Only a remote row is tracked by a branch.
                     tracked_by: crate::Name::default(),
-                    ahead: r.ahead,
-                    behind: r.behind,
+                    counts: r.counts,
                 });
             }
             // The branch measured against this reading, and its counts —
@@ -440,8 +438,10 @@ pub(super) fn build_snapshot(
                     .tracked_by(r)
                     .map(|local| local.short.clone())
                     .unwrap_or_default(),
-                ahead: joins.tracked_by(r).map_or(0, |local| local.ahead),
-                behind: joins.tracked_by(r).map_or(0, |local| local.behind),
+                counts: joins
+                    .tracked_by(r)
+                    .map(|local| local.counts)
+                    .unwrap_or_default(),
             }),
             RefKind::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),

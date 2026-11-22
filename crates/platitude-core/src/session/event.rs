@@ -219,9 +219,10 @@ pub enum SessionEvent {
         upstream_here: bool,
         /// The branch's counts against the tracking ref where a mark sends
         /// its push, when that is not the upstream's remote
-        /// ([`crate::remote::pushes_elsewhere`]); empty everywhere else.
+        /// ([`crate::remote::pushes_elsewhere`]); none everywhere else, and
+        /// where nothing here tracks the branch over there.
         /// Rides the status for the reason `push_remote` does.
-        push_track: crate::remote::PushTrack,
+        push_track: Option<crate::remote::PushTrack>,
         /// Pending paths whose change has something to say about line
         /// endings. Shared: most status reads repeat the previous answer.
         eol_marks: Arc<Vec<EolMark>>,
@@ -279,9 +280,9 @@ pub enum SessionEvent {
         target: remote::RemoteBranch,
         local: String,
         state: remote::RemoteBranchState,
-        /// The commit the remote advertised (hex; empty where none) —
-        /// what an overwrite leases against.
-        tip: String,
+        /// The commit the remote advertised, none where it carries no
+        /// such name or the ask failed — what an overwrite leases against.
+        tip: Option<Oid>,
         /// Commits that tip reaches and this history does not — what an
         /// overwrite would drop. Zero unless `Refused`, the only state
         /// that has both the commit and the walk.

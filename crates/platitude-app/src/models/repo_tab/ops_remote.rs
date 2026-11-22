@@ -71,8 +71,12 @@ impl RepoTab {
     /// (デザイン規約 §リモートへ送る).
     pub(super) fn named_push(&mut self, branch: String, force: String, lease_expect: String) {
         let fallback = self.default_remote.clone();
-        let force = Self::push_force(&force, &lease_expect);
-        let asked = self.ask_session(|s| s.push_named(branch.clone(), fallback, force));
+        let named = branch.clone();
+        let asked = self.ask_pinned(
+            "push",
+            Self::push_force(&force, &lease_expect),
+            |s, force| s.push_named(named, fallback, force),
+        );
         self.push_out.asked(asked, branch);
     }
 
@@ -81,16 +85,31 @@ impl RepoTab {
     /// shows.
     pub(super) fn current_push(&mut self, branch: String, force: String, lease_expect: String) {
         let fallback = self.default_remote.clone();
-        let force = Self::push_force(&force, &lease_expect);
-        let asked = self.ask_session(|s| s.push_current(fallback, force));
+        let asked = self.ask_pinned(
+            "push",
+            Self::push_force(&force, &lease_expect),
+            |s, force| s.push_current(fallback, force),
+        );
         self.push_out.asked(asked, branch);
     }
 
     /// The question's first push of `branch`, written down as
-    /// [`Self::current_push`] writes its own.
+    /// [`Self::current_push`] writes its own. An empty `expect` sends it
+    /// fast-forward only (`remote::publish_spec`).
     pub(super) fn branch_publish(&mut self, branch: String, target: RemoteBranch, expect: String) {
-        let asked = self.ask_session(|s| s.publish(branch.clone(), target, expect));
+        let published = branch.clone();
+        let asked = self.ask_pinned("publish", Self::lease_pin(&expect), |s, expect| {
+            s.publish(published, target, expect)
+        });
         self.push_out.asked(asked, branch);
+    }
+
+    /// One tag sent to one remote; an empty `lease_expect` sends it plain
+    /// (`remote::push_tag`).
+    pub(super) fn tag_push(&mut self, target: RemoteTag, lease_expect: String) {
+        self.ask_pinned("push tag", Self::lease_pin(&lease_expect), |s, expect| {
+            s.push_tag(target, expect)
+        });
     }
 
     /// Points `branch` at the remote branch and sends it there; the answer
@@ -109,14 +128,18 @@ impl RepoTab {
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
         let row = old.to_string();
-        let asked = self.ask_session(|s| s.replace_remote_tag(old, to, expect));
+        let asked = self.ask_leased("replace tag", &expect, |s, expect| {
+            s.replace_remote_tag(old, to, expect)
+        });
         self.ref_push_asked(&row, asked);
     }
 
     /// The same for a branch, keyed on the remote row that goes.
-    pub(super) fn remote_branch_replace(&mut self, old: RemoteBranch, to: String, expect: String) {
-        let row = old.to_string();
-        let asked = self.ask_session(|s| s.replace_remote_branch(old, to, expect));
+    pub(super) fn remote_branch_replace(&mut self, old: TrackedBranch, to: String, expect: String) {
+        let row = old.short().to_string();
+        let asked = self.ask_leased("replace branch", &expect, |s, expect| {
+            s.replace_remote_branch(old, to, expect)
+        });
         self.ref_push_asked(&row, asked);
     }
 

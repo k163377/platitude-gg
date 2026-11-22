@@ -7,9 +7,10 @@ import platitude.ui
 ColumnLayout {
     id: carryForm
 
-    /// The three answers, handed in by the flow (`RenameCarryFlow`).
+    /// The answers offered, handed in by the flow (`RenameCarryFlow.choices`).
     required property var choices
-    /// The one picked — never empty (`RenameCarryFlow.choice`), so there is no placeholder state.
+    /// The answer standing, in its row's words — never empty (`RenameCarryFlow.choice`), so there is no
+    /// placeholder state.
     required property string picked
 
     signal choicePicked(int index)

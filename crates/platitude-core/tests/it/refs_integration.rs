@@ -252,7 +252,7 @@ async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
     let counts = |short: &str| {
         refs.iter()
             .find(|r| r.kind == RefKind::LocalBranch && r.short == short)
-            .map(|entry| (entry.ahead, entry.behind))
+            .map(|entry| (entry.counts.ahead, entry.counts.behind))
             .unwrap_or_else(|| panic!("missing branch {short}"))
     };
 

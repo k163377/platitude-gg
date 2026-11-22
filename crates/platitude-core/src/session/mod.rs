@@ -131,8 +131,8 @@ pub(crate) use model::{HeadMarks, LabelIndex};
 pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
 pub use pace::{
-    OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS, PACE_MIN_SECS, PaceBounds, WORKTREE_CEILING,
-    WORKTREE_FLOOR, WorktreesPace, pace_bounds_secs,
+    OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS, PACE_MIN_SECS, PaceBounds, PaceSecs,
+    WORKTREE_CEILING, WORKTREE_FLOOR, WorktreesPace,
 };
 use pass_watch::PassWatch;
 pub use pass_watch::{PassHooks, PassStep};

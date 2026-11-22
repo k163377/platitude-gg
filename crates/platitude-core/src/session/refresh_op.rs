@@ -163,11 +163,11 @@ impl RepoSession {
         status: &WorktreeStatus,
         marks: &remote::PushMarks,
         cancel: &CancellationToken,
-    ) -> remote::PushTrack {
+    ) -> Option<remote::PushTrack> {
         let told = if self.push_goes_elsewhere(status, marks) {
             remote::push_track(&self.executor, workdir, branch, cancel).await
         } else {
-            Ok(remote::PushTrack::default())
+            Ok(None)
         };
         match told {
             Ok(track) => {
@@ -194,7 +194,7 @@ impl RepoSession {
         workdir: &std::path::Path,
         status: &mut WorktreeStatus,
         cancel: &CancellationToken,
-    ) -> (String, bool, remote::PushTrack) {
+    ) -> (String, bool, Option<remote::PushTrack>) {
         let Some(branch) = status.branch_head.clone() else {
             return Default::default();
         };
@@ -224,7 +224,7 @@ impl RepoSession {
         let Some(upstream) = status
             .upstream
             .as_deref()
-            .filter(|_| status.upstream_tracked)
+            .filter(|_| status.upstream_counts.is_some())
         else {
             return false;
         };

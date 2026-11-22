@@ -269,7 +269,7 @@ pub(crate) async fn has_branch(
 /// `.`) has no remote-tracking ref and goes the second way.
 ///
 /// git can reach that state itself (2.55): `status --porcelain=v2` gives
-/// `branch.upstream` with no `branch.ab` (`upstream_tracked` false) and
+/// `branch.upstream` with no `branch.ab` (`WorktreeStatus::upstream_counts` none) and
 /// `%(upstream:track)` gives `[gone]`. `plan_current_push` then builds
 /// `<local>:refs/heads/<branch>` as recorded and makes it, and the counts
 /// start once the tracking ref comes. A bare `git push` would not

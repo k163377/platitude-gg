@@ -45,17 +45,14 @@ pub async fn load_local(
 pub async fn set_local_identity(
     executor: &GitExecutor,
     workdir: &Path,
-    name: &str,
-    email: &str,
+    values: &IdentityValues,
     cancel: &CancellationToken,
 ) -> Result<IdentityWrite, GitError> {
-    let name = name.trim();
-    let email = email.trim();
-    let written = write_local_pair(executor, workdir, name, email, cancel).await?;
+    let written = write_local_pair(executor, workdir, values, cancel).await?;
     if written.is_saved() {
         return Ok(written);
     }
-    write_local_pair(executor, workdir, name, email, cancel).await
+    write_local_pair(executor, workdir, values, cancel).await
 }
 
 /// Which of the two keys a pass has to touch, and with what — the whole
@@ -65,18 +62,19 @@ pub async fn set_local_identity(
 /// optimisation: `--unset` of an absent key exits 5 like a refused
 /// multi-valued one, so only after this filter is a failed unset real
 /// (rules-refs/core.md「今の値を先に読んで、違うキーだけ撃つ」).
-fn keys_to_write<'a>(
-    held: &Identity,
-    name: &'a str,
-    email: &'a str,
-) -> Vec<(&'static str, &'a str)> {
+fn keys_to_write<'a>(held: &Identity, wanted: &'a IdentityValues) -> Vec<(&'static str, &'a str)> {
     [
-        ("user.name", name, held.name.as_deref()),
-        ("user.email", email, held.email.as_deref()),
+        ("user.name", wanted.name(), wanted.name_read(), &held.name),
+        (
+            "user.email",
+            wanted.email(),
+            wanted.email_read(),
+            &held.email,
+        ),
     ]
     .into_iter()
-    .filter(|(_, wanted, held_value)| *held_value != non_empty(wanted).as_deref())
-    .map(|(key, wanted, _)| (key, wanted))
+    .filter(|(_, _, read, held)| held.as_deref() != *read)
+    .map(|(key, value, _, _)| (key, value))
     .collect()
 }
 
@@ -85,13 +83,12 @@ fn keys_to_write<'a>(
 async fn write_local_pair(
     executor: &GitExecutor,
     workdir: &Path,
-    name: &str,
-    email: &str,
+    values: &IdentityValues,
     cancel: &CancellationToken,
 ) -> Result<IdentityWrite, GitError> {
     let held = load_local(executor, workdir, cancel).await?;
     let mut message = String::new();
-    for (key, wanted) in keys_to_write(&held, name, email) {
+    for (key, wanted) in keys_to_write(&held, values) {
         // Stops at the first that fails: the second would write into a
         // file this pass was just told it cannot change.
         if let Err(e) = write_local_key(executor, workdir, key, wanted, cancel).await {
@@ -105,8 +102,8 @@ async fn write_local_pair(
     }
     let identity = load_local(executor, workdir, cancel).await?;
     Ok(IdentityWrite {
-        name_saved: identity.name.as_deref() == non_empty(name).as_deref(),
-        email_saved: identity.email.as_deref() == non_empty(email).as_deref(),
+        name_saved: identity.name.as_deref() == values.name_read(),
+        email_saved: identity.email.as_deref() == values.email_read(),
         identity,
         message,
     })
@@ -134,7 +131,7 @@ async fn write_local_key(
 
 #[cfg(test)]
 mod tests {
-    use super::{Identity, keys_to_write};
+    use super::{Identity, IdentityValues, keys_to_write};
 
     /// What one repository's own file holds; `None` is a key nobody wrote
     /// here.
@@ -145,6 +142,11 @@ mod tests {
         }
     }
 
+    /// What a save asks for; an empty half is an emptied box.
+    fn wanted(name: &str, email: &str) -> IdentityValues {
+        IdentityValues::new(name, email)
+    }
+
     /// A save that asks for what the file already says asks git for
     /// nothing — including a blank box over a key nobody wrote, which
     /// would otherwise reach a failing `--unset`.
@@ -153,14 +155,13 @@ mod tests {
         assert!(
             keys_to_write(
                 &held(Some("Ada"), Some("ada@example.com")),
-                "Ada",
-                "ada@example.com"
+                &wanted("Ada", "ada@example.com")
             )
             .is_empty()
         );
-        assert!(keys_to_write(&Identity::default(), "", "").is_empty());
+        assert!(keys_to_write(&Identity::default(), &wanted("", "")).is_empty());
         assert!(
-            keys_to_write(&held(Some("Ada"), None), "Ada", "").is_empty(),
+            keys_to_write(&held(Some("Ada"), None), &wanted("Ada", "")).is_empty(),
             "one key written and one not, each asked for what it already is"
         );
     }
@@ -172,16 +173,14 @@ mod tests {
         assert_eq!(
             keys_to_write(
                 &held(Some("Ada"), Some("ada@example.com")),
-                "Ada",
-                "work@example.com"
+                &wanted("Ada", "work@example.com")
             ),
             vec![("user.email", "work@example.com")]
         );
         assert_eq!(
             keys_to_write(
                 &held(Some("Ada"), Some("ada@example.com")),
-                "Ada Lovelace",
-                "ada@example.com"
+                &wanted("Ada Lovelace", "ada@example.com")
             ),
             vec![("user.name", "Ada Lovelace")]
         );
@@ -192,7 +191,7 @@ mod tests {
     #[test]
     fn both_keys_move_together_and_in_order() {
         assert_eq!(
-            keys_to_write(&Identity::default(), "Ada", "ada@example.com"),
+            keys_to_write(&Identity::default(), &wanted("Ada", "ada@example.com")),
             vec![("user.name", "Ada"), ("user.email", "ada@example.com")]
         );
     }
@@ -202,19 +201,28 @@ mod tests {
     #[test]
     fn an_emptied_box_takes_its_key_out_beside_one_being_written() {
         assert_eq!(
-            keys_to_write(&held(Some("Ada"), Some("ada@example.com")), "", ""),
+            keys_to_write(&held(Some("Ada"), Some("ada@example.com")), &wanted("", "")),
             vec![("user.name", ""), ("user.email", "")]
         );
         assert_eq!(
             keys_to_write(
                 &held(Some("Ada"), Some("ada@example.com")),
-                "",
-                "work@example.com"
+                &wanted("", "work@example.com")
             ),
             vec![("user.name", ""), ("user.email", "work@example.com")]
         );
         assert_eq!(
-            keys_to_write(&held(None, Some("ada@example.com")), "Ada", ""),
+            keys_to_write(&held(None, Some("ada@example.com")), &wanted("Ada", "")),
+            vec![("user.name", "Ada"), ("user.email", "")]
+        );
+    }
+
+    /// What is asked arrives trimmed, so a box of blanks alone is an
+    /// emptied one, and a name is written without the blanks around it.
+    #[test]
+    fn a_box_of_blanks_is_an_emptied_one() {
+        assert_eq!(
+            keys_to_write(&held(None, Some("ada@example.com")), &wanted(" Ada ", " ")),
             vec![("user.name", "Ada"), ("user.email", "")]
         );
     }

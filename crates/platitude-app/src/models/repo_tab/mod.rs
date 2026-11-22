@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use platitude_core::remote::{RemoteBranch, RemoteTag};
+use platitude_core::remote::{RemoteBranch, RemoteTag, TrackedBranch};
 use platitude_core::{OperationKind, ReportKind};
 use qtbridge::{QmlObject, qobject};
 
@@ -130,7 +130,9 @@ pub struct RepoTab {
     /// seconds, so the field says so while it runs.
     merge_tools_loading: bool,
     /// Configured remote names as one property, for the publish question
-    /// to bind to and the `GitFacts` rules that split a ref by them.
+    /// to bind to, the `GitFacts` rules that split a ref by them, and the
+    /// tab's own reading of a remote row a write starts from
+    /// (`RepoTab::tracked`).
     remote_names: Vec<String>,
     /// The name the last answer to `checkRemoteBranch` was about; none
     /// while a read is out. Readers check it — the box may have moved on.

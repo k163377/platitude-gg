@@ -26,8 +26,8 @@ mod tree;
 
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
-    SwitchAction, leave_code, leaving_undoes, move_landed, moves_blocked, skip_is_free,
-    switch_action,
+    SwitchAction, SwitchTarget, leave_code, leaving_undoes, move_landed, moves_blocked,
+    skip_is_free, switch_action,
 };
 pub use pull::{PullOffer, PullOut, PullRuns, pull_row};
 pub use tree::TreeStanding;
@@ -60,6 +60,32 @@ impl RefKind {
             "worktree" => Some(Self::Worktree),
             _ => None,
         }
+    }
+}
+
+/// The row a menu stands on: its kind, and the name the row is asked by —
+/// a branch's, a remote branch's and a tag's as the chip wears it (`feat`,
+/// `origin/feat`), not [`crate::refs::RefEntry::name`]'s spelling; a
+/// stash's selector; a worktree's path. Never empty. Which row is not
+/// where a press on it lands: a remote row's move goes to a branch here of
+/// another name ([`SwitchTarget`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RefTarget<'a> {
+    kind: RefKind,
+    name: &'a str,
+}
+
+impl<'a> RefTarget<'a> {
+    /// `None` for no name: a row that names nothing is no row to offer on.
+    fn new(kind: RefKind, name: &'a str) -> Option<Self> {
+        (!name.is_empty()).then_some(Self { kind, name })
+    }
+
+    /// The row the two words a menu asks with stand for; `None` where the
+    /// kind is none a menu names itself by ([`RefKind::from_word`]) or the
+    /// name is empty.
+    pub fn from_words(kind: &str, name: &'a str) -> Option<Self> {
+        Self::new(RefKind::from_word(kind)?, name)
     }
 }
 
@@ -213,11 +239,9 @@ impl RefMenuOffers {
 
 /// The offers themselves.
 ///
-/// `full` is the row's display name as the chip wears it (`feat`,
-/// `origin/feat`), not [`crate::refs::RefEntry::name`]'s spelling. `open`
-/// is the tab-lifecycle gate; `tree` is where the worktree stands;
-/// `held_by_worktree` is the path of the other worktree holding this row's
-/// branch, empty when none does;
+/// `target` is the row; `open` is the tab-lifecycle gate; `tree` is where
+/// the worktree stands; `held_by_worktree` is the path of the other
+/// worktree holding this row's branch, empty when none does;
 /// `remote_counterpart` is the remote reading a local branch carries;
 /// `remote_drifted` says that reading stands on another commit
 /// ([`crate::session::BranchItem::upstream_drifted`] /
@@ -229,8 +253,7 @@ impl RefMenuOffers {
 /// row is [`pull_row`]'s.
 #[expect(clippy::too_many_arguments)]
 pub fn ref_menu(
-    kind: RefKind,
-    full: &str,
+    target: RefTarget<'_>,
     oid_hex: &str,
     open: bool,
     tree: &TreeStanding,
@@ -241,9 +264,10 @@ pub fn ref_menu(
     default_remote: &str,
     tag_sides: &str,
 ) -> RefMenuOffers {
+    let RefTarget { kind, name } = target;
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let held = !held_by_worktree.is_empty();
-    let current = tree.is_current(full);
+    let current = tree.is_current(name);
     let on_current_branch = kind == RefKind::Branch && current;
     // Only a tag has sides; every other row's local half is simply there.
     let sides = (kind == RefKind::Tag)
@@ -260,7 +284,7 @@ pub fn ref_menu(
         switch_to: (branchy && !current) || (kind == RefKind::Worktree && held),
         switch_asks: !held && tree.moves_blocked,
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
-        integrate_from: open && tree.on_branch() && !full.is_empty() && !current,
+        integrate_from: open && tree.on_branch() && !current,
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
@@ -573,8 +597,9 @@ impl WorktreeOffers {
     }
 }
 
-/// The rule. `kind` is the row's (`None` on a commit row that draws no
-/// name); `open` and `tree` read as in [`ref_menu`];
+/// The rule. `target` is the row (`None` on a commit row that draws no
+/// name, and for any row asked by none); `open` and `tree` read as in
+/// [`ref_menu`];
 /// `held_by_worktree` the worktree holding the row's branch, a remote
 /// row's through the local branch of its name, as in [`ref_menu`];
 /// `stopped_here` whether a rebase or bisect stopped in this tree holds the
@@ -587,10 +612,8 @@ impl WorktreeOffers {
 /// and the `switch` row's `Open` leads to the holder. A remote branch whose
 /// local one exists leaves it to that branch's own row: making the
 /// worktree off the remote would mean moving the local one.
-#[expect(clippy::too_many_arguments)]
 pub fn worktree_rows(
-    kind: Option<RefKind>,
-    full: &str,
+    target: Option<RefTarget<'_>>,
     oid_hex: &str,
     open: bool,
     tree: &TreeStanding,
@@ -599,14 +622,16 @@ pub fn worktree_rows(
     local_exists: bool,
 ) -> WorktreeOffers {
     let held = !held_by_worktree.is_empty();
+    let kind = target.map(|target| target.kind);
     let checkout = match kind {
         Some(RefKind::Branch) => Some(WorktreeCheckout::Branch),
         Some(RefKind::Remote) if !held && !local_exists => Some(WorktreeCheckout::Track),
         _ => None,
     }
-    .filter(|_| open && !full.is_empty());
+    .filter(|_| open);
+    let on_current = target.is_some_and(|target| tree.is_current(target.name));
     let checkout_out = match checkout {
-        Some(WorktreeCheckout::Branch) if tree.is_current(full) => Some(WorktreeAddOut::Current),
+        Some(WorktreeCheckout::Branch) if on_current => Some(WorktreeAddOut::Current),
         Some(WorktreeCheckout::Branch) if held => Some(WorktreeAddOut::Held),
         Some(WorktreeCheckout::Branch) if stopped_here => Some(WorktreeAddOut::Stopped),
         _ => None,
@@ -618,5 +643,7 @@ pub fn worktree_rows(
     }
 }
 
+#[cfg(test)]
+mod testkit;
 #[cfg(test)]
 mod tests;

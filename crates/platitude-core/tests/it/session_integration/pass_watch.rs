@@ -237,12 +237,7 @@ async fn a_closing_session_is_told_nothing() {
 async fn a_paced_read_whose_walk_falls_over_still_ends_for_the_pace() {
     let (mut repo, sink, session, doors) = settled().await;
     let hour = std::time::Duration::from_secs(3600);
-    session.set_pace_bounds(PaceBounds {
-        own_floor: hour,
-        own_ceiling: hour,
-        worktree_floor: hour,
-        worktree_ceiling: hour,
-    });
+    session.set_pace_bounds(PaceBounds::new(hour..=hour, hour..=hour));
     session.set_paced(true);
     // A commit made outside, so the read walks.
     repo.commit_file("outside.txt", "o\n", "made outside");

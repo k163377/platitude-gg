@@ -8,7 +8,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::{far, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{far, origin_and_clone, row};
 use crate::support::session::{opened, write_answer};
 use platitude_core::process::CommandEnd;
 use platitude_core::remote;
@@ -36,7 +37,7 @@ async fn delete_and_untrack(work: &TestRepo, shown: &str) -> Vec<String> {
         &exec,
         &work.path,
         &far("origin", "topic"),
-        shown,
+        oid(shown),
         NET,
         &cancel,
     )
@@ -135,7 +136,7 @@ async fn delete_both_takes_the_upstream_off_the_branches_left_here() {
     sink.opening_settled(&session).await;
 
     let id = session
-        .delete_branch_everywhere("topic".into(), far("origin", "topic"), true, shown)
+        .delete_branch_everywhere("topic".into(), row("origin", "topic"), true, oid(&shown))
         .expect("accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     session.close_and_wait().await;
@@ -161,7 +162,7 @@ async fn an_upstream_that_will_not_come_off_is_the_logs_not_the_writes() {
     std::fs::write(&lock, "").expect("hold the config file");
 
     let id = session
-        .delete_remote_branch(far("origin", "topic"), shown)
+        .delete_remote_branch(row("origin", "topic"), oid(&shown))
         .expect("accepted");
     let answer = write_answer(&sink, id).await;
     std::fs::remove_file(&lock).expect("let the config file go");

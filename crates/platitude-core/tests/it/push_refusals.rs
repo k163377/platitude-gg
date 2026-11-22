@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use crate::support::TestRepo;
 use crate::support::exec::{Said, env, logged, observed_env};
+use crate::support::oid;
 use crate::support::remote::{far, far_tag, moved_over_there, origin_and_clone};
 use platitude_core::GitError;
 use platitude_core::process::{CommandEnd, Kept};
@@ -81,7 +82,7 @@ async fn a_push_the_pre_push_hook_turns_down_is_reported_as_the_hooks() {
         &exec,
         &work.path,
         &far("origin", "main"),
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )
@@ -128,7 +129,7 @@ async fn a_far_side_that_takes_no_rewrite_is_not_out_of_date() {
         &work,
         "origin",
         PushForce::WithLease {
-            expect: Some(leased),
+            expect: oid(&leased),
         },
     )
     .await
@@ -155,7 +156,7 @@ async fn a_far_side_that_keeps_a_branch_says_which_rule() {
         &exec,
         &work.path,
         &far("origin", "main"),
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )
@@ -172,7 +173,7 @@ async fn a_far_side_that_keeps_a_branch_says_which_rule() {
         &exec,
         &work.path,
         &far("origin", "side"),
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )
@@ -277,7 +278,7 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
     // A stale lease is outdated too: this window is looking at an older remote.
     let stale = work.git(&["rev-parse", "origin/main"]);
     let leased = PushForce::WithLease {
-        expect: Some(stale),
+        expect: oid(&stale),
     };
     let err = push_main(&work, "origin", leased)
         .await
@@ -288,6 +289,14 @@ async fn a_non_fast_forward_push_is_refused_until_forced() {
         "a lease the remote left says the branch moved, not that it is ahead: {err}"
     );
     assert!(err.is_outdated(), "and is caught up with all the same");
+
+    // git's own lease, to the remote-tracking ref: the remote has left
+    // that too.
+    let err = push_main(&work, "origin", PushForce::WithTrackingLease)
+        .await
+        .expect_err("the remote moved past the remote-tracking ref");
+    assert_eq!(kind_of(&err), Some(ReportKind::Moved), "{err}");
+    assert!(err.is_outdated());
 
     push_main(&work, "origin", PushForce::Force)
         .await
@@ -333,7 +342,7 @@ async fn a_branch_the_far_side_keeps_comes_back_as_a_refusal_with_its_words() {
         &exec,
         &work.path,
         &far("origin", "main"),
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )
@@ -394,7 +403,7 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
         &exec,
         &work.path,
         &far_tag("origin", "v1.0"),
-        "",
+        None,
         NET,
         &cancel,
     )
@@ -407,7 +416,7 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
         &exec,
         &work.path,
         &far_tag("origin", "v1.0"),
-        &shown,
+        oid(&shown),
         NET,
         &cancel,
     )
@@ -426,7 +435,7 @@ async fn a_tag_the_far_side_keeps_is_reported_the_way_a_branch_is() {
         &exec,
         &work.path,
         &far_tag("origin", "v1.1"),
-        "",
+        None,
         NET,
         &cancel,
     )
@@ -460,7 +469,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         &exec,
         &work.path,
         &far_tag("origin", "v1.0"),
-        "",
+        None,
         NET,
         &cancel,
     )
@@ -501,7 +510,7 @@ async fn a_hook_a_neighbour_holds_open_still_says_why_the_push_was_refused() {
         &exec,
         &work.path,
         &far_tag("origin", "v1.0"),
-        &shown,
+        oid(&shown),
         NET,
         &cancel,
     )

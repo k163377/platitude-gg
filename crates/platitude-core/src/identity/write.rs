@@ -45,29 +45,25 @@ impl IdentityWrite {
 /// commit time ("Author identity unknown"); the rest is git's to handle: an
 /// empty address goes through as `<>`, git drops `<`, `>` and line breaks
 /// from the author line, and the config write escapes `\n`, so nothing is
-/// injected. Values are trimmed, as git would, so the stored configuration
-/// equals what commits show.
+/// injected. The values arrive trimmed ([`IdentityValues`]).
 pub async fn set_identity(
     executor: &GitExecutor,
     workdir: &Path,
-    name: &str,
-    email: &str,
+    values: &IdentityValues,
     scope: ConfigScope,
     cancel: &CancellationToken,
 ) -> Result<IdentityWrite, GitError> {
-    let name = name.trim();
-    let email = email.trim();
-    if name.is_empty() {
+    if values.name().is_empty() {
         return Err(GitError::Rejected {
             message: "the name must not be empty".to_string(),
         });
     }
 
-    let written = write_pair(executor, workdir, name, email, scope, cancel).await?;
+    let written = write_pair(executor, workdir, values, scope, cancel).await?;
     if written.is_saved() {
         return Ok(written);
     }
-    write_pair(executor, workdir, name, email, scope, cancel).await
+    write_pair(executor, workdir, values, scope, cancel).await
 }
 
 /// One pass: both keys, then a read-back. Stops at the first failing call
@@ -76,13 +72,12 @@ pub async fn set_identity(
 async fn write_pair(
     executor: &GitExecutor,
     workdir: &Path,
-    name: &str,
-    email: &str,
+    values: &IdentityValues,
     scope: ConfigScope,
     cancel: &CancellationToken,
 ) -> Result<IdentityWrite, GitError> {
     let mut message = String::new();
-    for (key, value) in [("user.name", name), ("user.email", email)] {
+    for (key, value) in [("user.name", values.name()), ("user.email", values.email())] {
         let mut cmd = GitCommand::new().cwd(workdir).arg("config");
         if scope == ConfigScope::Global {
             cmd = cmd.arg("--global");
@@ -101,8 +96,8 @@ async fn write_pair(
     }
     let config = load(executor, workdir, cancel).await?;
     Ok(IdentityWrite {
-        name_saved: config.identity.name.as_deref() == Some(name),
-        email_saved: config.identity.email.as_deref() == non_empty(email).as_deref(),
+        name_saved: config.identity.name.as_deref() == values.name_read(),
+        email_saved: config.identity.email.as_deref() == values.email_read(),
         identity: config.identity,
         message,
     })
@@ -124,8 +119,7 @@ mod tests {
         let err = set_identity(
             &exec,
             &refusing::nowhere(),
-            "   ",
-            "e@example.com",
+            &IdentityValues::new("   ", "e@example.com"),
             ConfigScope::Local,
             &cancel,
         )

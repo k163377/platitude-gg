@@ -135,6 +135,7 @@ impl AppBackend {
         self.identity_email_saved = false;
         self.identity_unsaved = false;
         self.identity_changed();
+        let values = platitude_core::identity::IdentityValues::new(&name, &email);
         let feed = Arc::clone(&self.check_feed);
         // Held by the hub, so the window cannot close between the pair's
         // two `git config` writes (`hub::saves`).
@@ -149,8 +150,7 @@ impl AppBackend {
                 let written = identity::set_identity(
                     &executor,
                     &workdir,
-                    &name,
-                    &email,
+                    &values,
                     ConfigScope::Global,
                     &cancel,
                 )

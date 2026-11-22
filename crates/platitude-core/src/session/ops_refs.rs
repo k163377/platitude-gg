@@ -81,7 +81,7 @@ impl RepoSession {
     pub(super) fn measures_head(
         &self,
         local: Option<&str>,
-        remote: Option<&remote::RemoteBranch>,
+        remote: Option<&remote::TrackedBranch>,
     ) -> bool {
         let Some(snapshot) = self.published_snapshot() else {
             return false;
@@ -102,7 +102,7 @@ impl RepoSession {
                 && snapshot.local_named(name).map(|b| b.oid) == head.upstream_oid
         });
         let remote_upstream = remote.is_some_and(|target| {
-            target.branch == head.short.as_str() || head.upstream.as_str() == target.to_string()
+            target.far().branch == head.short.as_str() || head.upstream.as_str() == target.short()
         });
         local_upstream || remote_upstream
     }

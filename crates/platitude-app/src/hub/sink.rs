@@ -465,7 +465,7 @@ impl SessionSink for BridgeSink {
                     target,
                     local,
                     state: state.as_str().to_string(),
-                    tip,
+                    tip: tip.map(|tip| tip.to_hex()).unwrap_or_default(),
                     theirs: i32::try_from(theirs).unwrap_or(i32::MAX),
                 });
             }
@@ -768,7 +768,7 @@ mod tests {
             merge_tool: String::new(),
             push_remote: String::new(),
             upstream_here: false,
-            push_track: platitude_core::remote::PushTrack::default(),
+            push_track: None,
             eol_marks: Arc::default(),
             lfs_needed: 0,
             not_copied: Arc::default(),

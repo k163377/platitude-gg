@@ -10,7 +10,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::{a_branch_over_there, far, moved_over_there, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{a_branch_over_there, far, moved_over_there, origin_and_clone, row};
 use crate::support::session::{opened, write_answer, write_result};
 use platitude_core::GitError;
 use platitude_core::OperationKind;
@@ -92,9 +93,9 @@ async fn replace_billing(work: &TestRepo, shown: &str) -> Result<(), GitError> {
     remote::replace_remote_branch(
         &exec,
         &work.path,
-        &far("origin", "billing"),
+        &row("origin", "billing"),
         "billing-v2",
-        shown,
+        oid(shown),
         NET,
         &cancel,
     )
@@ -115,7 +116,7 @@ async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
         &exec,
         &work.path,
         &far("origin", "topic"),
-        &shown,
+        oid(&shown),
         NET,
         &cancel,
     )
@@ -141,7 +142,7 @@ async fn a_remote_branch_that_moved_since_the_last_fetch_is_not_deleted() {
         &exec,
         &work.path,
         &far("origin", "topic"),
-        &seen,
+        oid(&seen),
         NET,
         &cancel,
     )
@@ -165,7 +166,7 @@ async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
         &exec,
         &work.path,
         &far("origin", "gone"),
-        &shown,
+        oid(&shown),
         NET,
         &cancel,
     )
@@ -183,7 +184,7 @@ async fn a_remote_branch_dropped_since_the_last_fetch_is_the_leases_refusal() {
         &exec,
         &work.path,
         &far("origin", "twin"),
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )
@@ -239,7 +240,7 @@ async fn delete_both_refused_by_the_lease_keeps_the_commit_under_the_remote_trac
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_branch_everywhere("topic".into(), far("origin", "topic"), false, shown.clone())
+        .delete_branch_everywhere("topic".into(), row("origin", "topic"), false, oid(&shown))
         .expect("accepted");
     let refused = write_answer(&sink, id).await;
 
@@ -277,16 +278,21 @@ async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
     let (sink, session) = opened(&work).await;
 
     session.check_remote_branch(far("origin", "shared"), "topic".into());
-    let (state, local) = sink
+    let (state, local, tip) = sink
         .wait_for("the remote's answer", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::RemoteBranchChecked { state, local, .. } => {
-                    Some((*state, local.clone()))
-                }
+                SessionEvent::RemoteBranchChecked {
+                    state, local, tip, ..
+                } => Some((*state, local.clone(), *tip)),
                 _ => None,
             })
         })
         .await;
+    assert_eq!(
+        tip,
+        Some(oid(&bare.git(&["rev-parse", "shared"]))),
+        "with the commit the remote holds the name on: what an overwrite would be leased to"
+    );
     assert_eq!(
         state,
         remote::RemoteBranchState::FastForward,
@@ -298,7 +304,7 @@ async fn a_branch_the_worktree_is_not_on_is_published_and_weighed_as_itself() {
     );
 
     let id = session
-        .publish("topic".into(), far("origin", "shared"), String::new())
+        .publish("topic".into(), far("origin", "shared"), None)
         .expect("the write is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(
@@ -378,7 +384,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
         "their commit is not one of ours, which is what makes this refusable"
     );
 
-    let spec = remote::publish_spec("ours", &far("origin", "theirs"), "");
+    let spec = remote::publish_spec("ours", &far("origin", "theirs"), None);
     let sent = remote::push(&exec, &work.path, &spec, NET, &cancel).await;
     assert!(
         sent.as_ref().is_err_and(GitError::is_outdated),
@@ -392,7 +398,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
 
     // Only a leased overwrite can land here; a lease on a commit that is no
     // longer there is refused.
-    let stale = remote::publish_spec("ours", &far("origin", "theirs"), &"0".repeat(40));
+    let stale = remote::publish_spec("ours", &far("origin", "theirs"), Some(oid(&"0".repeat(40))));
     assert!(
         remote::push(&exec, &work.path, &stale, NET, &cancel)
             .await
@@ -401,7 +407,7 @@ async fn a_taken_name_holding_commits_of_its_own_is_refused() {
     );
     assert_eq!(bare.git(&["rev-parse", "theirs"]), theirs);
 
-    let leased = remote::publish_spec("ours", &far("origin", "theirs"), &theirs);
+    let leased = remote::publish_spec("ours", &far("origin", "theirs"), Some(oid(&theirs)));
     remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect("the overwrite the question offers, pinned to what it showed");
@@ -448,7 +454,7 @@ mod periodic {
             &exec,
             &work.path,
             &far("origin", "temp"),
-            &tip,
+            oid(&tip),
             NET,
             &cancel,
         )
@@ -482,7 +488,7 @@ mod periodic {
             &exec,
             &work.path,
             &far("origin", "topic"),
-            &shown,
+            oid(&shown),
             NET,
             &cancel,
         )
@@ -521,7 +527,7 @@ mod periodic {
             .expect("correct the URL");
         assert_eq!(work.git(&["remote", "get-url", "fork"]), bare.file_url());
 
-        let spec = remote::publish_spec("main", &far("fork", "main"), "");
+        let spec = remote::publish_spec("main", &far("fork", "main"), None);
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect("push to the corrected remote");
@@ -539,7 +545,7 @@ mod periodic {
         remote::add(&exec, &work.path, "fork", nowhere, &cancel)
             .await
             .expect("add");
-        let spec = remote::publish_spec("main", &far("fork", "main"), "");
+        let spec = remote::publish_spec("main", &far("fork", "main"), None);
         let error = remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect_err("nothing answers there");
@@ -597,7 +603,7 @@ mod periodic {
         work.git(&["switch", "-c", "topic"]);
         work.commit_file("b.txt", "b\n", "topic work");
 
-        let spec = remote::publish_spec("topic", &far("origin", "topic"), "");
+        let spec = remote::publish_spec("topic", &far("origin", "topic"), None);
         assert!(spec.set_upstream, "the answer is recorded, not re-asked");
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
@@ -643,7 +649,7 @@ mod periodic {
             "what makes this the fast-forward case: their commit is one of ours"
         );
 
-        let spec = remote::publish_spec("shared", &far("origin", "shared"), "");
+        let spec = remote::publish_spec("shared", &far("origin", "shared"), None);
         remote::push(&exec, &work.path, &spec, NET, &cancel)
             .await
             .expect("git takes it — this is the hole the question covers");
@@ -694,5 +700,30 @@ mod periodic {
             !bare.git_ok(&["rev-parse", "--verify", "--quiet", "refs/tags/rel2"]),
             "the tag stays here"
         );
+    }
+
+    /// Why a lease's pin is an `Oid` (`remote::PushForce::WithLease`): git
+    /// reads the second half of `--force-with-lease=<ref>:<expect>` as a
+    /// revision. A ref's name there stands for whatever that ref is on as
+    /// the push runs — here the remote-tracking ref, which is on what the
+    /// remote holds, so the overwrite goes through pinned by nobody.
+    #[test]
+    #[ignore = "git's own reading of a lease: not worth the pre-merge run"]
+    fn git_reads_what_a_lease_expects_as_a_revision() {
+        let (mut bare, mut work) = origin_and_clone();
+        // Rewritten here, so sending it overwrites what origin holds.
+        work.git(&["commit", "--amend", "-m", "rewritten"]);
+        let rewritten = work.git(&["rev-parse", "HEAD"]);
+
+        assert!(
+            work.git_ok(&[
+                "push",
+                "--force-with-lease=main:refs/remotes/origin/main",
+                "origin",
+                "main",
+            ]),
+            "a name in an object's place is resolved, not refused"
+        );
+        assert_eq!(bare.git(&["rev-parse", "refs/heads/main"]), rewritten);
     }
 }

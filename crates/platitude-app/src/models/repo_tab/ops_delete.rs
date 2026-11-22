@@ -3,8 +3,10 @@
 //!
 //! Every press asks the session and writes down the rows it took away
 //! under the id it got back, so every row that moves has an answer
-//! coming. What the waiting means is `ops::StandIn`'s (tested in
-//! `ops::tests::stand_in`); this file is the wiring.
+//! coming — a leased delete with no object to lease to is turned away
+//! before the session, gets no id and moves no row
+//! (`RepoTab::ask_leased`). What the waiting means is `ops::StandIn`'s
+//! (tested in `ops::tests::stand_in`); this file is the wiring.
 //!
 //! The write slots themselves are the signal (`deleteBranch`,
 //! `deleteRemoteBranch`, `deleteBranchEverywhere`, `deleteTag`,
@@ -62,13 +64,13 @@ impl RepoTab {
     }
 
     /// `git push <remote> --delete <branch>`: only the remote row leaves,
-    /// keyed `<remote>/<branch>` as the row is — the halves were cut with
-    /// the configured names (`GitFacts.remoteOfRef`), since a remote's
-    /// name may hold a slash. `expect` is the commit the row showed, which
+    /// keyed by its own name. `expect` is the commit the row showed, which
     /// the delete is leased to (`remote::delete_remote_branch`).
-    pub(super) fn remote_branch_delete(&mut self, target: RemoteBranch, expect: String) {
-        let row = target.to_string();
-        let asked = self.ask_session(|s| s.delete_remote_branch(target, expect));
+    pub(super) fn remote_branch_delete(&mut self, target: TrackedBranch, expect: String) {
+        let row = target.short().to_string();
+        let asked = self.ask_leased("delete remote branch", &expect, |s, expect| {
+            s.delete_remote_branch(target, expect)
+        });
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Remote, &row)], asked);
     }
@@ -86,13 +88,14 @@ impl RepoTab {
     pub(super) fn branch_delete_everywhere(
         &mut self,
         branch: String,
-        target: RemoteBranch,
+        target: TrackedBranch,
         force: bool,
         expect: String,
     ) {
-        let row = target.to_string();
-        let asked =
-            self.ask_session(|s| s.delete_branch_everywhere(branch.clone(), target, force, expect));
+        let row = target.short().to_string();
+        let asked = self.ask_leased("delete branch everywhere", &expect, |s, expect| {
+            s.delete_branch_everywhere(branch.clone(), target, force, expect)
+        });
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Branch, &branch), (Row::Remote, &row)], asked);
     }
@@ -114,7 +117,9 @@ impl RepoTab {
     pub(super) fn remote_tag_delete(&mut self, target: RemoteTag, row_goes: bool, expect: String) {
         let row = target.to_string();
         let tag = target.tag.clone();
-        let asked = self.ask_session(|s| s.delete_remote_tag(target, expect));
+        let asked = self.ask_leased("delete remote tag", &expect, |s, expect| {
+            s.delete_remote_tag(target, expect)
+        });
         self.ref_push_asked(&row, asked);
         let rows: &[(Row, &str)] = if row_goes { &[(Row::Tag, &tag)] } else { &[] };
         self.took_away(rows, asked);
@@ -126,7 +131,9 @@ impl RepoTab {
     pub(super) fn tag_delete_everywhere(&mut self, target: RemoteTag, expect: String) {
         let row = target.to_string();
         let tag = target.tag.clone();
-        let asked = self.ask_session(|s| s.delete_tag_everywhere(target, expect));
+        let asked = self.ask_leased("delete tag everywhere", &expect, |s, expect| {
+            s.delete_tag_everywhere(target, expect)
+        });
         self.ref_push_asked(&row, asked);
         self.took_away(&[(Row::Tag, &tag)], asked);
     }

@@ -15,6 +15,7 @@ use crate::process::{GitCommand, GitExecutor};
 
 use super::push::{PushForce, PushSpec, porcelain_push, push};
 use super::tags::split_ls_remote_line;
+use super::tracked::TrackedBranch;
 
 /// A branch on a remote: the remote as git is handed it, and the branch's
 /// name over there — not the branch here it goes from or is measured for,
@@ -23,8 +24,11 @@ use super::tags::split_ls_remote_line;
 /// (`branch.<name>.remote = .`).
 ///
 /// Built from the two names as they were given apart, never cut out of
-/// `origin/feature/x`: both may hold a slash. Nothing here checks them;
-/// git judges the names, and the callers refuse what they refuse.
+/// `origin/feature/x`: both may hold a slash. The row a write starts
+/// from is read by [`TrackedBranch::listed`], which keeps the row beside
+/// the pair.
+/// Nothing here checks them; git judges the names, and the callers refuse
+/// what they refuse.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RemoteBranch {
     pub remote: String,
@@ -177,7 +181,7 @@ pub async fn delete_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
     target: &RemoteBranch,
-    expect: &str,
+    expect: Oid,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
@@ -260,8 +264,9 @@ pub async fn untrack_deleted(
 /// rename: the far side sees a create and a delete, and whatever hung off
 /// the old name (an open PR, a protection rule) stays behind.
 ///
-/// The new name is pushed from the remote-tracking ref, since a moved-on
-/// local branch of the same name would publish its commits too. The old
+/// The new name is pushed from the remote-tracking ref — the row's own
+/// ([`TrackedBranch::tracking_ref`]) — since a moved-on local branch of
+/// the same name would publish its commits too. The old
 /// name's delete is leased to `expect`, as in [`delete_remote_branch`]; a
 /// refused lease leaves both names over there and the tracking alone.
 /// Local branches tracking the old name are then repointed: a stale
@@ -269,24 +274,21 @@ pub async fn untrack_deleted(
 pub async fn replace_remote_branch(
     executor: &GitExecutor,
     workdir: &Path,
-    old: &RemoteBranch,
+    old: &TrackedBranch,
     to: &str,
-    expect: &str,
+    expect: Oid,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let spec = PushSpec {
-        target: RemoteBranch {
-            remote: old.remote.clone(),
-            branch: to.to_string(),
-        },
+        target: old.beside(to),
         local: old.tracking_ref(),
         set_upstream: false,
         force: PushForce::None,
     };
     push(executor, workdir, &spec, timeout, cancel).await?;
-    delete_remote_branch(executor, workdir, old, expect, timeout, cancel).await?;
-    for branch in tracking_branches(executor, workdir, old, cancel).await? {
+    delete_remote_branch(executor, workdir, old.far(), expect, timeout, cancel).await?;
+    for branch in tracking_branches(executor, workdir, old.far(), cancel).await? {
         crate::branch::set_upstream(executor, workdir, &branch, &spec.target, cancel).await?;
     }
     Ok(())

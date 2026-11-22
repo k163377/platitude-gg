@@ -31,6 +31,7 @@
 //! fits or not ([`Pacer::starts`]), so a worktree slower than the gap is
 //! still read.
 
+use std::ops::RangeInclusive;
 use std::time::Duration;
 
 /// A moment, as the time since the driver's origin.
@@ -60,35 +61,79 @@ pub const PACE_MIN_SECS: u32 = 1;
 /// The longest ceiling — an hour, the way the auto-fetch ceiling is one.
 pub const PACE_MAX_SECS: u32 = 3600;
 
-/// The floor and the ceiling that will run for the pair asked, in seconds:
-/// each in range, and the ceiling never under the floor. The one place the
+/// A floor and a ceiling as the settings keep them, in whole seconds: each
+/// in range, and the ceiling never under the floor. The one place the
 /// range is applied, as with `auto_fetch_minutes`: the settings screen and
-/// a hand-written `settings.toml` write the same fields.
-#[must_use]
-pub fn pace_bounds_secs(floor: u32, ceiling: u32) -> (u32, u32) {
-    let floor = floor.clamp(PACE_MIN_SECS, PACE_MAX_SECS);
-    (floor, ceiling.clamp(floor, PACE_MAX_SECS))
+/// a hand-written `settings.toml` write the same pair, and each builds one
+/// of these — so a pair the settings hold is one that will run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PaceSecs {
+    floor: u32,
+    ceiling: u32,
 }
 
-/// The floors and ceilings the pace keeps to — the settings'
-/// (`settings::Defaults::pace_bounds`), each pair through
-/// [`pace_bounds_secs`].
+impl PaceSecs {
+    /// The pair that will run for the one asked: a ceiling asked for under
+    /// its floor is the floor.
+    #[must_use]
+    pub fn new(floor: u32, ceiling: u32) -> Self {
+        let floor = floor.clamp(PACE_MIN_SECS, PACE_MAX_SECS);
+        Self {
+            floor,
+            ceiling: ceiling.clamp(floor, PACE_MAX_SECS),
+        }
+    }
+
+    pub fn floor(self) -> u32 {
+        self.floor
+    }
+
+    pub fn ceiling(self) -> u32 {
+        self.ceiling
+    }
+
+    /// The pair as the pace keeps to it ([`PaceBounds::new`]).
+    #[must_use]
+    pub fn span(self) -> RangeInclusive<Duration> {
+        Duration::from_secs(self.floor.into())..=Duration::from_secs(self.ceiling.into())
+    }
+}
+
+/// The floors and ceilings the pace keeps to — the settings' two
+/// [`PaceSecs`] (`settings::Defaults::pace_bounds`).
+///
+/// No ceiling here is under its floor, whoever built it ([`Self::new`]):
+/// an interval is clamped between the two, and `Ord::clamp` panics on a
+/// pair the other way round. That is the whole of what is held to — whole
+/// seconds and their range are [`PaceSecs`]'s, and a bound here is any
+/// `Duration`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PaceBounds {
-    pub own_floor: Duration,
-    pub own_ceiling: Duration,
-    pub worktree_floor: Duration,
-    pub worktree_ceiling: Duration,
+    own_floor: Duration,
+    own_ceiling: Duration,
+    worktree_floor: Duration,
+    worktree_ceiling: Duration,
+}
+
+impl PaceBounds {
+    /// `own` is this tree's floor to its ceiling, `worktrees` each other
+    /// worktree's. A ceiling asked for under its floor is the floor.
+    #[must_use]
+    pub fn new(own: RangeInclusive<Duration>, worktrees: RangeInclusive<Duration>) -> Self {
+        let (own_floor, own_ceiling) = own.into_inner();
+        let (worktree_floor, worktree_ceiling) = worktrees.into_inner();
+        Self {
+            own_floor,
+            own_ceiling: own_ceiling.max(own_floor),
+            worktree_floor,
+            worktree_ceiling: worktree_ceiling.max(worktree_floor),
+        }
+    }
 }
 
 impl Default for PaceBounds {
     fn default() -> Self {
-        Self {
-            own_floor: OWN_FLOOR,
-            own_ceiling: OWN_CEILING,
-            worktree_floor: WORKTREE_FLOOR,
-            worktree_ceiling: WORKTREE_CEILING,
-        }
+        Self::new(OWN_FLOOR..=OWN_CEILING, WORKTREE_FLOOR..=WORKTREE_CEILING)
     }
 }
 

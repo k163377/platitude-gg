@@ -2,7 +2,7 @@
 //! leaving a stopped operation undoes. Apart from the menus: the two
 //! share nothing but the repository state they read.
 
-use super::TreeStanding;
+use super::{RefKind, TreeStanding};
 use crate::integrate::InProgress;
 use crate::opstate::OpState;
 use crate::status::Counts;
@@ -11,9 +11,8 @@ use crate::status::Counts;
 /// `RepoPage.switchToRef` branches on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SwitchAction {
-    /// Nothing moves: the branch the tree is already on, the detached
-    /// marker, or a tag — moving onto one could only detach HEAD, so its
-    /// row offers a branch at its commit instead.
+    /// Nothing moves: the branch the tree is already on, or a press that
+    /// names no branch to land on ([`SwitchTarget::from_words`]).
     None,
     /// The branch is checked out in another worktree: git refuses the
     /// move outright (`fatal: '<branch>' is already used by worktree at
@@ -47,21 +46,62 @@ impl SwitchAction {
     }
 }
 
-/// The action itself. `kind` is the word the chip goes out under
-/// (`branch` / `remote` — every other kind moves nothing); `local` the
-/// local branch the move lands on (for `remote`, the remote ref's local
-/// name); `tree` where the worktree stands; `held_by_worktree` the other
-/// worktree holding that local branch, empty when none does; `local_oid`
-/// that branch's commit, empty when no such branch exists.
+/// The branch here a press lands on, and which row was pressed for it:
+/// the branch's own, or a remote branch's — whose move lands on the local
+/// branch of its name (`RepoPage.switchToRef` asks which), never on the
+/// remote row's own name (`origin/feat` lands on `feat`). `local` is never
+/// empty.
+///
+/// The fields are this module's: the one way to build it is
+/// [`Self::from_words`], which is where every other press ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SwitchTarget<'a> {
+    pressed: Pressed,
+    local: &'a str,
+}
+
+/// The row a [`SwitchTarget`] was pressed on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Pressed {
+    Branch,
+    Remote,
+}
+
+impl<'a> SwitchTarget<'a> {
+    /// `kind` is the word the chip goes out under ([`RefKind::from_word`])
+    /// and `local` the local branch the move lands on. `None` for every
+    /// kind but a branch and a remote branch — a tag could only detach
+    /// HEAD, so its row offers a branch at its commit instead; a stash, a
+    /// worktree's chip and the HEAD marker name no branch — and for no
+    /// name.
+    pub fn from_words(kind: &str, local: &'a str) -> Option<Self> {
+        let pressed = match RefKind::from_word(kind)? {
+            RefKind::Branch => Pressed::Branch,
+            RefKind::Remote => Pressed::Remote,
+            RefKind::Tag | RefKind::Stash | RefKind::Worktree => return None,
+        };
+        (!local.is_empty()).then_some(Self { pressed, local })
+    }
+}
+
+/// The action itself. `target` is where the press lands, `None` where it
+/// lands nowhere; `tree` where the worktree stands; `held_by_worktree` the
+/// other worktree holding that local branch, empty when none does;
+/// `local_oid` that branch's commit, empty when no such branch exists.
+///
+/// A remote row moves its local branch even where the tree is on it:
+/// landing the current branch on its remote ref is a move.
 pub fn switch_action(
-    kind: &str,
-    local: &str,
+    target: Option<SwitchTarget<'_>>,
     tree: &TreeStanding,
     held_by_worktree: &str,
     local_oid: &str,
 ) -> SwitchAction {
-    match kind {
-        "branch" => {
+    let Some(SwitchTarget { pressed, local }) = target else {
+        return SwitchAction::None;
+    };
+    match pressed {
+        Pressed::Branch => {
             if tree.is_current(local) {
                 SwitchAction::None
             } else if !held_by_worktree.is_empty() {
@@ -70,7 +110,7 @@ pub fn switch_action(
                 SwitchAction::Switch
             }
         }
-        "remote" => {
+        Pressed::Remote => {
             if !held_by_worktree.is_empty() {
                 SwitchAction::OpenHolder
             } else if local_oid.is_empty() {
@@ -79,7 +119,6 @@ pub fn switch_action(
                 SwitchAction::MoveBranch
             }
         }
-        _ => SwitchAction::None,
     }
 }
 

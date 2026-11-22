@@ -165,24 +165,20 @@ impl CommandsModel {
 
     /// The rows the selection touches, so that only they are re-spelled.
     fn span(&self) -> Option<RangeInclusive<usize>> {
-        let (first, last) = self.sel_ends?.ordered().into_inner();
+        let (first, last) = self.selection?.ends().ordered().into_inner();
         Some(first.row..=last.row)
     }
 
     pub(super) fn start_select(&mut self, position: SourcePosition) -> bool {
         let was = self.span();
-        self.sel_word = None;
-        self.sel_ends = Some(SelectionEnds {
-            anchor: position,
-            focus: position,
-        });
+        self.selection = Some(Selection::pressed(position));
         self.respell(was)
     }
 
     /// A double-click: the word the character under the pointer stands in
     /// (`platitude_core::word`, read across the whole line, so a word ends
     /// at a column's tab) becomes the selection, and the drag behind it
-    /// grows word by word (`SelectionEnds::grown_by_word`). `position`
+    /// grows word by word (`Selection::dragged_to`). `position`
     /// names a character of column `column`. Nothing is taken on a gap —
     /// the wash runs from one column's characters to another's, so a tab
     /// alone would be taken with no ground on it — below the line, where
@@ -200,39 +196,31 @@ impl CommandsModel {
             word::run_at(&line.text(), base + plain_char(text, position.utf16)?)
         });
         let Some(run) = run else {
-            self.sel_word = None;
+            self.selection = self.selection.map(Selection::wordless);
             return false;
         };
         let was = self.span();
-        let ends = SelectionEnds::word(position.row, run);
-        self.sel_ends = Some(ends);
-        self.sel_word = Some(ends);
+        self.selection = Some(Selection::word(position.row, run));
         self.respell(was)
     }
 
     pub(super) fn drag_select(&mut self, position: SourcePosition) -> bool {
-        let Some(ends) = self.sel_ends else {
+        let Some(held) = self.selection else {
             return false;
         };
-        let next = match self.sel_word {
-            Some(clicked) => clicked.grown_by_word(position, || {
-                word::run_across(&self.line_at(position.row)?.text(), position.byte)
-            }),
-            None => SelectionEnds {
-                focus: position,
-                ..ends
-            },
-        };
-        if next == ends {
+        let next = held.dragged_to(position, || {
+            word::run_across(&self.line_at(position.row)?.text(), position.byte)
+        });
+        if next.ends() == held.ends() {
             return false;
         }
         let was = self.span();
-        self.sel_ends = Some(next);
+        self.selection = Some(next);
         self.respell(was)
     }
 
     pub(super) fn drop_selection(&mut self) -> bool {
-        if self.sel_ends.is_none() {
+        if self.selection.is_none() {
             return false;
         }
         let was = self.span();
@@ -241,21 +229,15 @@ impl CommandsModel {
     }
 
     pub(super) fn forget_selection(&mut self) {
-        self.sel_ends = None;
-        self.sel_word = None;
+        self.selection = None;
     }
 
     /// Moves the ends (row numbers) up past the `gone` oldest rows that fell
-    /// off; a selection with an end over the edge is dropped. A
-    /// double-clicked word stands only beside a selection: it goes with
-    /// the selection, even where its own row stays (a drag behind it
-    /// carried the far end up over the edge).
+    /// off; a selection with an end over the edge is dropped, and its
+    /// double-clicked word with it, even where the word's own row stays (a
+    /// drag behind it carried the far end up over the edge).
     pub(super) fn shift_selection(&mut self, gone: usize) {
-        self.sel_ends = self.sel_ends.and_then(|ends| ends.shifted_up(gone));
-        self.sel_word = self
-            .sel_ends
-            .and(self.sel_word)
-            .and_then(|clicked| clicked.shifted_up(gone));
+        self.selection = self.selection.and_then(|held| held.shifted_up(gone));
     }
 
     // ---- what each row draws of it -----------------------------------
@@ -296,7 +278,7 @@ impl CommandsModel {
 
     /// One row's share, as the delegate reads it (`CommandWash`).
     fn spell(&self, row: usize) -> Optional<CommandWash> {
-        let Some(ends) = self.sel_ends else {
+        let Some(ends) = self.selection.map(Selection::ends) else {
             return Optional::none();
         };
         // A re-spell walks rows the selection has left: they are answered
@@ -343,7 +325,7 @@ impl CommandsModel {
     /// what the rows draw is copied: no `exit 0`, no stderr of a command
     /// that went through, and a row still running has no third column.
     pub(super) fn copied(&self) -> String {
-        let Some(ends) = self.sel_ends else {
+        let Some(ends) = self.selection.map(Selection::ends) else {
             return String::new();
         };
         let (first, last) = ends.ordered().into_inner();

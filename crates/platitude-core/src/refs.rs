@@ -54,9 +54,10 @@ pub struct RefEntry {
     /// Commits ahead of / behind the upstream as of the last fetch. Both
     /// zero when level, with no upstream, or with the remote ref gone —
     /// tell those apart by `upstream` and
-    /// [`RemoteBranches::has_counterpart`].
-    pub ahead: u32,
-    pub behind: u32,
+    /// [`RemoteBranches::has_counterpart`]: the listing's rows are joined
+    /// to their upstream by name afterwards, and whether these counts speak
+    /// is decided there (`RefsSnapshot::branch_push`).
+    pub counts: crate::AheadBehind,
 }
 
 impl RefEntry {
@@ -141,7 +142,7 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
         .ok()
         .and_then(|s| s.trim().parse().ok())
         .unwrap_or(0);
-    let (ahead, behind) = parse_track(fields[7]);
+    let counts = parse_track(fields[7]);
 
     Ok(Some(RefEntry {
         name,
@@ -152,8 +153,7 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
         upstream,
         is_head,
         created_unix,
-        ahead,
-        behind,
+        counts,
     }))
 }
 
@@ -168,24 +168,23 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
 /// `[gone]` and level both read 0/0: telling them apart is `upstream`'s and
 /// `RemoteBranches::has_counterpart`'s
 /// (`refs_integration::a_branch_counts_how_far_it_stands_from_its_upstream`).
-pub(crate) fn parse_track(field: &[u8]) -> (u32, u32) {
+pub(crate) fn parse_track(field: &[u8]) -> crate::AheadBehind {
+    let mut counts = crate::AheadBehind::default();
     let Some(inside) = field
         .strip_prefix(b"[")
         .and_then(|rest| rest.strip_suffix(b"]"))
     else {
-        return (0, 0);
+        return counts;
     };
-    let mut ahead = 0;
-    let mut behind = 0;
     for leg in inside.split(|b| *b == b',') {
         let leg = std::str::from_utf8(leg).unwrap_or_default().trim();
         if let Some(count) = leg.strip_prefix("ahead ") {
-            ahead = count.parse().unwrap_or(0);
+            counts.ahead = count.parse().unwrap_or(0);
         } else if let Some(count) = leg.strip_prefix("behind ") {
-            behind = count.parse().unwrap_or(0);
+            counts.behind = count.parse().unwrap_or(0);
         }
     }
-    (ahead, behind)
+    counts
 }
 
 /// The remote branches, by the refname an upstream names.

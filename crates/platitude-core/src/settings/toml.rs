@@ -231,13 +231,13 @@ pub(super) fn worktrees(
 }
 
 /// A floor and a ceiling in seconds, each falling back on its own to
-/// `fallback`, then held to range together by `session::pace_bounds_secs`
-/// — a ceiling written under the floor comes back as the floor.
+/// `fallback`'s, then held to range together (`session::PaceSecs`) — a
+/// ceiling written under the floor comes back as the floor.
 pub(super) fn pace_pair(
     table: &Table,
     (floor_key, ceiling_key): (&str, &str),
-    (floor, ceiling): (u32, u32),
-) -> (u32, u32) {
+    fallback: crate::session::PaceSecs,
+) -> crate::session::PaceSecs {
     let secs = |key: &str| {
         table
             .get(key)
@@ -245,9 +245,9 @@ pub(super) fn pace_pair(
             .filter(|v| *v >= 0)
             .map(|v| u32::try_from(v).unwrap_or(u32::MAX))
     };
-    crate::session::pace_bounds_secs(
-        secs(floor_key).unwrap_or(floor),
-        secs(ceiling_key).unwrap_or(ceiling),
+    crate::session::PaceSecs::new(
+        secs(floor_key).unwrap_or(fallback.floor()),
+        secs(ceiling_key).unwrap_or(fallback.ceiling()),
     )
 }
 

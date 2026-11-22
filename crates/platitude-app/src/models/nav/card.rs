@@ -159,8 +159,10 @@ mod tests {
         held.held_elsewhere = true;
         let mut tracked = local("feature/tracked", false);
         tracked.has_remote = true;
-        tracked.ahead = 1;
-        tracked.behind = 2;
+        tracked.counts = platitude_core::AheadBehind {
+            ahead: 1,
+            behind: 2,
+        };
         let mut gone = local("feature/zz-gone", false);
         gone.upstream_gone = "origin/feature/zz-gone".into();
         let mut model = section(

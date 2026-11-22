@@ -6,15 +6,12 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::support::TestRepo;
+use crate::support::oid;
 use crate::support::session::open_unawaited;
 use platitude_core::Oid;
 use platitude_core::discards::{self, CopyOf, CopyOperation, Stands};
 use platitude_core::graph::SegmentKind;
 use platitude_core::session::{LogRow, SessionEvent, ShownDiscard};
-
-fn oid(hex: &str) -> Oid {
-    Oid::from_hex_str(hex.trim()).expect("an oid")
-}
 
 fn subjects(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<String> {
     rows.values().map(|row| row.subject.clone()).collect()

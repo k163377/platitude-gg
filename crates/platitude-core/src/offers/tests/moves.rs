@@ -10,36 +10,45 @@ use crate::status::Counts;
 fn switch_lands_where_the_kind_and_the_local_branch_say() {
     use SwitchAction::*;
     let main = TreeStanding::on("main");
-    assert_eq!(switch_action("branch", "main", &main, "", ""), None);
-    assert_eq!(switch_action("branch", "feat", &main, "", ""), Switch);
+    // The press as the page asks it: the chip's word, the local branch,
+    // who holds that branch, and its commit where it is there.
+    let lands = |kind: &str, local: &str, held: &str, local_oid: &str| {
+        switch_action(
+            SwitchTarget::from_words(kind, local),
+            &main,
+            held,
+            local_oid,
+        )
+    };
+    assert_eq!(lands("branch", "main", "", ""), None);
+    assert_eq!(lands("branch", "feat", "", ""), Switch);
+    assert_eq!(lands("branch", "feat", "C:/work/other", ""), OpenHolder);
+    assert_eq!(lands("remote", "feat", "", ""), Materialize);
+    assert_eq!(lands("remote", "feat", "", "abc123"), MoveBranch);
     assert_eq!(
-        switch_action("branch", "feat", &main, "C:/work/other", ""),
-        OpenHolder
-    );
-    assert_eq!(switch_action("remote", "feat", &main, "", ""), Materialize);
-    assert_eq!(
-        switch_action("remote", "feat", &main, "", "abc123"),
-        MoveBranch
-    );
-    assert_eq!(
-        switch_action("remote", "feat", &main, "C:/work/other", "abc123"),
+        lands("remote", "feat", "C:/work/other", "abc123"),
         OpenHolder
     );
     // Landing the current branch on its remote ref is the one move that
     // is not a no-op for a remote: git answers what it would cost.
-    assert_eq!(
-        switch_action("remote", "main", &main, "", "abc123"),
-        MoveBranch
-    );
+    assert_eq!(lands("remote", "main", "", "abc123"), MoveBranch);
     // A tag could only detach HEAD, and the two markers name no branch.
-    assert_eq!(switch_action("tag", "v1.0", &main, "", ""), None);
-    assert_eq!(switch_action("head", "", &main, "", ""), None);
-    assert_eq!(switch_action("worktree", "rig", &main, "", ""), None);
+    assert_eq!(lands("tag", "v1.0", "", ""), None);
+    assert_eq!(lands("head", "", "", ""), None);
+    assert_eq!(lands("worktree", "rig", "", ""), None);
     assert_eq!(
-        switch_action("", "", &TreeStanding::detached(), "", ""),
+        switch_action(
+            SwitchTarget::from_words("", ""),
+            &TreeStanding::detached(),
+            "",
+            ""
+        ),
         None,
         "detached on nothing"
     );
+    // A press that names no branch lands on none, whichever row it was on.
+    assert_eq!(lands("branch", "", "", ""), None);
+    assert_eq!(lands("remote", "", "", ""), None);
 }
 
 #[test]

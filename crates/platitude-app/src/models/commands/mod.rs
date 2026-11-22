@@ -10,7 +10,7 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 use crate::encode::{Fields, Optional, Record, Runs, field, plain_byte, plain_char, plain_ranges};
 use crate::hub::{CommandMsg, Feed};
 
-use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
+use super::text_position::{LayoutPosition, Selection, SourcePosition};
 use super::{impl_notify_runs, push_run, qml_register};
 
 mod selection;
@@ -120,15 +120,11 @@ pub struct CommandsModel {
     /// Minutes to add to local time to reach UTC
     /// (`Date.getTimezoneOffset()`); stamps the rows that arrive from here on.
     zone_minutes: i32,
-    /// The selection's two ends, none while nothing is selected. Kept as
-    /// pressed: on a row whose command is still running, the outcome
+    /// The selection, none while nothing is selected. Its ends are kept
+    /// as pressed: on a row whose command is still running, the outcome
     /// column names a byte past the line (the tab before it is not there
     /// yet), which `SelectionEnds::bytes_on` cuts where a row is read.
-    sel_ends: Option<SelectionEnds>,
-    /// The word a double-click took (`selection::take_word`), which the
-    /// drag behind it grows word by word; none for a selection a plain
-    /// press started.
-    sel_word: Option<SelectionEnds>,
+    selection: Option<Selection>,
     feed: Option<Arc<Feed<CommandMsg>>>,
     held: crate::harness::HeldRecords,
     tab_id: i32,

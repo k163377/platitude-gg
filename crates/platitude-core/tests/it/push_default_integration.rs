@@ -19,6 +19,7 @@ use std::path::Path;
 
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
+use crate::support::oid;
 use crate::support::remote::far;
 use crate::support::session::{CaptureSink, opened, poll_landed, write_answer};
 use platitude_core::GitError;
@@ -233,7 +234,7 @@ async fn track_of(
     repo: &Path,
     exec: &GitExecutor,
     cancel: &CancellationToken,
-) -> remote::PushTrack {
+) -> Option<remote::PushTrack> {
     remote::push_track(exec, repo, "main", cancel)
         .await
         .expect("an answer")
@@ -260,16 +261,14 @@ async fn standing_of(
             status.upstream.as_deref().unwrap_or_default(),
             marks.upstream_is_here(),
         ),
-        status.upstream_tracked,
-        status.ahead,
-        status.behind,
+        status.upstream_counts,
         marks.push_remote.as_deref().unwrap_or_default(),
         marks
             .push_default
             .as_ref()
             .map_or("", |marked| marked.remote.as_str()),
         ["fork", "origin"],
-        &track,
+        track.as_ref(),
     )
 }
 
@@ -281,7 +280,7 @@ async fn push_leased(
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
     let force = PushForce::WithLease {
-        expect: Some(expect.trim().to_string()),
+        expect: oid(expect),
     };
     let spec = remote::plan_current_push(exec, repo, "origin", force, cancel)
         .await
@@ -301,17 +300,25 @@ async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
         .await
         .expect("status");
     assert_eq!(
-        (status.upstream.as_deref(), status.ahead, status.behind),
-        (Some("origin/main"), 1, 0),
+        (status.upstream.as_deref(), status.upstream_counts),
+        (
+            Some("origin/main"),
+            Some(platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 0
+            })
+        ),
         "against the upstream there is only ours to add"
     );
     assert_eq!(
         track_of(&repo.path, &exec, &cancel).await,
-        remote::PushTrack {
+        Some(remote::PushTrack {
             tracking: "fork/main".to_string(),
-            ahead: 1,
-            behind: 1,
-        }
+            counts: platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 1
+            },
+        })
     );
     assert_eq!(
         standing_of(&repo.path, &exec, &cancel).await,
@@ -353,7 +360,7 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     repo.git(&["config", "--unset", "remote.pushDefault"]);
     let (sink, session) = opened(&repo).await;
     session.set_recording(Recording::WithBackground);
-    let statuses = |sink: &CaptureSink| -> Vec<remote::PushTrack> {
+    let statuses = |sink: &CaptureSink| -> Vec<Option<remote::PushTrack>> {
         sink.events
             .lock()
             .unwrap()
@@ -380,10 +387,7 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     let quiet = |sink: &CaptureSink, why: &str| {
         let read = statuses(sink);
         assert!(
-            !read.is_empty()
-                && read
-                    .iter()
-                    .all(|track| *track == remote::PushTrack::default()),
+            !read.is_empty() && read.iter().all(Option::is_none),
             "{why}: {read:?}"
         );
         assert_eq!(
@@ -404,11 +408,10 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     let track = sink
         .wait_for("a status with the fork's counts", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::StatusLoaded { push_track, .. }
-                    if !push_track.tracking.is_empty() =>
-                {
-                    Some(push_track.clone())
-                }
+                SessionEvent::StatusLoaded {
+                    push_track: Some(push_track),
+                    ..
+                } => Some(push_track.clone()),
                 _ => None,
             })
         })
@@ -417,8 +420,10 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
         track,
         remote::PushTrack {
             tracking: "fork/main".to_string(),
-            ahead: 1,
-            behind: 1,
+            counts: platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 1
+            },
         }
     );
     assert!(
@@ -476,7 +481,7 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
             "main".into(),
             "origin".into(),
             PushForce::WithLease {
-                expect: Some(fork_tip.trim().to_string()),
+                expect: oid(&fork_tip),
             },
         )
         .expect("the write is accepted");
@@ -567,8 +572,10 @@ async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
                 "main".to_string(),
                 remote::PushTrack {
                     tracking: "fork/main".to_string(),
-                    ahead: 1,
-                    behind: 1,
+                    counts: platitude_core::AheadBehind {
+                        ahead: 1,
+                        behind: 1,
+                    },
                 },
             )])
         } else {
@@ -748,8 +755,11 @@ mod periodic {
         repo.git(&["config", "--unset", "remote.pushDefault"]);
         repo.git(&["config", "branch.main.pushRemote", "fork"]);
         assert_eq!(
-            track_of(&repo.path, &exec, &cancel).await.tracking,
-            "fork/main"
+            track_of(&repo.path, &exec, &cancel)
+                .await
+                .map(|track| track.tracking)
+                .as_deref(),
+            Some("fork/main")
         );
         assert_eq!(
             standing_of(&repo.path, &exec, &cancel).await,
@@ -764,12 +774,11 @@ mod periodic {
     async fn a_destination_nothing_here_tracks_has_no_counts() {
         let (_origin, _fork, mut repo) = fork_diverged();
         let (exec, cancel) = env();
-        let none = remote::PushTrack::default();
 
         // Named by the fetch refspec, but never fetched (`[gone]`).
         let tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
         repo.git(&["update-ref", "-d", "refs/remotes/fork/main"]);
-        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, None);
         repo.git(&["update-ref", "refs/remotes/fork/main", tip.trim()]);
 
         // A push refspec that renames the branch: `%(push)` names a ref the
@@ -780,12 +789,12 @@ mod periodic {
             "remote.fork.push",
             "refs/heads/main:refs/heads/wip",
         ]);
-        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, None);
         repo.git(&["config", "--unset", "remote.fork.push"]);
 
         // No fetch refspec: `%(push)` has nothing to name.
         repo.git(&["config", "--unset-all", "remote.fork.fetch"]);
-        assert_eq!(track_of(&repo.path, &exec, &cancel).await, none);
+        assert_eq!(track_of(&repo.path, &exec, &cancel).await, None);
         assert_eq!(
             standing_of(&repo.path, &exec, &cancel).await,
             remote::PushStanding::Elsewhere

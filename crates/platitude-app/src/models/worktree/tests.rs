@@ -38,7 +38,7 @@ fn status(items: Vec<StatusItem>) -> StateMsg {
 fn status_of(
     branch: &str,
     upstream: Option<&str>,
-    ahead: i32,
+    ahead: u32,
     head_seq: u64,
     items: Vec<StatusItem>,
 ) -> StateMsg {
@@ -47,9 +47,7 @@ fn status_of(
             branch_oid: None,
             branch_head: Some(branch.to_string()),
             upstream: upstream.map(str::to_string),
-            upstream_tracked: upstream.is_some(),
-            ahead,
-            behind: 0,
+            upstream_counts: upstream.map(|_| platitude_core::AheadBehind { ahead, behind: 0 }),
             items,
             staged_print: 0,
         }),
@@ -62,7 +60,7 @@ fn status_of(
         merge_tool: String::new(),
         push_remote: String::new(),
         upstream_here: false,
-        push_track: platitude_core::remote::PushTrack::default(),
+        push_track: None,
         eol_marks: Arc::new(Vec::new()),
         lfs_needed: 0,
         not_copied: Arc::new(Vec::new()),
@@ -290,17 +288,65 @@ fn the_counts_are_the_branch_they_were_read_with() {
     assert_eq!(model.ahead, 0);
 }
 
+/// An upstream git names with nothing counted against it — its ref gone —
+/// is none the counts speak for; with counts it is, and they go out.
+#[test]
+fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
+    let read = |counts: Option<platitude_core::AheadBehind>| {
+        let mut model = WorktreeModel::default();
+        let mut status = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
+        if let StateMsg::Status(read) = &mut status {
+            Arc::make_mut(&mut read.status).upstream_counts = counts;
+        }
+        model.absorb(vec![head_on("feature", ROOT, 1), status]);
+        (
+            model.upstream_tracked,
+            model.ahead,
+            model.behind,
+            model.pull_blocked,
+        )
+    };
+    assert_eq!(read(None), (false, 0, 0, false));
+    let both = platitude_core::AheadBehind {
+        ahead: 1,
+        behind: 2,
+    };
+    assert_eq!(read(Some(both)), (true, 1, 2, true));
+}
+
+/// Commits on both sides of the upstream grey the pull; on one side
+/// alone, a push or a pull brings the two together. Each count goes out as
+/// read.
+#[test]
+fn commits_on_both_sides_of_the_upstream_block_the_pull() {
+    let read = |ahead: u32, behind: u32| {
+        let mut model = WorktreeModel::default();
+        let mut status = status_of("feature", Some("origin/feature"), ahead, 1, Vec::new());
+        if let StateMsg::Status(read) = &mut status {
+            Arc::make_mut(&mut read.status).upstream_counts =
+                Some(platitude_core::AheadBehind { ahead, behind });
+        }
+        model.absorb(vec![head_on("feature", ROOT, 1), status]);
+        (model.ahead, model.behind, model.pull_blocked)
+    };
+    assert_eq!(read(2, 1), (2, 1, true));
+    assert_eq!(read(2, 0), (2, 0, false));
+    assert_eq!(read(0, 3), (0, 3, false));
+}
+
 /// The push destination's own counts go blank with the upstream's.
 #[test]
 fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     let mut model = WorktreeModel::default();
     let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
     if let StateMsg::Status(status) = &mut read {
-        status.push_track = platitude_core::remote::PushTrack {
+        status.push_track = Some(platitude_core::remote::PushTrack {
             tracking: "fork/feature".to_string(),
-            ahead: 1,
-            behind: 2,
-        };
+            counts: platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 2,
+            },
+        });
     }
     model.absorb(vec![head_on("feature", ROOT, 1), read]);
     let pushes = |model: &WorktreeModel| {

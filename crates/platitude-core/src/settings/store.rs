@@ -243,10 +243,8 @@ mod tests {
                 git_concurrency: 8,
                 worktrees_reading: crate::settings::prefs::WorktreesReading::Fixed,
                 worktrees_interval_secs: 45,
-                refresh_floor_secs: 3,
-                refresh_ceiling_secs: 20,
-                worktrees_floor_secs: 10,
-                worktrees_ceiling_secs: 60,
+                refresh_pace: crate::session::PaceSecs::new(3, 20),
+                worktrees_pace: crate::session::PaceSecs::new(10, 60),
             },
             avatars: crate::avatar::Avatars::from_values(&[toml::Value::Table({
                 let mut t = Table::new();

@@ -92,15 +92,14 @@ impl Hub {
 
     /// Records the shortest and the longest interval a repository on screen
     /// is read again at, and the same pair for its other worktrees; puts them
-    /// in force on every open tab and saves. Each pair has been through
-    /// `session::pace_bounds_secs` (the range).
-    pub fn set_pace_bounds(&mut self, refresh: (u32, u32), worktrees: (u32, u32)) {
-        let defaults = &mut self.settings.defaults;
-        (defaults.refresh_floor_secs, defaults.refresh_ceiling_secs) = refresh;
-        (
-            defaults.worktrees_floor_secs,
-            defaults.worktrees_ceiling_secs,
-        ) = worktrees;
+    /// in force on every open tab and saves.
+    pub fn set_pace_bounds(
+        &mut self,
+        refresh: platitude_core::session::PaceSecs,
+        worktrees: platitude_core::session::PaceSecs,
+    ) {
+        self.settings.defaults.refresh_pace = refresh;
+        self.settings.defaults.worktrees_pace = worktrees;
         self.reapply_settings();
         self.save_settings_now();
     }

@@ -19,5 +19,5 @@ pub mod wait;
 // through their module (`wait::QUIET_BUDGET`), since an unused re-export warns.
 pub use exec::{Ends, Said};
 pub use graph::{replay_graph, replay_rows};
-pub use repo::{TestRepo, barrier_filter, barrier_hook, info};
+pub use repo::{TestRepo, barrier_filter, barrier_hook, info, oid};
 pub use wait::Patience;

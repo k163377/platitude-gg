@@ -994,7 +994,23 @@ impl RepoTab {
     /// records it is core's to decide (`branch::set_upstream`).
     #[qslot]
     fn set_upstream(&mut self, branch: String, remote: String, remote_branch: String) {
-        self.upstream_set(branch, remote, remote_branch);
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.upstream_set(branch, target);
+    }
+
+    /// Records, as `branch`'s upstream, a branch of its own name on the
+    /// remote the row `old_upstream` is on — the upstream it was renamed
+    /// away from — and sends nothing: the answer to a rename here whose old
+    /// upstream is gone from over there (`RenameCarryFlow.gone`).
+    #[qslot]
+    fn point_upstream(&mut self, branch: String, old_upstream: String) {
+        if let Some(old) = self.tracked(&old_upstream) {
+            let target = old.beside(&branch);
+            self.upstream_set(branch, target);
+        }
     }
 
     /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
@@ -1016,8 +1032,7 @@ impl RepoTab {
     /// on; empty sends it plain.
     #[qslot]
     fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
-        let target = RemoteTag { remote, tag };
-        self.ask_session(|s| s.push_tag(target, lease_expect));
+        self.tag_push(RemoteTag { remote, tag }, lease_expect);
     }
 
     /// Replaces a tag on a remote with one under a new name. git has no
@@ -1227,8 +1242,9 @@ impl RepoTab {
     /// Pushes the checked-out branch to wherever it tracks, or to the
     /// default remote when it tracks nothing yet. `force` is `""` /
     /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
-    /// user saw. `branch` is what the button shows, recorded with the
-    /// press's id so the answer comes back to it (`ops::PushOut`).
+    /// user saw, and left empty the lease is git's own
+    /// (`RepoTab::push_force`). `branch` is what the button shows, recorded
+    /// with the press's id so the answer comes back to it (`ops::PushOut`).
     #[qslot]
     fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
         self.current_push(branch, force, lease_expect);
@@ -1316,41 +1332,43 @@ impl RepoTab {
 
     /// The push of a branch row's menu: `branch`, checked out or not, to
     /// wherever its marks and upstream send it. `force` is `""` /
-    /// `"lease"`; `lease_expect` pins the remote commit the row showed.
+    /// `"lease"`; `lease_expect` pins the remote commit the row showed,
+    /// and left empty the lease is git's own (`RepoTab::push_force`).
     #[qslot]
     fn push_named(&mut self, branch: String, force: String, lease_expect: String) {
         self.named_push(branch, force, lease_expect)
     }
 
-    /// Points a branch at a remote branch and sends it there, in that
-    /// order — the answer to a rename here that takes nothing away over
-    /// there.
+    /// Points `branch` at a branch of its own name on the remote the row
+    /// `old_upstream` is on — the upstream it was renamed away from — and
+    /// sends it there, in that order: the answer to a rename here that
+    /// takes nothing away over there.
     #[qslot]
-    fn point_upstream_and_push(&mut self, branch: String, remote: String, remote_branch: String) {
-        let target = RemoteBranch {
-            remote,
-            branch: remote_branch,
-        };
-        self.point_and_push(branch, target);
+    fn point_upstream_and_push(&mut self, branch: String, old_upstream: String) {
+        if let Some(old) = self.tracked(&old_upstream) {
+            let target = old.beside(&branch);
+            self.point_and_push(branch, target);
+        }
     }
 
-    /// Replaces a branch on a remote the way `replaceRemoteTag` replaces a
-    /// tag, the old name's delete leased to `expect`.
+    /// Replaces the branch the row `remote_ref` shows with one called `to`
+    /// on the same remote, the way `replaceRemoteTag` replaces a tag, the
+    /// old name's delete leased to `expect`.
     #[qslot]
-    fn replace_remote_branch(&mut self, remote: String, from: String, to: String, expect: String) {
-        let old = RemoteBranch {
-            remote,
-            branch: from,
-        };
-        self.remote_branch_replace(old, to, expect);
+    fn replace_remote_branch(&mut self, remote_ref: String, to: String, expect: String) {
+        if let Some(old) = self.tracked(&remote_ref) {
+            self.remote_branch_replace(old, to, expect);
+        }
     }
 
-    /// `git push <remote> --delete <branch>` (destructive), leased to
-    /// `expect`, the commit the row showed.
+    /// `git push <remote> --delete <branch>` (destructive) for the branch
+    /// the row `remote_ref` shows, leased to `expect`, the commit the row
+    /// showed.
     #[qslot]
-    fn delete_remote_branch(&mut self, remote: String, branch: String, expect: String) {
-        let target = RemoteBranch { remote, branch };
-        self.remote_branch_delete(target, expect);
+    fn delete_remote_branch(&mut self, remote_ref: String, expect: String) {
+        if let Some(target) = self.tracked(&remote_ref) {
+            self.remote_branch_delete(target, expect);
+        }
     }
 
     /// `git branch --delete` (`-D` under `force`) and then
@@ -1361,16 +1379,13 @@ impl RepoTab {
     fn delete_branch_everywhere(
         &mut self,
         branch: String,
-        remote: String,
-        remote_branch: String,
+        remote_ref: String,
         force: bool,
         expect: String,
     ) {
-        let target = RemoteBranch {
-            remote,
-            branch: remote_branch,
-        };
-        self.branch_delete_everywhere(branch, target, force, expect)
+        if let Some(target) = self.tracked(&remote_ref) {
+            self.branch_delete_everywhere(branch, target, force, expect)
+        }
     }
 
     /// `git merge <rev>`.

@@ -391,12 +391,7 @@ async fn a_stash_dropped_outside_is_walked_off_by_the_paced_read_the_window_asks
 /// the walk it asked for included, which runs inside the read.
 async fn asked_paced_read(sink: &CaptureSink, session: &Arc<RepoSession>, from: usize) {
     let hour = std::time::Duration::from_secs(3600);
-    session.set_pace_bounds(PaceBounds {
-        own_floor: hour,
-        own_ceiling: hour,
-        worktree_floor: hour,
-        worktree_ceiling: hour,
-    });
+    session.set_pace_bounds(PaceBounds::new(hour..=hour, hour..=hour));
     session.set_paced(true);
     session.poll_now();
     sink.wait_for("this tree's paced read", |events| {

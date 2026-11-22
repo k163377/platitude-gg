@@ -283,13 +283,22 @@ impl RefsSnapshot {
         };
         // With whether its ref is in the listing: a remote branch's reading
         // fills `upstream`, a branch here's commit `upstream_oid`
-        // (`RefJoins::upstream_commit`).
-        let (upstream, tracked) = if branch.upstream_here {
-            (Upstream::Here, branch.upstream_oid.is_some())
+        // (`RefJoins::upstream_commit`). An upstream fetched outside the
+        // remote branches is in neither, so a row reads its branch as never
+        // sent (`Publish`) while the toolbar, whose counts are git's own
+        // (`status`), offers the push: the two doors part in that
+        // configuration, which gets no mechanism of its own (user decision
+        // — ask before changing).
+        let listed = Some(branch.counts);
+        let (upstream, upstream_counts) = if branch.upstream_here {
+            (
+                Upstream::Here,
+                listed.filter(|_| branch.upstream_oid.is_some()),
+            )
         } else if !branch.upstream.is_empty() {
-            (Upstream::Remote(branch.upstream.as_str()), true)
+            (Upstream::Remote(branch.upstream.as_str()), listed)
         } else {
-            (Upstream::of(branch.upstream_gone.as_str(), false), false)
+            (Upstream::of(branch.upstream_gone.as_str(), false), None)
         };
         let remotes = || self.remote_names.iter().map(String::as_str);
         // Only counts against where the marks send the branch now: a read
@@ -302,22 +311,17 @@ impl RefsSnapshot {
             .filter(|track| {
                 crate::refs::split_remote_ref(&track.tracking, remotes())
                     .is_some_and(|(on, _)| on == marked)
-            })
-            .cloned()
-            .unwrap_or_default();
-        let counted = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
+            });
         let standing = crate::remote::push_standing(
             false,
             false,
             short,
             upstream,
-            tracked,
-            counted(branch.ahead),
-            counted(branch.behind),
+            upstream_counts,
             push_remote,
             push_default,
             remotes(),
-            &track,
+            track,
         );
         // The remote branch the counts are against: none where the push
         // stays here; where a mark sends it elsewhere, its tracking ref
@@ -331,10 +335,10 @@ impl RefsSnapshot {
                 remotes(),
             ) =>
             {
-                track.tracking.as_str()
+                track.map_or("", |track| track.tracking.as_str())
             }
             _ => match upstream {
-                Upstream::Remote(name) if tracked => name,
+                Upstream::Remote(name) if upstream_counts.is_some() => name,
                 _ => "",
             },
         };
@@ -581,14 +585,13 @@ pub struct BranchItem {
     /// carried.
     pub tracked_by: crate::Name,
     /// How far this branch stands from its upstream as of the last fetch
-    /// ([`crate::refs::RefEntry::ahead`]); both zero draws nothing, level
+    /// ([`crate::refs::RefEntry::counts`]); both zero draws nothing, level
     /// or no upstream.
     ///
     /// On a remote-tracking ref, the counts of the branch in
     /// [`Self::tracked_by`], drawn on that line only (デザイン規約
     /// §左メニューの所作).
-    pub ahead: u32,
-    pub behind: u32,
+    pub counts: crate::AheadBehind,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::support::TestRepo;
+use crate::support::oid;
 use crate::support::remote::far_tag;
 use crate::support::session::{CaptureSink, TestSession, opened, write_answer};
 use platitude_core::remote;
@@ -92,9 +93,16 @@ async fn a_tag_the_remote_holds_on_the_same_commit_is_answered_as_sent() {
         &format!("{root}:refs/tags/v-both"),
     ]);
 
-    remote::push_tag(&exec, &path, &far_tag("origin", "v-both"), "", NET, &cancel)
-        .await
-        .expect("the same commit over there is no collision");
+    remote::push_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        None,
+        NET,
+        &cancel,
+    )
+    .await
+    .expect("the same commit over there is no collision");
     assert_eq!(
         at_origin(&mut work, "v-both"),
         root,
@@ -124,8 +132,15 @@ async fn the_same_commit_is_weighed_where_the_push_goes() {
         &pushed_to.file_url(),
     ]);
 
-    let refused =
-        remote::push_tag(&exec, &path, &far_tag("origin", "v-both"), "", NET, &cancel).await;
+    let refused = remote::push_tag(
+        &exec,
+        &path,
+        &far_tag("origin", "v-both"),
+        None,
+        NET,
+        &cancel,
+    )
+    .await;
     assert_eq!(
         refused
             .as_ref()
@@ -161,7 +176,7 @@ async fn a_qualified_delete_takes_the_tag_and_leaves_the_branch_of_the_same_name
         &exec,
         &path,
         &far_tag("origin", "v-both"),
-        &root,
+        oid(&root),
         NET,
         &cancel,
     )
@@ -205,7 +220,7 @@ async fn replacing_a_tag_on_a_remote_pushes_the_new_name_and_deletes_the_old() {
         &path,
         &far_tag("origin", "v-both"),
         "v-moved",
-        &root,
+        oid(&root),
         NET,
         &cancel,
     )
@@ -243,7 +258,7 @@ async fn a_replace_the_remote_refuses_leaves_the_old_name_standing() {
         &path,
         &far_tag("origin", "v-both"),
         "v-drift",
-        &root,
+        oid(&root),
         NET,
         &cancel,
     )
@@ -292,7 +307,7 @@ async fn a_tag_the_remote_moved_since_it_was_read_is_not_deleted() {
         &exec,
         &path,
         &far_tag("origin", "v-both"),
-        &root,
+        oid(&root),
         NET,
         &cancel,
     )
@@ -316,7 +331,7 @@ async fn a_tag_the_remote_moved_since_it_was_read_is_not_deleted() {
         &exec,
         &path,
         &far_tag("origin", "v-both"),
-        &head,
+        oid(&head),
         NET,
         &cancel,
     )
@@ -343,7 +358,7 @@ async fn a_replace_whose_delete_is_refused_leaves_both_names() {
         &path,
         &far_tag("origin", "v-both"),
         "v-moved",
-        &root,
+        oid(&root),
         NET,
         &cancel,
     )
@@ -368,7 +383,7 @@ async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_tag_everywhere(far_tag("origin", "v-both"), root.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-both"), oid(&root))
         .expect("accepted");
     assert!(
         write_answer(&sink, id).await.is_some(),
@@ -393,7 +408,7 @@ async fn delete_both_of_a_tag_refused_by_the_lease_touches_nothing() {
 
     work.git(&["push", "origin", "v-local"]);
     let id = session
-        .delete_tag_everywhere(far_tag("origin", "v-local"), head.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-local"), oid(&head))
         .expect("accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert!(!work.git_ok(&["rev-parse", "--verify", "refs/tags/v-local"]));
@@ -410,7 +425,7 @@ async fn a_tag_the_remote_holds_elsewhere_is_read_again_on_the_refusal() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .push_tag(far_tag("origin", "v-drift"), String::new())
+        .push_tag(far_tag("origin", "v-drift"), None)
         .expect("accepted");
     assert!(write_answer(&sink, id).await.is_some(), "git refuses it");
     let snapshot = refs_after_write(&sink, id).await;
@@ -450,7 +465,7 @@ async fn delete_both_of_a_tag_reads_the_remote_again_where_the_local_half_fails(
     std::fs::write(&lock, b"").expect("hold the tag's ref lock");
 
     let id = session
-        .delete_tag_everywhere(far_tag("origin", "v-both"), root.clone())
+        .delete_tag_everywhere(far_tag("origin", "v-both"), oid(&root))
         .expect("accepted");
     let answer = write_answer(&sink, id).await;
 
@@ -513,7 +528,7 @@ async fn a_lease_pinned_to_a_commit_the_remote_has_left_is_refused() {
         &exec,
         &path,
         &far_tag("origin", "v-drift"),
-        &root,
+        Some(oid(&root)),
         NET,
         &cancel,
     )
@@ -883,7 +898,7 @@ mod periodic {
             &exec,
             &work.path,
             &far_tag("origin", "v-local"),
-            &head,
+            oid(&head),
             NET,
             &cancel,
         )
@@ -1005,7 +1020,7 @@ mod periodic {
             &exec,
             &path,
             &far_tag("origin", "v-local"),
-            "",
+            None,
             NET,
             &cancel,
         )
@@ -1021,7 +1036,7 @@ mod periodic {
             &exec,
             &path,
             &far_tag("origin", "v-drift"),
-            "",
+            None,
             NET,
             &cancel,
         )
@@ -1045,7 +1060,7 @@ mod periodic {
             &exec,
             &path,
             &far_tag("origin", "v-drift"),
-            &root,
+            Some(oid(&root)),
             NET,
             &cancel,
         )

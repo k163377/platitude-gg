@@ -149,7 +149,7 @@ fn the_rows_going_take_the_selection_with_them() {
     model.start_select(0, source(1, 0));
     model.drag_select(0, source(4, 1));
     model.forget_selection();
-    assert_eq!(model.sel_ends, None);
+    assert_eq!(model.selection, None);
     assert!(!model.sel_has_new);
     assert_eq!(model.sel_removed, 0);
     assert!(model.copied_new().is_empty());
@@ -292,7 +292,7 @@ fn a_drag_between_two_places_copies_what_lies_between_them() {
 fn a_drag_with_nothing_selected_starts_where_it_is() {
     let mut model = tab_kanji_astral();
     assert!(model.drag_select(0, source(1, 4)));
-    assert!(model.sel_ends.is_some());
+    assert!(model.selection.is_some());
     assert!(model.copied_new().is_empty(), "it holds nothing yet");
     model.drag_select(0, source(1, 7));
     assert_eq!(model.copied_new(), "本");
@@ -466,7 +466,11 @@ fn a_selection_is_of_one_column() {
     );
     // A drag that wandered into the other column stays in its own.
     model.drag_select(0, source(3, 0));
-    assert_eq!(model.sel_side, 1);
+    assert!(
+        model.holds(1, source(2, 0)),
+        "still of the column it began in"
+    );
+    assert!(!model.holds(0, source(2, 0)));
     assert_eq!(model.copied_new(), "main() {\n    let a = 2;\n");
 }
 
@@ -796,10 +800,39 @@ fn a_double_click_past_the_line_s_end_takes_nothing() {
     model.start_select(0, source(1, 11));
     assert!(!model.take_word(0, layout(1, 11)), "nothing moved");
     assert_eq!(model.copied_new(), "");
-    assert_eq!(model.sel_word, None);
-    // A drag behind it goes place by place from the press.
+    // A drag behind it goes place by place from the press: no word is held.
     model.drag_select(0, source(1, 3));
     assert_eq!(model.copied_new(), "main() {");
+}
+
+/// A double-click on a word a plain drag already took end to end moves
+/// nothing drawn — and is still a double-click: the drag behind it grows
+/// word by word.
+#[test]
+fn a_word_taken_under_the_same_ends_moves_nothing_and_still_grows_by_word() {
+    let mut model = one_change();
+    model.start_select(0, source(1, 3));
+    model.drag_select(0, source(1, 7));
+    assert_eq!(model.copied_new(), "main");
+    assert!(
+        !model.take_word(0, layout(1, 4)),
+        "the ends are the word's already"
+    );
+    model.drag_select(0, source(3, 5));
+    assert_eq!(model.copied_new(), "main() {\n    let");
+}
+
+/// A double-click that takes no word, with no press laid before it, lets
+/// go of the word the selection grew by and of nothing drawn: the ends
+/// stay, and the drag behind it goes place by place.
+#[test]
+fn a_double_click_on_no_word_lets_the_held_word_go_and_the_ends_stay() {
+    let mut model = one_change();
+    model.take_word(0, layout(1, 4));
+    assert!(!model.take_word(0, layout(1, 11)), "nothing drawn moved");
+    assert_eq!(model.copied_new(), "main", "the ends stay");
+    model.drag_select(0, source(3, 5));
+    assert_eq!(model.copied_new(), "main() {\n    l");
 }
 
 #[test]

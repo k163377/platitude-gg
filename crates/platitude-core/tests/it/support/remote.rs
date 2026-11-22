@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use platitude_core::remote::{RemoteBranch, RemoteTag};
+use platitude_core::remote::{RemoteBranch, RemoteTag, TrackedBranch};
 
 use crate::support::TestRepo;
 
@@ -13,6 +13,12 @@ pub fn far(remote: &str, branch: &str) -> RemoteBranch {
         remote: remote.to_string(),
         branch: branch.to_string(),
     }
+}
+
+/// The row `<remote>/<branch>` — the remote-tracking branch as a clone of
+/// that remote lists it — read as a press on it is (`TrackedBranch::listed`).
+pub fn row(remote: &str, branch: &str) -> TrackedBranch {
+    TrackedBranch::listed(&format!("{remote}/{branch}"), [remote]).expect("a remote's row")
 }
 
 /// A tag on a remote, by its two names.

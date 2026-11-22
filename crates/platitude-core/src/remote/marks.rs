@@ -251,6 +251,16 @@ impl PushMarks {
     /// `refs/remotes/`, or where a branch here's merge is no branch: git's
     /// own name for it stands there.
     ///
+    /// Outside `refs/remotes/` (`+refs/heads/*:refs/mirror/origin/*`) that
+    /// name is the tracking ref's (`mirror/origin/main`). With no mark set
+    /// it is what the toolbar then says a push goes to, while the send goes
+    /// to the tracked remote's branch (`origin`, `main`:
+    /// [`super::plan_push`]); with a mark on that remote the name is cut as
+    /// another remote's, so the push reads as going elsewhere with nothing
+    /// counted ([`super::PushStanding::Elsewhere`]). Exceptional, and left
+    /// as it is — no second name is carried for it (user decision — ask
+    /// before changing).
+    ///
     /// Not `git status`'s name for it, which is shortened against what else
     /// is here: beside a branch here called `origin/main`, origin's own
     /// `main` comes out as `remotes/origin/main`.

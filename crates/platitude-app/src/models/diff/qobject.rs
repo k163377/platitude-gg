@@ -63,7 +63,7 @@ impl DiffModel {
     qproperty!("endingExt", Member = ending_ext, Notify = changed);
     qproperty!("selActive", Read = sel_active, Notify = changed);
     fn sel_active(&self) -> bool {
-        self.sel_ends.is_some()
+        self.selection.is_some()
     }
     qproperty!("selHasNew", Member = sel_has_new, Notify = changed);
     qproperty!("selRemoved", Member = sel_removed, Notify = changed);
@@ -406,7 +406,7 @@ impl DiffModel {
 
     /// A press landed: the selection starts here, empty.
     ///
-    /// Three arguments, the column first (`sel_side`), here and in the
+    /// Three arguments, the column first (`DiffSelection`), here and in the
     /// other selection slots: a QML caller left at another arity dies on a
     /// TypeError part-way through its handler, and a verb then goes
     /// silently to the watchdog — change every caller with the signature.

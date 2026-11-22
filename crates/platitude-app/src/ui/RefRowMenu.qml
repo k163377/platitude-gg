@@ -212,25 +212,6 @@ Item {
         }
     }
 
-    /// Deletes the remote branch alone, cut against the configured remote names — a remote's name may contain `/`
-    /// (`GitFacts.remoteOfRef`). `expect` is the commit the card showed it on, the delete's lease.
-    function deleteRemoteNow(remoteRef, expect) {
-        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
-        if (remote === "")
-            return
-        refRowMenu.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), expect)
-    }
-
-    /// Both halves at once, cut the same way: one write with one answer, so it is one thing to put back.
-    function deleteEverywhereNow(branch, remoteRef, forced, expect) {
-        const remote = GitFacts.remoteOfRef(remoteRef, refRowMenu.repoTab.remoteNames)
-        if (remote === "")
-            return
-        refRowMenu.repoTab.deleteBranchEverywhere(
-            branch, remote, GitFacts.branchOfRef(remoteRef, refRowMenu.repoTab.remoteNames), forced, expect)
-    }
-
     /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. What the card
     /// reaches and why its rows are held back live in the TAGS section alone (`NavSectionModel.tagMenu`); `aim` is a
     /// remote the reader named on its own.
@@ -591,9 +572,12 @@ Item {
             onPublishRequested: (branch, upstream) => refRowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => refRowMenu.repoTab.deleteBranch(branch, true)
-            onDeleteRemoteRequested: (remoteRef, expect) => refRowMenu.deleteRemoteNow(remoteRef, expect)
+            // The remote row goes by its own name: the tab reads which branch over there it is
+            // (`RepoTab.deleteRemoteBranch`). `expect` is the commit the card showed it on, the delete's lease.
+            onDeleteRemoteRequested: (remoteRef, expect) =>
+                refRowMenu.repoTab.deleteRemoteBranch(remoteRef, expect)
             onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
-                refRowMenu.deleteEverywhereNow(branch, remoteRef, forced, expect)
+                refRowMenu.repoTab.deleteBranchEverywhere(branch, remoteRef, forced, expect)
         }
         AppMenuSeparator {}
         // A worktree made off this row, and the one this row names or leads to; above the TAG card

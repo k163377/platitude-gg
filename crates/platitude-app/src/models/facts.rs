@@ -118,11 +118,12 @@ impl GitFacts {
 
     /// The two rows that make a worktree (`offers::worktree_rows`), as
     /// words: `here`, then `checkout-branch` / `checkout-track`, then
-    /// `out-current` / `out-held` / `out-stopped`. `kind` is the row's
-    /// word, empty on a commit row that draws no name; `tree` the menu's
-    /// `WorktreeModel.reading` (as `refMenuOffers`); `local_exists` whether
-    /// a remote row's local branch is there; `stopped_here` whether a
-    /// rebase or bisect stopped in this tree holds the branch.
+    /// `out-current` / `out-held` / `out-stopped`. `kind` and `full` are the
+    /// row's two words, empty on a commit row that draws no name; `tree`
+    /// the menu's `WorktreeModel.reading` (as `refMenuOffers`);
+    /// `local_exists` whether a remote row's local branch is there;
+    /// `stopped_here` whether a rebase or bisect stopped in this tree holds
+    /// the branch.
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn worktree_offers(
@@ -137,8 +138,7 @@ impl GitFacts {
         local_exists: bool,
     ) -> Vec<String> {
         platitude_core::offers::worktree_rows(
-            platitude_core::offers::RefKind::from_word(&kind),
-            &full,
+            platitude_core::offers::RefTarget::from_words(&kind, &full),
             &oid_hex,
             open,
             &tree,
@@ -152,16 +152,17 @@ impl GitFacts {
         .collect()
     }
 
-    /// The remote half of a remote-tracking name (`origin/main`): the
-    /// longest of `remote_names` wins (a remote's name may contain `/`);
-    /// where none owns the ref the first slash answers, so the gesture
-    /// still acts and git refuses loudly — the list may still be loading,
-    /// or the remote gone while its refs remain. `""` only where there is
-    /// no slash at all.
+    /// The remote half of a remote-tracking name (`origin/main`), as the
+    /// writes read it (`TrackedBranch::listed`): the longest of
+    /// `remote_names` wins (a remote's name may contain `/`); where none
+    /// owns the ref the first slash answers, so the gesture still acts and
+    /// git refuses loudly — the list may still be loading, or the remote
+    /// gone while its refs remain. `""` only where there is no slash at
+    /// all.
     #[qslot]
     fn remote_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
-        platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names))
-            .map(|(remote, _)| remote.to_string())
+        platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names))
+            .map(|row| row.far().remote.clone())
             .unwrap_or_default()
     }
 
@@ -169,10 +170,22 @@ impl GitFacts {
     /// branch (the shape a rename box is typed in).
     #[qslot]
     fn branch_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
-        match platitude_core::refs::split_remote_ref_or_first_slash(&full, names(&remote_names)) {
-            Some((_, branch)) => branch.to_string(),
+        match platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names)) {
+            Some(row) => row.far().branch.clone(),
             None => full,
         }
+    }
+
+    /// The name a branch called `name` is listed under on the remote the
+    /// row `full` is on (`origin/main`, `renamed` → `origin/renamed`) — the
+    /// new side a replace, or a rename carried over, shows and checks
+    /// before the write that sends it there reads the row the same way
+    /// (`TrackedBranch::beside`). `""` where `full` names no remote.
+    #[qslot]
+    fn remote_ref_beside(&self, full: String, name: String, remote_names: Vec<String>) -> String {
+        platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names))
+            .map(|row| row.beside(&name).to_string())
+            .unwrap_or_default()
     }
 
     /// What a push of the current branch can do, in the word
@@ -206,17 +219,18 @@ impl GitFacts {
             detached,
             &branch,
             platitude_core::remote::Upstream::of(&upstream, upstream_here),
-            upstream_tracked,
-            ahead,
-            behind,
+            upstream_tracked.then(|| counts_of(ahead, behind)),
             &push_remote,
             &push_default,
             names(&remote_names),
-            &platitude_core::remote::PushTrack {
-                tracking: push_tracking,
-                ahead: push_ahead,
-                behind: push_behind,
-            },
+            // An empty name is the model's word for no destination counted
+            // against (`WorktreeModel.pushTracking`).
+            (!push_tracking.is_empty())
+                .then(|| platitude_core::remote::PushTrack {
+                    tracking: push_tracking,
+                    counts: counts_of(push_ahead, push_behind),
+                })
+                .as_ref(),
         )
         .as_str()
         .to_string()
@@ -300,12 +314,11 @@ impl GitFacts {
         default_remote: String,
         tag_sides: String,
     ) -> Vec<String> {
-        let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
+        let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
             return Vec::new();
         };
         platitude_core::offers::ref_menu(
-            kind,
-            &full,
+            target,
             &oid_hex,
             open,
             &tree,
@@ -337,17 +350,16 @@ impl GitFacts {
         row_upstream: String,
         row_ahead: i32,
     ) -> Vec<String> {
-        let Some(kind) = platitude_core::offers::RefKind::from_word(&kind) else {
+        let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
             return Vec::new();
         };
         platitude_core::offers::pull_row(
-            kind,
-            &full,
+            target,
             open,
             &tree,
             &held_by_worktree,
             &row_upstream,
-            row_ahead,
+            u32::try_from(row_ahead).unwrap_or(0),
         )
         .map(|offer| offer.words().into_iter().map(str::to_string).collect())
         .unwrap_or_default()
@@ -400,7 +412,8 @@ impl GitFacts {
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
     /// `move` / `holder`, or `""` — also for any `kind` but the chip words
     /// `branch` / `remote` (the chip's own `kind`, which the sidebar's
-    /// `refSwitchRequested` hands on too).
+    /// `refSwitchRequested` hands on too), and for no `local` to land on
+    /// (`offers::SwitchTarget`).
     #[qslot]
     fn switch_action(
         &self,
@@ -410,9 +423,14 @@ impl GitFacts {
         held_by_worktree: String,
         local_oid: String,
     ) -> String {
-        platitude_core::offers::switch_action(&kind, &local, &tree, &held_by_worktree, &local_oid)
-            .as_str()
-            .to_string()
+        platitude_core::offers::switch_action(
+            platitude_core::offers::SwitchTarget::from_words(&kind, &local),
+            &tree,
+            &held_by_worktree,
+            &local_oid,
+        )
+        .as_str()
+        .to_string()
     }
 
     /// Whether the move a press already sent has reached the screen —
@@ -680,6 +698,16 @@ fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
 }
 
+/// A pair of counts as QML hands it back: the two `int` properties a model
+/// put out for it. None of them is under zero; one that were counts for
+/// nothing.
+fn counts_of(ahead: i32, behind: i32) -> platitude_core::AheadBehind {
+    platitude_core::AheadBehind {
+        ahead: u32::try_from(ahead).unwrap_or(0),
+        behind: u32::try_from(behind).unwrap_or(0),
+    }
+}
+
 /// The lines of a file QML names by its first and last line numbers,
 /// numbered from 1; `None` where `first` is no line or `last` is negative.
 /// A `last` before `first` — `0` among them — is `first`.
@@ -718,7 +746,49 @@ qml_register!(GitFacts, "GitFacts", singleton = true);
 
 #[cfg(test)]
 mod tests {
-    use super::file_lines;
+    use super::{GitFacts, counts_of, file_lines};
+
+    /// The bridge's two spellings of "nothing counted" — a flag beside the
+    /// upstream's numbers, an empty name beside the destination's — reach
+    /// the table as none, whatever numbers ride with them.
+    #[test]
+    fn a_flag_down_and_an_empty_name_are_nothing_counted() {
+        let standing = |tracked: bool, counts: (i32, i32), mark: &str, tracking: &str| {
+            GitFacts.push_standing(
+                false,
+                false,
+                "main".to_string(),
+                "origin/main".to_string(),
+                false,
+                tracked,
+                counts.0,
+                counts.1,
+                mark.to_string(),
+                String::new(),
+                vec!["fork".to_string(), "origin".to_string()],
+                tracking.to_string(),
+                1,
+                1,
+            )
+        };
+        assert_eq!(standing(false, (3, 3), "", ""), "publish");
+        assert_eq!(standing(true, (3, 3), "", ""), "diverged");
+        assert_eq!(standing(true, (1, 0), "fork", ""), "elsewhere");
+        assert_eq!(standing(true, (1, 0), "fork", "fork/main"), "diverged");
+    }
+
+    #[test]
+    fn a_pair_of_counts_comes_back_as_it_went_out() {
+        let pair = |ahead, behind| platitude_core::AheadBehind { ahead, behind };
+        assert_eq!(counts_of(2, 1), pair(2, 1));
+        assert_eq!(counts_of(0, 0), pair(0, 0));
+        assert_eq!(
+            counts_of(i32::MAX, 0),
+            pair(i32::MAX.unsigned_abs(), 0),
+            "a count drawn at its largest stays a count"
+        );
+        assert_eq!(counts_of(-1, -7), pair(0, 0), "under zero counts for none");
+    }
 
     #[test]
     fn the_lines_named_start_at_line_one_and_run_forward() {

@@ -307,3 +307,9 @@ pub async fn info(repo: &TestRepo) -> platitude_core::repo::RepoInfo {
         .await
         .expect("open repo")
 }
+
+/// An object's id off the hex git printed for it — a `rev-parse` line, its
+/// newline and all.
+pub fn oid(hex: &str) -> platitude_core::Oid {
+    platitude_core::Oid::from_hex_str(hex.trim()).expect("an object name")
+}

@@ -229,7 +229,7 @@ fn a_wash_inside_a_column_counts_from_that_column() {
 fn a_drag_with_nothing_selected_selects_nothing() {
     let mut model = kanji_astral();
     assert!(!model.drag_select(source(0, 5)));
-    assert_eq!(model.sel_ends, None);
+    assert_eq!(model.selection, None);
     assert_eq!(model.copied(), "");
 }
 
@@ -428,7 +428,7 @@ fn a_selection_whose_head_went_over_the_edge_is_let_go() {
     model.start_select(source(0, 9));
     model.drag_select(source(1, 12));
     model.shift_selection(1);
-    assert_eq!(model.sel_ends, None, "let go, not left holding nothing");
+    assert_eq!(model.selection, None, "let go, not left holding nothing");
     assert_eq!(model.copied(), "");
 }
 
@@ -496,8 +496,8 @@ fn a_double_click_on_a_gap_below_the_line_or_past_its_end_takes_nothing() {
             "{said}: nothing moved"
         );
         assert_eq!(model.copied(), "", "{said}");
-        assert_eq!(model.sel_word, None, "{said}");
-        // A drag behind it goes place by place from the press.
+        // A drag behind it goes place by place from the press: no word is
+        // held.
         model.drag_select(source(0, 12));
         assert_eq!(
             model.copied(),
@@ -528,15 +528,17 @@ fn a_double_clicked_word_moves_with_its_row_or_goes_with_it() {
     let mut model = two_commands();
     model.take_word(AT_CMD, layout(1, 5));
     model.shift_selection(1);
-    assert_eq!(model.sel_word, Some(SelectionEnds::word(0, 13..17)));
+    assert_eq!(model.selection, Some(Selection::word(0, 13..17)));
     model.take_word(AT_CMD, layout(0, 5));
     model.shift_selection(1);
-    assert_eq!(model.sel_word, None, "its row fell off");
+    assert_eq!(model.selection, None, "its row fell off");
     // The word's row stays, but the drag behind it reached the row that
     // fell off: the selection goes, and the word with it.
     model.take_word(AT_CMD, layout(1, 5));
     model.drag_select(source(0, 9 + 5));
     model.shift_selection(1);
-    assert_eq!(model.sel_ends, None);
-    assert_eq!(model.sel_word, None, "no word stands beside no selection");
+    assert_eq!(
+        model.selection, None,
+        "the selection goes, its word with it"
+    );
 }

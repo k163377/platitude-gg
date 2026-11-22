@@ -43,8 +43,7 @@ impl RepoSession {
     /// Records `user.name` / `user.email`.
     pub fn set_identity(
         self: &Arc<Self>,
-        name: String,
-        email: String,
+        values: identity::IdentityValues,
         scope: identity::ConfigScope,
     ) -> Option<OperationId> {
         self.write(
@@ -52,8 +51,7 @@ impl RepoSession {
             AfterWrite::Author,
             move |exec, repo, cancel| async move {
                 let written =
-                    identity::set_identity(&exec, &repo.workdir, &name, &email, scope, &cancel)
-                        .await?;
+                    identity::set_identity(&exec, &repo.workdir, &values, scope, &cancel).await?;
                 if written.is_saved() {
                     return Ok(());
                 }

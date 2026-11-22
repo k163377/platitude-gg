@@ -59,7 +59,8 @@ impl RepoTab {
         } else {
             platitude_core::identity::ConfigScope::Local
         };
-        self.ask_session(|s| s.set_identity(name, email, scope));
+        let values = platitude_core::identity::IdentityValues::new(&name, &email);
+        self.ask_session(|s| s.set_identity(values, scope));
     }
 
     pub(super) fn write_tags_shown(&mut self, shown: bool) {
@@ -71,15 +72,12 @@ impl RepoTab {
         self.with_session(|s| s.set_include_tags(shown));
     }
 
-    /// Behind `setUpstream`; a name left empty asks nothing.
-    pub(super) fn upstream_set(&mut self, branch: String, remote: String, remote_branch: String) {
-        if branch.is_empty() || remote.is_empty() || remote_branch.is_empty() {
+    /// Behind `setUpstream` and `pointUpstream`; a name left empty asks
+    /// nothing.
+    pub(super) fn upstream_set(&mut self, branch: String, target: RemoteBranch) {
+        if branch.is_empty() || target.remote.is_empty() || target.branch.is_empty() {
             return;
         }
-        let target = RemoteBranch {
-            remote,
-            branch: remote_branch,
-        };
         self.ask_session(|s| s.set_upstream(branch, target));
     }
 

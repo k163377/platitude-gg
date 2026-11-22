@@ -18,7 +18,7 @@ use crate::encode::{
 };
 use crate::hub::{DiffMsg, Feed};
 
-use super::text_position::{LayoutPosition, SelectionEnds, SourcePosition};
+use super::text_position::{LayoutPosition, Selection, SelectionEnds, SourcePosition};
 use super::{
     edit_between, impl_edit_notified, impl_extend_notified, impl_notify_runs, push_run,
     qml_register,
@@ -361,14 +361,9 @@ pub struct DiffModel {
     /// (`wait_for`), and a read asked before it shows the side as it was.
     /// 0 once a read is drawn again.
     drawn_from: u64,
-    /// The selection's two ends, none while nothing is selected.
-    sel_ends: Option<SelectionEnds>,
-    /// The word a double-click took (`selection::take_word`), which the
-    /// drag behind it grows word by word; none for a selection a plain
-    /// press started.
-    sel_word: Option<SelectionEnds>,
-    /// Which column the selection is of (`selection`).
-    sel_side: i32,
+    /// The selection, none while nothing is selected
+    /// (`selection::DiffSelection`).
+    selection: Option<selection::DiffSelection>,
     /// What the selection holds, so the menu can leave out a row that
     /// would copy nothing (デザイン規約 §メニュー「対象が存在しない」行は消す);
     /// settled with the selection, read once as the menu opens.

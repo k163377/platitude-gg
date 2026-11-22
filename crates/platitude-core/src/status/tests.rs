@@ -150,7 +150,13 @@ fn parses_headers_and_ordinary_entries() {
     assert_eq!(s.branch_oid.unwrap().to_hex(), SHA);
     assert_eq!(s.branch_head.as_deref(), Some("main"));
     assert_eq!(s.upstream.as_deref(), Some("origin/main"));
-    assert_eq!((s.ahead, s.behind), (2, 1));
+    assert_eq!(
+        s.upstream_counts,
+        Some(crate::AheadBehind {
+            ahead: 2,
+            behind: 1
+        })
+    );
     assert_eq!(s.items.len(), 3);
     assert_eq!(s.staged().count(), 1);
     assert_eq!(s.unstaged().count(), 1);
@@ -160,7 +166,6 @@ fn parses_headers_and_ordinary_entries() {
         "un staged with spaces.txt"
     );
     assert!(!s.has_conflicts());
-    assert!(s.upstream_tracked);
 }
 
 /// A branch can name an upstream that has no remote-tracking ref: git
@@ -174,8 +179,7 @@ fn upstream_without_a_tracking_ref_reports_no_counts() {
     ]);
     let s = parse_status(&bytes).unwrap();
     assert_eq!(s.upstream.as_deref(), Some("origin/main"));
-    assert!(!s.upstream_tracked);
-    assert_eq!((s.ahead, s.behind), (0, 0));
+    assert_eq!(s.upstream_counts, None);
 }
 
 #[test]
@@ -249,9 +253,10 @@ fn holding(items: Vec<StatusItem>) -> WorktreeStatus {
     WorktreeStatus {
         branch_head: Some("main".to_string()),
         upstream: Some("origin/main".to_string()),
-        upstream_tracked: true,
-        ahead: 2,
-        behind: 1,
+        upstream_counts: Some(crate::AheadBehind {
+            ahead: 2,
+            behind: 1,
+        }),
         items,
         // Any number that is not the one nothing staged hashes to.
         staged_print: 7,
@@ -361,17 +366,16 @@ fn a_commit_leaves_nothing_staged_and_the_branch_lines_as_they_were() {
             left.branch_oid,
             left.branch_head,
             left.upstream,
-            left.upstream_tracked,
-            left.ahead,
-            left.behind
+            left.upstream_counts
         ),
         (
             status.branch_oid,
             status.branch_head.clone(),
             status.upstream.clone(),
-            true,
-            2,
-            1
+            Some(crate::AheadBehind {
+                ahead: 2,
+                behind: 1
+            })
         )
     );
 }

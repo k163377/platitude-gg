@@ -91,9 +91,9 @@ AppMenu {
     /// Its first push: the page asks where it goes, in the window's one question bar (`PublishFlow.startPublishAsk`),
     /// opening on `upstream`, where the branch already points.
     signal publishRequested(string branch, string upstream)
-    /// Requests to the carrying menu, which holds the tab (rules/app-ui.md の「配線」) and cuts a ref path into remote
-    /// and branch against the configured remotes: the early `merged` check, the held `-D` after a refusal, the remote
-    /// delete alone, and the pair.
+    /// Requests to the carrying menu, which holds the tab (rules/app-ui.md の「配線」): the early `merged` check, the
+    /// held `-D` after a refusal, the remote delete alone, and the pair. A remote branch goes by its row's name, whole
+    /// (`RepoTab.deleteRemoteBranch`).
     signal checkDeleteRequested(string branch)
     signal forceDeleteRequested(string branch)
     signal deleteRemoteRequested(string remoteRef, string expect)

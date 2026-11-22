@@ -175,11 +175,11 @@ impl NavSectionModel {
             // carries the one made against it (`BranchItem::tracked_by`),
             // drawn by the line naming that branch (`NavRowFacts`).
             Role::Ahead => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.ahead),
+                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.counts.ahead),
                 _ => 0,
             }),
             Role::Behind => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.behind),
+                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.counts.behind),
                 _ => 0,
             }),
         }

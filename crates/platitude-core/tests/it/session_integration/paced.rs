@@ -44,12 +44,7 @@ fn worktree_rows(event: &SessionEvent) -> Option<usize> {
 /// Paces the page under bounds no read falls due within.
 fn paced_off_the_clock(session: &Arc<RepoSession>) {
     let hour = Duration::from_secs(3600);
-    session.set_pace_bounds(PaceBounds {
-        own_floor: hour,
-        own_ceiling: hour,
-        worktree_floor: hour,
-        worktree_ceiling: hour,
-    });
+    session.set_pace_bounds(PaceBounds::new(hour..=hour, hour..=hour));
     session.set_paced(true);
 }
 

@@ -86,7 +86,7 @@ async fn toolbar(
             .await
             .expect("the destination's counts")
     } else {
-        PushTrack::default()
+        None
     };
     let label = remote::push_target(
         &branch,
@@ -101,13 +101,11 @@ async fn toolbar(
         false,
         &branch,
         upstream,
-        status.upstream_tracked,
-        status.ahead,
-        status.behind,
+        status.upstream_counts,
         push_remote,
         push_default,
         REMOTES,
-        &track,
+        track.as_ref(),
     );
     (label, standing)
 }
@@ -146,8 +144,14 @@ async fn the_mark_decides_where_the_branch_goes_and_what_it_is_counted_against()
         .await
         .expect("status");
     assert_eq!(
-        (status.upstream.as_deref(), status.ahead, status.behind),
-        (Some("origin/base"), 2, 0),
+        (status.upstream.as_deref(), status.upstream_counts),
+        (
+            Some("origin/base"),
+            Some(platitude_core::AheadBehind {
+                ahead: 2,
+                behind: 0
+            })
+        ),
         "git's short name for the branch here is a remote branch's"
     );
     assert_eq!(
@@ -232,7 +236,7 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
     let upstream = upstream.expect("an upstream");
     assert_eq!(
         (upstream.as_str(), push_track),
-        ("origin/base", PushTrack::default()),
+        ("origin/base", None),
         "the mark is the upstream's own remote, so no counts of its own are read"
     );
     let plan = remote::plan_current_push(&exec, &work.path, "origin", PushForce::None, &cancel)
@@ -338,11 +342,10 @@ async fn the_status_says_the_upstream_is_here() {
         told,
         (
             true,
-            PushTrack {
+            Some(PushTrack {
                 tracking: "origin/topic".to_string(),
-                ahead: 0,
-                behind: 0,
-            }
+                counts: platitude_core::AheadBehind::default(),
+            })
         )
     );
     session.close_and_wait().await;

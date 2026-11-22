@@ -71,12 +71,12 @@ pub struct Defaults {
     /// it again brings the number back.
     pub worktrees_interval_secs: u32,
     /// The shortest and the longest interval a repository on screen is read
-    /// again at (`session::pace`), through `session::pace_bounds_secs`.
-    pub refresh_floor_secs: u32,
-    pub refresh_ceiling_secs: u32,
-    /// The same pair for each other worktree read automatically.
-    pub worktrees_floor_secs: u32,
-    pub worktrees_ceiling_secs: u32,
+    /// again at (`session::pace`); `refresh_floor_secs` and
+    /// `refresh_ceiling_secs` in the file.
+    pub refresh_pace: crate::session::PaceSecs,
+    /// The same pair for each other worktree read automatically
+    /// (`worktrees_floor_secs` / `worktrees_ceiling_secs`).
+    pub worktrees_pace: crate::session::PaceSecs,
 }
 
 impl Default for Defaults {
@@ -89,10 +89,14 @@ impl Default for Defaults {
             git_concurrency: crate::process::default_concurrency(),
             worktrees_reading: WorktreesReading::default(),
             worktrees_interval_secs: crate::session::WORKTREES_INTERVAL_DEFAULT_SECS,
-            refresh_floor_secs: secs_of(crate::session::OWN_FLOOR),
-            refresh_ceiling_secs: secs_of(crate::session::OWN_CEILING),
-            worktrees_floor_secs: secs_of(crate::session::WORKTREE_FLOOR),
-            worktrees_ceiling_secs: secs_of(crate::session::WORKTREE_CEILING),
+            refresh_pace: crate::session::PaceSecs::new(
+                secs_of(crate::session::OWN_FLOOR),
+                secs_of(crate::session::OWN_CEILING),
+            ),
+            worktrees_pace: crate::session::PaceSecs::new(
+                secs_of(crate::session::WORKTREE_FLOOR),
+                secs_of(crate::session::WORKTREE_CEILING),
+            ),
         }
     }
 }
@@ -105,13 +109,7 @@ impl Defaults {
     /// The floors and ceilings the session paces its reads by.
     #[must_use]
     pub fn pace_bounds(&self) -> crate::session::PaceBounds {
-        let secs = |s: u32| std::time::Duration::from_secs(s.into());
-        crate::session::PaceBounds {
-            own_floor: secs(self.refresh_floor_secs),
-            own_ceiling: secs(self.refresh_ceiling_secs),
-            worktree_floor: secs(self.worktrees_floor_secs),
-            worktree_ceiling: secs(self.worktrees_ceiling_secs),
-        }
+        crate::session::PaceBounds::new(self.refresh_pace.span(), self.worktrees_pace.span())
     }
 
     /// What the session paces the other worktrees by.
@@ -149,18 +147,15 @@ impl Settings {
                     t,
                     (fallback.worktrees_reading, fallback.worktrees_interval_secs),
                 );
-                let (refresh_floor_secs, refresh_ceiling_secs) = pace_pair(
+                let refresh_pace = pace_pair(
                     t,
                     ("refresh_floor_secs", "refresh_ceiling_secs"),
-                    (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
+                    fallback.refresh_pace,
                 );
-                let (worktrees_floor_secs, worktrees_ceiling_secs) = pace_pair(
+                let worktrees_pace = pace_pair(
                     t,
                     ("worktrees_floor_secs", "worktrees_ceiling_secs"),
-                    (
-                        fallback.worktrees_floor_secs,
-                        fallback.worktrees_ceiling_secs,
-                    ),
+                    fallback.worktrees_pace,
                 );
                 Defaults {
                     auto_fetch_minutes: minutes(t, "auto_fetch_minutes")
@@ -174,10 +169,8 @@ impl Settings {
                         .unwrap_or(fallback.git_concurrency),
                     worktrees_reading,
                     worktrees_interval_secs,
-                    refresh_floor_secs,
-                    refresh_ceiling_secs,
-                    worktrees_floor_secs,
-                    worktrees_ceiling_secs,
+                    refresh_pace,
+                    worktrees_pace,
                 }
             }
             None => fallback,
@@ -230,12 +223,12 @@ impl Settings {
             Value::Integer(self.defaults.worktrees_interval_secs.into()),
         );
         for (key, secs) in [
-            ("refresh_floor_secs", self.defaults.refresh_floor_secs),
-            ("refresh_ceiling_secs", self.defaults.refresh_ceiling_secs),
-            ("worktrees_floor_secs", self.defaults.worktrees_floor_secs),
+            ("refresh_floor_secs", self.defaults.refresh_pace.floor()),
+            ("refresh_ceiling_secs", self.defaults.refresh_pace.ceiling()),
+            ("worktrees_floor_secs", self.defaults.worktrees_pace.floor()),
             (
                 "worktrees_ceiling_secs",
-                self.defaults.worktrees_ceiling_secs,
+                self.defaults.worktrees_pace.ceiling(),
             ),
         ] {
             defaults.insert(key.into(), Value::Integer(secs.into()));
@@ -463,13 +456,16 @@ network_timeout_secs = 9
              worktrees_floor_secs = 20\nworktrees_ceiling_secs = 10\n",
         );
         assert_eq!(
-            (defaults.refresh_floor_secs, defaults.refresh_ceiling_secs),
+            (
+                defaults.refresh_pace.floor(),
+                defaults.refresh_pace.ceiling()
+            ),
             (2, 30)
         );
         assert_eq!(
             (
-                defaults.worktrees_floor_secs,
-                defaults.worktrees_ceiling_secs
+                defaults.worktrees_pace.floor(),
+                defaults.worktrees_pace.ceiling()
             ),
             (20, 20),
             "a ceiling written under its floor is the floor"
@@ -478,10 +474,8 @@ network_timeout_secs = 9
         assert_eq!(fresh.pace_bounds(), crate::session::PaceBounds::default());
         let settings = Settings {
             defaults: Defaults {
-                refresh_floor_secs: 1,
-                refresh_ceiling_secs: 90,
-                worktrees_floor_secs: 7,
-                worktrees_ceiling_secs: 600,
+                refresh_pace: crate::session::PaceSecs::new(1, 90),
+                worktrees_pace: crate::session::PaceSecs::new(7, 600),
                 ..Defaults::default()
             },
             ..Settings::default()

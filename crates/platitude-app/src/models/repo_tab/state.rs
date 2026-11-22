@@ -446,16 +446,94 @@ impl RepoTab {
                 || self.head_author_email != self.author_email);
     }
 
-    /// Decodes the push-force pair QML sends.
-    pub(super) fn push_force(force: &str, lease_expect: &str) -> platitude_core::remote::PushForce {
+    /// Decodes the push-force pair QML sends. `lease_expect` is read for
+    /// `"lease"` alone: the object its door showed pins the lease, and with
+    /// none on screen the lease is git's own, to its remote-tracking ref
+    /// (`PushForce::WithTrackingLease`). A pin that names no object is
+    /// turned away ([`Self::lease_turned_away`]); the other two words carry
+    /// none.
+    pub(super) fn push_force(
+        force: &str,
+        lease_expect: &str,
+    ) -> Result<platitude_core::remote::PushForce, platitude_core::oid::OidParseError> {
         use platitude_core::remote::PushForce;
-        match force {
-            "lease" => PushForce::WithLease {
-                expect: (!lease_expect.is_empty()).then(|| lease_expect.to_string()),
+        Ok(match force {
+            "lease" => match Self::lease_pin(lease_expect)? {
+                Some(expect) => PushForce::WithLease { expect },
+                None => PushForce::WithTrackingLease,
             },
             "force" => PushForce::Force,
             _ => PushForce::None,
+        })
+    }
+
+    /// The object a lease is pinned to, off the hex QML hands back: none
+    /// for an empty one — the write then goes as it does unpinned — and
+    /// otherwise an object name in full, or the press is turned away
+    /// ([`Self::lease_turned_away`]). Never passed on as written: git reads
+    /// a lease's second half as a revision, so a ref's name there would pin
+    /// to wherever that ref stands as the push runs.
+    pub(super) fn lease_pin(
+        expect: &str,
+    ) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
+        if expect.is_empty() {
+            return Ok(None);
         }
+        platitude_core::Oid::from_hex_str(expect).map(Some)
+    }
+
+    /// A write turned away before the session over a lease that names no
+    /// object: nothing goes to git. Said to the watch as the door says a
+    /// write it turns down ([`Self::ask_session`]) — a waiting reader must
+    /// not expect an answer — and answered as that door answers, with no
+    /// id. The rows that hand the pin over are the models' own
+    /// (`Oid::to_hex`), so this is the belt under them.
+    pub(super) fn lease_turned_away(&mut self, what: &str) -> Option<u64> {
+        tracing::warn!(what, "turned away: its lease names no object");
+        self.write_watch.asked(None);
+        None
+    }
+
+    /// [`Self::ask_session`] for a write behind a lease's pin as QML handed
+    /// it back: asked with what the pin decodes to, and turned away where
+    /// it names no object ([`Self::lease_turned_away`]) — the one door of
+    /// every such write.
+    pub(super) fn ask_pinned<T>(
+        &mut self,
+        what: &str,
+        pin: Result<T, platitude_core::oid::OidParseError>,
+        f: impl FnOnce(
+            &Arc<platitude_core::session::RepoSession>,
+            T,
+        ) -> Option<platitude_core::OperationId>,
+    ) -> Option<u64> {
+        match pin {
+            Ok(pin) => self.ask_session(|s| f(s, pin)),
+            Err(_) => self.lease_turned_away(what),
+        }
+    }
+
+    /// [`Self::ask_pinned`] for a write that takes a name off a remote,
+    /// leased to the object its row showed: with none to lease to — an
+    /// empty pin as much as a malformed one — nothing is asked. Where the
+    /// write is two commands, the first has not run either.
+    pub(super) fn ask_leased(
+        &mut self,
+        what: &str,
+        expect: &str,
+        f: impl FnOnce(
+            &Arc<platitude_core::session::RepoSession>,
+            platitude_core::Oid,
+        ) -> Option<platitude_core::OperationId>,
+    ) -> Option<u64> {
+        self.ask_pinned(what, platitude_core::Oid::from_hex_str(expect), f)
+    }
+
+    /// A remote row as a press on it is carried ([`TrackedBranch::listed`]),
+    /// read against the remotes this tab lists. None for a name no slash
+    /// divides — no remote to address, and nothing is asked.
+    pub(super) fn tracked(&self, remote_ref: &str) -> Option<TrackedBranch> {
+        TrackedBranch::listed(remote_ref, self.remote_names.iter().map(String::as_str))
     }
 
     /// Moves HEAD, taking uncommitted work along (`RepoSession::checkout`).
@@ -637,6 +715,57 @@ impl RepoTab {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platitude_core::remote::PushForce;
+
+    const SHA1: &str = "a9771664a8219f845abfd8ce6f5d7af521247539";
+
+    /// Only an object name in full pins a lease: what git would read as a
+    /// revision is turned away, never handed on.
+    #[test]
+    fn a_lease_is_pinned_to_an_object_name_in_full_or_to_nothing() {
+        let sha256 = "0".repeat(63) + "1";
+        assert_eq!(RepoTab::lease_pin(""), Ok(None), "no pin");
+        for name in [SHA1, sha256.as_str()] {
+            let pin = RepoTab::lease_pin(name).expect("an object name");
+            assert_eq!(pin.map(|oid| oid.to_hex()).as_deref(), Some(name));
+        }
+        for revision in ["HEAD", "origin/main", &SHA1[..39], "a977166", " "] {
+            assert!(RepoTab::lease_pin(revision).is_err(), "{revision:?}");
+        }
+    }
+
+    /// A write turned away over its lease says so to the watch: an armed
+    /// run is not left waiting for an answer nothing will bring.
+    #[test]
+    fn a_lease_that_names_no_object_tells_the_watch_the_write_was_turned_away() {
+        let mut tab = RepoTab::default();
+        assert!(tab.write_watch.arm("probe").is_none());
+        assert_eq!(tab.lease_turned_away("probe"), None);
+        assert_eq!(tab.write_watch.stage(), "turned-down");
+    }
+
+    /// The pin is the lease's alone: a plain push and a force carry none,
+    /// whatever came beside the word — and a lease with none on screen is
+    /// git's own.
+    #[test]
+    fn the_force_word_decides_whether_the_pin_is_read() {
+        let pinned = platitude_core::Oid::from_hex_str(SHA1).expect("an object name");
+        assert_eq!(
+            RepoTab::push_force("lease", SHA1),
+            Ok(PushForce::WithLease { expect: pinned })
+        );
+        assert_eq!(
+            RepoTab::push_force("lease", ""),
+            Ok(PushForce::WithTrackingLease)
+        );
+        assert!(RepoTab::push_force("lease", "origin/main").is_err());
+        assert_eq!(RepoTab::push_force("", "origin/main"), Ok(PushForce::None));
+        assert_eq!(RepoTab::push_force("force", ""), Ok(PushForce::Force));
+        assert_eq!(
+            RepoTab::push_force("force", "origin/main"),
+            Ok(PushForce::Force)
+        );
+    }
 
     // These stay off the first-failure branch: its Qt signal wants an
     // attached object (the fetch-recover verb walks it).

@@ -102,8 +102,7 @@ mod tests {
             upstream_drifted: false,
             held_elsewhere: false,
             tracked_by: "".into(),
-            ahead: 0,
-            behind: 0,
+            counts: crate::AheadBehind::default(),
         }
     }
 
@@ -130,8 +129,7 @@ mod tests {
             upstream: None,
             is_head: false,
             created_unix: 0,
-            ahead: 0,
-            behind: 0,
+            counts: crate::AheadBehind::default(),
         }
     }
 

@@ -25,8 +25,7 @@ fn branch(short: &str, at: u8) -> BranchItem {
         upstream_drifted: false,
         held_elsewhere: false,
         tracked_by: "".into(),
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     }
 }
 
@@ -34,8 +33,7 @@ fn branch(short: &str, at: u8) -> BranchItem {
 fn tracking(short: &str, upstream: &str, ahead: u32, behind: u32) -> BranchItem {
     BranchItem {
         upstream: upstream.into(),
-        ahead,
-        behind,
+        counts: crate::AheadBehind { ahead, behind },
         ..branch(short, b'1')
     }
 }
@@ -164,7 +162,7 @@ fn against_here(short: &str, upstream: &str, ahead: u32, listed: bool) -> Branch
         upstream_oid: listed.then(|| oid(b'1')),
         upstream_gone: if listed { "" } else { upstream }.into(),
         upstream_local: "".into(),
-        ahead,
+        counts: crate::AheadBehind { ahead, behind: 0 },
         ..branch(short, b'2')
     }
 }
@@ -247,8 +245,7 @@ fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
         "topic".to_string(),
         PushTrack {
             tracking: "origin/topic".to_string(),
-            ahead: 0,
-            behind: 0,
+            counts: crate::AheadBehind::default(),
         },
     )];
     assert_eq!(
@@ -296,8 +293,10 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         "counted".to_string(),
         PushTrack {
             tracking: "fork/counted".to_string(),
-            ahead: 1,
-            behind: 2,
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 2,
+            },
         },
     )];
     assert_eq!(
@@ -334,6 +333,33 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
     );
 }
 
+/// The destination counted a read ahead of its row — the counts and the
+/// rows are two reads: the standing is the counts', and there is no commit
+/// here to lease the overwrite to (`remote::PushForce::WithTrackingLease`).
+#[test]
+fn counts_ahead_of_their_row_stand_with_nothing_to_lease_to() {
+    let mut at = snapshot(
+        vec![tracking("counted", "origin/counted", 1, 0)],
+        &[("origin/counted", b'a')],
+    );
+    at.branch_push_remotes = vec![marked("counted", "fork")];
+    at.push_tracks = vec![(
+        "counted".to_string(),
+        PushTrack {
+            tracking: "fork/counted".to_string(),
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 2,
+            },
+        },
+    )];
+    let facts = at.branch_push("counted", "origin");
+    assert_eq!(
+        (facts.standing, facts.target.as_str(), facts.lease),
+        (PushStanding::Diverged, "fork/counted", None)
+    );
+}
+
 /// Counts read before a mark moved — repeated by a read that could not
 /// tell — are about where the branch no longer goes: nothing speaks.
 #[test]
@@ -348,8 +374,10 @@ fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
         "counted".to_string(),
         PushTrack {
             tracking: "fork/counted".to_string(),
-            ahead: 1,
-            behind: 2,
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 2,
+            },
         },
     )];
     assert_eq!(

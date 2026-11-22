@@ -129,7 +129,7 @@ pub struct AppBackend {
     worktrees_interval_max: i32,
     /// The shortest and the longest interval a repository on screen is read
     /// again at, and the same pair for each other worktree read automatically
-    /// (`session::pace`). The range is core's (`session::pace_bounds_secs`);
+    /// (`session::pace`). The range is core's (`session::PaceSecs`);
     /// an emptied box is the default, which is core's too.
     refresh_floor_secs: i32,
     refresh_ceiling_secs: i32,

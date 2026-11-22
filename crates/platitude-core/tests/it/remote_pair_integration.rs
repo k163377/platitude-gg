@@ -8,7 +8,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{Log, logged};
-use crate::support::remote::{far, far_tag, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{far, far_tag, origin_and_clone, row};
 use platitude_core::branch;
 use platitude_core::remote;
 
@@ -52,7 +53,7 @@ async fn a_pair_reaches_git_as_its_two_names() {
         .expect("asked");
     assert_eq!(free, None, "the tag of that name is no branch");
 
-    let first = remote::publish_spec("topic", &target, "");
+    let first = remote::publish_spec("topic", &target, None);
     remote::push(&exec, &work.path, &first, NET, &cancel)
         .await
         .expect("published");
@@ -71,14 +72,14 @@ async fn a_pair_reaches_git_as_its_two_names() {
     assert_eq!(there.to_hex(), ours);
 
     work.commit_file("topic.txt", "more\n", "more of ours");
-    let leased = remote::publish_spec("topic", &target, &ours);
+    let leased = remote::publish_spec("topic", &target, Some(oid(&ours)));
     remote::push(&exec, &work.path, &leased, NET, &cancel)
         .await
         .expect("the lease holds");
     let moved = work.git(&["rev-parse", "topic"]);
     assert_eq!(bare.git(&["rev-parse", "refs/heads/feature/x"]), moved);
 
-    let stale = remote::delete_remote_branch(&exec, &work.path, &target, &ours, NET, &cancel)
+    let stale = remote::delete_remote_branch(&exec, &work.path, &target, oid(&ours), NET, &cancel)
         .await
         .expect_err("the branch moved on from the commit the lease names");
     let report = stale.report().expect("the refusal is a report");
@@ -88,7 +89,7 @@ async fn a_pair_reaches_git_as_its_two_names() {
     );
     assert!(stale.is_outdated(), "{stale}");
 
-    remote::delete_remote_branch(&exec, &work.path, &target, &moved, NET, &cancel)
+    remote::delete_remote_branch(&exec, &work.path, &target, oid(&moved), NET, &cancel)
         .await
         .expect("deleted");
     let untracked = remote::untrack_deleted(&exec, &work.path, &target, &cancel)
@@ -175,12 +176,12 @@ async fn an_upstream_is_written_either_way_from_the_two_names() {
     );
 }
 
-/// A replace sends the new name from the old pair's remote-tracking ref,
-/// deletes the old name leased to the commit shown, and repoints what
-/// tracked it — every name spelled from the pair, the tag of the old
-/// name left where it was.
+/// A replace sends the new name from the old row's own remote-tracking
+/// ref, deletes the old name leased to the commit shown, and repoints what
+/// tracked it — the far side read off the row at the remote that owns it,
+/// the tag of the old name left where it was.
 #[tokio::test]
-async fn a_replace_reaches_git_from_the_old_pair_and_the_new_name() {
+async fn a_replace_reaches_git_from_the_old_row_and_the_new_name() {
     let (mut bare, mut work) = slashed_remote();
     let tag = bare.git(&["rev-parse", "refs/tags/feature/x"]);
     work.git(&["push", "-u", "team/fork", "topic:refs/heads/feature/x"]);
@@ -190,9 +191,9 @@ async fn a_replace_reaches_git_from_the_old_pair_and_the_new_name() {
     remote::replace_remote_branch(
         &exec,
         &work.path,
-        &far("team/fork", "feature/x"),
+        &row("team/fork", "feature/x"),
         "feature/y",
-        &shown,
+        oid(&shown),
         NET,
         &cancel,
     )
@@ -237,7 +238,7 @@ async fn a_tag_pair_reaches_git_as_its_two_names() {
     let target = far_tag("team/fork", "release/1.0");
     let (exec, log, cancel) = logged();
 
-    remote::push_tag(&exec, &work.path, &target, "", NET, &cancel)
+    remote::push_tag(&exec, &work.path, &target, None, NET, &cancel)
         .await
         .expect("sent");
     assert_eq!(bare.git(&["rev-parse", "refs/tags/release/1.0"]), ours);
@@ -247,7 +248,7 @@ async fn a_tag_pair_reaches_git_as_its_two_names() {
         &work.path,
         &target,
         "release/1.1",
-        &ours,
+        oid(&ours),
         NET,
         &cancel,
     )

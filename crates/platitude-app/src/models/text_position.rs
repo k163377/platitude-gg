@@ -4,8 +4,9 @@
 //! ([`SourcePosition`]). Which conversion turns one into the other is the
 //! model's own (`encode::markup::source_byte` for the diff,
 //! `encode::markup::plain_byte` per column for the log). A selection is
-//! two of the latter ([`SelectionEnds`]), and a double-click's word grows
-//! by the same rule in both ([`SelectionEnds::grown_by_word`]).
+//! two of the latter ([`SelectionEnds`]) and the word a double-click took
+//! ([`Selection`]), which a drag grows by the same rule in both
+//! ([`Selection::dragged_to`]).
 //!
 //! Unsigned. The slots hand signed values, and `new` reads them once:
 //! one that is negative makes no position. A position says nothing of
@@ -68,7 +69,7 @@ pub(super) struct SelectionEnds {
 impl SelectionEnds {
     /// The word over `bytes` of row `row` — what a double-click selects —
     /// anchored at its start.
-    pub(super) fn word(row: usize, bytes: Range<usize>) -> Self {
+    fn word(row: usize, bytes: Range<usize>) -> Self {
         Self {
             anchor: SourcePosition {
                 row,
@@ -87,7 +88,7 @@ impl SelectionEnds {
     /// start going back, its end going on — or stands where it is, on a
     /// boundary between two. `across` answers the word `position` cuts in
     /// two on its row's line (`platitude_core::word::run_across`).
-    pub(super) fn grown_by_word(
+    fn grown_by_word(
         self,
         position: SourcePosition,
         across: impl FnOnce() -> Option<Range<usize>>,
@@ -142,6 +143,87 @@ impl SelectionEnds {
         Some(Self {
             anchor: self.anchor.shifted_up(gone)?,
             focus: self.focus.shifted_up(gone)?,
+        })
+    }
+}
+
+/// A selection as the hand holds it: its two ends, and the word a
+/// double-click took, which the drag behind it grows word by word. One
+/// value, replaced whole — a word stands only beside the ends it gave or
+/// the ends grown from it, and goes when they go. Which pane it is of, and
+/// which column of it, is the model's to hold beside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Selection {
+    ends: SelectionEnds,
+    /// None for a selection a plain press or a row taken whole started.
+    clicked_word: Option<SelectionEnds>,
+}
+
+impl Selection {
+    /// What a press lays: nothing yet, at `position`.
+    pub(super) fn pressed(position: SourcePosition) -> Self {
+        Self::over(SelectionEnds {
+            anchor: position,
+            focus: position,
+        })
+    }
+
+    /// What a double-click takes: the word over `bytes` of row `row`, kept
+    /// for the drag behind it to grow by.
+    pub(super) fn word(row: usize, bytes: Range<usize>) -> Self {
+        let word = SelectionEnds::word(row, bytes);
+        Self {
+            ends: word,
+            clicked_word: Some(word),
+        }
+    }
+
+    /// A stretch taken whole, with no word to grow by.
+    pub(super) fn over(ends: SelectionEnds) -> Self {
+        Self {
+            ends,
+            clicked_word: None,
+        }
+    }
+
+    pub(super) fn ends(self) -> SelectionEnds {
+        self.ends
+    }
+
+    /// The same ends with no word to grow by: a double-click that took
+    /// none.
+    pub(super) fn wordless(self) -> Self {
+        Self::over(self.ends)
+    }
+
+    /// The selection a drag reaching `position` leaves: the far end follows
+    /// the pointer place by place, or — behind a double-click — word by
+    /// word (`SelectionEnds::grown_by_word`, which `across` answers for).
+    pub(super) fn dragged_to(
+        self,
+        position: SourcePosition,
+        across: impl FnOnce() -> Option<Range<usize>>,
+    ) -> Self {
+        let ends = match self.clicked_word {
+            Some(clicked) => clicked.grown_by_word(position, across),
+            None => SelectionEnds {
+                focus: position,
+                ..self.ends
+            },
+        };
+        Self { ends, ..self }
+    }
+
+    /// The same selection once `gone` rows before it have been taken away —
+    /// none where either end's row was among them. The word lies between
+    /// the ends, so it moves with them.
+    pub(super) fn shifted_up(self, gone: usize) -> Option<Self> {
+        Some(Self {
+            ends: self.ends.shifted_up(gone)?,
+            clicked_word: match self.clicked_word {
+                Some(word) => Some(word.shifted_up(gone)?),
+                None => None,
+            },
         })
     }
 }
@@ -287,6 +369,49 @@ mod tests {
             word.grown_by_word(at(2, 6), || panic!("not asked inside the word")),
             word,
             "inside the word itself"
+        );
+    }
+
+    #[test]
+    fn a_drag_goes_place_by_place_until_a_word_is_taken() {
+        let pressed = Selection::pressed(at(2, 4));
+        assert_eq!(pressed.ends(), ends(at(2, 4), at(2, 4)), "nothing yet");
+        assert_eq!(
+            pressed
+                .dragged_to(at(3, 5), || panic!("no word to grow by"))
+                .ends(),
+            ends(at(2, 4), at(3, 5))
+        );
+
+        let word = Selection::word(2, 4..8);
+        let grown = word.dragged_to(at(3, 5), || Some(3..9));
+        assert_eq!(grown.ends(), ends(at(2, 4), at(3, 9)), "to that word's end");
+        assert_eq!(
+            grown.dragged_to(at(2, 6), || None),
+            word,
+            "back inside the word it grew from, which it still holds"
+        );
+        assert_eq!(
+            grown
+                .wordless()
+                .dragged_to(at(3, 5), || panic!("the word was let go"))
+                .ends(),
+            ends(at(2, 4), at(3, 5)),
+            "let go of, the ends stay and the drag is plain"
+        );
+    }
+
+    #[test]
+    fn a_selection_moves_up_with_its_word_or_goes_whole() {
+        let grown = Selection::word(2, 4..8).dragged_to(at(3, 5), || Some(3..9));
+        assert_eq!(
+            grown.shifted_up(2),
+            Some(Selection::word(0, 4..8).dragged_to(at(1, 5), || Some(3..9)))
+        );
+        assert_eq!(
+            grown.shifted_up(3),
+            None,
+            "the word's row went, an end's too"
         );
     }
 

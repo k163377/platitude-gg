@@ -153,7 +153,7 @@ fn a_branch_reads_how_far_it_stands_from_its_upstream() {
 
     let counts: Vec<(u32, u32)> = parse_refs(&bytes)
         .iter()
-        .map(|entry| (entry.ahead, entry.behind))
+        .map(|entry| (entry.counts.ahead, entry.counts.behind))
         .collect();
     assert_eq!(counts, vec![(2, 0), (0, 1), (1, 1), (0, 0), (0, 0)]);
 }
@@ -168,8 +168,7 @@ fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefE
         upstream: upstream.map(crate::Name::from),
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     }
 }
 

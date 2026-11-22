@@ -117,7 +117,7 @@ pub(super) fn parse_config(bytes: &[u8]) -> AuthorConfig {
     parsed
 }
 
-pub(super) fn non_empty(value: &str) -> Option<String> {
+fn non_empty(value: &str) -> Option<String> {
     (!value.is_empty()).then(|| value.to_string())
 }
 

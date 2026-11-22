@@ -67,7 +67,7 @@ fn status_msg(
         merge_tool: String::new(),
         push_remote: String::new(),
         upstream_here: false,
-        push_track: platitude_core::remote::PushTrack::default(),
+        push_track: None,
         eol_marks: Arc::new(Vec::new()),
         lfs_needed: 0,
         not_copied: Arc::new(Vec::new()),

@@ -514,9 +514,10 @@ pub struct StatusMsg {
     /// `push_remote`.
     pub upstream_here: bool,
     /// The branch's counts against where a mark sends its push, when that
-    /// is not the upstream's remote; empty everywhere else. Per-branch like
+    /// is not the upstream's remote; none everywhere else, and where
+    /// nothing here tracks the branch over there. Per-branch like
     /// `push_remote`.
-    pub push_track: platitude_core::remote::PushTrack,
+    pub push_track: Option<platitude_core::remote::PushTrack>,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
     /// Pending files that need Git LFS where git cannot run it.

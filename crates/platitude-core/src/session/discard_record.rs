@@ -446,11 +446,11 @@ pub(super) async fn remote_tip(
     exec: &GitExecutor,
     workdir: &Path,
     target: &remote::RemoteBranch,
-    expect: Option<&str>,
+    expect: Option<Oid>,
     cancel: &CancellationToken,
 ) -> Result<Option<RemoteTip>, GitError> {
-    let rev = match expect.filter(|expect| !expect.is_empty()) {
-        Some(expect) => expect.to_string(),
+    let rev = match expect {
+        Some(expect) => expect.to_hex(),
         None => target.tracking_ref(),
     };
     Ok(discards::commit_of(exec, workdir, &rev, cancel)

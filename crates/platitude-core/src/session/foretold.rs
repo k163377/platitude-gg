@@ -66,7 +66,7 @@ pub(super) struct Told {
     pub(super) merge_tool: String,
     pub(super) push_remote: String,
     pub(super) upstream_here: bool,
-    pub(super) push_track: remote::PushTrack,
+    pub(super) push_track: Option<remote::PushTrack>,
     pub(super) eol_marks: Arc<Vec<EolMark>>,
     pub(super) lfs_needed: usize,
     pub(super) not_copied: Arc<Vec<String>>,
@@ -353,7 +353,10 @@ mod tests {
     fn told() -> Told {
         Told {
             status: Arc::new(WorktreeStatus {
-                ahead: 1,
+                upstream_counts: Some(crate::AheadBehind {
+                    ahead: 1,
+                    behind: 0,
+                }),
                 items: vec![row('M', '.', "staged.txt"), row('M', 'M', "both.txt")],
                 ..WorktreeStatus::default()
             }),
@@ -366,7 +369,7 @@ mod tests {
             merge_tool: "meld".to_string(),
             push_remote: "fork".to_string(),
             upstream_here: true,
-            push_track: remote::PushTrack::default(),
+            push_track: None,
             eol_marks: Arc::new(vec![mark("both.txt", true), mark("both.txt", false)]),
             lfs_needed: 4,
             not_copied: Arc::new(vec!["big.bin".to_string()]),
@@ -394,7 +397,11 @@ mod tests {
         );
         assert_eq!(left.status.items, [row('.', 'M', "both.txt")]);
         assert_eq!(*left.eol_marks, [mark("both.txt", false)]);
-        assert_eq!(left.status.ahead, 1, "the counts are not worked out");
+        assert_eq!(
+            left.status.upstream_counts.map(|counts| counts.ahead),
+            Some(1),
+            "the counts are not worked out"
+        );
         assert_eq!(
             (
                 left.merge_tool.as_str(),

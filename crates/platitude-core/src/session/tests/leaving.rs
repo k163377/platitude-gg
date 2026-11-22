@@ -151,8 +151,7 @@ fn branch(short: &str, upstream: &str, drifted: bool) -> BranchItem {
         upstream_drifted: drifted,
         held_elsewhere: false,
         tracked_by: crate::Name::default(),
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     }
 }
 

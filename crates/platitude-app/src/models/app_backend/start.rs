@@ -88,10 +88,10 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
 fn pace_bounds() -> (i32, i32, i32, i32) {
     let defaults = Hub::with(|hub| hub.settings().defaults.clone()).unwrap_or_default();
     (
-        defaults.refresh_floor_secs as i32,
-        defaults.refresh_ceiling_secs as i32,
-        defaults.worktrees_floor_secs as i32,
-        defaults.worktrees_ceiling_secs as i32,
+        defaults.refresh_pace.floor() as i32,
+        defaults.refresh_pace.ceiling() as i32,
+        defaults.worktrees_pace.floor() as i32,
+        defaults.worktrees_pace.ceiling() as i32,
     )
 }
 

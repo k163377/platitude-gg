@@ -1,3 +1,4 @@
+use super::super::testkit::target;
 use super::super::*;
 
 /// A worktree's row on an idle repository on `main`: `holder` is the
@@ -5,8 +6,7 @@ use super::super::*;
 /// stands in it.
 fn worktree_row(holder: &str) -> RefMenuOffers {
     ref_menu(
-        RefKind::Worktree,
-        "C:/work/topic",
+        target(RefKind::Worktree, "C:/work/topic"),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -74,8 +74,7 @@ fn the_kind_word_is_the_chips() {
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
     worktree_rows(
-        kind,
-        full,
+        kind.map(|kind| target(kind, full)),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -107,8 +106,7 @@ fn a_branch_already_out_greys_its_worktree_add() {
         vec!["here", "checkout-branch", "out-current"]
     );
     let held = worktree_rows(
-        Some(RefKind::Branch),
-        "feature/topic-a",
+        Some(target(RefKind::Branch, "feature/topic-a")),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -130,8 +128,7 @@ fn a_branch_already_out_greys_its_worktree_add() {
 #[test]
 fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
     let stopped = worktree_rows(
-        Some(RefKind::Branch),
-        "feature/clash",
+        Some(target(RefKind::Branch, "feature/clash")),
         "abc123",
         true,
         &TreeStanding::detached().standing("REBASING"),
@@ -149,8 +146,7 @@ fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
 #[test]
 fn a_detached_tree_holds_no_branch() {
     let offers = worktree_rows(
-        Some(RefKind::Branch),
-        "main",
+        Some(target(RefKind::Branch, "main")),
         "abc123",
         true,
         &TreeStanding::detached(),
@@ -170,8 +166,7 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         vec!["here", "checkout-track"]
     );
     let local_there = worktree_rows(
-        Some(RefKind::Remote),
-        "origin/feature/login",
+        Some(target(RefKind::Remote, "origin/feature/login")),
         "abc123",
         true,
         &TreeStanding::on("main"),
@@ -188,19 +183,18 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
     let main = TreeStanding::on("main");
     assert!(
-        worktree_rows(None, "", "abc123", false, &main, "", false, false)
+        worktree_rows(None, "abc123", false, &main, "", false, false)
             .words()
             .is_empty()
     );
     assert!(
-        worktree_rows(None, "", "", true, &main, "", false, false)
+        worktree_rows(None, "", true, &main, "", false, false)
             .words()
             .is_empty()
     );
     assert!(
         worktree_rows(
-            Some(RefKind::Stash),
-            "stash@{0}",
+            Some(target(RefKind::Stash, "stash@{0}")),
             "abc123",
             true,
             &main,

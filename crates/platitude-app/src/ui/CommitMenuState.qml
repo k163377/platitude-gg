@@ -250,24 +250,6 @@ QtObject {
         }
     }
 
-    /// Delete the remote branch alone, or both at once — the ref split against the tab's configured remote names
-    /// (`RefRowMenu.deleteRemoteNow`), leased to `expect`.
-    function deleteRemoteNow(remoteRef, expect) {
-        const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
-        if (remote === "")
-            return
-        menuState.repoTab.deleteRemoteBranch(
-            remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), expect)
-    }
-
-    function deleteEverywhereNow(branch, remoteRef, forced, expect) {
-        const remote = GitFacts.remoteOfRef(remoteRef, menuState.repoTab.remoteNames)
-        if (remote === "")
-            return
-        menuState.repoTab.deleteBranchEverywhere(
-            branch, remote, GitFacts.branchOfRef(remoteRef, menuState.repoTab.remoteNames), forced, expect)
-    }
-
     /// The menu on another worktree's uncommitted row (デザイン規約 §別の worktree を読む), at `path` as the row names
     /// it — read off the tree as `openRowMenu` reads it, and greyed while a command is out as every menu is.
     function openCarriedMenu(path, name) {

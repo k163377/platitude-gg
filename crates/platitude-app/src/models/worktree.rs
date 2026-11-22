@@ -85,9 +85,7 @@ pub struct WorktreeModel {
     /// the ones below only while it is the branch HEAD is on (`settle`).
     status_upstream: String,
     status_upstream_here: bool,
-    status_upstream_tracked: bool,
-    status_ahead: i32,
-    status_behind: i32,
+    status_upstream_counts: Option<platitude_core::AheadBehind>,
     upstream: String,
     /// `upstream` is a branch here (`branch.<branch>.remote = .`), not a
     /// remote's — which its short name cannot say: a branch here may be
@@ -112,7 +110,7 @@ pub struct WorktreeModel {
     /// What the last status said of the branch against where a mark sends
     /// its push (`StatusMsg::push_track`), shown through the three below
     /// only while it is the branch HEAD is on (`settle`).
-    status_push_track: platitude_core::remote::PushTrack,
+    status_push_track: Option<platitude_core::remote::PushTrack>,
     /// The remote branch the push's own counts are against, where a mark
     /// sends the push to another remote than the upstream's; empty
     /// everywhere else, and where nothing here tracks the branch over
@@ -524,9 +522,7 @@ impl WorktreeModel {
         self.counts_settled = false;
         self.status_upstream = String::new();
         self.status_upstream_here = false;
-        self.status_upstream_tracked = false;
-        self.status_ahead = 0;
-        self.status_behind = 0;
+        self.status_upstream_counts = None;
         self.upstream = String::new();
         self.upstream_here = false;
         self.upstream_tracked = false;
@@ -534,7 +530,7 @@ impl WorktreeModel {
         self.behind = 0;
         self.pull_blocked = false;
         self.push_remote = String::new();
-        self.status_push_track = platitude_core::remote::PushTrack::default();
+        self.status_push_track = None;
         self.push_tracking = String::new();
         self.push_ahead = 0;
         self.push_behind = 0;
@@ -662,9 +658,7 @@ impl WorktreeModel {
         self.status_branch = status.branch_head.clone().unwrap_or_default();
         self.status_upstream = status.upstream.clone().unwrap_or_default();
         self.status_upstream_here = upstream_here;
-        self.status_upstream_tracked = status.upstream_tracked;
-        self.status_ahead = status.ahead;
-        self.status_behind = status.behind;
+        self.status_upstream_counts = status.upstream_counts;
         self.push_remote = push_remote;
         self.status_push_track = push_track;
         self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
@@ -802,14 +796,19 @@ impl WorktreeModel {
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
             self.upstream_here = self.status_upstream_here;
-            self.upstream_tracked = self.status_upstream_tracked;
-            self.ahead = self.status_ahead;
-            self.behind = self.status_behind;
-            self.pull_blocked = self.status_ahead > 0 && self.status_behind > 0;
-            self.push_tracking
-                .clone_from(&self.status_push_track.tracking);
-            self.push_ahead = self.status_push_track.ahead;
-            self.push_behind = self.status_push_track.behind;
+            // The properties are Qt's own: a flag and an empty name for
+            // "nothing to count against", zeroes beside them, and `int`s —
+            // a count past one is drawn as its largest.
+            let shown = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
+            let upstream = self.status_upstream_counts;
+            self.upstream_tracked = upstream.is_some();
+            self.ahead = shown(upstream.map_or(0, |counts| counts.ahead));
+            self.behind = shown(upstream.map_or(0, |counts| counts.behind));
+            self.pull_blocked = upstream.is_some_and(platitude_core::AheadBehind::is_diverged);
+            let pushed = self.status_push_track.as_ref();
+            self.push_tracking = pushed.map_or_else(String::new, |track| track.tracking.clone());
+            self.push_ahead = shown(pushed.map_or(0, |track| track.counts.ahead));
+            self.push_behind = shown(pushed.map_or(0, |track| track.counts.behind));
         } else {
             self.upstream.clear();
             self.upstream_here = false;

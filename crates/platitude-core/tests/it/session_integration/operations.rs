@@ -11,7 +11,7 @@ use crate::support::session::{
 };
 use crate::support::wait::bounded;
 use platitude_core::commit::CommitOptions;
-use platitude_core::identity::ConfigScope;
+use platitude_core::identity::{ConfigScope, IdentityValues};
 use platitude_core::session::{FollowUp, PassStep, RepoSession, SessionEvent};
 use platitude_core::{OperationId, OperationKind};
 
@@ -268,8 +268,7 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
     // read the same, so the only walk behind it is the listing's.
     let id = session
         .set_identity(
-            "Spike".into(),
-            "spike@example.com".into(),
+            IdentityValues::new("Spike", "spike@example.com"),
             ConfigScope::Local,
         )
         .expect("the session is open");

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use platitude_core::Oid;
+use crate::support::oid;
 use platitude_core::discards::{self, CopyOf, Discard, DiscardKind, Restore};
 
 async fn read(repo: &TestRepo) -> Vec<Discard> {
@@ -27,10 +27,6 @@ async fn read_at(path: &Path) -> Vec<Discard> {
     discards::read_repo(&executor, path, Some(2000), &cancel)
         .await
         .expect("read the reflogs and the record")
-}
-
-fn oid(hex: &str) -> Oid {
-    Oid::from_hex_str(hex.trim()).expect("an oid")
 }
 
 fn one(found: &[Discard], kind: DiscardKind) -> &Discard {

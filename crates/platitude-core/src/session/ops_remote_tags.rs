@@ -135,7 +135,7 @@ impl RepoSession {
     }
 
     /// Sends one tag to one remote. `expect` pins a leased overwrite to
-    /// the commit that remote was last seen holding the tag on; empty
+    /// the commit that remote was last seen holding the tag on; none
     /// sends it plain (see [`remote::push_tag`]).
     ///
     /// **The badge is re-read inside the write**: what a remote carries
@@ -153,7 +153,7 @@ impl RepoSession {
     pub fn push_tag(
         self: &Arc<Self>,
         target: remote::RemoteTag,
-        expect: String,
+        expect: Option<Oid>,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -162,8 +162,7 @@ impl RepoSession {
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let result =
-                    remote::push_tag(&exec, &repo.workdir, &target, &expect, timeout, &cancel)
-                        .await;
+                    remote::push_tag(&exec, &repo.workdir, &target, expect, timeout, &cancel).await;
                 if tags_moved(&result) {
                     s.read_remote_tags(
                         &exec,
@@ -192,7 +191,7 @@ impl RepoSession {
     pub fn delete_remote_tag(
         self: &Arc<Self>,
         target: remote::RemoteTag,
-        expect: String,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -204,7 +203,7 @@ impl RepoSession {
                     &exec,
                     &repo.workdir,
                     &target,
-                    &expect,
+                    expect,
                     timeout,
                     &cancel,
                 )
@@ -236,7 +235,7 @@ impl RepoSession {
         self: &Arc<Self>,
         old: remote::RemoteTag,
         to: String,
-        expect: String,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -249,7 +248,7 @@ impl RepoSession {
                     &repo.workdir,
                     &old,
                     &to,
-                    &expect,
+                    expect,
                     timeout,
                     &cancel,
                 )
@@ -279,7 +278,7 @@ impl RepoSession {
     pub fn delete_tag_everywhere(
         self: &Arc<Self>,
         target: remote::RemoteTag,
-        expect: String,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let name = target.tag.clone();
@@ -303,7 +302,7 @@ impl RepoSession {
                     &exec,
                     &repo.workdir,
                     &target,
-                    &expect,
+                    expect,
                     timeout,
                     &cancel,
                 )

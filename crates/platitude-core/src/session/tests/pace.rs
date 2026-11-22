@@ -655,12 +655,7 @@ fn a_worktree_turned_away_before_its_read_waits_for_this_tree_s_read() {
 /// pair.
 #[test]
 fn the_floors_and_ceilings_a_person_sets_are_the_ones_kept() {
-    let bounds = PaceBounds {
-        own_floor: secs(2),
-        own_ceiling: secs(60),
-        worktree_floor: secs(3),
-        worktree_ceiling: secs(90),
-    };
+    let bounds = PaceBounds::new(secs(2)..=secs(60), secs(3)..=secs(90));
     let read = ms(20);
     let mut light = World::steady(read).with_worktrees(&[("a", ms(10))]);
     light.pacer.set_bounds(bounds);
@@ -704,29 +699,93 @@ fn the_floors_and_ceilings_a_person_sets_are_the_ones_kept() {
 
 #[test]
 fn a_pair_asked_for_is_held_in_range_with_the_ceiling_never_under_the_floor() {
-    assert_eq!(pace_bounds_secs(0, 0), (PACE_MIN_SECS, PACE_MIN_SECS));
+    let kept = |floor, ceiling| {
+        let pace = PaceSecs::new(floor, ceiling);
+        (pace.floor(), pace.ceiling())
+    };
+    assert_eq!(kept(0, 0), (PACE_MIN_SECS, PACE_MIN_SECS));
     assert_eq!(
-        pace_bounds_secs(10, 4),
+        kept(10, 4),
         (10, 10),
         "a ceiling under the floor is the floor"
     );
-    assert_eq!(pace_bounds_secs(5, u32::MAX), (5, PACE_MAX_SECS));
+    assert_eq!(kept(5, u32::MAX), (5, PACE_MAX_SECS));
+    assert_eq!(kept(u32::MAX, 0), (PACE_MAX_SECS, PACE_MAX_SECS));
+    assert_eq!(kept(5, 15), (5, 15));
+}
+
+/// Bounds built with a ceiling under its floor are the floor's alone, for
+/// each pair apart — and a heavy read, whose interval is clamped between
+/// the two, is paced by them instead of meeting a pair the wrong way round.
+#[test]
+fn a_ceiling_built_under_its_floor_is_the_floor() {
+    let reversed = PaceBounds::new(secs(10)..=secs(4), secs(9)..=secs(3));
     assert_eq!(
-        pace_bounds_secs(u32::MAX, 0),
-        (PACE_MAX_SECS, PACE_MAX_SECS)
+        reversed,
+        PaceBounds::new(secs(10)..=secs(10), secs(9)..=secs(9))
     );
-    assert_eq!(pace_bounds_secs(5, 15), (5, 15));
+    assert_eq!(
+        PaceBounds::new(secs(10)..=secs(4), secs(3)..=secs(9)),
+        PaceBounds::new(secs(10)..=secs(10), secs(3)..=secs(9)),
+        "the worktrees' pair, in order, is kept as asked"
+    );
+
+    let mut heavy = World::steady(secs(2)).with_worktrees(&[("a", secs(2))]);
+    heavy.pacer.set_bounds(reversed);
+    heavy.run_until(secs(120));
+    assert!(
+        heavy
+            .own_gaps()
+            .iter()
+            .skip(1)
+            .all(|gap| close(*gap, secs(10))),
+        "{:?}",
+        heavy.own_gaps()
+    );
+}
+
+/// Each of the four bounds is kept as built, to the millisecond: the
+/// settings' whole seconds are not asked of it.
+#[test]
+fn bounds_under_a_second_are_kept_as_built() {
+    let built = PaceBounds::new(ms(1500)..=ms(2500), ms(700)..=ms(900));
+    for (bound, a_millisecond_off) in [
+        (
+            "this tree's floor",
+            PaceBounds::new(ms(1501)..=ms(2500), ms(700)..=ms(900)),
+        ),
+        (
+            "this tree's ceiling",
+            PaceBounds::new(ms(1500)..=ms(2501), ms(700)..=ms(900)),
+        ),
+        (
+            "a worktree's floor",
+            PaceBounds::new(ms(1500)..=ms(2500), ms(701)..=ms(900)),
+        ),
+        (
+            "a worktree's ceiling",
+            PaceBounds::new(ms(1500)..=ms(2500), ms(700)..=ms(901)),
+        ),
+    ] {
+        assert_ne!(built, a_millisecond_off, "{bound}");
+    }
+
+    let mut pacer = Pacer::new(WorktreesPace::Off);
+    pacer.set_bounds(built);
+    pacer.opened(Duration::ZERO);
+    pacer.set_active(true, Duration::ZERO);
+    assert_eq!(
+        pacer.next_wake(),
+        Some(ms(1500)),
+        "this tree's floor, with nothing weighed yet"
+    );
 }
 
 /// This tree waiting long on a slow pace, and a worktree on an hour's fixed
 /// interval: the reads fall due where the pace would have put them.
 fn waiting_long() -> Pacer {
     let mut pacer = Pacer::new(WorktreesPace::Fixed(secs(3600)));
-    let slow = PaceBounds {
-        own_floor: secs(60),
-        own_ceiling: secs(60),
-        ..PaceBounds::default()
-    };
+    let slow = PaceBounds::new(secs(60)..=secs(60), WORKTREE_FLOOR..=WORKTREE_CEILING);
     pacer.set_bounds(slow);
     pacer.opened(Duration::ZERO);
     pacer.set_active(true, Duration::ZERO);
@@ -760,17 +819,12 @@ fn a_wait_already_set_is_planned_again_when_the_bounds_change() {
     assert_eq!(pacer.next_wake(), Some(OWN_FLOOR));
 
     // This tree kept on its long wait, so only the worktree's bounds move.
-    let own_slow = PaceBounds {
-        own_floor: secs(60),
-        own_ceiling: secs(60),
-        ..PaceBounds::default()
-    };
+    let own_slow = PaceBounds::new(secs(60)..=secs(60), WORKTREE_FLOOR..=WORKTREE_CEILING);
     let mut worktrees = Pacer::new(WorktreesPace::Auto);
-    worktrees.set_bounds(PaceBounds {
-        worktree_floor: secs(3600),
-        worktree_ceiling: secs(3600),
-        ..own_slow
-    });
+    worktrees.set_bounds(PaceBounds::new(
+        secs(60)..=secs(60),
+        secs(3600)..=secs(3600),
+    ));
     worktrees.opened(Duration::ZERO);
     worktrees.set_active(true, Duration::ZERO);
     worktrees.list(&["a".to_string()], Duration::ZERO);

@@ -25,8 +25,7 @@ fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
         upstream: None,
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     }
 }
 
@@ -40,8 +39,7 @@ fn branch(name: &str, commit: Oid) -> RefEntry {
         upstream: None,
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     }
 }
 
@@ -78,8 +76,7 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
         upstream: None,
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     };
     let mut main = branch("main", oid(1));
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
@@ -117,13 +114,12 @@ fn a_reading_carries_the_branch_that_is_measured_against_it() {
         upstream: None,
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     };
     let mut main = branch("main", oid(2));
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));
-    main.ahead = 2;
-    main.behind = 1;
+    main.counts.ahead = 2;
+    main.counts.behind = 1;
     // Matches `fork/side` by name only: a different branch.
     let stray = branch("side", oid(2));
 
@@ -143,12 +139,21 @@ fn a_reading_carries_the_branch_that_is_measured_against_it() {
     };
     assert_eq!(read("origin/main").tracked_by, "main");
     assert_eq!(
-        (read("origin/main").ahead, read("origin/main").behind),
+        (
+            read("origin/main").counts.ahead,
+            read("origin/main").counts.behind
+        ),
         (2, 1),
         "the measurement is the branch's, read from the far side"
     );
     assert_eq!(read("fork/side").tracked_by, "");
-    assert_eq!((read("fork/side").ahead, read("fork/side").behind), (0, 0));
+    assert_eq!(
+        (
+            read("fork/side").counts.ahead,
+            read("fork/side").counts.behind
+        ),
+        (0, 0)
+    );
     assert_eq!(
         snapshot.local_named("main").expect("the branch").tracked_by,
         "",
@@ -217,8 +222,7 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
         upstream: None,
         is_head: false,
         created_unix: 0,
-        ahead: 0,
-        behind: 0,
+        counts: crate::AheadBehind::default(),
     };
     let mut main = branch("main", oid(1));
     main.upstream = Some(crate::Name::from("refs/remotes/origin/main"));

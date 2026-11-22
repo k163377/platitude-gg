@@ -9,7 +9,8 @@
 
 use std::sync::Arc;
 
-use crate::support::remote::far;
+use crate::support::oid;
+use crate::support::remote::{far, row};
 use crate::support::session::{opened, pass_of, write_answer, write_settled};
 use crate::support::{TestRepo, barrier_filter, barrier_hook};
 use platitude_core::session::{RefreshOutcome, RepoSession, SessionEvent};
@@ -768,14 +769,10 @@ async fn a_composite_delete_takes_its_turn_for_the_half_that_is_here() {
     closing.close();
 
     let (reopened_sink, reopened) = opened(&repo).await;
-    // No lease to name: the local half is what refuses.
+    // The lease is never weighed: the local half is what refuses.
+    let unweighed = oid(&repo.git(&["rev-parse", "HEAD"]));
     let removal = reopened
-        .delete_branch_everywhere(
-            "victim".into(),
-            far("origin", "victim"),
-            false,
-            String::new(),
-        )
+        .delete_branch_everywhere("victim".into(), row("origin", "victim"), false, unweighed)
         .expect("the delete was accepted");
 
     std::fs::write(&release, b"go").expect("release the hook");

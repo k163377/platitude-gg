@@ -9,8 +9,8 @@ use super::super::*;
 #[test]
 fn the_stand_in_takes_its_counts_off_the_row_it_stands_for() {
     let mut main = local("main", false);
-    main.ahead = 2;
-    main.behind = 1;
+    main.counts.ahead = 2;
+    main.counts.behind = 1;
     let mut model = section(
         "branches",
         Source::Locals(locals(vec![local("feature/topic-a", false), main])),

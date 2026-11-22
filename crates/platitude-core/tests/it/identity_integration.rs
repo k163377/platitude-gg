@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use crate::support::exec::{env, isolated_global, observed_env};
 use crate::support::{TestRepo, info};
 use platitude_core::commit::{self, CommitOptions};
-use platitude_core::identity::{self, ConfigScope, SignatureFormat, SignatureStatus};
+use platitude_core::identity::{
+    self, ConfigScope, IdentityValues, SignatureFormat, SignatureStatus,
+};
 use platitude_core::process::{CommandEnd, CommandObserver, GitExecutor, Kept};
 use tokio_util::sync::CancellationToken;
 
@@ -89,8 +91,7 @@ async fn a_write_that_only_half_lands_says_which_half() {
     let written = identity::set_identity(
         &exec,
         &repo.path,
-        "Work Name",
-        "work@example.com",
+        &IdentityValues::new("Work Name", "work@example.com"),
         ConfigScope::Local,
         &cancel,
     )
@@ -126,8 +127,7 @@ async fn a_locked_configuration_takes_neither_half() {
     let written = identity::set_identity(
         &exec,
         &repo.path,
-        "Work Name",
-        "work@example.com",
+        &IdentityValues::new("Work Name", "work@example.com"),
         ConfigScope::Local,
         &cancel,
     )
@@ -151,8 +151,7 @@ async fn a_dash_leading_identity_is_stored_verbatim() {
     let written = identity::set_identity(
         &exec,
         &repo.path,
-        "-dashed name",
-        "-dash@example.com",
+        &IdentityValues::new("-dashed name", "-dash@example.com"),
         ConfigScope::Local,
         &cancel,
     )
@@ -375,10 +374,14 @@ async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
     repo.commit_file("a.txt", "one\n", "root");
     let (exec, spawns, cancel) = counted();
 
-    let written =
-        identity::set_local_identity(&exec, &repo.path, "Test User", "work@example.com", &cancel)
-            .await
-            .expect("set_local_identity");
+    let written = identity::set_local_identity(
+        &exec,
+        &repo.path,
+        &IdentityValues::new("Test User", "work@example.com"),
+        &cancel,
+    )
+    .await
+    .expect("set_local_identity");
     assert!(written.is_saved(), "{written:?}");
     assert_eq!(
         writes(&spawns),
@@ -388,9 +391,10 @@ async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
 
     // Both emptied while both are held: both come out.
     let (exec, spawns, cancel) = counted();
-    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
-        .await
-        .expect("set_local_identity");
+    let written =
+        identity::set_local_identity(&exec, &repo.path, &IdentityValues::new("", ""), &cancel)
+            .await
+            .expect("set_local_identity");
     assert!(written.is_saved(), "{written:?}");
     assert_eq!(written.identity, identity::Identity::default());
     assert_eq!(
@@ -404,9 +408,10 @@ async fn the_keys_the_decision_names_are_the_ones_git_is_asked_for() {
     // Again, over a file that holds neither: the `--unset` git would
     // refuse must not be sent.
     let (exec, spawns, cancel) = counted();
-    let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
-        .await
-        .expect("set_local_identity");
+    let written =
+        identity::set_local_identity(&exec, &repo.path, &IdentityValues::new("", ""), &cancel)
+            .await
+            .expect("set_local_identity");
     assert!(
         written.is_saved(),
         "there was nothing to take out: {written:?}"
@@ -442,8 +447,7 @@ mod periodic {
         let written = identity::set_identity(
             &exec,
             &repo.path,
-            "山田 太郎",
-            "taro@example.com",
+            &IdentityValues::new("山田 太郎", "taro@example.com"),
             ConfigScope::Local,
             &cancel,
         )
@@ -481,8 +485,7 @@ mod periodic {
         identity::set_identity(
             &exec,
             &repo.path,
-            injection,
-            "e@example.com",
+            &IdentityValues::new(injection, "e@example.com"),
             ConfigScope::Local,
             &cancel,
         )
@@ -495,8 +498,7 @@ mod periodic {
         identity::set_identity(
             &exec,
             &repo.path,
-            "  Ada Lovelace  ",
-            "ada<at>example.com",
+            &IdentityValues::new("  Ada Lovelace  ", "ada<at>example.com"),
             ConfigScope::Local,
             &cancel,
         )
@@ -528,8 +530,7 @@ mod periodic {
         let err = identity::set_identity(
             &exec,
             &repo.path,
-            "   ",
-            "e@example.com",
+            &IdentityValues::new("   ", "e@example.com"),
             ConfigScope::Local,
             &cancel,
         )
@@ -552,10 +553,14 @@ mod periodic {
         let exec = isolated_global(repo.global_config());
         let cancel = CancellationToken::new();
 
-        let written =
-            identity::set_local_identity(&exec, &repo.path, "", "work@example.com", &cancel)
-                .await
-                .expect("set_local_identity");
+        let written = identity::set_local_identity(
+            &exec,
+            &repo.path,
+            &IdentityValues::new("", "work@example.com"),
+            &cancel,
+        )
+        .await
+        .expect("set_local_identity");
         assert!(written.is_saved(), "both halves as asked: {written:?}");
         assert!(written.message.is_empty(), "nothing to report");
         assert_eq!(written.identity.name, None, "the name is not written here");
@@ -600,9 +605,10 @@ mod periodic {
         let exec = isolated_global(repo.global_config());
         let cancel = CancellationToken::new();
 
-        let written = identity::set_local_identity(&exec, &repo.path, "", "", &cancel)
-            .await
-            .expect("set_local_identity");
+        let written =
+            identity::set_local_identity(&exec, &repo.path, &IdentityValues::new("", ""), &cancel)
+                .await
+                .expect("set_local_identity");
         assert!(written.is_saved(), "both were taken out: {written:?}");
         assert_eq!(written.identity, identity::Identity::default());
 

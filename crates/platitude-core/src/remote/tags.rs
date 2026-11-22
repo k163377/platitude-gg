@@ -87,7 +87,7 @@ pub async fn list_tags(
 /// Sends one tag to one remote.
 ///
 /// `expect` makes it a leased overwrite pinned to the commit the remote was
-/// last seen holding this tag on; empty sends it plain, which git refuses
+/// last seen holding this tag on; none sends it plain, which git refuses
 /// where the name already stands on something else over there.
 ///
 /// A plain push onto a name the remote holds on **the same commit** is
@@ -111,7 +111,7 @@ pub async fn push_tag(
     executor: &GitExecutor,
     workdir: &Path,
     target: &RemoteTag,
-    expect: &str,
+    expect: Option<Oid>,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
@@ -119,7 +119,7 @@ pub async fn push_tag(
     let refspec = format!("{0}:{0}", sent.refname);
     let mut cmd = porcelain_push(workdir, timeout);
     let mut replaced = None;
-    if !expect.is_empty() {
+    if let Some(expect) = expect {
         let (pinned, there) = lease_on(executor, workdir, target, expect, timeout, cancel).await?;
         cmd = cmd.arg(format!("--force-with-lease={}:{pinned}", sent.refname));
         replaced = there;
@@ -198,7 +198,7 @@ pub async fn delete_remote_tag(
     executor: &GitExecutor,
     workdir: &Path,
     target: &RemoteTag,
-    expect: &str,
+    expect: Oid,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
@@ -215,8 +215,9 @@ pub async fn delete_remote_tag(
     Err(super::refusal::tag_refusal(command, &out, &sent))
 }
 
-/// What a delete of this tag is leased to: the object the remote holds it
-/// on, where that peels to `expect`, and `expect` otherwise.
+/// What a write over this tag on the remote — its delete, or a push that
+/// replaces it — is leased to: the object the remote holds it on, where
+/// that peels to `expect`, and `expect` otherwise.
 ///
 /// A lease compares the ref's own value, which for an annotated tag is the
 /// tag object — leased to the commit it peels to, the delete is refused as
@@ -227,10 +228,10 @@ async fn lease_on(
     executor: &GitExecutor,
     workdir: &Path,
     target: &RemoteTag,
-    expect: &str,
+    expect: Oid,
     timeout: Duration,
     cancel: &CancellationToken,
-) -> Result<(String, Option<HeldTag>), GitError> {
+) -> Result<(Oid, Option<HeldTag>), GitError> {
     let there = holding(executor, workdir, target, timeout, cancel).await?;
     Ok((pin_for(there.as_ref(), expect), there))
 }
@@ -301,10 +302,10 @@ fn parse_holding(bytes: &[u8], refname: &str) -> Option<HeldTag> {
 }
 
 /// [`lease_on`]'s choice: the remote's object where it peels to `expect`.
-fn pin_for(there: Option<&HeldTag>, expect: &str) -> String {
+fn pin_for(there: Option<&HeldTag>, expect: Oid) -> Oid {
     match there {
-        Some(there) if there.commit.to_hex() == expect => there.object.to_hex(),
-        _ => expect.to_string(),
+        Some(there) if there.commit == expect => there.object,
+        _ => expect,
     }
 }
 
@@ -327,7 +328,7 @@ pub async fn replace_remote_tag(
     workdir: &Path,
     old: &RemoteTag,
     to: &str,
-    expect: &str,
+    expect: Oid,
     timeout: Duration,
     cancel: &CancellationToken,
 ) -> Result<Option<HeldTag>, GitError> {
@@ -335,7 +336,7 @@ pub async fn replace_remote_tag(
         remote: old.remote.clone(),
         tag: to.to_string(),
     };
-    push_tag(executor, workdir, &new, "", timeout, cancel).await?;
+    push_tag(executor, workdir, &new, None, timeout, cancel).await?;
     delete_remote_tag(executor, workdir, old, expect, timeout, cancel).await
 }
 
@@ -484,8 +485,10 @@ a9771664a8219f845abfd8ce6f5d7af521247539\trefs/tags/light\n";
     const SHOWN: &str = "a9771664a8219f845abfd8ce6f5d7af521247539";
     const ELSEWHERE: &str = "8e54e2935b5e9b6cf32833403904fd3f68da81f2";
 
+    /// The lease's pin in hex, for `expect` in hex.
     fn pin(bytes: &[u8], refname: &str, expect: &str) -> String {
-        pin_for(parse_holding(bytes, refname).as_ref(), expect)
+        let expect = Oid::from_hex_str(expect).expect("an object name");
+        pin_for(parse_holding(bytes, refname).as_ref(), expect).to_hex()
     }
 
     #[test]

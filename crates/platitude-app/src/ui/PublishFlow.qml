@@ -139,11 +139,16 @@ Item {
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "", "")
     }
     /// Leased against the commit this window shows, not the tracking ref — a background fetch moves that and would
-    /// make it a plain force. A remote that moved since is refused, and core answers with a fetch.
+    /// make it a plain force. A remote that moved since is refused, and core answers with a fetch. With no commit of
+    /// the far side on screen (`leaseOid` empty) the lease is git's own, to its tracking ref
+    /// (`remote::PushForce::WithTrackingLease`): the press is offered as what git would do, not held back for what
+    /// the list does not draw (user decision — ask before changing).
     function forcePush() {
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "lease", publishFlow.leaseOid())
     }
-    /// Commit the remote branch the counts are against (`pushMeasured`) points at, as shown here.
+    /// Commit the remote branch the counts are against (`pushMeasured`) points at, as shown here. Empty where the
+    /// remotes list holds no such row: an upstream fetched outside `refs/remotes/` is counted by git and never
+    /// listed, and a count can land one read ahead of its row.
     function leaseOid() {
         return publishFlow.pushMeasured !== ""
                ? publishFlow.remotesModel.oidOfName(publishFlow.pushMeasured)

@@ -138,12 +138,7 @@ async fn a_worktree_that_has_committed_draws_no_row_until_its_reading_catches_up
     // moves where the worktree stands, and the refs read sees its branch move,
     // which asks for the walk. The worktree's reading is not retaken by it.
     let hour = Duration::from_secs(3600);
-    session.set_pace_bounds(PaceBounds {
-        own_floor: hour,
-        own_ceiling: hour,
-        worktree_floor: hour,
-        worktree_ceiling: hour,
-    });
+    session.set_pace_bounds(PaceBounds::new(hour..=hour, hour..=hour));
     session.set_paced(true);
     session.poll_now();
 

@@ -4,10 +4,12 @@
 //! [`SessionEvent::DiscardsChanged`].
 
 use crate::support::exec::env;
-use crate::support::remote::{far, far_tag, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{far_tag, origin_and_clone, row};
 use crate::support::session::{opened, write_answer};
 use crate::support::stage::fp;
 use crate::support::{TestRepo, info};
+use platitude_core::OperationKind;
 use platitude_core::branch::{CheckoutTarget, ResetMode};
 use platitude_core::commit::CommitOptions;
 use platitude_core::details::DiffTarget;
@@ -17,11 +19,6 @@ use platitude_core::patch::HunkSelect;
 use platitude_core::remote::PushForce;
 use platitude_core::session::SessionEvent;
 use platitude_core::stage::DiscardSide;
-use platitude_core::{Oid, OperationKind};
-
-fn oid(hex: &str) -> Oid {
-    Oid::from_hex_str(hex.trim()).expect("an oid")
-}
 
 async fn listed(repo: &TestRepo) -> Vec<Discard> {
     let (executor, cancel) = env();
@@ -774,6 +771,43 @@ async fn a_dropped_stash_is_on_the_record_and_comes_back() {
     session.close_and_wait().await;
 }
 
+/// A pinned overwrite records the commit it was leased to — what the
+/// remote held — not where the remote-tracking ref stands here.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pinned_overwrite_records_the_commit_it_was_leased_to() {
+    let (_bare, mut work) = origin_and_clone();
+    work.git(&["switch", "-c", "over", "main"]);
+    let first = work.commit_file_id("over.txt", "1\n", "first");
+    work.git(&["push", "-u", "origin", "over"]);
+    work.git(&["reset", "--hard", "HEAD~1"]);
+    work.commit_file("over.txt", "2\n", "second");
+    // The tracking ref off what the remote holds: the pin alone names it.
+    work.git(&["update-ref", "refs/remotes/origin/over", "main"]);
+    let (sink, session) = opened(&work).await;
+
+    let id = session
+        .push_current(
+            "origin".into(),
+            PushForce::WithLease {
+                expect: oid(&first),
+            },
+        )
+        .expect("the push is accepted");
+    assert_eq!(write_answer(&sink, id).await, None);
+
+    let all = listed(&work).await;
+    assert_eq!(all[0].kind, DiscardKind::ForcePushed, "{all:#?}");
+    assert!(
+        matches!(
+            &all[0].parts[0].restore,
+            Restore::Branch { name, tip, .. }
+                if name == "over-pgg-restored" && *tip == oid(&first)
+        ),
+        "{all:#?}"
+    );
+    session.close_and_wait().await;
+}
+
 /// What went from a remote: a branch deleted there, one pushed over, and a
 /// tag deleted there — each on the record with what the remote held, and
 /// each coming back here, under a name clear of the ones here.
@@ -794,15 +828,15 @@ async fn what_went_from_a_remote_is_on_the_record_and_comes_back_here() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_remote_branch(far("origin", "gone"), gone.trim().into())
+        .delete_remote_branch(row("origin", "gone"), oid(&gone))
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session
-        .push_current("origin".into(), PushForce::WithLease { expect: None })
+        .push_current("origin".into(), PushForce::WithTrackingLease)
         .expect("the push is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session
-        .delete_remote_tag(far_tag("origin", "v1"), object.clone())
+        .delete_remote_tag(far_tag("origin", "v1"), oid(&object))
         .expect("the tag's delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 
@@ -864,11 +898,11 @@ async fn a_remote_annotated_tag_is_recorded_as_the_remote_held_it() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .delete_remote_tag(far_tag("origin", "v1"), shown.clone())
+        .delete_remote_tag(far_tag("origin", "v1"), oid(&shown))
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     let id = session
-        .delete_tag_everywhere(far_tag("origin", "v2"), shown.clone())
+        .delete_tag_everywhere(far_tag("origin", "v2"), oid(&shown))
         .expect("the delete is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 
@@ -914,7 +948,7 @@ async fn a_tag_pushed_over_is_recorded_as_the_remote_held_it() {
     let (sink, session) = opened(&work).await;
 
     let id = session
-        .push_tag(far_tag("origin", "v1"), shown)
+        .push_tag(far_tag("origin", "v1"), Some(oid(&shown)))
         .expect("the push is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
 

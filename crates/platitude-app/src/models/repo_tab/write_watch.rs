@@ -25,8 +25,9 @@ pub(super) enum WatchedWrite {
     #[default]
     Asleep,
     /// The next write this tab is asked to make is the one to keep.
-    /// `turned_down`: the queue took nothing (the session is closed) —
-    /// unlike a press not yet in, which the watch cannot see.
+    /// `turned_down`: the queue took nothing — the session is closed, or
+    /// the tab turned the write away before it — unlike a press not yet
+    /// in, which the watch cannot see.
     Armed { turned_down: bool },
     /// That ask was taken under this id, and these are the two boundaries
     /// behind it (`session::write` の三境界).

@@ -334,7 +334,7 @@ ColumnLayout {
                                        worktreesField.text === "" ? 0 : Number(worktreesField.text))
         worktreesField.text = String(AppBackend.worktreesIntervalSecs)
     }
-    // A pair is written whole: the ceiling is held to the floor by core (`session::pace_bounds_secs`), so its boxes
+    // A pair is written whole: the ceiling is held to the floor by core (`session::PaceSecs`), so its boxes
     // show what came back. Empty is that bound's default. Each pair puts back only its own boxes — the way out writes
     // one pair after the other, and the second's boxes may hold an edit nobody finished.
     function applyRefreshBounds() {

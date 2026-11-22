@@ -536,8 +536,8 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
 #[test]
 fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     let mut ours = local("main", true);
-    ours.ahead = 2;
-    ours.behind = 1;
+    ours.counts.ahead = 2;
+    ours.counts.behind = 1;
     let mut mine = section("branches", Source::Locals(locals(vec![ours])));
     mine.arrange();
     assert_eq!(numbers(&mine, 0, Role::Ahead), 2);
@@ -545,8 +545,8 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
 
     let mut read = remote("origin/main");
     read.tracked_by = "main".into();
-    read.ahead = 2;
-    read.behind = 1;
+    read.counts.ahead = 2;
+    read.counts.behind = 1;
     let mut theirs = section(
         "remotes",
         // Name order, the way the join hands the list over: the lookups
@@ -620,8 +620,7 @@ fn a_branch_another_worktree_holds_wears_the_state_in_the_shared_slot() {
         upstream_drifted: false,
         held_elsewhere: held,
         tracked_by: "".into(),
-        ahead: 0,
-        behind: 0,
+        counts: platitude_core::AheadBehind::default(),
     };
     let mut snap = platitude_core::session::RefsSnapshot {
         locals: vec![local("main", false), local("feature/topic-a", true)],
@@ -676,8 +675,7 @@ fn a_branch_carries_the_upstream_that_is_not_here_in_the_shared_slot() {
         upstream_drifted: false,
         held_elsewhere: false,
         tracked_by: "".into(),
-        ahead: 0,
-        behind: 0,
+        counts: platitude_core::AheadBehind::default(),
     };
     let mut snap = platitude_core::session::RefsSnapshot {
         locals: vec![
@@ -871,4 +869,51 @@ fn an_upstream_is_named_wherever_it_stands() {
         pair("", ""),
         "a name this section does not carry"
     );
+}
+
+/// What a rename asks about: the remote branch the renamed one is measured
+/// against, whether its row is listed or gone from the list — and nothing
+/// for a branch measured against one here, which no remote carries, nor for
+/// one whose upstream is unlisted because it is fetched outside the remote
+/// branches, which is there all the same (`upstream_to_carry`, デザイン規約
+/// §手元の改名の後のリモート).
+#[test]
+fn a_rename_asks_about_a_remote_upstream_listed_or_gone() {
+    let mut reads = local("reads", false);
+    reads.upstream = "origin/reads".into();
+    let mut stacked = local("stacked", false);
+    stacked.upstream_local = "main".into();
+    stacked.upstream_here = true;
+    let mut lost = local("lost", false);
+    lost.upstream_gone = "origin/lost".into();
+    let mut lost_here = local("lost-here", false);
+    lost_here.upstream_gone = "base".into();
+    lost_here.upstream_here = true;
+    // As `RefJoins::upstream_gone` leaves a ref outside `refs/remotes/`.
+    let mut mirrored = local("mirrored", false);
+    mirrored.upstream_gone = "refs/mirror/origin/mirrored".into();
+    let mut list = vec![
+        reads,
+        stacked,
+        lost,
+        lost_here,
+        mirrored,
+        local("main", true),
+        local("plain", false),
+    ];
+    list.sort_by(|a, b| a.short.cmp(&b.short));
+    let mut model = section("branches", Source::Locals(locals(list)));
+    model.arrange();
+    let asked = |name: &str| model.upstream_to_carry(name.to_string(), vec!["origin".to_string()]);
+    assert_eq!(asked("reads"), "origin/reads");
+    assert_eq!(
+        asked("lost"),
+        "origin/lost",
+        "gone, asked about all the same"
+    );
+    assert_eq!(asked("stacked"), "", "a branch here");
+    assert_eq!(asked("lost-here"), "", "a branch here, gone or not");
+    assert_eq!(asked("mirrored"), "", "no remote here owns the name");
+    assert_eq!(asked("plain"), "", "measured against nothing");
+    assert_eq!(asked("nobody"), "", "a name this section does not carry");
 }

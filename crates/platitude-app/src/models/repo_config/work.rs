@@ -157,6 +157,7 @@ impl RepoConfigModel {
         };
         self.listen();
         self.changed();
+        let values = platitude_core::identity::IdentityValues::new(&name, &email);
         let feed = Arc::clone(&self.feed);
         let path = self.repo_path.clone();
         // Held by the hub: the screen and its tab can both go, and the
@@ -168,7 +169,7 @@ impl RepoConfigModel {
                 let cancel = CancellationToken::new();
                 let workdir = PathBuf::from(&path);
                 let written = platitude_core::identity::set_local_identity(
-                    &executor, &workdir, &name, &email, &cancel,
+                    &executor, &workdir, &values, &cancel,
                 )
                 .await;
                 let msg = match written {

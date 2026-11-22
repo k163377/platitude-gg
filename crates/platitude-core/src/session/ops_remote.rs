@@ -85,7 +85,11 @@ impl RepoSession {
     /// ([`Self::catch_up_after`]). A forced push that replaced the remote's
     /// tip, rather than adding to it, puts the tip it replaced on the
     /// discard record (`discards::record`) — read before the push: the lease's
-    /// commit, else the remote-tracking ref.
+    /// commit, else the remote-tracking ref by the default refspec's name
+    /// ([`remote::RemoteBranch::tracking_ref`]). An upstream fetched outside
+    /// the remote branches has no ref there, so what a push over it replaced
+    /// goes unrecorded — exceptional, and given no mechanism of its own
+    /// (user decision — ask before changing).
     async fn push_recorded(
         self: &Arc<Self>,
         exec: &GitExecutor,
@@ -96,8 +100,8 @@ impl RepoSession {
     ) -> Result<(), GitError> {
         let expect = match &spec.force {
             remote::PushForce::None => None,
-            remote::PushForce::WithLease { expect } => Some(expect.as_deref()),
-            remote::PushForce::Force => Some(None),
+            remote::PushForce::WithLease { expect } => Some(Some(*expect)),
+            remote::PushForce::WithTrackingLease | remote::PushForce::Force => Some(None),
         };
         let replaced = match expect {
             Some(expect) => remote_tip(exec, &repo.workdir, &spec.target, expect, cancel).await?,
@@ -197,7 +201,7 @@ impl RepoSession {
         self: &Arc<Self>,
         branch: String,
         target: remote::RemoteBranch,
-        expect: String,
+        expect: Option<Oid>,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -205,7 +209,7 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let spec = remote::publish_spec(&branch, &target, &expect);
+                let spec = remote::publish_spec(&branch, &target, expect);
                 s.push_recorded(&exec, &repo, &spec, timeout, &cancel).await
             },
         )
@@ -280,7 +284,7 @@ impl RepoSession {
         let tip = format!("refs/heads/{local}");
         let s = Arc::clone(self);
         self.runtime.spawn(async move {
-            let mut far_tip = String::new();
+            let mut far_tip = None;
             let mut theirs = 0;
             let state = match remote::branch_tip(&s.executor, &workdir, &target, timeout, &cancel)
                 .await
@@ -290,7 +294,7 @@ impl RepoSession {
                 // contains the remote's tip. A tip never fetched here leaves
                 // neither answer ours to give.
                 Ok(Some(over_there)) => {
-                    far_tip = over_there.to_hex();
+                    far_tip = Some(over_there);
                     match commit::is_in_history(&s.executor, &workdir, &over_there, &tip, &cancel)
                         .await
                     {
@@ -348,8 +352,8 @@ impl RepoSession {
     /// upstream comes off what tracked it ([`Self::untrack_deleted`]).
     pub fn delete_remote_branch(
         self: &Arc<Self>,
-        target: remote::RemoteBranch,
-        expect: String,
+        target: remote::TrackedBranch,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let status = self.measures_head(None, Some(&target));
@@ -360,18 +364,18 @@ impl RepoSession {
             AfterWrite::Name { status },
             &[LeavingRef::Remote(&leaving)],
             move |exec, repo, cancel| async move {
-                let before =
-                    remote_tip(&exec, &repo.workdir, &target, Some(&expect), &cancel).await?;
+                let far = target.far();
+                let before = remote_tip(&exec, &repo.workdir, far, Some(expect), &cancel).await?;
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
-                    &target,
-                    &expect,
+                    far,
+                    expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, target.remote.clone());
+                s.catch_up_after(&result, far.remote.clone());
                 result?;
                 if let Some(before) = before {
                     let keep = record_token();
@@ -385,7 +389,7 @@ impl RepoSession {
                     .await;
                     s.recorded(written);
                 }
-                s.untrack_deleted(&exec, &repo, &target, &cancel).await;
+                s.untrack_deleted(&exec, &repo, far, &cancel).await;
                 Ok(())
             },
         )
@@ -446,9 +450,9 @@ impl RepoSession {
     pub fn delete_branch_everywhere(
         self: &Arc<Self>,
         branch: String,
-        target: remote::RemoteBranch,
+        target: remote::TrackedBranch,
         force: bool,
-        expect: String,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let status = self.measures_head(Some(&branch), Some(&target));
@@ -462,21 +466,21 @@ impl RepoSession {
                 LeavingRef::Remote(&leaving.1),
             ],
             move |exec, repo, cancel| async move {
+                let far = target.far();
                 let here = discards::branch_before(&exec, &repo.workdir, &branch, &cancel).await?;
-                let there =
-                    remote_tip(&exec, &repo.workdir, &target, Some(&expect), &cancel).await?;
+                let there = remote_tip(&exec, &repo.workdir, far, Some(expect), &cancel).await?;
                 branch::delete(&exec, &repo.workdir, &branch, force, &cancel).await?;
                 s.own_config_rewrite();
                 let result = remote::delete_remote_branch(
                     &exec,
                     &repo.workdir,
-                    &target,
-                    &expect,
+                    far,
+                    expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, target.remote.clone());
+                s.catch_up_after(&result, far.remote.clone());
                 // The branch here went whatever the remote said.
                 if let Some(here) = here {
                     let there = there.filter(|_| result.is_ok());
@@ -494,7 +498,7 @@ impl RepoSession {
                 }
                 result?;
                 // Other branches here may have tracked it too.
-                s.untrack_deleted(&exec, &repo, &target, &cancel).await;
+                s.untrack_deleted(&exec, &repo, far, &cancel).await;
                 Ok(())
             },
         )
@@ -543,9 +547,9 @@ impl RepoSession {
     /// UI asks first: the old name is destroyed.
     pub fn replace_remote_branch(
         self: &Arc<Self>,
-        old: remote::RemoteBranch,
+        old: remote::TrackedBranch,
         to: String,
-        expect: String,
+        expect: Oid,
     ) -> Option<OperationId> {
         let timeout = self.network_timeout();
         let s = Arc::clone(self);
@@ -553,18 +557,19 @@ impl RepoSession {
             OperationKind::Push,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let before = remote_tip(&exec, &repo.workdir, &old, Some(&expect), &cancel).await?;
+                let before =
+                    remote_tip(&exec, &repo.workdir, old.far(), Some(expect), &cancel).await?;
                 let result = remote::replace_remote_branch(
                     &exec,
                     &repo.workdir,
                     &old,
                     &to,
-                    &expect,
+                    expect,
                     timeout,
                     &cancel,
                 )
                 .await;
-                s.catch_up_after(&result, old.remote);
+                s.catch_up_after(&result, old.far().remote.clone());
                 result?;
                 if let Some(before) = before {
                     let keep = record_token();

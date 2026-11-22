@@ -303,8 +303,9 @@ impl NavSectionModel {
     }
 
     /// Whether `remote` already has a branch called `name` — asked of the
-    /// remotes section by every door that would push a name there, and by
-    /// the GitHub links, which point only at what the remote has.
+    /// remotes section by a remote row's name boxes, which refuse a name
+    /// taken there, and by the GitHub links, which point only at what the
+    /// remote has.
     #[qslot]
     pub(super) fn has_remote_branch(&self, remote: String, name: String) -> bool {
         !self.oid_of_name(format!("{remote}/{name}")).is_empty()
@@ -471,6 +472,40 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
+    /// The remote branch a rename of this branch asks about
+    /// (デザイン規約 §手元の改名の後のリモート): the one it is measured
+    /// against, listed or gone from the list — the question says which
+    /// (`RenameCarryFlow.gone`). Empty where it is measured against a
+    /// branch here or against nothing, and for every section but the
+    /// branches.
+    ///
+    /// A gone one is asked about only where one of `remote_names` owns the
+    /// name: an upstream fetched outside the remote branches is out of the
+    /// list as well (`BranchItem::upstream_gone` is "no row answers", not
+    /// git's `[gone]`) and is there all the same — the answer would write a
+    /// setting over one that works.
+    #[qslot]
+    pub(super) fn upstream_to_carry(&self, name: String, remote_names: Vec<String>) -> String {
+        let Some(branch) = self
+            .all
+            .branch_named(&name)
+            .filter(|branch| !branch.upstream_here)
+        else {
+            return String::new();
+        };
+        let listed = branch.upstream.as_str();
+        if !listed.is_empty() {
+            return listed.to_string();
+        }
+        let gone = branch.upstream_gone.as_str();
+        let remotes = remote_names.iter().map(String::as_str);
+        if platitude_core::refs::split_remote_ref(gone, remotes).is_some() {
+            gone.to_string()
+        } else {
+            String::new()
+        }
+    }
+
     /// The upstream this branch is configured with, wherever it stands —
     /// a remote reading, a branch here, or gone (`BranchItem::upstream` /
     /// `upstream_local` / `upstream_gone`). What the menu offers to take
@@ -539,7 +574,7 @@ impl NavSectionModel {
     pub(super) fn ahead_of(&self, name: String) -> i32 {
         self.all
             .branch_named(&name)
-            .map_or(0, |branch| super::field::counted(branch.ahead))
+            .map_or(0, |branch| super::field::counted(branch.counts.ahead))
     }
 
     /// The other half of that pair — how far it is behind.
@@ -547,7 +582,7 @@ impl NavSectionModel {
     pub(super) fn behind_of(&self, name: String) -> i32 {
         self.all
             .branch_named(&name)
-            .map_or(0, |branch| super::field::counted(branch.behind))
+            .map_or(0, |branch| super::field::counted(branch.counts.behind))
     }
 
     /// The commit this branch's configured upstream stands on, hex — the

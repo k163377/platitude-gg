@@ -12,7 +12,8 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::{Log, assert_answered, logged};
-use crate::support::remote::{far, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{origin_and_clone, row};
 use platitude_core::process::CommandEnd;
 use platitude_core::remote::{self, PushForce};
 use platitude_core::{conflict, eol, identity};
@@ -86,9 +87,9 @@ async fn reading_the_tracking_branches_answers_by_code() {
     remote::replace_remote_branch(
         &exec,
         &work.path,
-        &far("origin", "billing"),
+        &row("origin", "billing"),
         "billing-v2",
-        &tip,
+        oid(&tip),
         NET,
         &cancel,
     )

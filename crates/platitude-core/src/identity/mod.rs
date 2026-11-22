@@ -16,6 +16,7 @@ use crate::process::{GitCommand, GitExecutor};
 
 mod local;
 mod read;
+mod values;
 mod verify;
 mod write;
 
@@ -24,6 +25,7 @@ pub use crate::config::ConfigScope;
 pub use local::{load_local, set_local_identity};
 pub use read::{AuthorConfig, Identity, SignatureFormat, SigningConfig, load};
 // Reached by the siblings through `use super::*`.
-use read::{non_empty, parse_config};
+use read::parse_config;
+pub use values::IdentityValues;
 pub use verify::{Signature, SignatureStatus, verify_commit};
 pub use write::{IdentityWrite, set_identity};

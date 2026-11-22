@@ -17,16 +17,29 @@ use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
 use super::standing::{PushTrack, THIS_REPOSITORY};
+use crate::oid::Oid;
 
 /// How hard a push may overwrite the remote.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PushForce {
     /// Fast-forward only; git refuses anything else.
     None,
-    /// `--force-with-lease`. `expect` pins the remote commit the user saw;
-    /// without it the lease checks the remote-tracking ref, which a
-    /// background fetch can advance, turning it into a plain force.
-    WithLease { expect: Option<String> },
+    /// `--force-with-lease=<branch>:<expect>`, pinned to the remote commit
+    /// the user saw (デザイン規約 §相手の履歴を置き換える): the form wherever
+    /// the screen shows that commit.
+    ///
+    /// An object name, not a string: git reads the lease's second half as a
+    /// revision, so a name there — a branch's, `HEAD` — would pin to
+    /// whatever it names as the push runs.
+    WithLease { expect: Oid },
+    /// `--force-with-lease` with no value: git leases the branch to the
+    /// remote-tracking ref it has for it. For an overwrite with no commit
+    /// of the far side on screen to pin to — an upstream fetched outside
+    /// the remote branches is counted by git and never listed, and a count
+    /// can land one read ahead of its row. A fetch since moves that ref,
+    /// so this guards less than a pin; the press is offered all the same,
+    /// as what git itself would do (user decision — ask before changing).
+    WithTrackingLease,
     /// `--force`: unconditional. The UI confirms before choosing this.
     Force,
 }
@@ -170,21 +183,18 @@ fn decide_push(
 /// the question named, checked out or not: HEAD may have moved in a
 /// terminal while the question stood.
 ///
-/// `expect` is the commit the question showed as being over there. Empty
+/// `expect` is the commit the question showed as being over there. None
 /// pushes fast-forward only; a commit makes it a lease pinned to what was
 /// on screen, so a remote that moved since is refused
 /// (デザイン規約 §相手の履歴を置き換える).
-pub fn publish_spec(branch: &str, target: &RemoteBranch, expect: &str) -> PushSpec {
+pub fn publish_spec(branch: &str, target: &RemoteBranch, expect: Option<Oid>) -> PushSpec {
     PushSpec {
         target: target.clone(),
         local: format!("refs/heads/{branch}"),
         set_upstream: true,
-        force: if expect.is_empty() {
-            PushForce::None
-        } else {
-            PushForce::WithLease {
-                expect: Some(expect.to_string()),
-            }
+        force: match expect {
+            None => PushForce::None,
+            Some(expect) => PushForce::WithLease { expect },
         },
     }
 }
@@ -232,10 +242,13 @@ pub async fn push(
     }
     match &spec.force {
         PushForce::None => {}
-        PushForce::WithLease { expect: None } => cmd = cmd.arg("--force-with-lease"),
-        PushForce::WithLease { expect: Some(oid) } => {
-            cmd = cmd.arg(format!("--force-with-lease={}:{oid}", spec.target.branch));
+        PushForce::WithLease { expect } => {
+            cmd = cmd.arg(format!(
+                "--force-with-lease={}:{expect}",
+                spec.target.branch
+            ));
         }
+        PushForce::WithTrackingLease => cmd = cmd.arg("--force-with-lease"),
         PushForce::Force => cmd = cmd.arg("--force"),
     }
     let refspec = format!("{}:{}", spec.local, sent.refname);
@@ -266,7 +279,7 @@ pub async fn push_track(
     workdir: &Path,
     branch: &str,
     cancel: &CancellationToken,
-) -> Result<PushTrack, GitError> {
+) -> Result<Option<PushTrack>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
         .args([
@@ -313,8 +326,8 @@ fn parse_push_tracks(bytes: &[u8]) -> Vec<(String, PushTrack)> {
         .filter_map(|line| {
             let cut = line.iter().position(|b| *b == 0)?;
             let branch = std::str::from_utf8(&line[..cut]).ok()?;
-            let track = track_of(branch, &line[cut + 1..]);
-            (!track.tracking.is_empty()).then(|| (branch.to_string(), track))
+            let track = track_of(branch, &line[cut + 1..])?;
+            Some((branch.to_string(), track))
         })
         .collect();
     tracks.sort_by(|a, b| a.0.cmp(&b.0));
@@ -322,7 +335,7 @@ fn parse_push_tracks(bytes: &[u8]) -> Vec<(String, PushTrack)> {
 }
 
 /// One [`push_track`] answer, its first line.
-fn parse_push_track(branch: &str, bytes: &[u8]) -> PushTrack {
+fn parse_push_track(branch: &str, bytes: &[u8]) -> Option<PushTrack> {
     track_of(
         branch,
         bytes.split(|b| *b == b'\n').next().unwrap_or_default(),
@@ -330,36 +343,27 @@ fn parse_push_track(branch: &str, bytes: &[u8]) -> PushTrack {
 }
 
 /// One line: `<ref>\0<remote ref>\0<track>`. Every way of having nothing
-/// to count against answers the empty [`PushTrack`].
-fn track_of(branch: &str, line: &[u8]) -> PushTrack {
+/// to count against answers none.
+fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
     let mut fields = line.split(|b| *b == 0);
-    let (Some(tracking), Some(remote_ref), Some(track)) =
-        (fields.next(), fields.next(), fields.next())
-    else {
-        return PushTrack::default();
-    };
+    let (tracking, remote_ref, track) = (fields.next()?, fields.next()?, fields.next()?);
     // Set only by a `remote.<name>.push` refspec, which moves `%(push)`
     // where the send's own refspec does not go.
     if !remote_ref.is_empty() && remote_ref != format!("refs/heads/{branch}").as_bytes() {
-        return PushTrack::default();
+        return None;
     }
     // Only a remote branch is on screen for a lease to pin to; `[gone]`
     // names a ref nothing has fetched.
-    let Some(tracking) = std::str::from_utf8(tracking)
-        .ok()
-        .and_then(|name| name.strip_prefix("refs/remotes/"))
-    else {
-        return PushTrack::default();
-    };
+    let tracking = std::str::from_utf8(tracking)
+        .ok()?
+        .strip_prefix("refs/remotes/")?;
     if track == b"[gone]" {
-        return PushTrack::default();
+        return None;
     }
-    let (ahead, behind) = crate::refs::parse_track(track);
-    PushTrack {
+    Some(PushTrack {
         tracking: tracking.to_string(),
-        ahead: i32::try_from(ahead).unwrap_or(i32::MAX),
-        behind: i32::try_from(behind).unwrap_or(i32::MAX),
-    }
+        counts: crate::refs::parse_track(track),
+    })
 }
 
 #[cfg(test)]
@@ -492,7 +496,7 @@ mod tests {
             "refs/heads/topic"
         );
         assert_eq!(
-            publish_spec("topic", &far("origin", "elsewhere"), "").local,
+            publish_spec("topic", &far("origin", "elsewhere"), None).local,
             "refs/heads/topic"
         );
     }
@@ -529,24 +533,27 @@ mod tests {
         let track = |line: &[u8]| parse_push_track("main", line);
         assert_eq!(
             track(b"refs/remotes/fork/main\0\0[ahead 1, behind 1]\n"),
-            PushTrack {
+            Some(PushTrack {
                 tracking: "fork/main".to_string(),
-                ahead: 1,
-                behind: 1,
-            }
+                counts: crate::AheadBehind {
+                    ahead: 1,
+                    behind: 1
+                },
+            })
         );
         assert_eq!(
             track(b"refs/remotes/fork/main\0\0\n"),
-            PushTrack {
+            Some(PushTrack {
                 tracking: "fork/main".to_string(),
-                ahead: 0,
-                behind: 0,
-            },
+                counts: crate::AheadBehind::default(),
+            }),
             "level with it is a count too"
         );
         assert_eq!(
-            track(b"refs/remotes/fork/main\0refs/heads/main\0[ahead 1]\n").tracking,
-            "fork/main",
+            track(b"refs/remotes/fork/main\0refs/heads/main\0[ahead 1]\n")
+                .map(|track| track.tracking)
+                .as_deref(),
+            Some("fork/main"),
             "a push refspec that sends the branch under its own name"
         );
         for (line, why) in [
@@ -562,7 +569,7 @@ mod tests {
             ),
             (b"", "no such branch"),
         ] {
-            assert_eq!(track(line), PushTrack::default(), "{why}");
+            assert_eq!(track(line), None, "{why}");
         }
     }
 
@@ -582,16 +589,20 @@ mod tests {
                     "feature/x".to_string(),
                     PushTrack {
                         tracking: "fork/feature/x".to_string(),
-                        ahead: 0,
-                        behind: 2,
+                        counts: crate::AheadBehind {
+                            ahead: 0,
+                            behind: 2
+                        },
                     }
                 ),
                 (
                     "main".to_string(),
                     PushTrack {
                         tracking: "fork/main".to_string(),
-                        ahead: 1,
-                        behind: 1,
+                        counts: crate::AheadBehind {
+                            ahead: 1,
+                            behind: 1
+                        },
                     }
                 ),
             ],

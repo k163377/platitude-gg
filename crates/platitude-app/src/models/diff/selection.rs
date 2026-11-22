@@ -38,6 +38,17 @@ enum Wash {
     Part(Range<usize>),
 }
 
+/// The selection as it stands: the column it is of, and what the hand
+/// holds there (`Selection` — the two ends, and a double-click's word).
+/// One value, replaced whole, so a column never stands without ends. The
+/// model holds one or none — none is nothing selected, and ends on one
+/// position are a selection holding nothing (`SelectionEnds`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct DiffSelection {
+    side: i32,
+    held: Selection,
+}
+
 impl DiffModel {
     /// The source line (the file's own bytes) column `side` of row `row`
     /// draws.
@@ -82,16 +93,19 @@ impl DiffModel {
 
     /// The rows the selection covers, clamped to the rows that exist.
     fn span(&self) -> Option<RangeInclusive<usize>> {
-        let (first, last) = self.sel_ends?.ordered().into_inner();
+        let (first, last) = self.selection?.held.ends().ordered().into_inner();
         let end = self.lines.len().checked_sub(1)?;
         (first.row <= end).then(|| first.row..=last.row.min(end))
     }
 
     pub(super) fn holds(&self, side: i32, position: SourcePosition) -> bool {
-        side == self.sel_side
-            && self
-                .sel_ends
-                .is_some_and(|ends| ends.ordered().contains(&position))
+        self.selection
+            .is_some_and(|of| of.side == side && of.held.ends().ordered().contains(&position))
+    }
+
+    /// The column the selection is of; the rows' own with none standing.
+    fn selected_side(&self) -> i32 {
+        self.selection.map_or(0, |of| of.side)
     }
 
     /// The end a drag carried (`focus` — a right-click's whole row ends at
@@ -99,110 +113,104 @@ impl DiffModel {
     /// caret would stand, which the menu key opens under
     /// (デザイン規約 §メニュー のキーボード).
     pub(super) fn moving_end(&self) -> Ended {
-        let Some(SelectionEnds { focus, .. }) = self.sel_ends else {
+        let Some(DiffSelection { side, held }) = self.selection else {
             return Ended::none();
         };
+        let focus = held.ends().focus;
         let place = self
-            .source_line(self.sel_side, focus.row)
+            .source_line(side, focus.row)
             .map_or(0, |text| spelled_place(text, focus.byte));
         Ended::some(TextEnd {
-            side: self.sel_side,
+            side,
             row: i32::try_from(focus.row).unwrap_or(i32::MAX),
             place: i32::try_from(place).unwrap_or(i32::MAX),
         })
     }
 
     pub(super) fn start_select(&mut self, side: i32, position: SourcePosition) -> bool {
-        self.sel_word = None;
-        let ends = SelectionEnds {
-            anchor: position,
-            focus: position,
-        };
-        self.move_ends(side, Some(ends))
+        self.select(Some(DiffSelection {
+            side,
+            held: Selection::pressed(position),
+        }))
     }
 
     /// A double-click: the word the character under the pointer stands in
     /// (`platitude_core::word`) becomes the selection, and the drag behind
-    /// it grows word by word (`SelectionEnds::grown_by_word`). `position`
+    /// it grows word by word (`Selection::dragged_to`). `position`
     /// names the character, not a boundary (`source_char`). Past the
     /// line's end there is no character, and nothing is taken: the blank
     /// there takes nothing, as a drag out there takes nothing. The empty
-    /// selection the second press laid stays (`start_select`), so a drag
-    /// behind it goes place by place, as from a plain press.
+    /// selection the second press laid stays (`start_select`) and holds no
+    /// word, so a drag behind it goes place by place, as from a plain press.
+    /// A word taken is of column `side`, as a press is.
     pub(super) fn take_word(&mut self, side: i32, position: LayoutPosition) -> bool {
         let run = self
             .source_line(side, position.row)
             .and_then(|text| word::run_at(text, source_char(text, position.utf16)?));
         let Some(run) = run else {
-            self.sel_word = None;
-            return false;
+            let wordless = self.selection.map(|of| DiffSelection {
+                held: of.held.wordless(),
+                ..of
+            });
+            return self.select(wordless);
         };
-        let ends = SelectionEnds::word(position.row, run);
-        let moved = self.move_ends(side, Some(ends));
-        self.sel_word = Some(ends);
-        moved
+        self.select(Some(DiffSelection {
+            side,
+            held: Selection::word(position.row, run),
+        }))
     }
 
     /// The far end follows the pointer; the pressed end and its column
     /// stay — `side` is read only where no selection stands to extend.
     pub(super) fn drag_select(&mut self, side: i32, position: SourcePosition) -> bool {
-        let Some(ends) = self.sel_ends else {
+        let Some(of) = self.selection else {
             return self.start_select(side, position);
         };
-        let ends = match self.sel_word {
-            Some(clicked) => clicked.grown_by_word(position, || {
-                word::run_across(
-                    self.source_line(self.sel_side, position.row)?,
-                    position.byte,
-                )
-            }),
-            None => SelectionEnds {
-                focus: position,
-                ..ends
-            },
-        };
-        self.move_ends(self.sel_side, Some(ends))
+        let held = of.held.dragged_to(position, || {
+            word::run_across(self.source_line(of.side, position.row)?, position.byte)
+        });
+        self.select(Some(DiffSelection { held, ..of }))
     }
 
     pub(super) fn select_whole_row(&mut self, side: i32, row: usize) -> bool {
-        self.sel_word = None;
         let end = self.source_line(side, row).map_or(0, str::len);
-        let ends = SelectionEnds {
-            anchor: SourcePosition { row, byte: 0 },
-            focus: SourcePosition { row, byte: end },
-        };
-        self.move_ends(side, Some(ends))
+        self.select(Some(DiffSelection {
+            side,
+            held: Selection::over(SelectionEnds {
+                anchor: SourcePosition { row, byte: 0 },
+                focus: SourcePosition { row, byte: end },
+            }),
+        }))
     }
 
     /// Nothing is selected any more (a plain click, or a press on nothing).
     pub(super) fn drop_selection(&mut self) -> bool {
-        self.sel_word = None;
-        self.move_ends(0, None)
+        self.select(None)
     }
 
     /// The same while the rows themselves go: no wash is written back.
     pub(super) fn forget_selection(&mut self) {
-        self.sel_ends = None;
-        self.sel_word = None;
-        self.sel_side = 0;
+        self.selection = None;
         self.sel_has_new = false;
         self.sel_removed = 0;
     }
 
-    /// Moves the two ends, or lets the selection go (`None`), and brings
-    /// the rows and the counts along. Returns whether anything moved — the
-    /// slots fire `changed` only then, so a drag that stays on one
-    /// character costs no signal.
-    fn move_ends(&mut self, side: i32, ends: Option<SelectionEnds>) -> bool {
+    /// Puts `next` in the selection's place, or lets the selection go
+    /// (`None`), and brings the rows and the counts along. Returns whether
+    /// what is drawn moved — the column or an end; the slots fire `changed`
+    /// only then, so a drag that stays on one character costs no signal,
+    /// and neither does a word taken or let go under ends that stay.
+    fn select(&mut self, next: Option<DiffSelection>) -> bool {
+        let drawn = |of: Option<DiffSelection>| of.map(|of| (of.side, of.held.ends()));
         let before = self.span();
-        let was = (self.sel_side, self.sel_ends);
-        self.sel_ends = ends;
-        self.sel_side = side;
+        let was = self.selection;
+        self.selection = next;
         let after = self.span();
-        if before == after && was == (side, ends) {
+        if before == after && drawn(was) == drawn(next) {
             return false;
         }
-        self.lay_wash(before, after, was.0 != side);
+        let side_of = |of: Option<DiffSelection>| of.map_or(0, |of| of.side);
+        self.lay_wash(before, after, side_of(was) != side_of(next));
         self.settle_counts();
         true
     }
@@ -280,12 +288,13 @@ impl DiffModel {
 
     /// What this side of this row gives the plain `Copy` — and wears.
     fn wash_of(&self, side: i32, row: usize) -> Wash {
-        if side != self.sel_side || !self.takes(side, row) {
-            return Wash::None;
-        }
-        let Some(ends) = self.sel_ends else {
+        let Some(of) = self.selection else {
             return Wash::None;
         };
+        if side != of.side || !self.takes(side, row) {
+            return Wash::None;
+        }
+        let ends = of.held.ends();
         let Some(text) = self.source_line(side, row) else {
             return Wash::None;
         };
@@ -311,7 +320,7 @@ impl DiffModel {
     /// Whether `Copy removed lines` has anything to offer: not in a split
     /// diff's old column, where the plain `Copy` already takes them.
     fn removed_offered(&self) -> bool {
-        !(self.split && self.sel_side != RIGHT)
+        !(self.split && self.selected_side() != RIGHT)
     }
 
     /// Recounts what the selection holds, so the menu can be assembled
@@ -322,7 +331,7 @@ impl DiffModel {
         let mut removed = 0usize;
         if let Some(rows) = self.span() {
             for row in rows {
-                match self.wash_of(self.sel_side, row) {
+                match self.wash_of(self.selected_side(), row) {
                     Wash::None => {}
                     Wash::Whole => {
                         takes += 1;
@@ -351,10 +360,10 @@ impl DiffModel {
         let mut first_line = true;
         if let Some(rows) = self.span() {
             for row in rows {
-                let Some(text) = self.source_line(self.sel_side, row) else {
+                let Some(text) = self.source_line(self.selected_side(), row) else {
                     continue;
                 };
-                let bytes = match self.wash_of(self.sel_side, row) {
+                let bytes = match self.wash_of(self.selected_side(), row) {
                     Wash::None => continue,
                     Wash::Whole => 0..text.len(),
                     Wash::Part(bytes) => bytes,
@@ -377,14 +386,14 @@ impl DiffModel {
     /// selection only touches the edge of holds no line of it.
     pub(super) fn line_span(&self) -> Option<LineSpan> {
         let rows = self.span()?;
-        let old_column = self.split && self.sel_side != RIGHT;
+        let old_column = self.split && self.selected_side() != RIGHT;
         let mut taken = None;
         let mut removed = None;
         for row in rows {
             let Some(item) = self.lines.get(row) else {
                 continue;
             };
-            if self.wash_of(self.sel_side, row) != Wash::None && !self.edge_only(row) {
+            if self.wash_of(self.selected_side(), row) != Wash::None && !self.edge_only(row) {
                 let no = if old_column { item.old_no } else { item.new_no };
                 take_in(&mut taken, no);
             }
@@ -403,11 +412,11 @@ impl DiffModel {
     /// at the head of its last row, or starts at the end of a first row
     /// with text: the copy takes the line break there, and none of the line.
     fn edge_only(&self, row: usize) -> bool {
-        let Some(ends) = self.sel_ends else {
+        let Some(DiffSelection { side, held }) = self.selection else {
             return false;
         };
-        let (first, last) = ends.ordered().into_inner();
-        let len = self.source_line(self.sel_side, row).map_or(0, str::len);
+        let (first, last) = held.ends().ordered().into_inner();
+        let len = self.source_line(side, row).map_or(0, str::len);
         (row == last.row && last.byte == 0) || (row == first.row && len > 0 && first.byte >= len)
     }
 

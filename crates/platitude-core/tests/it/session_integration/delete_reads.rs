@@ -7,7 +7,8 @@ use std::sync::Arc;
 use platitude_core::session::{Recording, SessionEvent};
 
 use crate::support::TestRepo;
-use crate::support::remote::{far, origin_and_clone};
+use crate::support::oid;
+use crate::support::remote::{origin_and_clone, row};
 use crate::support::session::{CaptureSink, opened, scenario, write_settled};
 
 fn times(commands: &[String], needle: &str) -> usize {
@@ -89,7 +90,7 @@ async fn deleting_the_branch_head_is_measured_against_reads_the_status_again() {
     let (sink, session) = opened(&repo).await;
     sink.opened_graph(&session, 5).await;
     assert!(
-        last_status(&sink).upstream_tracked,
+        last_status(&sink).upstream_counts.is_some(),
         "the fixture measures main against base"
     );
     session.set_recording(Recording::WithBackground);
@@ -103,7 +104,7 @@ async fn deleting_the_branch_head_is_measured_against_reads_the_status_again() {
     let ran = sink.commands_since(from);
     assert_eq!(times(&ran, "status"), 1, "{ran:#?}");
     assert!(
-        !last_status(&sink).upstream_tracked,
+        last_status(&sink).upstream_counts.is_none(),
         "the status behind the delete no longer counts against base"
     );
     session.close_and_wait().await;
@@ -124,7 +125,42 @@ async fn a_remote_branch_delete_reads_the_status_only_for_heads_upstream() {
     for (branch, shown, reads) in [("other", other, 0), ("topic", topic, 1)] {
         let from = sink.events.lock().unwrap().len();
         let id = session
-            .delete_remote_branch(far("origin", branch), shown)
+            .delete_remote_branch(row("origin", branch), oid(&shown))
+            .expect("accepted");
+        assert_eq!(write_settled(&sink, id).await, []);
+        let ran = sink.commands_since(from);
+        assert_eq!(
+            times(&ran, "status"),
+            reads,
+            "the delete of origin/{branch}: {ran:#?}"
+        );
+    }
+    session.close_and_wait().await;
+}
+
+/// The two ways a remote branch is HEAD's, each alone: HEAD's upstream
+/// under another name, and the branch of HEAD's own name while HEAD is
+/// measured against another.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_remote_branch_delete_reads_the_status_for_heads_upstream_or_heads_name() {
+    let (_bare, mut work) = origin_and_clone();
+    let third = pushed(&mut work, "third");
+    let other = pushed(&mut work, "other");
+    let topic = pushed(&mut work, "topic");
+    work.git(&["switch", "topic"]);
+    work.git(&["branch", "--set-upstream-to", "origin/other"]);
+    let (sink, session) = opened(&work).await;
+    sink.opening_settled(&session).await;
+    session.set_recording(Recording::WithBackground);
+
+    for (branch, shown, reads) in [
+        ("third", third, 0),
+        ("topic", topic, 1),
+        ("other", other, 1),
+    ] {
+        let from = sink.events.lock().unwrap().len();
+        let id = session
+            .delete_remote_branch(row("origin", branch), oid(&shown))
             .expect("accepted");
         assert_eq!(write_settled(&sink, id).await, []);
         let ran = sink.commands_since(from);
@@ -148,7 +184,7 @@ async fn a_remote_branch_delete_leaves_no_gone_upstream_behind() {
     sink.opening_settled(&session).await;
 
     let id = session
-        .delete_remote_branch(far("origin", "topic"), shown)
+        .delete_remote_branch(row("origin", "topic"), oid(&shown))
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
 

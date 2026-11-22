@@ -8,7 +8,7 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::remote::far;
+use crate::support::remote::{far, moved_over_there, origin_and_clone};
 use platitude_core::branch::{self, CheckoutTarget};
 use platitude_core::remote::{self, PushForce};
 
@@ -25,6 +25,69 @@ fn upstream_of(repo: &mut TestRepo, branch: &str) -> Option<String> {
         &format!("refs/heads/{branch}"),
     ]);
     (!printed.is_empty()).then_some(printed)
+}
+
+/// An upstream fetched outside the remote branches
+/// (`+refs/heads/*:refs/mirror/origin/*`): git counts against it and
+/// names it by its own short name, the listing has no remote row for it,
+/// and the bare lease is to that ref — what the toolbar's overwrite goes
+/// by where no commit of the far side is on screen
+/// (`remote::PushForce::WithTrackingLease`).
+#[tokio::test]
+async fn an_upstream_fetched_outside_the_remote_branches_is_counted_unlisted_and_leased_by_git() {
+    let (mut origin, mut clone) = origin_and_clone();
+    clone.git(&[
+        "config",
+        "remote.origin.fetch",
+        "+refs/heads/*:refs/mirror/origin/*",
+    ]);
+    clone.git(&["update-ref", "-d", "refs/remotes/origin/main"]);
+    clone.git(&["config", "branch.main.remote", "origin"]);
+    clone.git(&["config", "branch.main.merge", "refs/heads/main"]);
+    // Both sides move, and the fetch brings theirs under the mirror ref.
+    moved_over_there(&origin, "main", "theirs.txt", "theirs");
+    clone.commit_file("ours.txt", "ours\n", "ours");
+    clone.git(&["fetch", "origin"]);
+    let (exec, cancel) = env();
+
+    let status = platitude_core::status::load(&exec, &clone.path, &cancel)
+        .await
+        .expect("status");
+    assert_eq!(status.upstream.as_deref(), Some("mirror/origin/main"));
+    assert_eq!(
+        status.upstream_counts,
+        Some(platitude_core::AheadBehind {
+            ahead: 1,
+            behind: 1
+        })
+    );
+    let listed = platitude_core::refs::load(&exec, &clone.path, &cancel)
+        .await
+        .expect("refs");
+    assert!(
+        listed
+            .iter()
+            .all(|entry| entry.kind != platitude_core::refs::RefKind::RemoteBranch),
+        "no remote row for the mirror ref: {listed:#?}"
+    );
+
+    let spec = remote::plan_current_push(
+        &exec,
+        &clone.path,
+        "origin",
+        PushForce::WithTrackingLease,
+        &cancel,
+    )
+    .await
+    .expect("a plan");
+    assert_eq!(spec.target, far("origin", "main"));
+    remote::push(&exec, &clone.path, &spec, NET, &cancel)
+        .await
+        .expect("the lease is to the mirror ref, which the remote still stands on");
+    assert_eq!(
+        origin.git(&["rev-parse", "main"]),
+        clone.git(&["rev-parse", "HEAD"])
+    );
 }
 
 /// A local branch created from a remote-tracking ref must track it, so the

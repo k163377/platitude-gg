@@ -1010,6 +1010,7 @@ FocusScope {
     RenameCarryFlow {
         id: renameCarryFlow
         repoTab: repoTab
+        remotesModel: remotesModel
         graphPane: graphPane
         onAskRequested: (oidHex, label, accept, run, form) =>
             page.startRowAsk(oidHex, label, "", false, accept, run, false, "", form, "")
@@ -1017,20 +1018,21 @@ FocusScope {
     }
     /// Automation: the question above was raised, and the two names it is between.
     signal renameCarryAsked(string kind, string from, string to)
-    /// A branch took a new name here and the remote it was measured against still carries the old one. The cut is
-    /// the configured remote name where one owns the ref (a remote's own name may contain `/`), the first slash
-    /// otherwise (`GitFacts.remoteOfRef`).
+    /// A branch took a new name here and its upstream still names the remote branch under the old one. `remoteRef`
+    /// is the old upstream's row, and stays whole: the answers send the row itself, and the tab reads which branch
+    /// over there it is (`RepoTab.replaceRemoteBranch`). Only the new side's name is asked for, to show and to check
+    /// (`GitFacts.remoteRefBeside`).
     function carryBranchRenameOver(remoteRef, name) {
-        const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
-        if (remote === "")
-            return
-        const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
+        const comes = GitFacts.remoteRefBeside(remoteRef, name, repoTab.remoteNames)
         // Not where the remote already carries the new name: both answers would push, which fast-forwards the branch
         // over there and reports success — somebody else's branch would move. The box refuses it too; this catches
         // the way in that has no box.
-        if (name === from || remotesModel.hasRemoteBranch(remote, name))
+        if (comes === "" || comes === remoteRef || remotesModel.oidOfName(comes) !== "")
             return
-        renameCarryFlow.startAsk("branch", remote, from, name, remotesModel.oidOfName(remoteRef))
+        // The commit the old name's row shows, empty where the row is out of the list — gone before the rename, or
+        // pruned by a fetch while it ran: asked all the same — the upstream still names the old branch —, with the
+        // answers that are left (`RenameCarryFlow.gone`).
+        renameCarryFlow.startBranchAsk(remoteRef, comes, name, remotesModel.oidOfName(remoteRef))
     }
     /// Automation: a row of the chooser inside it, which no injected click can reach, picked; answers whether it was
     /// (`RenameCarryFlow.pickChoice`).
@@ -1240,8 +1242,8 @@ FocusScope {
     function renameRow(kind, id, oid, name) {
         if (kind === "branch") {
             // Which remote this branch speaks for has to be read before the rename: afterwards the row answers to the
-            // new name.
-            page.pendingRenameRemote = branchesModel.upstreamOf(id)
+            // new name. One already gone from the list is asked about too — the setting still names it.
+            page.pendingRenameRemote = branchesModel.upstreamToCarry(id, repoTab.remoteNames)
             page.pendingRenameTo = name
             repoTab.renameBranch(id, name, false)
         } else if (kind === "tag") {
@@ -1375,30 +1377,31 @@ FocusScope {
     /// `editMode "rename"`), and the question after one (`RenameCarryFlow`, `rename_carry`, the verbs
     /// `rename-local-upstream*` / `rename-tag-remote*`, named for the local rename that sets them off).
     function askReplaceRemote(remoteRef, name) {
-        // The same cut as `carryBranchRenameOver`.
-        const remote = GitFacts.remoteOfRef(remoteRef, repoTab.remoteNames)
-        if (remote === "")
-            return
-        const from = GitFacts.branchOfRef(remoteRef, repoTab.remoteNames)
-        // And the same stop at a name already over there (`carryBranchRenameOver`), which the box turns down: a plain
-        // push onto an existing name passes as a success wherever it fast-forwards.
-        if (name === from || remotesModel.hasRemoteBranch(remote, name))
+        // The new side's name, as `carryBranchRenameOver` asks for it, and the same stop at a name already over
+        // there, which the box turns down: a plain push onto an existing name passes as a success wherever it
+        // fast-forwards.
+        const comes = GitFacts.remoteRefBeside(remoteRef, name, repoTab.remoteNames)
+        if (comes === "" || comes === remoteRef || remotesModel.oidOfName(comes) !== "")
             return
         // The commit the bar marks, taken as it is raised: the old name's delete is leased to it
-        // (`remote::replace_remote_branch`), so a remote that moved while the question stood is refused.
+        // (`remote::replace_remote_branch`), so a remote that moved while the question stood is refused. A row gone
+        // from the list has none, and nothing is asked: this question has the one answer, which could only be turned
+        // away (デザイン規約 §リモートブランチの差し替え).
         const shown = remotesModel.oidOfName(remoteRef)
+        if (shown === "")
+            return
         page.startRowAsk(
             shown,
-            page.replaceQuestion(remoteRef, remote + "/" + name),
+            page.replaceQuestion(remoteRef, comes),
             qsTr("The old branch is deleted, not moved."),
             false,
             qsTr("Replace"),
-            function () { repoTab.replaceRemoteBranch(remote, from, name, shown) },
+            function () { repoTab.replaceRemoteBranch(remoteRef, name, shown) },
             true,
-            page.replaceTip(remote + "/" + name, remoteRef),
+            page.replaceTip(comes, remoteRef),
             null, "", "", Theme.textLink, "",
-            { label: Words.marksOf(page.replaceQuestion, [[remoteRef, "remote"], [remote + "/" + name, "remote"]]),
-              tip: Words.marksOf(page.replaceTip, [[remote + "/" + name, "remote"], [remoteRef, "remote"]]) })
+            { label: Words.marksOf(page.replaceQuestion, [[remoteRef, "remote"], [comes, "remote"]]),
+              tip: Words.marksOf(page.replaceTip, [[comes, "remote"], [remoteRef, "remote"]]) })
         page.replaceRemoteAsked(remoteRef, name)
     }
     /// The replace question: the old remote branch `was`, the new one `comes` — one spelling for the words and the
@@ -1798,7 +1801,6 @@ FocusScope {
             onPushBranchRequested: (branch, force, lease) => repoTab.pushNamed(branch, force, lease)
             onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
-            // The remote-ref deletes go through `CommitMenuState`, beside the lookups their cards read.
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)
             onRevertRequested: oidHex => repoTab.revert(oidHex)
             onMergeRequested: ref => repoTab.merge(ref, false, false, "")
@@ -1806,9 +1808,9 @@ FocusScope {
             onPullRequested: branch => repoTab.pull(branch)
             onCheckDeleteRequested: branch => repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => repoTab.deleteBranch(branch, true)
-            onDeleteRemoteRequested: (remoteRef, expect) => commitMenuState.deleteRemoteNow(remoteRef, expect)
+            onDeleteRemoteRequested: (remoteRef, expect) => repoTab.deleteRemoteBranch(remoteRef, expect)
             onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
-                commitMenuState.deleteEverywhereNow(branch, remoteRef, forced, expect)
+                repoTab.deleteBranchEverywhere(branch, remoteRef, forced, expect)
             onPushTagRequested: (remote, tag, lease) => repoTab.pushTag(remote, tag, lease)
             onDeleteTagRequested: tag => repoTab.deleteTag(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
@@ -2218,7 +2220,7 @@ FocusScope {
             const now = page.pendingRenameTagTo
             const at = page.pendingRenameTagOid
             page.forgetRenameTagRemote()
-            renameCarryFlow.startAsk("tag", on, was, now, at)
+            renameCarryFlow.startTagAsk(on, was, now, at)
         }
         // Where the answer sends the reader, read per answer this notify carried (`RepoTab::write_answers`): a write
         // starting in the same drain (the fetch after a run) would already have lowered a single stop flag. The two

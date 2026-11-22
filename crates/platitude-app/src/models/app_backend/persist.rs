@@ -84,52 +84,49 @@ impl AppBackend {
     /// read again at (`refresh`) and the same pair for each other worktree
     /// read automatically (`worktrees`); `None` leaves a pair as it is, and
     /// zero (an emptied box) is that bound's default. The range — and a
-    /// ceiling never under its floor — is core's
-    /// (`session::pace_bounds_secs`), as above.
+    /// ceiling never under its floor — is core's (`session::PaceSecs`), as
+    /// above.
     pub(super) fn apply_pace_bounds(
         &mut self,
         refresh: Option<(i32, i32)>,
         worktrees: Option<(i32, i32)>,
     ) {
+        use platitude_core::session::PaceSecs;
         let fallback = platitude_core::settings::Defaults::default();
-        let held = |secs: i32| secs.max(0).unsigned_abs();
-        let pair = |asked: Option<(i32, i32)>, held: (u32, u32), default: (u32, u32)| {
+        let held = |floor: i32, ceiling: i32| {
+            PaceSecs::new(floor.max(0).unsigned_abs(), ceiling.max(0).unsigned_abs())
+        };
+        let pair = |asked: Option<(i32, i32)>, held: PaceSecs, default: PaceSecs| {
             let pick = |asked: i32, default: u32| match asked.max(0).unsigned_abs() {
                 0 => default,
                 secs => secs,
             };
-            let (floor, ceiling) = asked.map_or(held, |(floor, ceiling)| {
-                (pick(floor, default.0), pick(ceiling, default.1))
-            });
-            platitude_core::session::pace_bounds_secs(floor, ceiling)
+            asked.map_or(held, |(floor, ceiling)| {
+                PaceSecs::new(
+                    pick(floor, default.floor()),
+                    pick(ceiling, default.ceiling()),
+                )
+            })
         };
         let refresh = pair(
             refresh,
-            (
-                held(self.refresh_floor_secs),
-                held(self.refresh_ceiling_secs),
-            ),
-            (fallback.refresh_floor_secs, fallback.refresh_ceiling_secs),
+            held(self.refresh_floor_secs, self.refresh_ceiling_secs),
+            fallback.refresh_pace,
         );
         let worktrees = pair(
             worktrees,
-            (
-                held(self.worktrees_floor_secs),
-                held(self.worktrees_ceiling_secs),
-            ),
-            (
-                fallback.worktrees_floor_secs,
-                fallback.worktrees_ceiling_secs,
-            ),
+            held(self.worktrees_floor_secs, self.worktrees_ceiling_secs),
+            fallback.worktrees_pace,
         );
-        let as_i32 = |(floor, ceiling): (u32, u32)| (floor as i32, ceiling as i32);
-        let unchanged = as_i32(refresh) == (self.refresh_floor_secs, self.refresh_ceiling_secs)
-            && as_i32(worktrees) == (self.worktrees_floor_secs, self.worktrees_ceiling_secs);
+        // In range, so within Qt's `int`.
+        let shown = |pace: PaceSecs| (pace.floor() as i32, pace.ceiling() as i32);
+        let unchanged = shown(refresh) == (self.refresh_floor_secs, self.refresh_ceiling_secs)
+            && shown(worktrees) == (self.worktrees_floor_secs, self.worktrees_ceiling_secs);
         if unchanged {
             return;
         }
-        (self.refresh_floor_secs, self.refresh_ceiling_secs) = as_i32(refresh);
-        (self.worktrees_floor_secs, self.worktrees_ceiling_secs) = as_i32(worktrees);
+        (self.refresh_floor_secs, self.refresh_ceiling_secs) = shown(refresh);
+        (self.worktrees_floor_secs, self.worktrees_ceiling_secs) = shown(worktrees);
         Hub::with(|hub| hub.set_pace_bounds(refresh, worktrees));
         self.settings_changed();
     }

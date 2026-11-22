@@ -48,12 +48,11 @@ pub struct WorktreeStatus {
     /// Current branch name; `None` when detached.
     pub branch_head: Option<String>,
     pub upstream: Option<String>,
-    /// Whether git could compare against the upstream. False when it has no
-    /// remote-tracking ref (never fetched, or gone): `ahead` / `behind` then
-    /// say nothing, though the upstream is still configured.
-    pub upstream_tracked: bool,
-    pub ahead: i32,
-    pub behind: i32,
+    /// How far the branch stands from the upstream — not the tree's file
+    /// counts ([`Counts`]). None where git could not compare: no upstream,
+    /// or one with no ref here (never fetched, or gone) though it is still
+    /// configured.
+    pub upstream_counts: Option<crate::AheadBehind>,
     pub items: Vec<StatusItem>,
     /// What the index holds where it differs from HEAD, as one number: a
     /// hash of each staged entry's whole `--porcelain=v2` record — its index
@@ -160,9 +159,7 @@ impl WorktreeStatus {
             branch_oid: self.branch_oid,
             branch_head: self.branch_head.clone(),
             upstream: self.upstream.clone(),
-            upstream_tracked: self.upstream_tracked,
-            ahead: self.ahead,
-            behind: self.behind,
+            upstream_counts: self.upstream_counts,
             items,
             staged_print: nothing_staged(),
         })
@@ -414,14 +411,15 @@ fn parse_header(header: &str, status: &mut WorktreeStatus) {
         }
         "branch.upstream" => status.upstream = Some(value.trim().to_string()),
         "branch.ab" => {
-            status.upstream_tracked = true;
+            let mut counts = crate::AheadBehind::default();
             for part in value.split_whitespace() {
                 if let Some(n) = part.strip_prefix('+') {
-                    status.ahead = n.parse().unwrap_or(0);
+                    counts.ahead = n.parse().unwrap_or(0);
                 } else if let Some(n) = part.strip_prefix('-') {
-                    status.behind = n.parse().unwrap_or(0);
+                    counts.behind = n.parse().unwrap_or(0);
                 }
             }
+            status.upstream_counts = Some(counts);
         }
         _ => {}
     }

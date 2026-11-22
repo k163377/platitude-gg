@@ -86,7 +86,8 @@ pub enum Upstream<'a> {
     #[default]
     None,
     /// A remote branch, `<remote>/<branch>` as the remote branches are
-    /// listed.
+    /// listed — or git's own short name for an upstream fetched outside
+    /// them ([`super::PushMarks::upstream_name`]).
     Remote(&'a str),
     /// A branch here (`branch.<n>.remote = .`). Told by configuration,
     /// never off a name: a branch here may be called `origin/main`.
@@ -110,18 +111,19 @@ impl<'a> Upstream<'a> {
 /// the branch's counts against it ([`super::push_track`] on the status
 /// tick, [`super::push_tracks`] on the refs read for the other branches).
 /// The upstream's counts are about the other remote.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+///
+/// There is one only where something here tracks the branch over there.
+/// None where it was never fetched, where no fetch refspec of that remote
+/// takes it in (or takes it outside the remote branches), and — with that
+/// ref here — where `remote.<name>.push` sends the branch under another
+/// name or not at all: such a refspec decides `%(push)` whatever
+/// `push.default` says (`track_of`). A fetch reads every remote, so there
+/// usually is one.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PushTrack {
     /// The tracking ref as the remote branches are listed (`fork/main`).
-    /// Empty where nothing here tracks the branch over there: never
-    /// fetched, or no fetch refspec of that remote takes it in (or takes it
-    /// outside the remote branches). Empty too, with that ref here, where
-    /// `remote.<name>.push` sends the branch under another name or not at
-    /// all: such a refspec decides `%(push)` whatever `push.default` says
-    /// (`track_of`). A fetch reads every remote, so it is usually there.
     pub tracking: String,
-    pub ahead: i32,
-    pub behind: i32,
+    pub counts: crate::AheadBehind,
 }
 
 /// Which remote the marks send this branch to, empty where neither is
@@ -213,24 +215,22 @@ pub fn pushes_elsewhere<'a>(
     !marked.is_empty() && marked != THIS_REPOSITORY && !upstream_is_on(upstream, marked, remotes)
 }
 
-/// The standing itself: the table of counts, read against the upstream,
-/// or against `push_track` where the push goes elsewhere
-/// ([`pushes_elsewhere`]). `upstream_tracked` is whether its ref is there
-/// to count against — false for git's `[gone]`, which asks where the
-/// branch goes whichever kind the upstream was.
+/// The standing itself: the table of counts, read against the upstream
+/// (`upstream_counts`), or against `push_track` where the push goes
+/// elsewhere ([`pushes_elsewhere`]). `upstream_counts` is none where the
+/// upstream's ref is not there to count against — git's `[gone]`, which
+/// asks where the branch goes whichever kind the upstream was.
 #[expect(clippy::too_many_arguments)]
 pub fn push_standing<'a>(
     unborn: bool,
     detached: bool,
     branch: &str,
     upstream: Upstream<'a>,
-    upstream_tracked: bool,
-    ahead: i32,
-    behind: i32,
+    upstream_counts: Option<crate::AheadBehind>,
     push_remote: &str,
     push_default: &str,
     remotes: impl IntoIterator<Item = &'a str>,
-    push_track: &PushTrack,
+    push_track: Option<&PushTrack>,
 ) -> PushStanding {
     if detached || branch.is_empty() {
         return PushStanding::Closed;
@@ -241,9 +241,9 @@ pub fn push_standing<'a>(
         return PushStanding::Unborn;
     }
     // Before the `.` mark: the question's answer names the destination.
-    if upstream == Upstream::None || !upstream_tracked {
+    let Some(counts) = upstream_counts.filter(|_| upstream != Upstream::None) else {
         return PushStanding::Publish;
-    }
+    };
     // Resolved to this repository: marked to `.` itself, or to nothing with
     // the upstream here.
     let marked = marked_remote(push_remote, push_default);
@@ -253,7 +253,7 @@ pub fn push_standing<'a>(
     if pushes_elsewhere(upstream, push_remote, push_default, remotes) {
         return marked_standing(push_track);
     }
-    counted(ahead, behind)
+    counted(counts)
 }
 
 /// The standing where a mark alone says where the push goes — to another
@@ -266,23 +266,17 @@ pub fn push_standing<'a>(
 /// refusal, and `ahead = 0` read as clean would make a branch unpressable
 /// the moment it is marked. With a ref, the count rows of the table apply
 /// unchanged, and the overwrite leases to that ref's tip as shown.
-fn marked_standing(push_track: &PushTrack) -> PushStanding {
-    if push_track.tracking.is_empty() {
-        return PushStanding::Elsewhere;
-    }
-    counted(push_track.ahead, push_track.behind)
+fn marked_standing(push_track: Option<&PushTrack>) -> PushStanding {
+    push_track.map_or(PushStanding::Elsewhere, |track| counted(track.counts))
 }
 
 /// The table of counts.
-fn counted(ahead: i32, behind: i32) -> PushStanding {
-    if behind > 0 {
-        return if ahead > 0 {
-            PushStanding::Diverged
-        } else {
-            PushStanding::Behind
-        };
-    }
-    if ahead > 0 {
+fn counted(counts: crate::AheadBehind) -> PushStanding {
+    if counts.is_diverged() {
+        PushStanding::Diverged
+    } else if counts.behind > 0 {
+        PushStanding::Behind
+    } else if counts.ahead > 0 {
         PushStanding::Ready
     } else {
         PushStanding::Clean
@@ -295,18 +289,11 @@ mod tests {
 
     const REMOTES: [&str; 3] = ["origin", "my", "my/fork"];
 
-    /// Nothing here tracks the branch where the push goes.
-    const NO_TRACK: PushTrack = PushTrack {
-        tracking: String::new(),
-        ahead: 0,
-        behind: 0,
-    };
-
     fn standing_of(
         upstream: &str,
         tracked: bool,
-        ahead: i32,
-        behind: i32,
+        ahead: u32,
+        behind: u32,
         marked: &str,
     ) -> PushStanding {
         push_standing(
@@ -314,13 +301,11 @@ mod tests {
             false,
             "main",
             Upstream::of(upstream, false),
-            tracked,
-            ahead,
-            behind,
+            tracked.then_some(crate::AheadBehind { ahead, behind }),
             "",
             marked,
             REMOTES,
-            &NO_TRACK,
+            None,
         )
     }
 
@@ -328,19 +313,17 @@ mod tests {
     /// counts beside the upstream's.
     fn standing_tracking(
         upstream: &str,
-        ahead: i32,
-        behind: i32,
+        ahead: u32,
+        behind: u32,
         marked: &str,
-        push_track: &PushTrack,
+        push_track: Option<&PushTrack>,
     ) -> PushStanding {
         push_standing(
             false,
             false,
             "main",
             Upstream::Remote(upstream),
-            true,
-            ahead,
-            behind,
+            Some(crate::AheadBehind { ahead, behind }),
             "",
             marked,
             REMOTES,
@@ -348,11 +331,10 @@ mod tests {
         )
     }
 
-    fn track(tracking: &str, ahead: i32, behind: i32) -> PushTrack {
+    fn track(tracking: &str, ahead: u32, behind: u32) -> PushTrack {
         PushTrack {
             tracking: tracking.to_string(),
-            ahead,
-            behind,
+            counts: crate::AheadBehind { ahead, behind },
         }
     }
 
@@ -364,13 +346,11 @@ mod tests {
                 false,
                 "main",
                 Upstream::None,
-                false,
-                0,
-                0,
+                None,
                 "",
                 "",
                 REMOTES,
-                &NO_TRACK
+                None
             ),
             PushStanding::Unborn
         );
@@ -384,13 +364,14 @@ mod tests {
             false,
             "main",
             Upstream::Remote(upstream),
-            true,
-            2,
-            0,
+            Some(crate::AheadBehind {
+                ahead: 2,
+                behind: 0,
+            }),
             push_remote,
             "",
             REMOTES,
-            &NO_TRACK,
+            None,
         )
     }
 
@@ -408,19 +389,7 @@ mod tests {
     #[test]
     fn a_push_standing_is_read_without_sending_anything() {
         assert_eq!(
-            push_standing(
-                false,
-                true,
-                "",
-                Upstream::None,
-                false,
-                0,
-                0,
-                "",
-                "",
-                [],
-                &NO_TRACK
-            ),
+            push_standing(false, true, "", Upstream::None, None, "", "", [], None),
             PushStanding::Closed
         );
         assert_eq!(standing_of("", false, 0, 0, ""), PushStanding::Publish);
@@ -486,26 +455,26 @@ mod tests {
     #[test]
     fn the_destinations_own_counts_decide_where_the_push_goes_elsewhere() {
         assert_eq!(
-            standing_tracking("origin/main", 1, 0, "my", &track("my/main", 1, 1)),
+            standing_tracking("origin/main", 1, 0, "my", Some(&track("my/main", 1, 1))),
             PushStanding::Diverged,
             "git refuses the plain push there, so only the overwrite reaches"
         );
         assert_eq!(
-            standing_tracking("origin/main", 1, 0, "my", &track("my/main", 0, 2)),
+            standing_tracking("origin/main", 1, 0, "my", Some(&track("my/main", 0, 2))),
             PushStanding::Behind
         );
         assert_eq!(
-            standing_tracking("origin/main", 1, 0, "my", &track("my/main", 0, 0)),
+            standing_tracking("origin/main", 1, 0, "my", Some(&track("my/main", 0, 0))),
             PushStanding::Clean,
             "the destination has it all, though the upstream does not"
         );
         assert_eq!(
-            standing_tracking("origin/main", 0, 0, "my", &track("my/main", 3, 0)),
+            standing_tracking("origin/main", 0, 0, "my", Some(&track("my/main", 3, 0))),
             PushStanding::Ready,
             "the upstream has it all, the destination does not"
         );
         assert_eq!(
-            standing_tracking("origin/main", 1, 0, "origin", &track("my/main", 0, 2)),
+            standing_tracking("origin/main", 1, 0, "origin", Some(&track("my/main", 0, 2))),
             PushStanding::Ready,
             "a mark on the upstream's own remote leaves the upstream's counts speaking"
         );
@@ -515,13 +484,11 @@ mod tests {
                 false,
                 "main",
                 Upstream::Remote("origin/main"),
-                false,
-                1,
-                0,
+                None,
                 "",
                 "my",
                 REMOTES,
-                &track("my/main", 1, 0)
+                Some(&track("my/main", 1, 0))
             ),
             PushStanding::Publish,
             "an upstream with no tracking ref still asks where the branch goes"
@@ -546,13 +513,14 @@ mod tests {
                 false,
                 "main",
                 Upstream::Remote("origin/main"),
-                true,
-                2,
-                0,
+                Some(crate::AheadBehind {
+                    ahead: 2,
+                    behind: 0
+                }),
                 "origin",
                 "my",
                 REMOTES,
-                &NO_TRACK
+                None
             ),
             PushStanding::Ready,
             "the branch's mark wins over the repository's, so the counts still speak"
@@ -563,13 +531,14 @@ mod tests {
                 false,
                 "main",
                 Upstream::Remote("origin/main"),
-                true,
-                2,
-                0,
+                Some(crate::AheadBehind {
+                    ahead: 2,
+                    behind: 0
+                }),
                 "my",
                 "origin",
                 REMOTES,
-                &NO_TRACK
+                None
             ),
             PushStanding::Elsewhere,
             "and it wins the other way round too"
@@ -582,15 +551,16 @@ mod tests {
     /// counts are the destination's.
     #[test]
     fn a_branch_here_is_on_no_remote_whatever_its_name_says() {
-        let here = |push_remote: &str, push_default: &str, push_track: &PushTrack| {
+        let here = |push_remote: &str, push_default: &str, push_track: Option<&PushTrack>| {
             push_standing(
                 false,
                 false,
                 "topic",
                 Upstream::Here,
-                true,
-                2,
-                0,
+                Some(crate::AheadBehind {
+                    ahead: 2,
+                    behind: 0,
+                }),
                 push_remote,
                 push_default,
                 REMOTES,
@@ -608,26 +578,26 @@ mod tests {
             )
         };
         assert_eq!(
-            (here("", "", &NO_TRACK), target("", "")),
+            (here("", "", None), target("", "")),
             (PushStanding::StaysHere, String::new()),
             "marked to no remote: nowhere to send it, not even the fallback"
         );
         assert_eq!(
             (
-                here("origin", "", &track("origin/topic", 0, 0)),
+                here("origin", "", Some(&track("origin/topic", 0, 0))),
                 target("origin", "")
             ),
             (PushStanding::Clean, "origin/topic".to_string()),
             "level with origin/topic, however far ahead of the branch here"
         );
         assert_eq!(
-            here("", "my", &track("my/topic", 0, 1)),
+            here("", "my", Some(&track("my/topic", 0, 1))),
             PushStanding::Behind,
             "the repository's mark sends it just as well"
         );
         assert_eq!(target("", "my"), "my/topic");
         assert_eq!(
-            here("origin", "", &NO_TRACK),
+            here("origin", "", None),
             PushStanding::Elsewhere,
             "nothing here tracks origin/topic yet"
         );
@@ -637,13 +607,11 @@ mod tests {
                 false,
                 "topic",
                 Upstream::Here,
-                false,
-                0,
-                0,
+                None,
                 "",
                 "",
                 REMOTES,
-                &NO_TRACK
+                None
             ),
             PushStanding::Publish,
             "gone, it asks where the branch goes, as any gone upstream does"
@@ -664,13 +632,14 @@ mod tests {
                 false,
                 "topic",
                 upstream,
-                tracked,
-                1,
-                0,
+                tracked.then_some(crate::AheadBehind {
+                    ahead: 1,
+                    behind: 0,
+                }),
                 push_remote,
                 push_default,
                 REMOTES,
-                &track("origin/topic", 1, 0),
+                Some(&track("origin/topic", 1, 0)),
             )
         };
         assert_eq!(with(Upstream::Here, true, ".", ""), PushStanding::StaysHere);

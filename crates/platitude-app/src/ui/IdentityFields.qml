@@ -15,7 +15,7 @@ ColumnLayout {
     /// Both boxes hold something. Not asked where empty is an answer (the repository chapter: "not set here").
     readonly property bool filled: nameField.text.trim() !== "" && emailField.text.trim() !== ""
     /// The boxes differ from what git holds, whoever put it there. Compared trimmed, as git is handed and reports it
-    /// (`identity::set_identity` / `identity::read`) — a trailing space is no difference git would keep.
+    /// (`identity::IdentityValues` / `identity::read`) — a trailing space is no difference git would keep.
     readonly property bool differs: nameField.text.trim() !== fields.heldName
                                     || emailField.text.trim() !== fields.heldEmail
     /// Somebody typed and it differs from git: the settings screen's one unsaved edit (`SettingsDialog.escapeOut`) and

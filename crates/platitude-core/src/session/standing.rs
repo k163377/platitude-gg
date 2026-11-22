@@ -309,15 +309,15 @@ impl Standing {
 
     /// The kept push counts where they are about `branch`; nothing where
     /// the last read was about another.
-    pub(super) fn push_track_of(&self, branch: &str) -> crate::remote::PushTrack {
+    pub(super) fn push_track_of(&self, branch: &str) -> Option<crate::remote::PushTrack> {
         match &self.lock().push_track {
-            Some((kept, track)) if kept == branch => track.clone(),
-            _ => crate::remote::PushTrack::default(),
+            Some((kept, track)) if kept == branch => Some(track.clone()),
+            _ => None,
         }
     }
 
-    pub(super) fn set_push_track(&self, branch: &str, track: crate::remote::PushTrack) {
-        self.lock().push_track = Some((branch.to_string(), track));
+    pub(super) fn set_push_track(&self, branch: &str, track: Option<crate::remote::PushTrack>) {
+        self.lock().push_track = track.map(|track| (branch.to_string(), track));
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -351,18 +351,17 @@ mod tests {
         let standing = Standing::default();
         let track = crate::remote::PushTrack {
             tracking: "fork/main".to_string(),
-            ahead: 1,
-            behind: 2,
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 2,
+            },
         };
-        assert_eq!(
-            standing.push_track_of("main"),
-            crate::remote::PushTrack::default()
-        );
-        standing.set_push_track("main", track.clone());
-        assert_eq!(standing.push_track_of("main"), track);
+        assert_eq!(standing.push_track_of("main"), None);
+        standing.set_push_track("main", Some(track.clone()));
+        assert_eq!(standing.push_track_of("main"), Some(track));
         assert_eq!(
             standing.push_track_of("topic"),
-            crate::remote::PushTrack::default(),
+            None,
             "main's destination is not topic's"
         );
     }
