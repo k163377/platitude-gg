@@ -107,7 +107,7 @@ fn utc(text: &str) -> Option<SystemTime> {
 /// Every transcript file `session` has: one in the directory of each place
 /// it worked from, since a session that enters a seat can go on writing
 /// beside where it started.
-pub(super) fn transcripts(session: &str) -> Vec<PathBuf> {
+pub(crate) fn transcripts(session: &str) -> Vec<PathBuf> {
     projects().map_or_else(Vec::new, |projects| transcripts_in(&projects, session))
 }
 

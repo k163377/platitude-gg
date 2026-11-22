@@ -1,4 +1,5 @@
-//! SessionStart: where the session sits and where the seats stand.
+//! SessionStart: where the session sits and where the seats stand, and
+//! after a compaction the user's own words (`compact`).
 
 use super::payload::string_field;
 use crate::seats::{
@@ -95,6 +96,11 @@ pub(super) fn session_start(input: &str) -> Result<(), String> {
                 }
             }
         }
+    }
+    if string_field(input, "source").as_deref() == Some("compact")
+        && let Some(words) = super::compact::restored(input)
+    {
+        println!("{words}");
     }
     Ok(())
 }

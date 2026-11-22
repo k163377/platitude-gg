@@ -3,8 +3,9 @@
 //! touches only when the user asks, a side session's detach and the land
 //! command kept out of what reaches another session (`contact`), the
 //! language of what the user reads (`language`), a proposal to change the
-//! screen put to the user with its pictures (`proposal`), and background
-//! runs in a wrapper whose end wakes the session (`background`).
+//! screen put to the user with its pictures (`proposal`), background
+//! runs in a wrapper whose end wakes the session (`background`), and the
+//! user's own words kept across a compaction (`compact`).
 //! Main moves on the permit the user's own `/land` opens (`permit`), and on
 //! that alone.
 //! Codex's hooks share activity and landing prompts (`codex`), and refuse
@@ -36,6 +37,7 @@ mod codex_git;
 pub(crate) mod codex_land;
 mod codex_transcript;
 mod commit;
+mod compact;
 mod contact;
 mod dump;
 mod git;
@@ -103,6 +105,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "post-worktree" => seat::post_worktree(&input),
         "prompt-submit" => prompt_submit(&input),
         "session-start" => greeting::session_start(&input),
+        "pre-compact" => compact::pre_compact(&input),
         "session-end" => session_end(&input),
         // A session that loaded an older settings.json still names these,
         // for a tool that no longer exists; `pre-tool` / `post-tool` carry

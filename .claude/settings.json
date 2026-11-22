@@ -1,4 +1,5 @@
 {
+  "autoCompactWindow": 633000,
   "enableArtifact": false,
   "permissions": {
     "deny": [
@@ -161,6 +162,16 @@
           {
             "type": "command",
             "command": "git -c alias.pgg-claude-hook=!.claude/hooks/runner.sh pgg-claude-hook session-start"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git -c alias.pgg-claude-hook=!.claude/hooks/runner.sh pgg-claude-hook pre-compact"
           }
         ]
       }

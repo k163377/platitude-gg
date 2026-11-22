@@ -110,6 +110,39 @@ pub(super) fn array_items(array: &str) -> Vec<&str> {
     }
 }
 
+/// The name and value of each field of the JSON object `object` starts
+/// with — the name with its quotes, the value as written
+/// ([`written_value`]); empty when it is no object or is cut short.
+pub(super) fn object_entries(object: &str) -> Vec<(&str, &str)> {
+    let Some(mut rest) = object.trim_start().strip_prefix('{') else {
+        return Vec::new();
+    };
+    let mut entries = Vec::new();
+    loop {
+        rest = rest.trim_start();
+        if rest.starts_with('}') {
+            return entries;
+        }
+        let Some(name) = written_value(rest) else {
+            return Vec::new();
+        };
+        let Some(after) = rest[name.len()..].trim_start().strip_prefix(':') else {
+            return Vec::new();
+        };
+        rest = after.trim_start();
+        let Some(value) = written_value(rest) else {
+            return Vec::new();
+        };
+        entries.push((name, value));
+        rest = rest[value.len()..].trim_start();
+        match rest.strip_prefix(',') {
+            Some(next) => rest = next,
+            None if rest.starts_with('}') => return entries,
+            None => return Vec::new(),
+        }
+    }
+}
+
 /// The JSON value `value` starts with, as written — an object or an array
 /// with everything nested in it, a string with its quotes; `None` when cut
 /// short.
@@ -166,9 +199,25 @@ pub(super) fn printable(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        array_items, bool_field, number_field, own_string_field, own_value_field, string_field,
+        array_items, bool_field, number_field, object_entries, own_string_field, own_value_field,
+        string_field,
     };
     use crate::seats::worktree_root;
+
+    #[test]
+    fn reads_an_object_field_by_field() {
+        assert_eq!(
+            object_entries(r#"{"q, 1":"a}","n":{"x":[1,2]} ,"z":7}"#),
+            vec![
+                (r#""q, 1""#, r#""a}""#),
+                (r#""n""#, r#"{"x":[1,2]}"#),
+                (r#""z""#, "7")
+            ]
+        );
+        assert_eq!(object_entries(" { } "), Vec::<(&str, &str)>::new());
+        assert_eq!(object_entries(r#"{"a":1"#), Vec::<(&str, &str)>::new());
+        assert_eq!(object_entries(r#"["a"]"#), Vec::<(&str, &str)>::new());
+    }
 
     #[test]
     fn reads_an_array_value_by_value() {
