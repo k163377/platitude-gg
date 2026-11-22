@@ -375,7 +375,10 @@ impl CommandsModel {
             .count();
         i32::try_from(rows).unwrap_or(i32::MAX)
     }
+}
+qml_register!(CommandsModel, "CommandsModel", singleton = false);
 
+impl CommandsModel {
     fn drain(&mut self) {
         let Some(feed) = self.feed.clone() else {
             return;
@@ -388,10 +391,7 @@ impl CommandsModel {
             crate::harness::memprobe::note("command-rows", self.tab_id, &self.rows);
         }
     }
-}
-qml_register!(CommandsModel, "CommandsModel", singleton = false);
 
-impl CommandsModel {
     /// Applies what the feed brought, in its order; answers whether a row
     /// or the log's state moved.
     fn take_in(&mut self, messages: Vec<CommandMsg>) -> bool {

@@ -93,7 +93,9 @@ impl CloneModel {
         tracing::info!("clone cancelled");
         self.settle(false);
     }
+}
 
+impl CloneModel {
     fn drain(&mut self) {
         for msg in self.feed.drain() {
             self.cancel = None;
@@ -109,9 +111,7 @@ impl CloneModel {
             }
         }
     }
-}
 
-impl CloneModel {
     fn settle(&mut self, cloning: bool) {
         if self.cloning != cloning {
             self.cloning = cloning;

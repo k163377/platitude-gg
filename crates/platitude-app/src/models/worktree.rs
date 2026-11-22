@@ -450,7 +450,9 @@ impl WorktreeModel {
             self.changed();
         }
     }
+}
 
+impl WorktreeModel {
     fn drain(&mut self) {
         let progressed = self.drain_progress();
         let Some(feed) = self.feed.clone() else {
@@ -464,9 +466,7 @@ impl WorktreeModel {
             self.changed();
         }
     }
-}
 
-impl WorktreeModel {
     /// Where the tree stands, as core's rules read it.
     fn tree_standing(&self) -> platitude_core::offers::TreeStanding {
         platitude_core::offers::TreeStanding {
