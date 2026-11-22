@@ -68,8 +68,10 @@ description: 席の枝を main へ反映する手順。`/land` で反映の列�
    の段階 commit(`--amend` は `--only` 無しだと index 全部を巻き込む)→ 再編後の tree id が控えと一致することを確かめる。
    移動だけのコミットと変更は分ける。Conventional Commits・英語。木は変わらないので land の gate はキャッシュで済む
 6. **docs** — <!--cmd:docs.check-->`cargo xtask docs`(手書きのコマンドの印漏れはここで出る)
-7. **承諾の要る UI 挙動変更** — 入っていれば land しない。列から外れ、board に載せて承諾を貰い、次の `/land` で反映す
-   る(land の後に絵を載せ直さない)
+7. **承諾の要る UI 挙動変更・UX に影響する課題** — 反映する変更に入っていれば、または `/land` の後に UX に影響する課題が
+   見つかっていれば(反映する変更と関係が無くても)land しない。列から外れ、問題点と修正案を board に載せて訊
+   き([proposals.md](../../rules/proposals.md))、次の `/land` で反映する(land の後に絵を載せ直さない。9 の報告で UX の課
+   題を新しく出さない)
 8. **land** — <!--cmd:land.branch-->`cargo xtask land <branch>` を背景で撃ってターンを終える。land は rebase → gate →
    fast-forward をもう一度通し、fast-forward の直前に permit を読み直す(ユーザーの発話で閉じていれば main を動かさずに止
    まる)。終了の通知で起きる

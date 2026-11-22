@@ -34,8 +34,9 @@ popup・Loader の中身)は gate が名指しで止まる** — それを立て
 **ユーザーに見せる絵は board へ出す**(チャットのペインは画像を縮めるうえ拡大できない)。**明示的に撃った** `verify-ui` は
 撮った PNG を自動で board に載せる。**`gate` が回す verify の run は載らない**。**Linux の run も載らない** — 載せるのは
 ユーザーが Linux の絵を頼んだ時だけで、`linux verify-ui … --board`(札に `— linux` が付く)。**board に載せるのは「ユー
-ザーが求めた絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。**`/land` の後に自分の確かめだけで撃つ run は
-`--no-board`** — `/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。
+ザーが求めた絵」と「その指示に直接関係する絵」だけ**(ユーザー決定)。UX を変える修正の提案の絵は、求めた絵に入る(規約で求
+めている — [proposals.md](../../rules/proposals.md))。**`/land` の後に自分の確かめだけで撃つ run は `--no-board`** —
+`/land` の後に board へ載せた絵は、下げてもユーザーの次の発言まで反映を止める(CLAUDE.md §Git 運用)。
 
 手で作った切り出し・比較シートは
 `cargo xtask shots add --label "<この絵で何を見るか>" [--verb <動詞>] <png>...`(**`--label` は必須**)。**ラベルは日本語
