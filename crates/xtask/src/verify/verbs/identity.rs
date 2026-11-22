@@ -178,6 +178,37 @@ pub(super) const TABLE: &[Verb] = &[
         )],
         plain: "settings_refresh_leave refresh=5-15 worktrees=auto worktrees_bounds=5-45 worktrees_secs=30 open=false",
     },
+    // A window narrower than the screen's block, set in the middle of one
+    // stage of what it gives up: the chapters' column, then the air left
+    // of the rail, then the rail, then the bar's lane. Each stage's row
+    // has the ones before it at their least and the ones after at full,
+    // so a reversed order, a lead that falls past the `✕`'s inset, or a
+    // floor the REFRESH row no longer keeps reads as another word. `at=`
+    // (the window's width, which the fonts set) is left unasked. The
+    // plain row names no stage and no run can say it: an argument that
+    // is not a stage fails.
+    Verb {
+        name: "settings-narrow",
+        when: &[
+            (
+                Arg::Is("column"),
+                "settings_narrow stage=column lead=full rail=full column=between content=inside title=level",
+            ),
+            (
+                Arg::Is("lead"),
+                "settings_narrow stage=lead lead=between rail=full column=least content=inside title=level",
+            ),
+            (
+                Arg::Is("rail"),
+                "settings_narrow stage=rail lead=least rail=between column=least content=inside title=level",
+            ),
+            (
+                Arg::Is("lane"),
+                "settings_narrow stage=lane lead=least rail=least column=under content=lane title=level",
+            ),
+        ],
+        plain: "settings_narrow stage=column|lead|rail|lane",
+    },
     // The way out taken over a git waiting to be applied: the screen
     // still stands with its mark turned, and what holds it must be the
     // offer — an unsaved identity holds the screen the same way.

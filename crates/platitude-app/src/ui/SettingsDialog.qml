@@ -79,6 +79,11 @@ AppDialog {
     readonly property alias autoGitPane: gitPane
     /// The chapters' sweep hand, named so a run can enter it (`settings-sweep`).
     readonly property alias autoChapterHand: chapterHand
+    /// What a narrow window gives up, handed over whole so a run can read where each stands (`settings-narrow`).
+    readonly property alias autoBlockRow: blockRow
+    readonly property alias autoRail: railColumn
+    readonly property alias autoChapterColumn: chapterCol
+    readonly property alias autoHeader: settingsHeader
 
     /// Automation: sends the chapters to their foot, where the repository group stands — the resting position
     /// shows the group above it.

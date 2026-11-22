@@ -591,6 +591,95 @@ Item {
         }
     }
 
+    // _PGG_AUTO_ACT=settings-narrow column|lead|rail|lane: the screen in a window set to the middle of one stage of
+    // what a window narrower than the block gives up (`SettingsDialog.railRoom`): the chapters' column, the air left of
+    // the rail, the rail, then the bar's lane. Each width is worked out from the screen's own floor, words and `✕`, so
+    // the stage stands wherever the fonts put its edges; the window is set as a window manager sets it, past its floor
+    // (the film's `ws`). Judged: where each of the three stands (`full`, `between` or its `least`; the column can also
+    // be `under` its floor), whether the content keeps inside its column — past all four, inside the bar's lane — and
+    // whether the title starts level with the rail. `at=` is the window's width, which the fonts decide.
+    WindowStage {
+        id: narrowTimer
+        name: "settings_narrow"
+        /// The screen opened on `Application`, then the window set to the stage's width.
+        order: ["opened", "sized"]
+        running: Harness.autoAct === "settings-narrow"
+        readonly property string stage: Harness.autoActArg
+        /// The block row's width at the middle of `stage`, off the screen as it reads now.
+        function rowFor(stage) {
+            const d = acts.settingsDialog
+            const held = 2 * Theme.spaceLg + Theme.borderWidth + Theme.spaceXxl + d.chapterFloor
+            const leadLeast = d.autoHeader.exitInset
+            const railLeast = d.autoRail.implicitWidth
+            const fullAt = held + Theme.settingsRailWidth + Theme.spaceXxl
+            const railAt = held + Theme.settingsRailWidth + leadLeast
+            const laneAt = held + railLeast + leadLeast
+            if (stage === "column")
+                return (fullAt + d.blockWidth) / 2
+            if (stage === "lead")
+                return (fullAt + railAt) / 2
+            if (stage === "rail")
+                return (railAt + laneAt) / 2
+            return laneAt - Theme.spaceXxl / 2
+        }
+        /// Where `value` stands between its `full` and its `least`.
+        function where(value, full, least) {
+            if (Math.abs(value - full) < 0.5)
+                return "full"
+            if (Math.abs(value - least) < 0.5)
+                return "least"
+            if (value > full)
+                return "over"
+            return value < least ? "under" : "between"
+        }
+        function report() {
+            const d = acts.settingsDialog
+            const column = d.autoChapterColumn.width
+            const pane = d.autoAppPane.width
+            const titleX = d.autoHeader.autoTitle.mapToItem(null, 0, 0).x
+            const railX = d.autoRail.mapToItem(null, 0, 0).x
+            return "settings_narrow stage=" + narrowTimer.stage
+                + " lead=" + narrowTimer.where(d.railLead, Theme.spaceXxl, d.autoHeader.exitInset)
+                + " rail=" + narrowTimer.where(d.railWidth, Theme.settingsRailWidth, d.autoRail.implicitWidth)
+                + " column=" + narrowTimer.where(column, Theme.textWidth, d.chapterFloor)
+                + " content=" + (pane <= column + 0.5 ? "inside"
+                                 : pane <= column + Theme.spaceXxl + 0.5 ? "lane" : "out")
+                + " title=" + (Math.abs(titleX - railX) < 0.5 ? "level" : "off")
+                + " at=" + acts.window.width
+        }
+        onTriggered: {
+            if (narrowTimer.at("start")) {
+                narrowTimer.input("opened", () => acts.openOn("app"))
+                return
+            }
+            if (narrowTimer.at("opened")) {
+                if (!Awaited.all("settings_narrow_ready", { "opened": acts.settingsDialog.opened,
+                                                            "shown": acts.appPane.autoAppShown,
+                                                            "page": PageSettled.windowSettled(acts.window) }))
+                    return
+                // The block row stands in a column as wide as the window less its frame, which a set width keeps.
+                narrowTimer.input("sized", () => {
+                    const row = acts.settingsDialog.autoBlockRow
+                    const width = Math.round(narrowTimer.rowFor(narrowTimer.stage)
+                                             + acts.window.width - row.parent.width)
+                    if (acts.window.width !== width)
+                        acts.window.width = width
+                    return acts.window.width === width
+                })
+                return
+            }
+            // Under its floor the pane and the REFRESH row narrow each other a polish pass at a time
+            // (`SettingsAppPane.floorWidth`): read once they stand.
+            if (!narrowTimer.still("settings_narrow_laid", narrowTimer.report()))
+                return
+            narrowTimer.complete({
+                "name": "settings_narrow_ready",
+                "when": () => ({ "opened": acts.settingsDialog.opened,
+                                 "page": PageSettled.windowSettled(acts.window) }),
+                "report": () => narrowTimer.report() })
+        }
+    }
+
     // _PGG_AUTO_ACT=settings-sweep [app|git]: this screen's words, taken from the air around them
     // (規約 §右のペインの字は掴める); one category per run, as only one is on screen. Waited on the category's own git
     // reads, not the screen opening: sampled before them, the column is about to grow lines. The hand lies inside the

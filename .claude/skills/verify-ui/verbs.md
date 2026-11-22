@@ -369,6 +369,7 @@
 - `settings-processes [<数>]`(`Application` の `GIT PROCESSES` の章の欄を打つ。本番は `3` と引数なし(既定)— 詳細は `WindowSettingsActs.qml` の `processesTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-refresh [<床>:<天井>:<他の worktree の読み方>:<1 つ目>:<2 つ目>]`(`Application` の `REFRESH` の章を動かす。読み方は `auto` / `fixed` / `off` — 詳細は `WindowSettingsActs.qml` の `refreshTimer`、引数ごとの判定は `verify/verbs/identity.rs`)
 - `settings-refresh-leave [<床>:<天井>:<他の worktree の床>:<他の worktree の天井>]`(`REFRESH` の章の欄を確定しないまま設定画面を出る。空の部分は空にした欄 — 詳細は `WindowSettingsActs.qml` の `refreshLeaveTimer`、判定は同上)
+- `settings-narrow column|lead|rail|lane`(**引数は必須**。塊より狭い窓が譲る段 = 章の列・最左の余白・分類の列・バーの帯の、どれか 1 つの真ん中の幅へ窓を置いて設定画面を読む。幅は画面の床・字・`✕` から run が計算する — 詳細は `WindowSettingsActs.qml` の `narrowTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-git-path [<絶対パス>|stored-missing|in-use|other]`(`Application` の `GIT EXECUTABLE` 章 — 撃つ git のパスと、その先が答えた版。`other` は `--other-git <版>` と組、古い版の絵は `--old-git` で持ち込む — 詳細(キーワード・存在しないパスの綴り方)は `WindowSettingsActs.qml` の `gitPathTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-git-leave`(引数なし。差し出している git を置いて設定画面を出ようとする — 詳細は `WindowSettingsActs.qml` の `gitLeaveTimer`、判定は同上)
 - `settings-tools` / `settings-tools-loading`(設定画面の `Git` の Merge editor 候補一覧を実際に開いたまま止める。前者は settled 側、後者は実際の loading=true の edge を latch する側。引数なし — 詳細は `WindowSettingsActs.qml` の `toolsTimer`)

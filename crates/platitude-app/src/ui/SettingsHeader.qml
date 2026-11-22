@@ -25,6 +25,8 @@ Item {
     required property bool unsaved
     /// A press was made over that and turned down: the next one goes through.
     required property bool armed
+    /// The title, handed over whole so a run can read where it starts (`settings-narrow`).
+    readonly property alias autoTitle: title
 
     /// The `✕` was pressed.
     signal closed()
@@ -33,6 +35,7 @@ Item {
     implicitHeight: Theme.toolbarHeight + 2 * Theme.spaceLg
 
     RowLayout {
+        id: title
         // The block's left edge plus the rail's lane, set here: a margin on the band would fall outside the centred
         // width and shift the title off the rail.
         anchors.left: parent.left

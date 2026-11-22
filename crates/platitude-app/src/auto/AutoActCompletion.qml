@@ -354,6 +354,7 @@ QtObject {
                 "settings-switch", "settings-sweep", "settings-escape", "settings-leave",
                 "settings-repo", "settings-repo-pick", "settings-eol", "settings-git-path",
                 "settings-git-leave", "settings-processes", "settings-refresh", "settings-refresh-leave",
+                "settings-narrow",
                 "avatar-settings", "avatar-combo", "avatar-row-lit", "avatar-remove",
                 "avatar-enter"].indexOf(act) >= 0
     }
