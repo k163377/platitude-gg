@@ -127,20 +127,6 @@ impl TabsModel {
         self.ask(path, false);
     }
 
-    pub(super) fn drain(&mut self) {
-        for msg in self.asks.drain() {
-            // One ask is out at a time (`TabsModel::asking`).
-            let Some(ask) = self.asking.pop_front() else {
-                continue;
-            };
-            self.land(&ask, msg);
-        }
-        self.start_asking();
-        // After the next ask is out, so a non-empty queue never reads as
-        // settled between two.
-        self.settle_opening();
-    }
-
     /// Puts back the tabs the last session had open, in the order the
     /// reader left them in (`TabsModel::report` writes the strip's order).
     ///

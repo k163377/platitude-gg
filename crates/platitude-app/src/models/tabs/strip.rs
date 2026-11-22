@@ -4,6 +4,20 @@
 use super::*;
 
 impl TabsModel {
+    pub(super) fn drain(&mut self) {
+        for msg in self.asks.drain() {
+            // One ask is out at a time (`TabsModel::asking`).
+            let Some(ask) = self.asking.pop_front() else {
+                continue;
+            };
+            self.land(&ask, msg);
+        }
+        self.start_asking();
+        // After the next ask is out, so a non-empty queue never reads as
+        // settled between two.
+        self.settle_opening();
+    }
+
     pub(super) fn leave_front(&mut self) {
         if self.current_index >= 0 {
             self.leaving_tab(self.current_index);

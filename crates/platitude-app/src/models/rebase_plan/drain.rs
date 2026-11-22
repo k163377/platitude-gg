@@ -20,6 +20,15 @@ pub(in crate::models) fn refusal_kind(
 }
 
 impl RebasePlanModel {
+    pub(super) fn drain(&mut self) {
+        let Some(feed) = self.feed.clone() else {
+            return;
+        };
+        for msg in feed.drain() {
+            self.take(msg);
+        }
+    }
+
     pub(super) fn take(&mut self, msg: PlanMsg) {
         match msg {
             PlanMsg::Loaded { preview } => {

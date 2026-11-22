@@ -79,15 +79,6 @@ impl RebasePlanModel {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.plan, consumer);
     }
 
-    fn drain(&mut self) {
-        let Some(feed) = self.feed.clone() else {
-            return;
-        };
-        for msg in feed.drain() {
-            self.take(msg);
-        }
-    }
-
     /// Asks for the rows an interactive rebase from `oid_hex` would
     /// offer; the answer arrives through the feed and raises `active`,
     /// or `refusedPlan` where the range cannot be replayed.

@@ -12,6 +12,7 @@ use crate::hub::{DetailsMsg, Feed, Hub};
 use super::pathtree::DirNode;
 use super::qml_register;
 
+mod drain;
 mod qobject;
 #[cfg(test)]
 mod tests;

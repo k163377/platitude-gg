@@ -25,6 +25,7 @@ use super::{
 };
 
 mod ahead;
+mod drain;
 mod find;
 mod qobject;
 mod rows;
