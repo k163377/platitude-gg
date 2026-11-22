@@ -47,8 +47,9 @@ fn named(args: &[String]) -> Result<(std::path::PathBuf, Option<String>), String
 /// stopped, a red gate, runs awaiting approval, a closed permit, a refused
 /// fast-forward — leaves the line of landings: what stopped it is the
 /// user's to settle, and their next `/land` puts the seat back at the end
-/// (`line::leave`). A refusal ahead of the turn — a dirty seat, a branch
-/// checked out nowhere — is the session's to put right and land again;
+/// (`line::leave`). A refusal ahead of the turn — a dirty seat, a gate
+/// running in it, a branch checked out nowhere — is the session's to put
+/// right and land again;
 /// a branch with nothing to land ends its place too (`preflight`).
 fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let (root, branch) = named(args)?;
@@ -85,8 +86,9 @@ struct Ready {
     _turn: crate::budget::Admitted,
 }
 
-/// Everything ahead of the turn. A refusal here — a dirty seat, a branch
-/// checked out nowhere, a seat behind the head — is the session's to put
+/// Everything ahead of the turn. A refusal here — a dirty seat, a gate
+/// running in it, a branch checked out nowhere, a seat behind the head —
+/// is the session's to put
 /// right and land again. None is a branch with nothing to land: its place
 /// in the line ends there, with the permit unspent.
 fn preflight(
@@ -152,6 +154,7 @@ fn preflight(
     // The line of landings: only its head lands (`line`).
     line::must_be_head(here, me)?;
     settle_the_tree(&trees[seat_at].path)?;
+    no_gate_running(&trees[seat_at].path)?;
     // The landings' queue (`budget::Pool::turn`), held to the end. Taken
     // before the seat's tree, its gate and the machine's budget, so a
     // landing standing in line stands in nobody's way.
@@ -159,13 +162,17 @@ fn preflight(
     phases.mark("preflight");
     let turn = pool.turn(&crate::seats::slashed(seat_dir), &format!("land {branch}"));
     phases.mark("queue");
+    let turn = turn?;
+    // Again with the turn: a gate started in the seat while the landing
+    // waited for it.
+    no_gate_running(&trees[seat_at].path)?;
     Ok(Some(Ready {
         branch,
         listing,
         trees,
         seat_at,
         ahead,
-        _turn: turn?,
+        _turn: turn,
     }))
 }
 
@@ -282,6 +289,25 @@ fn settle_the_tree(seat: &str) -> Result<(), String> {
         "{seat} has uncommitted changes — what would land is not what is there. Commit or \
          stash first:\n{dirty}"
     ))
+}
+
+/// A gate still running in the seat — one that went to the background and
+/// looked finished — starts the task runner from the seat's build slot by
+/// name and reads its tree: stepping out of the slot and rebasing under it
+/// would turn it red for nothing. A lock that cannot be looked at moves
+/// nothing either.
+fn no_gate_running(seat: &str) -> Result<(), String> {
+    match crate::gate::running_in(std::path::Path::new(seat)) {
+        Ok(false) => Ok(()),
+        Ok(true) => Err(format!(
+            "a gate is running in {seat} — landing now would step out of the build slot its \
+             tests start the task runner from, and rebase the tree it reads. Wait for its \
+             verdict (the output of the command that started it) and land again."
+        )),
+        Err(why) => Err(format!(
+            "{why} — whether a gate runs in {seat} is not known, so nothing moves"
+        )),
+    }
 }
 
 /// Free only the seat's build slot: the primary's verdict runs from

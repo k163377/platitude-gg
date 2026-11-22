@@ -255,6 +255,46 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     assert_eq!(sb.main_sha(), sb.head(&sb.seat));
 }
 
+/// A gate still running in the seat (one that went to the background and
+/// looked finished) starts the task runner from the slot by name and
+/// reads the tree: the landing refuses before it steps out of the slot or
+/// rebases, and lands once that gate is over.
+#[test]
+fn land_refuses_a_seat_its_gate_is_running_in_and_moves_nothing() {
+    let sb = Sandbox::new("busy-seat");
+    sb.write(
+        &sb.repo,
+        "crates/xtask/src/qmltest.rs",
+        "pub fn run() { let _ = 17; }\n",
+    );
+    sb.commit_all(
+        &sb.repo,
+        "feat(xtask): main moved",
+        &[("PGGDEV_GATE_SKIP", "1")],
+    );
+    sb.write_refs(&sb.seat, 17);
+    let tip = sb.commit_all(&sb.seat, "feat(core): seventeen", &[]);
+    let before = sb.main_sha();
+    let slot = sb.seat.join("target").join("debug");
+    std::fs::create_dir_all(&slot).expect("the build slot");
+    let running = slot.join(format!("xtask{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(EXE, &running).expect("the runner cargo wrote");
+    // The seat's gate, as `lanes::sole` holds it: the lock beside its note.
+    let lock = std::fs::File::create(sb.seat.join("target").join("gate-running.lock"))
+        .expect("the gate's lock file");
+    lock.lock().expect("the seat's gate");
+
+    let (ok, text) = sb.land_from(&running, "worktree-a");
+    assert!(!ok && text.contains("a gate is running"), "{text}");
+    assert!(running.exists(), "stepped out from under the gate:\n{text}");
+    assert_eq!(sb.head(&sb.seat), tip, "rebased under the gate:\n{text}");
+    assert_eq!(sb.main_sha(), before, "{text}");
+
+    drop(lock);
+    let (ok, text) = sb.land_from(&running, "worktree-a");
+    assert!(ok && text.contains("landed worktree-a"), "{text}");
+}
+
 /// A runner published by `fs::copy` can be held open by a neighbour's
 /// fork, too briefly to catch, so it is held open here on purpose.
 ///
