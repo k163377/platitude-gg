@@ -209,7 +209,7 @@
 - `take-side-ours`
 - `take-side-theirs`(引数はパス。**conflict のある preset が要る**(`--preset conflict-kinds`)。conflict 行のメニューから片側を採り、着地まで待って撮る — 詳細は `AutoActFileRowVerbs.qml` の `runFileRowAct`)
 - `open-mergetool`(引数はパス、**`--preset conflict-kinds` が要る**。同じメニューから外部ツールへ渡す — ツールは run が建てる(`verify/repos.rs` の `seed_merge_tool`)。報告行 `merge_tool` の読み分けは `AutoActFileRowVerbs.qml` の `runFileRowAct`)
-- `merge-branch`
+- `merge-branch`(引数はブランチ名(リモート追跡ブランチも可)かタグ名。メニューはその名前を右クリックした時と同じ種類で開く — 詳細は `AutoActHistoryVerbs.qml` の merge / rebase の枝)
 - `merge-stops`(引数はブランチ名。**`--preset clashing` が要る**。同じ 1 押しの**もう 1 つの着地** = 選択は WIP 行へ行き、エラー帯もコマンドログの持ち上げも出ない(規約 §進行中の操作から出る)— 詳細は `AutoActHistoryVerbs.qml` の `mergeStoppedTimer`)
 
 - `merge-commit`(引数なし、**`--preset conflict-staged` 必須**。止まった merge を、箱を空にしたまま commit ボタンで仕上げる — 詳細は `AutoActWipVerbs.qml`、判定は `verify/verbs/sequencer.rs`)
@@ -217,7 +217,7 @@
 - `drop-stops`(引数は `drop-commit-go` と同じ、**`--preset drop-stops` + `row:2` 必須**。stash 経由で回り直した replay が止まった着地 — 詳細は `AutoActHistoryVerbs.qml` の `opStoppedTimer`)
 - `cherry-pick-stops`(**`feature/clash --preset clashing` 必須**。押した cherry-pick が conflict で止まった着地 — 詳細は同上)
 - `revert-stops`(引数は `revert-commit` と同じ、**`--preset revert-clashes` + `row:1` 必須** — 詳細は同上)
-- `rebase-onto`(引数はブランチ名)
+- `rebase-onto`(引数は `merge-branch` と同じ)
 - `replay-running`(引数はブランチ名、**`base --preset replay` 必須**。走行中の replay の画面 = `REBASING n/m` のバッジ・下りた扉・ポインタ脇のリング — 詳細は `AutoActHistoryVerbs.qml` の `replayRunningTimer`)
 - `rebase-stops`(**`main --preset rebase-clashes` 必須**。押した rebase が止まった着地 — 詳細は `AutoActHistoryVerbs.qml` の `opStoppedTimer`)
 - `revert-commit`(引数は**完全な oid** か **`row:<n>`**、省略で HEAD。先端に答えが立つ着地 — 視界の側を試す背の高い履歴の作り方と罠は `AutoActHistoryVerbs.qml` の revert の枝、完了は `tipLandedTimer`)

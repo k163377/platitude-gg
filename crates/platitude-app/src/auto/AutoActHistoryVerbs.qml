@@ -202,8 +202,17 @@ Item {
                     tipLandedTimer.start()
                 repoTab.revert(oidHex)
             } else {
-                page.openRefMenu("branch", arg, arg,
-                                 branchesModel.oidOfName(arg))
+                // Raised as a right-click on that name raises it: a remote-tracking branch's menu is the `remote`
+                // one, a tag's the `tag` one. Raised as a local branch's, the name finds no commit as the write ends
+                // and the menu closes (`RefRowMenu.standAgain`), out of the picture.
+                const local = branchesModel.oidOfName(arg)
+                const remote = local === "" ? remotesModel.oidOfName(arg) : ""
+                if (local !== "")
+                    page.openRefMenu("branch", arg, arg, local)
+                else if (remote !== "")
+                    page.openRefMenu("remote", arg, arg, remote)
+                else
+                    page.openRefMenu("tag", arg, arg, tagsModel.oidOfName(arg))
                 if (act === "merge-branch" || act === "merge-stops") {
                     if (act === "merge-stops")
                         mergeStoppedTimer.start()
