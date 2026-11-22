@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use super::{
     Alive, CANONICAL, Gone, HARNESS, ONLY_IF_MOVED, Tail, asks, crate_of, generation, profiles_in,
-    read_artifacts, stamp, stamped, sweep_profile, unit_key,
+    read_artifacts, resolve_lifted, stamp, stamped, sweep_profile, unit_key,
 };
 use crate::sweep::IF_MOVED;
 use crate::yard::Yard;
@@ -37,11 +37,21 @@ impl Yard {
     }
 }
 
-fn alive(deps: &[&str], build: &[&str]) -> Alive {
+fn alive(units: &[&str], lifted: &[&str]) -> Alive {
     Alive {
-        deps: deps.iter().map(|s| (*s).to_string()).collect(),
-        build: build.iter().map(|s| (*s).to_string()).collect(),
+        units: units.iter().map(|s| (*s).to_string()).collect(),
+        lifted: lifted.iter().map(|s| (*s).to_string()).collect(),
     }
+}
+
+/// A file inside a unit and its lifted copy at the profile's own
+/// directory, as cargo leaves them: the same bytes at the same moment,
+/// the unit's under the crate's name (`pgg_todo_editor.exe` lifted as
+/// `pgg-todo-editor.exe`).
+fn lifted(yard: &Yard, profile: &str, unit: &str, name: &str, at: SystemTime) {
+    let in_unit = name.replace('-', "_");
+    yard.file_at(&format!("{profile}/build/{unit}/out/{in_unit}"), 8, at);
+    yard.file_at(&format!("{profile}/{name}"), 8, at);
 }
 
 fn names_under(dir: &Path) -> Vec<String> {
@@ -57,8 +67,8 @@ fn names_under(dir: &Path) -> Vec<String> {
 }
 
 /// `lib` goes only on the extensions rustc puts it on, and a Unix binary
-/// has none: every spelling must map to one name, or keeping a unit takes
-/// half of it away.
+/// has none: every spelling must map to one name, or a crate's
+/// incremental session is dated against half its compile.
 #[test]
 fn every_spelling_of_one_unit_answers_to_one_name() {
     for (file, key) in [
@@ -111,15 +121,16 @@ fn a_units_crate_is_its_name_without_the_hash() {
 
 #[test]
 fn the_live_set_is_read_off_the_two_message_shapes() {
+    // Spelled as cargo writes them on Windows: the package and its hash
+    // joined by a forward slash inside a backslashed path.
     let text = [
         r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\xtask.exe","C:\\t\\c\\target\\debug\\xtask.pdb"],"executable":"C:\\t\\c\\target\\debug\\xtask.exe","fresh":true}"#,
-        // A dashed bin: `deps/` holds it under the crate's name too.
-        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\pgg-todo-editor.exe"],"executable":"C:\\t\\c\\target\\debug\\pgg-todo-editor.exe","fresh":true}"#,
-        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\deps\\liblibc-7581adf255e9367e.rlib","C:\\t\\c\\target\\debug\\deps\\liblibc-7581adf255e9367e.rmeta"],"fresh":false}"#,
-        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\build\\cc-1a10f7f7bb5602bf\\build-script-build.exe"],"fresh":true}"#,
-        r#"{"reason":"build-script-executed","out_dir":"C:\\t\\c\\target\\debug\\build\\cc-7801b9b6db4fe7b8\\out"}"#,
-        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\release\\deps\\libplatitude_core-8ad8598591cbaf1c.rmeta"],"fresh":true}"#,
-        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\hooks\\deps\\xtask-0000000000000000.exe"],"fresh":true}"#,
+        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\pgg-todo-editor.exe","C:\\t\\c\\target\\debug\\pgg_todo_editor.pdb"],"executable":"C:\\t\\c\\target\\debug\\pgg-todo-editor.exe","fresh":true}"#,
+        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\build\\libc/7581adf255e9367e\\out\\liblibc-7581adf255e9367e.rlib","C:\\t\\c\\target\\debug\\build\\libc/7581adf255e9367e\\out\\liblibc-7581adf255e9367e.rmeta"],"fresh":false}"#,
+        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\debug\\build\\cc/1a10f7f7bb5602bf\\out\\build_script_build.exe"],"fresh":true}"#,
+        r#"{"reason":"build-script-executed","out_dir":"C:\\t\\c\\target\\debug\\build\\cc/7801b9b6db4fe7b8\\out"}"#,
+        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\release\\build\\platitude-core/8ad8598591cbaf1c\\out\\libplatitude_core-8ad8598591cbaf1c.rmeta"],"fresh":true}"#,
+        r#"{"reason":"compiler-artifact","filenames":["C:\\t\\c\\target\\hooks\\build\\xtask/0000000000000000\\out\\xtask-0000000000000000.exe"],"fresh":true}"#,
         r#"{"reason":"build-finished","success":true}"#,
     ]
     .join("\n");
@@ -129,22 +140,26 @@ fn the_live_set_is_read_off_the_two_message_shapes() {
     assert_eq!(compiled, 1, "the one unit cargo said it had to build");
     let debug = live.get("debug").expect("the debug profile");
     assert_eq!(
-        debug.deps.iter().map(String::as_str).collect::<Vec<_>>(),
+        debug.units.iter().map(String::as_str).collect::<Vec<_>>(),
         [
-            "libc-7581adf255e9367e",
-            "pgg-todo-editor",
-            "pgg_todo_editor",
-            "xtask",
+            "cc/1a10f7f7bb5602bf",
+            "cc/7801b9b6db4fe7b8",
+            "libc/7581adf255e9367e",
         ]
     );
     assert_eq!(
-        debug.build.iter().map(String::as_str).collect::<Vec<_>>(),
-        ["cc-1a10f7f7bb5602bf", "cc-7801b9b6db4fe7b8"]
+        debug.lifted.iter().map(String::as_str).collect::<Vec<_>>(),
+        [
+            "pgg-todo-editor.exe",
+            "pgg_todo_editor.pdb",
+            "xtask.exe",
+            "xtask.pdb"
+        ]
     );
     let release = live.get("release").expect("the release profile");
     assert_eq!(
-        release.deps.iter().map(String::as_str).collect::<Vec<_>>(),
-        ["platitude_core-8ad8598591cbaf1c"]
+        release.units.iter().map(String::as_str).collect::<Vec<_>>(),
+        ["platitude-core/8ad8598591cbaf1c"]
     );
     assert!(
         !live.contains_key("hooks"),
@@ -157,13 +172,13 @@ fn the_live_set_is_read_off_the_two_message_shapes() {
 #[test]
 fn another_trees_paths_are_not_read() {
     let mut live: BTreeMap<String, Alive> = BTreeMap::new();
-    let line = r#"{"reason":"compiler-artifact","filenames":["/t/other/target/debug/deps/libx-0000000000000000.rlib"]}"#;
+    let line = r#"{"reason":"compiler-artifact","filenames":["/t/other/target/debug/build/x/0000000000000000/out/libx-0000000000000000.rlib"]}"#;
     read_artifacts(Path::new("/t/c"), line, &mut live);
     assert!(live.is_empty(), "{live:?}");
 }
 
-/// Every generation of a unit but the live one goes, and every spelling
-/// of the live one stays.
+/// Every generation of a unit but the live one goes, and the flat layout
+/// an older cargo writes goes whole.
 #[test]
 fn only_what_the_live_set_names_stays() {
     let yard = Yard::new("generations");
@@ -171,24 +186,50 @@ fn only_what_the_live_set_names_stays() {
     // waits(measured): a date handed to the files under test, awaited by nothing
     let long_ago = SystemTime::now() - Duration::from_secs(60 * 60 * 24 * 30);
     for hash in ["10e1c651a9583edf", "7fed29d0757554ac"] {
-        for spelling in ["libplatitude_core-{h}.rlib", "libplatitude_core-{h}.rmeta"] {
-            yard.file_at(
-                &format!("{debug}/deps/{}", spelling.replace("{h}", hash)),
-                8,
-                long_ago,
-            );
-        }
+        let unit = format!("{debug}/build/platitude-core/{hash}");
         yard.file_at(
-            &format!("{debug}/deps/platitude_core-{hash}.d"),
+            &format!("{unit}/out/libplatitude_core-{hash}.rmeta"),
+            8,
+            long_ago,
+        );
+        yard.file_at(
+            &format!("{unit}/fingerprint/lib-platitude_core"),
             8,
             long_ago,
         );
     }
-    yard.file_at(&format!("{debug}/deps/xtask.exe"), 8, long_ago);
-    yard.file_at(&format!("{debug}/deps/xtask.d"), 8, long_ago);
-    // A landing's set-aside (`land::INFLIGHT`): cargo never named it.
+    // Two configurations of one bin, one of them no line stands on.
     yard.file_at(
-        &format!("{debug}/deps/xtask-inflight-13720-2.exe"),
+        &format!("{debug}/build/xtask/2d983b8d01fd25e6/out/xtask.exe"),
+        8,
+        long_ago,
+    );
+    yard.file_at(
+        &format!("{debug}/build/xtask/ac1c6bf4eaa0025e/out/xtask.exe"),
+        8,
+        long_ago,
+    );
+    // A build script's compile and two runs, one of them dead.
+    yard.file_at(
+        &format!("{debug}/build/cc/1a10f7f7bb5602bf/out/build_script_build.exe"),
+        8,
+        long_ago,
+    );
+    yard.file_at(
+        &format!("{debug}/build/cc/7801b9b6db4fe7b8/run/output"),
+        8,
+        long_ago,
+    );
+    yard.file_at(
+        &format!("{debug}/build/cc/0000000000000000/run/output"),
+        8,
+        long_ago,
+    );
+    // No hash: nothing cargo wrote.
+    yard.file_at(&format!("{debug}/build/cc/notes/kept.txt"), 8, long_ago);
+    // The flat layout.
+    yard.file_at(
+        &format!("{debug}/deps/libplatitude_core-10e1c651a9583edf.rlib"),
         8,
         long_ago,
     );
@@ -198,53 +239,95 @@ fn only_what_the_live_set_names_stays() {
         long_ago,
     );
     yard.file_at(
-        &format!("{debug}/build/cc-7801b9b6db4fe7b8/out/probe.rs"),
-        8,
-        long_ago,
-    );
-    yard.file_at(
-        &format!("{debug}/build/cc-0000000000000000/out/probe.rs"),
-        8,
-        long_ago,
-    );
-    // Left alone whatever it holds: an unhashed unit keeps its bookkeeping.
-    yard.file(
         &format!("{debug}/.fingerprint/platitude-core-7fed29d0757554ac/lib-platitude_core"),
         8,
+        long_ago,
     );
 
     let alive = alive(
-        &["platitude_core-10e1c651a9583edf", "xtask"],
-        &["cc-1a10f7f7bb5602bf", "cc-7801b9b6db4fe7b8"],
+        &[
+            "platitude-core/10e1c651a9583edf",
+            "cc/1a10f7f7bb5602bf",
+            "cc/7801b9b6db4fe7b8",
+            "xtask/2d983b8d01fd25e6",
+        ],
+        &[],
     );
     let freed = sweep_profile(&yard.join(debug), "debug", &alive, None, false)
         .expect("the sweep")
         .freed;
 
     assert_eq!(
-        names_under(&yard.join(format!("{debug}/deps"))),
-        [
-            "libplatitude_core-10e1c651a9583edf.rlib",
-            "libplatitude_core-10e1c651a9583edf.rmeta",
-            "platitude_core-10e1c651a9583edf.d",
-            "xtask.d",
-            "xtask.exe",
-        ]
+        names_under(&yard.join(format!("{debug}/build/platitude-core"))),
+        ["10e1c651a9583edf"]
+    );
+    assert_eq!(
+        names_under(&yard.join(format!("{debug}/build/xtask"))),
+        ["2d983b8d01fd25e6"]
+    );
+    assert_eq!(
+        names_under(&yard.join(format!("{debug}/build/cc"))),
+        ["1a10f7f7bb5602bf", "7801b9b6db4fe7b8", "notes"]
     );
     assert_eq!(
         names_under(&yard.join(format!("{debug}/build"))),
-        ["cc-1a10f7f7bb5602bf", "cc-7801b9b6db4fe7b8"]
+        ["cc", "platitude-core", "xtask"]
     );
+    assert!(names_under(&yard.join(format!("{debug}/deps"))).is_empty());
+    assert!(names_under(&yard.join(format!("{debug}/.fingerprint"))).is_empty());
+    // The dead unit's two files, the other configuration of the bin, the
+    // dead run, and three entries of the flat layout.
+    assert_eq!(freed, (2 + 1 + 1 + 3) * 8);
+}
+
+/// A lifted bin is the unit its link stands on as each line ends: two
+/// lines that configure it differently keep both their units. A dashed
+/// bin's unit answers to the crate's name its file has there, with
+/// nothing else lifted beside it (no `.pdb`, as on Linux) — and a copy
+/// under the lifted name in another unit, the same bytes at the same
+/// moment (`install_todo_editor`'s), names nothing.
+#[test]
+fn a_lifted_bin_is_every_unit_a_line_linked_it_to() {
+    let yard = Yard::new("lifted");
+    let debug = "target/debug";
+    // waits(measured): a date handed to the files under test, awaited by nothing
+    let long_ago = SystemTime::now() - Duration::from_secs(60 * 60 * 24 * 30);
+    let packages = ["platitude-app".to_string(), "platitude-core".to_string()];
+    let mut alive = alive(&[], &["platitude-gg"]);
+    lifted(
+        &yard,
+        debug,
+        "platitude-app/5a9085458d380e67",
+        "platitude-gg",
+        long_ago,
+    );
+    yard.file_at(
+        &format!("{debug}/build/platitude-core/9352fd5ab2033615/out/platitude-gg"),
+        8,
+        long_ago,
+    );
+    resolve_lifted(&yard.join(debug), &packages, &mut alive);
+    // The next line lifts its own configuration over the first.
+    lifted(
+        &yard,
+        debug,
+        "platitude-app/1111111111111111",
+        "platitude-gg",
+        long_ago + Duration::from_secs(60),
+    );
+    resolve_lifted(&yard.join(debug), &packages, &mut alive);
+
     assert_eq!(
-        names_under(&yard.join(format!("{debug}/.fingerprint"))),
-        ["platitude-core-7fed29d0757554ac"]
+        alive.units.iter().map(String::as_str).collect::<Vec<_>>(),
+        [
+            "platitude-app/1111111111111111",
+            "platitude-app/5a9085458d380e67"
+        ]
     );
-    // Four dead files under deps and one dead build directory.
-    assert_eq!(freed, 5 * 8);
 }
 
 /// Whatever the live set says, or a configuration in use would be rebuilt
-/// after every sweep.
+/// after every sweep — but the flat layout, which this cargo never reads.
 #[test]
 fn what_was_written_since_the_last_sweep_stays() {
     let yard = Yard::new("recency");
@@ -252,9 +335,14 @@ fn what_was_written_since_the_last_sweep_stays() {
     // waits(measured): a date handed to the files under test, awaited by nothing
     let floor = SystemTime::now() - Duration::from_secs(60 * 60 * 24);
     yard.file_at(
-        &format!("{debug}/deps/libx-0000000000000000.rlib"),
+        &format!("{debug}/build/x/0000000000000000/out/libx-0000000000000000.rlib"),
         16,
         floor - Duration::from_secs(60 * 60),
+    );
+    yard.file_at(
+        &format!("{debug}/build/x/1111111111111111/out/libx-1111111111111111.rlib"),
+        16,
+        floor + Duration::from_secs(60 * 60),
     );
     yard.file_at(
         &format!("{debug}/deps/libx-1111111111111111.rlib"),
@@ -270,27 +358,34 @@ fn what_was_written_since_the_last_sweep_stays() {
     )
     .expect("the sweep")
     .freed;
-    assert_eq!(freed, 16);
+    assert_eq!(freed, 16 + 16);
     assert_eq!(
-        names_under(&yard.join(format!("{debug}/deps"))),
-        ["libx-1111111111111111.rlib"]
+        names_under(&yard.join(format!("{debug}/build/x"))),
+        ["1111111111111111"]
     );
+    assert!(names_under(&yard.join(format!("{debug}/deps"))).is_empty());
 }
 
 #[test]
 fn a_dry_run_leaves_the_tree_as_it_found_it() {
     let yard = Yard::new("dry");
     let debug = "target/debug";
-    yard.file(&format!("{debug}/deps/libx-0000000000000000.rlib"), 16);
-    yard.file(&format!("{debug}/deps/libx-1111111111111111.rlib"), 16);
-    let alive = alive(&["x-0000000000000000"], &[]);
+    yard.file(
+        &format!("{debug}/build/x/0000000000000000/out/libx-0000000000000000.rlib"),
+        16,
+    );
+    yard.file(
+        &format!("{debug}/build/x/1111111111111111/out/libx-1111111111111111.rlib"),
+        16,
+    );
+    let alive = alive(&["x/0000000000000000"], &[]);
     let would = sweep_profile(&yard.join(debug), "debug", &alive, None, true)
         .expect("the dry run")
         .freed;
     assert_eq!(would, 16);
     assert_eq!(
-        names_under(&yard.join(format!("{debug}/deps"))),
-        ["libx-0000000000000000.rlib", "libx-1111111111111111.rlib"]
+        names_under(&yard.join(format!("{debug}/build/x"))),
+        ["0000000000000000", "1111111111111111"]
     );
 }
 
@@ -304,8 +399,18 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
     let now = SystemTime::now();
     let long_ago = now - Duration::from_secs(60 * 60 * 24);
     yard.file_at(
-        &format!("{debug}/deps/libplatitude_core-10e1c651a9583edf.rmeta"),
+        &format!(
+            "{debug}/build/platitude-core/10e1c651a9583edf/out/libplatitude_core-10e1c651a9583edf.rmeta"
+        ),
         8,
+        now,
+    );
+    // A dashed bin, lifted: its session is the underscored crate's.
+    lifted(
+        &yard,
+        debug,
+        "platitude-core/404cf966f957821d",
+        "pgg-todo-editor.exe",
         now,
     );
 
@@ -326,18 +431,30 @@ fn an_incremental_session_stands_or_falls_by_its_compile() {
         8,
         long_ago,
     );
+    let bin = "pgg_todo_editor-017xhpis8lup9";
     yard.file_at(
-        &format!("{debug}/incremental/pgg_todo_editor-017xhpis8lup9/s-new/dep-graph.bin"),
+        &format!("{debug}/incremental/{bin}/s-new/dep-graph.bin"),
+        8,
+        now,
+    );
+    yard.file_at(
+        &format!("{debug}/incremental/gate-193yrqbpzpkgp/s-new/dep-graph.bin"),
         8,
         now,
     );
 
-    let alive = alive(&["platitude_core-10e1c651a9583edf"], &[]);
+    let alive = alive(
+        &[
+            "platitude-core/10e1c651a9583edf",
+            "platitude-core/404cf966f957821d",
+        ],
+        &["pgg-todo-editor.exe"],
+    );
     sweep_profile(&yard.join(debug), "debug", &alive, None, false).expect("the sweep");
 
     assert_eq!(
         names_under(&yard.join(format!("{debug}/incremental"))),
-        [live],
+        [bin, live],
         "the stale session and the crate with nothing live both go"
     );
     assert_eq!(
@@ -353,7 +470,7 @@ fn a_directory_that_is_not_there_is_not_swept() {
     let swept = sweep_profile(
         &yard.join("target/release"),
         "release",
-        &alive(&["x"], &[]),
+        &alive(&["x/0000000000000000"], &[]),
         None,
         false,
     )
@@ -374,7 +491,10 @@ fn a_directory_that_is_not_there_is_not_swept() {
 fn a_profile_cargo_is_building_in_is_left_whole() {
     let yard = Yard::new("locked");
     let debug = "target/debug";
-    yard.file(&format!("{debug}/deps/libx-1111111111111111.rlib"), 16);
+    yard.file(
+        &format!("{debug}/build/x/1111111111111111/out/libx-1111111111111111.rlib"),
+        16,
+    );
     let lock = yard.file(&format!("{debug}/.cargo-lock"), 0);
     let held = std::fs::File::open(&lock).expect("the lock");
     held.lock().expect("this test holding it, as cargo would");
@@ -385,8 +505,8 @@ fn a_profile_cargo_is_building_in_is_left_whole() {
     assert_eq!(swept.freed, 0);
     assert!(!swept.walked);
     assert_eq!(
-        names_under(&yard.join(format!("{debug}/deps"))),
-        ["libx-1111111111111111.rlib"]
+        names_under(&yard.join(format!("{debug}/build/x"))),
+        ["1111111111111111"]
     );
     held.unlock().expect("letting go");
 }
@@ -483,9 +603,10 @@ fn every_canonical_line_is_one_this_can_run() {
 }
 
 /// A workspace member's bin gets no `extra-filename`, so every
-/// configuration of it lands on one name under `deps/`: the line whose
+/// configuration of it lands on one lifted name: the line whose
 /// configuration this runner's tools read must be the last to write it,
-/// or the next tool relinks (`CANONICAL`).
+/// or the next tool lifts its own build over the name again
+/// (`CANONICAL`).
 #[test]
 fn the_configuration_this_runners_tools_read_is_written_last() {
     let of = |profile: &str| -> Vec<&[&str]> {

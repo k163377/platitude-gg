@@ -101,10 +101,13 @@ pub(super) const ENTRIES: &str =
       build-script directories name stays. A unit this tree has not built
       is compiled to be read, once per generation, and the count is
       printed. Everything written since this tree's last sweep stays
-      whatever the lines said. Only deps/, build/ and incremental/ under
-      debug/, release/ and shipped/ are swept — not .fingerprint/
-      (kilobytes), the hook's own target/hooks (in use at unpredictable
-      moments) or anything under target/ that is not cargo's. A profile
+      whatever the lines said. Only build/<package>/<hash>/ (one unit
+      each; a lifted bin's is every unit its link stood on as a line
+      ended) and incremental/ under debug/, release/ and shipped/ are
+      swept, and the flat deps/, .fingerprint/ and build/<unit>-<hash>/
+      an older cargo writes go whole — not the hook's own target/hooks
+      (in use at unpredictable moments) or anything under target/ that
+      is not cargo's. A profile
       cargo is building in is left whole, and a run that left one alone
       writes no stamp, so the next tail does it again. Every removal is
       printed with its size, and so is anything that would not go. The

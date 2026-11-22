@@ -142,8 +142,8 @@ const APP_NAME: &str = "platitude-gg";
 /// cargo does not link into.
 ///
 /// On Windows a running exe holds its file, and the release binary is a
-/// hard link to the one in `deps/`, so a window standing on the build
-/// fails the next link — and the gate's first verb builds
+/// hard link to the one in its unit's `out/`, so a window standing on the
+/// build fails the next link — and the gate's first verb builds
 /// ([`crate::tree`]) while the user's window, the one run a gate leaves
 /// standing, is still up.
 ///

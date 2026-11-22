@@ -3,7 +3,7 @@
 //! the cost in ci/baseline/code-costs-windows-x64.md §build directory の世代).
 //!
 //! **What is alive is asked of cargo, not of the clock**: a fresh build
-//! does not touch `.fingerprint/*/invoked.timestamp`, so an age is no
+//! does not touch a unit's `fingerprint/invoked.timestamp`, so an age is no
 //! evidence. The live set is read off `--message-format=json` from
 //! [`CANONICAL`], which names fresh units and compiled ones alike.
 //!
@@ -57,7 +57,7 @@ pub(crate) static IF_MOVED: command::Command = command::Command {
 };
 
 /// [`IF_MOVED`]'s option, spelled once. The command's own call is held
-/// to carrying it (`tests`).
+/// to carrying it (`run::tests`).
 const ONLY_IF_MOVED: &str = "--if-the-generation-moved";
 
 pub(crate) static COMMANDS: &[&command::Command] = &[&SWEEP, &DRY, &IF_MOVED];

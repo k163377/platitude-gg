@@ -153,12 +153,13 @@ cargo が置き換えた成果物を消さないことの代金。**1 世代 = �
 | 対象 | 読み |
 |---|---|
 | 席 1 つの `target/`(6 席の合計) | 148GB(51 / 47 / 15 / 12 / 12 / 5)。1 世代は 12〜15GB |
-| その内訳(積もった席の `target/debug` 42.7GB) | `incremental` 24.7GB(設定 250 個、生きているのは十数個)/ `deps` 12.8GB(外部 crate の rlib が典型 6 世代・最大 14 世代、テスト exe が 7〜9 世代)/ `build` 5.2GB(`qtbridge-type-lib` の出力 146MB × 8 世代) |
-| Linux 側のボリューム `pgg-linux-target-<席>`(空から gate を 1 本回した 1 世代) | 3.8GB = `debug/incremental` 1.5 + `debug/deps` 0.96 + `debug/build` 0.53 + `release` 0.83。debug の debuginfo は自前のクレートの行テーブルだけ(イメージの `/usr/local/cargo/config.toml`)。テスト exe `it` は 119MB・`libplatitude_core` の rlib は 105MB(full debuginfo の時は 250MB / 262MB) |
+| その内訳(積もった席の `target/debug` 42.7GB。ユニットの成果物を 1 段の `deps/` に置く配置で撮った) | `incremental` 24.7GB(設定 250 個、生きているのは十数個)/ `deps` 12.8GB(外部 crate の rlib が典型 6 世代・最大 14 世代、テスト exe が 7〜9 世代)/ `build` 5.2GB(`qtbridge-type-lib` の出力 146MB × 8 世代) |
+| Linux 側のボリューム `pgg-linux-target-<席>`(ユニットごとの配置で gate を数本回し、sweep を 1 回通った席 e) | 9.7GB = `debug/incremental` 6.3 + `debug/build` 1.9 + `release/build` 0.99 + 1 段の配置の残り 0.6(`deps`。次の sweep が丸ごと消す)。debug の debuginfo は自前のクレートの行テーブルだけ(イメージの `/usr/local/cargo/config.toml`)。テスト exe `it` は 145MB・`libplatitude_core` の rlib は 92MB(full debuginfo の時は 250MB / 262MB) |
 | コンテナの incremental | 持つ。1 世代の 1.5GB がそれで、持たないと core を touch した後の `linux test -p platitude-core --no-run` が 5s → 10.5s(2 回ずつ交互) |
 | incremental セッションの日付 | `<crate>-<id>/` の 2 段下の最新ファイルが、そのディレクトリ自身の日付と秒まで一致(40 件中 39 件。残り 1 件は 1 秒差)。artifact との差は ±5 秒 |
-| fresh なビルドが `.fingerprint/*/invoked.timestamp` に触るか | 触らない(`target/hooks` で hook が朝から数百回走っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
-| 正規集合を続けて 2 回読んだ時に relink する unit(listing 1 回あたり) | 2。どちらも `pgg-todo-editor` — feature 解決の違う 2 行(`test --locked --workspace --no-run` と `test --locked -p platitude-core --no-run`)が hash 無しの同じ bin を書くので、listing 1 回につき 1 回ずつ相手を上書きする。他の 15 行は全部 fresh |
+| fresh なビルドが `build/<package>/<hash>/fingerprint/invoked.timestamp` に触るか | 触らない(`cargo build -p xtask` を fresh で 2 回撃っても、時刻は最後の再ビルドのまま)= **古さは「死んでいる」の証拠にならない** |
+| 正規集合を続けて 2 回読んだ時に relink する unit(listing 1 回あたり) | 0(16 行とも fresh)。feature 解決の違う 2 行(`test --locked --workspace --no-run` と `test --locked -p platitude-core --no-run`)が建てる `pgg-todo-editor` は構成ごとに自分のユニットを持ち、プロファイル直下の名前を持ち上げ直すだけ |
+| bin の名前(dash 入りの bin を Windows とコンテナで組んで `ls -i`) | ユニットの `build/<pkg>/<hash>/out/` には crate 名で hash 無し(`a_b.exe`、Linux は `a_b`)、プロファイル直下へは target 名で持ち上げる(`a-b.exe` / `a-b`、Linux は同じ inode)。`.pdb` は crate 名のまま(`a_b.pdb`)。単体テストの実行ファイルは別ユニットの `a_b-<hash>` |
 
 ## コンテナのイメージと build cache(`xtask::linux`)
 

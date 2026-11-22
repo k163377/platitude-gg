@@ -383,8 +383,9 @@ pub(super) fn clock(took: std::time::Duration) -> String {
 /// delete: its own running image.
 const INFLIGHT: &str = "xtask-inflight-";
 
-/// Where cargo writes the binary the slot is linked to.
-const DEPS: &str = "deps";
+/// Where cargo writes the binary the slot is linked to: this package's
+/// units, `build/xtask/<hash>/`, each with its `out/`.
+const UNITS: [&str; 2] = ["build", "xtask"];
 
 /// Frees the cargo build slot this process occupies, when the slot is one
 /// of `trees`'.
@@ -393,8 +394,9 @@ const DEPS: &str = "deps";
 /// `<tree>/target/debug/xtask`: on Windows a running image cannot be
 /// replaced (`os error 5`) but can be renamed, so this process moves out
 /// of the name. Out of every name ([`names_of_this_image`]): cargo
-/// hard-links the slot to `deps/xtask-<hash>`, and freeing one name alone
-/// stops the gate's link step at the other (`LNK1104`), after the rebase.
+/// hard-links the slot to the `xtask` in its unit's `out/`, and freeing
+/// one name alone stops the gate's link step at the other (`LNK1104`),
+/// after the rebase.
 ///
 /// What cannot be moved waits for the next landing's sweep. Silent when
 /// this binary is in nobody's way; a move that fails says so. The hold
@@ -406,11 +408,14 @@ pub(super) fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
         return None;
     }
     let dir = exe.parent()?;
+    let outs = unit_outs(dir);
     sweep(dir);
-    sweep(&dir.join(DEPS));
+    for out in &outs {
+        sweep(out);
+    }
     let mut stood = Vec::new();
     let mut freed = Vec::new();
-    for (at, name) in names_of_this_image(&exe, dir).iter().enumerate() {
+    for (at, name) in names_of_this_image(&exe, &outs).iter().enumerate() {
         match step_aside(name, at) {
             Ok(()) => freed.push(name.display().to_string()),
             Err(why) => stood.push(format!("{} ({why})", name.display())),
@@ -430,30 +435,49 @@ pub(super) fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     ))
 }
 
+/// The `out/` of every unit of this package in the profile directory
+/// `dir`.
+fn unit_outs(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let Ok(units) = std::fs::read_dir(dir.join(UNITS[0]).join(UNITS[1])) else {
+        return Vec::new();
+    };
+    units
+        .flatten()
+        .map(|unit| unit.path().join("out"))
+        .filter(|out| out.is_dir())
+        .collect()
+}
+
 /// Every name in this tree's build directory that cargo writes this
-/// binary under: the slot the run was started from, and the hashed names
-/// in `deps/` the slot is linked to.
+/// binary under: the slot the run was started from, and the names in the
+/// units' `outs` one of which the slot is linked to.
 ///
 /// By name, not by inode: Windows offers one only through an unstable
-/// interface. So a name of another binary goes too: `xtask-<hash>` is also
-/// the `--bin xtask` unit-test harness (on windows-msvc the binary itself
-/// has no hash) — its next `cargo test` relinks it, and a harness running
-/// then cannot start itself again by `current_exe()`.
-fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std::path::PathBuf> {
+/// interface. So names of other binaries go too: the `xtask` of a unit not
+/// in use is another build of this binary, and `xtask-<hash>` is the
+/// `--bin xtask` unit-test harness in a unit of its own — cargo relinks
+/// either, and a harness running then cannot start itself again by
+/// `current_exe()`.
+fn names_of_this_image(
+    exe: &std::path::Path,
+    outs: &[std::path::PathBuf],
+) -> Vec<std::path::PathBuf> {
     let mut names = vec![exe.to_path_buf()];
-    let Ok(entries) = std::fs::read_dir(dir.join(DEPS)) else {
-        return names;
-    };
-    for entry in entries.flatten() {
-        if cargo_writes_this_binary_at(&entry.file_name().to_string_lossy()) {
-            names.push(entry.path());
+    for out in outs {
+        let Ok(entries) = std::fs::read_dir(out) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            if cargo_writes_this_binary_at(&entry.file_name().to_string_lossy()) {
+                names.push(entry.path());
+            }
         }
     }
     names
 }
 
-/// Whether a name in `deps/` is `xtask` or `xtask-<hash>` with the
-/// executable suffix alone — not the `.d` / `.pdb` beside it, nor an
+/// Whether a name in a unit's `out/` is `xtask` or `xtask-<hash>` with
+/// the executable suffix alone — not the `.d` / `.pdb` beside it, nor an
 /// earlier landing's aside (already swept).
 fn cargo_writes_this_binary_at(name: &str) -> bool {
     let Some(stem) = name.strip_suffix(std::env::consts::EXE_SUFFIX) else {

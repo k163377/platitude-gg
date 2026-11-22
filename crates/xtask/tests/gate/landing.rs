@@ -221,15 +221,19 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     sb.write_refs(&sb.seat, 16);
     sb.commit_all(&sb.seat, "feat(core): sixteen", &[]);
 
-    // As cargo leaves it: the image under `deps/` with a hashed name, and
-    // the slot a hard link to it. A running image is refused under either
-    // name, so freeing only the one started from stops the gate's first
-    // `cargo build -p xtask` at the other.
+    // As cargo leaves it: the image in its unit's `out/`
+    // (`build/xtask/<hash>/out/`), and the slot a hard link to it. A running
+    // image is refused under either name, so freeing only the one started
+    // from stops the gate's first `cargo build -p xtask` at the other.
     let slot = sb.seat.join("target").join("debug");
-    let deps = slot.join("deps");
-    std::fs::create_dir_all(&deps).expect("the build slot");
+    let out = slot
+        .join("build")
+        .join("xtask")
+        .join("a1b2c3d4e5f60718")
+        .join("out");
+    std::fs::create_dir_all(&out).expect("the unit");
     let suffix = std::env::consts::EXE_SUFFIX;
-    let linked = deps.join(format!("xtask-a1b2c3d4e5f60718{suffix}"));
+    let linked = out.join(format!("xtask{suffix}"));
     std::fs::copy(EXE, &linked).expect("the runner cargo wrote");
     let running = slot.join(format!("xtask{suffix}"));
     std::fs::hard_link(&linked, &running).expect("the slot cargo links to it");
@@ -245,8 +249,8 @@ fn land_steps_out_of_the_build_slot_the_gate_builds_into() {
     );
     assert!(
         !linked.exists(),
-        "the name under `deps/` the slot was linked to is still the running image's, and the \
-         link step of the gate's first build is refused there:\n{text}"
+        "the name in the unit's `out/` the slot was linked to is still the running image's, and \
+         the link step of the gate's first build is refused there:\n{text}"
     );
     assert!(
         !left_behind.exists(),

@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::TryLockError;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::ONLY_IF_MOVED;
@@ -92,12 +92,13 @@ fn the_runner(package: &str) -> bool {
 
 /// **A bin cargo writes without a hash is one file, however many lines
 /// build it**: a workspace member's bin is uplifted, so every
-/// configuration of it lands on one name under `deps/`, and lines that
-/// resolve features differently relink it past each other, leaving
-/// whichever ran last. So the line whose configuration this runner's own
-/// tools read stands last of the lines that write the bin: the
-/// per-package test lines after the workspace one, `build -p xtask` last
-/// in `debug`, and the harness release alone in `release`.
+/// configuration of it lands on one name in the profile's own directory
+/// (each in a unit of its own under `build/`), and lines that resolve
+/// features differently lift it past each other, leaving whichever ran
+/// last there. So the line whose configuration this runner's own tools
+/// read stands last of the lines that write the bin: the per-package test
+/// lines after the workspace one, `build -p xtask` last in `debug`, and
+/// the harness release alone in `release`.
 const CANONICAL: &[Line] = &[
     // What a session runs while writing, crate by crate. Nothing types a
     // bare `check` into the container.
@@ -362,7 +363,7 @@ fn sweep(root: &Path, dry_run: bool) -> Result<(), String> {
         };
         // An empty live set reads as "all of it is dead" — the one
         // failure that deletes a whole build.
-        if alive.deps.is_empty() && alive.build.is_empty() {
+        if alive.units.is_empty() {
             println!(
                 "  {profile}: left alone — the canonical lines named nothing there, so nothing \
                  can be called dead"
@@ -397,12 +398,14 @@ fn sweep(root: &Path, dry_run: bool) -> Result<(), String> {
 /// What one profile directory holds that the canonical lines named.
 #[derive(Default, Debug)]
 struct Alive {
-    /// Unit keys ([`unit_key`]) of the files under `deps/`.
-    deps: BTreeSet<String>,
-    /// Directory names under `build/` — a build script's own compile and
-    /// the directory its run wrote into, which are two units and two
-    /// names.
-    build: BTreeSet<String>,
+    /// The units under `build/`, as `<package>/<hash>`: cargo gives every
+    /// unit a directory of its own there — a build script's compile and
+    /// its run are two.
+    units: BTreeSet<String>,
+    /// The files cargo lifted to the profile's own directory, by name: a
+    /// bin's, whose unit no message names. Each line's are turned into
+    /// their units while that line's link stands ([`resolve_lifted`]).
+    lifted: BTreeSet<String>,
 }
 
 /// Every unit the canonical lines stand on, per profile directory, and
@@ -417,6 +420,7 @@ fn live(root: &Path) -> Result<(BTreeMap<String, Alive>, usize), String> {
             let _ = std::fs::remove_file(stale.path());
         }
     }
+    let packages = packages(root)?;
     let mut live: BTreeMap<String, Alive> = BTreeMap::new();
     let mut compiled = 0;
     for (at, line) in lines(root)?.iter().enumerate() {
@@ -432,6 +436,9 @@ fn live(root: &Path) -> Result<(BTreeMap<String, Alive>, usize), String> {
         match crate::subprocess::bounded("a sweep's reading", cmd, REPLAY_CEILING, Some(&log)) {
             Answer::Ended { status, stdout } if status.success() => {
                 compiled += read_artifacts(root, &stdout, &mut live);
+                for (profile, alive) in &mut live {
+                    resolve_lifted(&root.join("target").join(profile), &packages, alive);
+                }
             }
             Answer::Ended { status, .. } => {
                 return Err(format!(
@@ -518,8 +525,8 @@ fn read_artifacts(root: &Path, text: &str, live: &mut BTreeMap<String, Alive>) -
         for path in strings_after(line, "\"filenames\":[").into_iter().chain(
             string_after(line, "\"out_dir\":")
                 .into_iter()
-                // The out directory is `<profile>/build/<unit>/out`; the
-                // unit is its parent, as every other build entry is.
+                // The out directory is `<profile>/build/<package>/<hash>/out`;
+                // the unit is its parent, as for every other file.
                 .filter_map(|out| parent_of(&out)),
         ) {
             note(root, &path, live);
@@ -543,23 +550,14 @@ fn note(root: &Path, path: &str, live: &mut BTreeMap<String, Alive>) {
         return;
     }
     let alive = live.entry(profile.to_string()).or_default();
-    match (first, parts.next()) {
-        // `build/<unit>/…` — the directory is the unit.
-        ("build", Some(unit)) => {
-            alive.build.insert(unit.to_string());
+    match (first, parts.next(), parts.next()) {
+        // `build/<package>/<hash>/…` — the hash's directory is the unit.
+        ("build", Some(package), Some(hash)) if is_hash(hash) => {
+            alive.units.insert(format!("{package}/{hash}"));
         }
-        ("deps", Some(name)) => {
-            alive.deps.insert(unit_key(name));
-        }
-        // A lib or a bin cargo lifted to the profile's own directory,
-        // which answers for its unhashed twin under `deps/` — under both
-        // spellings: a dashed bin stands there dashed and as its crate
-        // name (`pgg-todo-editor.exe` beside `pgg_todo_editor.exe`), and
-        // with no separate debug file only one of the two is reported.
-        (name, None) => {
-            let key = unit_key(name);
-            alive.deps.insert(key.replace('-', "_"));
-            alive.deps.insert(key);
+        // A lib or a bin cargo lifted to the profile's own directory.
+        (name, None, None) => {
+            alive.lifted.insert(name.to_string());
         }
         _ => {}
     }
@@ -570,8 +568,8 @@ fn note(root: &Path, path: &str, live: &mut BTreeMap<String, Alive>) {
 /// ([`LIB_PREFIXED`]).
 ///
 /// The last extension only, so `cxxbridge_macro-<hash>.dll.lib` keys
-/// under `…dll`. Not a hole: cargo names such files in the unit's
-/// `filenames`, so the live set holds that key too.
+/// under `…dll`. Not a hole: the key only dates an incremental session
+/// ([`compiles_of`]), and that file's unit has the `.dll` beside it.
 fn unit_key(file_name: &str) -> String {
     match file_name.rsplit_once('.') {
         Some((stem, extension)) if LIB_PREFIXED.contains(&extension) => {
@@ -601,9 +599,10 @@ fn is_hash(text: &str) -> bool {
 /// Walks one profile directory, taking away what neither the live set
 /// nor `floor` speaks for, and answers the bytes that went.
 ///
-/// `.fingerprint/` is left alone: an entry there is kilobytes, and its
-/// directories cannot be named off the live set for an unhashed bin, so
-/// a standing unit would lose its bookkeeping.
+/// `deps/`, `.fingerprint/` and a `build/` entry named `<unit>-<hash>`
+/// are the flat layout an older cargo writes, which this one never reads:
+/// they go whole, whatever their date. A directory under a package's
+/// that is not a hash is not cargo's, and stays.
 fn sweep_profile(
     dir: &Path,
     profile: &str,
@@ -628,25 +627,90 @@ fn sweep_profile(
         }
     };
     let mut gone = Gone::new(profile, dry_run);
-    for entry in read_dir(&dir.join("deps"))? {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let path = entry.path();
-        if !alive.deps.contains(&unit_key(&name)) && !since(&path, floor) {
-            gone.take(&path, &format!("deps/{name}"));
+    for flat in ["deps", ".fingerprint"] {
+        for entry in read_dir(&dir.join(flat))? {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            gone.take(&entry.path(), &format!("{flat}/{name}"));
         }
     }
-    for entry in read_dir(&dir.join("build"))? {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let path = entry.path();
-        if !alive.build.contains(&name) && !since(&path, floor) {
+    let mut compiled = Vec::new();
+    for package in read_dir(&dir.join("build"))? {
+        let name = package.file_name().to_string_lossy().into_owned();
+        let path = package.path();
+        if crate_of(&name) != name {
             gone.take(&path, &format!("build/{name}"));
+            continue;
+        }
+        for unit in read_dir(&path)? {
+            let hash = unit.file_name().to_string_lossy().into_owned();
+            if !is_hash(&hash) {
+                continue;
+            }
+            let at = unit.path();
+            let key = format!("{name}/{hash}");
+            if alive.units.contains(&key) {
+                // A build script's run is no compile: its `out/` is what
+                // the script wrote.
+                if !at.join("run").is_dir() {
+                    compiled.push(at);
+                }
+            } else if !since(&at, floor) {
+                gone.take(&at, &format!("build/{key}"));
+            }
         }
     }
-    sweep_incremental(dir, alive, floor, &mut gone)?;
+    sweep_incremental(dir, &compiled, floor, &mut gone)?;
     Ok(Swept {
         freed: gone.done(),
         walked: true,
     })
+}
+
+/// Puts the unit each of `alive`'s lifted files is linked to now into its
+/// units. No message names a lifted bin's unit, and every configuration
+/// of the bin has one with the same unhashed file in it: the one lifted
+/// is the configuration of the line that ran last, so this runs after
+/// every line ([`live`]) and every configuration a line stands on is
+/// kept. Only the workspace's `packages` lift. The lifted file is a hard
+/// link — the same length, written at the same moment; a copy cargo made
+/// where it could not link keeps no date on Linux, names no unit, and
+/// leaves its unit to the floor.
+fn resolve_lifted(dir: &Path, packages: &[String], alive: &mut Alive) {
+    let mut found = Vec::new();
+    for name in &alive.lifted {
+        let up = dir.join(name);
+        for package in packages {
+            for unit in read_dir(&dir.join("build").join(package)).unwrap_or_default() {
+                let hash = unit.file_name().to_string_lossy().into_owned();
+                if is_hash(&hash) && same_file(&unit.path().join("out").join(in_unit(name)), &up) {
+                    found.push(format!("{package}/{hash}"));
+                }
+            }
+        }
+    }
+    alive.units.extend(found);
+}
+
+/// The name a lifted file has in its unit's `out/`: rustc writes under
+/// the crate's name, the target's with `_` for `-`, and cargo lifts a bin
+/// under the target's (`pgg_todo_editor.exe` as `pgg-todo-editor.exe`, on
+/// Linux too) while a `.pdb` keeps the crate's. So a copy under the lifted
+/// name in another unit's `out/` (`install_todo_editor`'s) is not it
+/// (ci/baseline/code-costs-windows-x64.md §build directory の世代).
+fn in_unit(lifted: &str) -> String {
+    lifted.replace('-', "_")
+}
+
+/// Whether two names are one file: the same length, written at the same
+/// moment, which the two names of a hard link read alike.
+fn same_file(one: &Path, other: &Path) -> bool {
+    let (Ok(one), Ok(other)) = (std::fs::metadata(one), std::fs::metadata(other)) else {
+        return false;
+    };
+    match (one.modified(), other.modified()) {
+        (Ok(at), Ok(also)) => one.len() == other.len() && at == also,
+        _ => false,
+    }
 }
 
 /// What one profile directory came to: the bytes that went, and whether
@@ -668,12 +732,12 @@ struct Swept {
 /// date.
 fn sweep_incremental(
     dir: &Path,
-    alive: &Alive,
+    compiled: &[PathBuf],
     floor: Option<SystemTime>,
     gone: &mut Gone,
 ) -> Result<(), String> {
     let incremental = dir.join("incremental");
-    let compiles = compiles_of(dir, alive);
+    let compiles = compiles_of(compiled);
     for entry in read_dir(&incremental)? {
         let name = entry.file_name().to_string_lossy().into_owned();
         let path = entry.path();
@@ -712,38 +776,20 @@ fn kept_incremental(name: &str, path: &Path, compiles: &BTreeMap<String, Vec<Sys
 }
 
 /// When each crate's live units were last compiled, by the dates of the
-/// files that compile wrote. A build script's compile is filed under the
-/// crate rustc builds it as, which is the name its incremental session
-/// carries.
-fn compiles_of(dir: &Path, alive: &Alive) -> BTreeMap<String, Vec<SystemTime>> {
+/// files that compile wrote into the unit's `out/` — filed under the
+/// crate rustc compiled, which is the name its incremental session
+/// carries: underscored (`pgg-todo-editor.exe` is `pgg_todo_editor`'s),
+/// and `build_script_build` for a build script.
+fn compiles_of(compiled: &[PathBuf]) -> BTreeMap<String, Vec<SystemTime>> {
     let mut compiles: BTreeMap<String, Vec<SystemTime>> = BTreeMap::new();
-    for entry in read_dir(&dir.join("deps")).unwrap_or_default() {
-        let key = unit_key(&entry.file_name().to_string_lossy());
-        if !alive.deps.contains(&key) {
-            continue;
-        }
-        if let Some(at) = written_at(&entry.path()) {
-            compiles
-                .entry(crate_of(&key).to_string())
-                .or_default()
-                .push(at);
-        }
-    }
-    for entry in read_dir(&dir.join("build")).unwrap_or_default() {
-        if !alive
-            .build
-            .contains(&entry.file_name().to_string_lossy().into_owned())
-        {
-            continue;
-        }
-        // The compiled build script is the only half of a build directory
-        // rustc wrote; a run's `out/` carries no incremental session.
-        for file in read_dir(&entry.path()).unwrap_or_default() {
-            let stem = unit_key(&file.file_name().to_string_lossy()).replace('-', "_");
-            if let Some(at) = written_at(&file.path())
-                && stem.starts_with("build_script_")
-            {
-                compiles.entry(stem).or_default().push(at);
+    for unit in compiled {
+        for file in read_dir(&unit.join("out")).unwrap_or_default() {
+            let key = unit_key(&file.file_name().to_string_lossy());
+            if let Some(at) = written_at(&file.path()) {
+                compiles
+                    .entry(crate_of(&key).replace('-', "_"))
+                    .or_default()
+                    .push(at);
             }
         }
     }
