@@ -4,13 +4,14 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import platitude.ui
 
-// A commit's parents one to a row, opened by the parent line's count. The line meanwhile stands as a single parent's
-// would (`HashPlate.unrolled`): the arrow, then the seat of one hash, and this card on that seat — its first row where
-// that hash would be, the rest stacked under it, the arrow left outside. One hash wide: every hash whole (the line cut
-// them for its room, not the card's), and no more air than a row's and the frame. The shape, the seat and the width
-// are user decisions (ask before changing). A popup, owned by the pane (`DetailsAuthorCards`): declared in the block
-// it would be clipped by it. Another commit landing closes it (`DetailsAuthorCards.follow`): the rows are that
-// commit's parents.
+// A commit's parents one to a row, opened by the parent line's count (or its arrow, at the line's mark). The line
+// meanwhile stands as a single parent's would (`HashPlate.unrolled`): the arrow, then the seat of one hash, and this
+// card on that seat — its first row where that hash would be, the rest stacked under it, the arrow left outside. A line
+// narrower than that seat (its kept form, its mark) stays as it is and the card opens flush under it, its hashes ending
+// where the line does (`HashPlate.unrollsInPlace`). One hash wide: every hash whole (the line cut them for its room,
+// not the card's), and no more air than a row's and the frame. The shape, the seat and the width are user decisions
+// (ask before changing). A popup, owned by the pane (`DetailsAuthorCards`): declared in the block it would be clipped
+// by it. Another commit landing closes it (`DetailsAuthorCards.follow`): the rows are that commit's parents.
 AppCard {
     id: parentCard
 
@@ -74,7 +75,8 @@ AppCard {
     // The chip card's ground: a frame's width of padding so the rows' wash meets it, and its corner.
     padding: Theme.borderWidth
     faceRadius: Theme.radiusSm
-    // Opened over its own count: the hand is inside from the first frame.
+    // Opened over its own count, or flush under a narrow line: the hand is inside, or a step from it, from the first
+    // frame.
     margins: 0
     // The hand reads the rows, so both halves (rules-refs/app-ui.md「hover で開くものの 5 つの罠」の (2)).
     tracksPointer: true

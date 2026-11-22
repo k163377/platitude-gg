@@ -69,10 +69,10 @@ QtObject {
     signal parentPicked(string oidHex)
 
     /// The pointer came onto the count that opens every parent, or left it. Each card's seat (`HoverSeat`) answers:
-    /// what unfolds opens at once; the hand inside the card holds it; a card the reader dismissed stays down until
-    /// the hand leaves the count and comes back (the card stands over the count, so Qt hands the count its hover
-    /// again the moment the card is gone). The target is the commit's (`targetOf`): another commit landing takes the
-    /// card down (`follow`), and the count asks again for the new one's.
+    /// what unfolds opens at once; the hand inside the card holds it; a card the reader dismissed stays down until the
+    /// hand leaves the count and comes back (where the card stands over the count, Qt hands the count its hover again
+    /// the moment the card is gone; under a narrow line the hand never left it). The target is the commit's
+    /// (`targetOf`): another commit landing takes the card down (`follow`), and the count asks again for the new one's.
     function pointParents(line) {
         parentKeep.point(cards.targetOf("parents", { "line": line }), true)
     }
@@ -105,17 +105,24 @@ QtObject {
     }
     /// Opens every parent on the seat a single parent's hash has — the line's right end (`line`, in the row's
     /// coordinates), which the line keeps while it stands as one parent's (`HashPlate.unrolled`, `ParentListCard`).
+    /// Only off the count or the mark (`HashPlate.moreStands`): a line whose parents all stand as links has nothing
+    /// left to open, and a lone parent down to the mark has no other way to it.
     function openParentCard(line) {
         const row = cards.block.valueRow
-        if (row.plate.parents.length < 2) {
+        if (!row.plate.moreStands) {
             parentKeep.refuse()
             return
         }
-        const at = row.mapToItem(cards.host, Qt.point(line.x + line.width, line.y))
         const parentCard = cards.built("parentCard")
         parentCard.parents = row.plate.parents
+        // The hashes end where the line does, on it or, for a line narrower than the seat, flush under it
+        // (`HashPlate.unrollsInPlace`).
+        const box = row.plate.parentLineRect(row)
+        const at = row.mapToItem(cards.host, Qt.point(line.x + line.width, line.y))
+        const under = row.mapToItem(cards.host, Qt.point(box.x, box.y + box.height))
         parentCard.x = Math.round(at.x - parentCard.hashWidth - parentCard.hashInset)
-        parentCard.y = Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
+        parentCard.y = row.plate.unrollsInPlace ? Math.round(at.y + line.height / 2 - parentCard.firstMiddle)
+                                                : Math.round(under.y)
         // The pane's floor is the ceiling; its rows scroll past it.
         parentCard.listRoom = cards.host.height - parentCard.y - Theme.spaceXs
         parentCard.open()

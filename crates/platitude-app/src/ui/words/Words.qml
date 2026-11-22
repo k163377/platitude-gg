@@ -286,8 +286,11 @@ QtObject {
     function stamp(epochSeconds) {
         return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH:mm")
     }
-    /// The day that stamp opens with: what a line short of room cuts it back to (`CommitAuthorRow.dateDayRoom`). The
-    /// time goes as one — a stamp cut through its figures reads as another time.
+    /// The stamp to its hour, and the day it opens with: what a line short of room cuts it back to, a unit at a time
+    /// (`CommitAuthorRow.dateHourRoom` / `dateDayRoom`) — a stamp cut through its figures reads as another time.
+    function stampHour(epochSeconds) {
+        return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd HH")
+    }
     function stampDay(epochSeconds) {
         return Qt.formatDateTime(new Date(epochSeconds * 1000), "yyyy-MM-dd")
     }

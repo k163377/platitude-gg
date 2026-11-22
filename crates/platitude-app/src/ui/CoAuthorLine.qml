@@ -83,9 +83,9 @@ Item {
     readonly property real foldedWidth: Theme.iconMd + line.countSeat
     /// The holder cannot give the name even its floor: the name goes and the face stands for the first, the count as
     /// it was — "◯ +2", or the face alone for one. The card still names them all. Judged on what the handed `width`
-    /// leaves the name past the face and the count. Whether it folds splits by the OS font (two parents × one mate at
-    /// `14:min` folds on Windows, Linux keeps four letters), so a check names only forms that fold on both. Pinned by
-    /// `tst_matefold.qml`; headless `co-authors 0:min` / `co-authors 8:min --preset octopus-mates`.
+    /// leaves the name past the face and the count. Whether it folds at a given width is the OS font's, so a check
+    /// names only forms that fold on both. Pinned by `tst_matefold.qml`; headless `co-authors 0:min` /
+    /// `co-authors 8:min --preset octopus-mates`.
     readonly property bool folded: !line.plain && line.records.length > 0
         && line.width - Theme.iconMd - Theme.spaceXs - line.countSeat < line.nameFloor
     /// The names did not fit — for a headless run, which cannot see the mark. Folded counts: nobody is named.

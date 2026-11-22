@@ -36,9 +36,13 @@ ColumnLayout {
     signal parentClicked(string oidHex)
 
     // ---- how the parent line fits its room ----
-    /// The digits a parent shows whole, and the fewest it is cut to before the tail of the line gives way.
+    /// The digits a hash shows whole, and the fewest it is cut to: a parent's before the tail of the line gives way, the
+    /// own hash's before a long name beside it is cut (`shaDigits`).
     readonly property int wholeDigits: 8
     readonly property int cutDigits: 3
+    /// How many of the own hash's digits stand: whole, or cut down to `cutDigits` beside a name that wants the room
+    /// (`CommitAuthorRow.shaDigits`). A list's plate keeps it whole.
+    property int shaDigits: plate.wholeDigits
     /// One digit, the cut mark and the count's characters, in the faces they are drawn in: measured, as the chip
     /// names' floor is (rules-refs/app-ui.md「字数の床の値付けは実測の字送り」). Properties, so the fit re-reads them.
     readonly property TextMetrics digitInk: TextMetrics {
@@ -50,6 +54,17 @@ ColumnLayout {
     readonly property TextMetrics cutInk: TextMetrics {
         font.family: Theme.monoFamily
         font.pixelSize: Theme.fontSm
+        text: WordFace.cutGlyph
+    }
+    /// The same two for the own hash, which stands at `shaSize`.
+    readonly property TextMetrics shaDigitInk: TextMetrics {
+        font.family: Theme.monoFamily
+        font.pixelSize: plate.shaSize
+        text: "0"
+    }
+    readonly property TextMetrics shaCutInk: TextMetrics {
+        font.family: Theme.monoFamily
+        font.pixelSize: plate.shaSize
         text: WordFace.cutGlyph
     }
     // The count's own font: the label draws in whatever face the window gives a `Label`, which need not be the one
@@ -67,6 +82,11 @@ ColumnLayout {
         font: moreLabel.font
         text: ", "
     }
+    /// The mark that stands for every parent once none is shown (`←…`), in the count's face: it is the count's seat.
+    readonly property TextMetrics markInk: TextMetrics {
+        font: moreLabel.font
+        text: WordFace.cutGlyph
+    }
     readonly property real commaWidth: Math.ceil(plate.commaInk.advanceWidth)
     /// The line's head before the first hash: the `←`, drawn in its place (デザイン規約 §アイコンの席 の字の代替) —
     /// its cell, and no step of the row's beside it.
@@ -79,8 +99,26 @@ ColumnLayout {
         return Math.ceil(digits >= plate.wholeDigits ? plate.wholeDigits * plate.digitInk.advanceWidth
                                                      : digits * plate.digitInk.advanceWidth + plate.cutInk.advanceWidth)
     }
-    /// The line with `shown` parents at `digits`, a comma after each but the last, and `more` said as `+N`.
+    /// The own hash with `digits` standing, priced as a parent's (`hashWidth`).
+    function shaWidth(digits) {
+        return Math.ceil(digits >= plate.wholeDigits
+                         ? plate.wholeDigits * plate.shaDigitInk.advanceWidth
+                         : digits * plate.shaDigitInk.advanceWidth + plate.shaCutInk.advanceWidth)
+    }
+    /// Automation: the own hash drawn at its digits' width (`shaDigits`), whole or cut — laid out, which a run that
+    /// points at it waits for (a sweep wants the value whole: `CommitAuthorRow.valueReady`).
+    readonly property bool shaLaid: shaText.visible && Math.abs(shaText.width - (plate.shaDigits >= plate.wholeDigits
+        ? shaText.implicitWidth : plate.shaWidth(plate.shaDigits))) < 0.5
+    /// The hash's row with `digits` standing: the button's padding, the hash, the step to the copy mark and its ink.
+    function firstLineWidthAt(digits) {
+        return hashCopy.leftPadding + hashCopy.rightPadding + plate.shaWidth(digits) + Theme.spaceXs
+            + copyMark.inkWidth
+    }
+    /// The line with `shown` parents at `digits`, a comma after each but the last, and `more` said as `+N` — or, with
+    /// none shown, the arrow and the mark that stands for them all (`←…`).
     function lineWidth(shown, digits, more) {
+        if (shown === 0)
+            return plate.leadWidth + Math.ceil(plate.markInk.advanceWidth)
         const count = more > 0 ? Theme.spaceXs + Math.ceil(plate.plusInk.advanceWidth
                                                            + String(more).length * plate.figureInk.advanceWidth) : 0
         return plate.leadWidth + shown * plate.hashWidth(digits) + (shown - 1) * plate.commaWidth + count
@@ -109,43 +147,60 @@ ColumnLayout {
     // ---- while the count's card is out (user decision — ask before changing) ----
     /// The card is out: the line stands as one parent's would — the arrow, then the room the card's first row fills,
     /// the card's frame and row air included, so the arrow stays clear of it. The other links and `+N` step out of the
-    /// line meanwhile: nothing peeks out past the card.
+    /// line meanwhile: nothing peeks out past the card. Only a line as wide as that seat at rest unrolls
+    /// (`unrollsInPlace`).
     property bool unrolled: false
+    /// The line at rest is as wide as a single parent's seat — the arrow, the card's frame and row air, a whole hash —
+    /// so the card can open on it. Narrower (the kept form `←9dc… +1`, the mark `←…`) the line stays as it is and the
+    /// card opens under it (`DetailsAuthorCards.openParentCard`; user decision — ask before changing): unrolled, the
+    /// line would push its arrow left over the date line's words. Read off the line as it rests (`rolledLineWidth`),
+    /// which unrolling does not move.
+    readonly property bool unrollsInPlace: plate.rolledLineWidth
+        >= plate.leadWidth + plate.unrollInset + plate.hashWidth(plate.wholeDigits) - 0.5
     /// The card's frame and row air left of its hashes (`ParentListCard.hashInset`), from the same two tokens, built
     /// apart on each side (`tst_parentcard` holds them equal).
     readonly property real unrollInset: Theme.borderWidth + Theme.spaceXs
-    /// The arrow's box in `item`'s coordinates: a mark and no target, outside the card (automation reads its edge).
+    /// The arrow's box in `item`'s coordinates: a mark, a target only in the mark's form (`marked`), outside the card
+    /// (automation reads its edge).
     function arrowBox(item) {
         const at = arrowSeat.mapToItem(item, Qt.point(0, 0))
         return Qt.rect(at.x, at.y, arrowSeat.width, arrowSeat.height)
     }
-    /// Every parent, cut evenly from whole down to `cutDigits`; past that the tail goes to `+N`. Two always stand. Each
-    /// step is a user decision (ask before changing). Evenly, since links cut to different lengths read as two kinds of
-    /// parent. Two, so an ordinary merge names both parents even at the right panel's floor: two hashes of `cutDigits`
-    /// and the mark, and an octopus's `+N`. A single parent is never cut: eight digits are narrower than the own hash.
+    /// Every parent, cut evenly from whole down to `cutDigits`; past that the tail goes to `+N`, down to one link; past
+    /// that the line is the arrow and the mark (`←…`), which opens them all as the count does. Each step is a user
+    /// decision (ask before changing). Evenly, since links cut to different lengths read as two kinds of parent. The
+    /// parents give way before the date line's words down to one link (`keptLineWidth`), and to the mark only once the
+    /// date line has given up its credit and its time (`CommitAuthorRow.parentRoom`): what they are is a rest on the
+    /// mark away.
     readonly property var parentFit: {
         const count = plate.parents.length
-        if (count < 2)
-            return { shown: count, digits: plate.wholeDigits }
         for (let digits = plate.wholeDigits; digits >= plate.cutDigits; digits--) {
             if (plate.lineWidth(count, digits, 0) <= plate.parentRoom)
                 return { shown: count, digits: digits }
         }
-        for (let shown = count - 1; shown > 2; shown--) {
+        for (let shown = count - 1; shown >= 1; shown--) {
             if (plate.lineWidth(shown, plate.cutDigits, count - shown) <= plate.parentRoom)
                 return { shown: shown, digits: plate.cutDigits }
         }
-        return { shown: 2, digits: plate.cutDigits }
+        return { shown: 0, digits: plate.cutDigits }
     }
+    /// The line's last form before the mark: one link at `cutDigits` and the rest as `+N` (`←9dc… +1`); none without
+    /// parents.
+    readonly property real keptLineWidth: plate.parents.length === 0 ? 0
+        : plate.lineWidth(1, plate.cutDigits, plate.parents.length - 1)
     /// Automation (verify-ui `details-parents`): how many links stand and how many digits each shows, and the count.
     readonly property int parentsShown: plate.parentFit.shown
     readonly property int parentDigits: plate.parentFit.digits
     readonly property int parentsLeft: plate.parents.length - plate.parentFit.shown
-    readonly property alias moreSaid: moreLabel.text
+    /// What the count says: `+N`, or the cut mark (`moreMark`, named by `WordFace.cutGlyph`) once no link stands.
+    readonly property string moreSaid: plate.parentsShown > 0 ? moreLabel.text
+        : moreMark.visible ? WordFace.cutGlyph : ""
     readonly property bool moreStands: moreLabel.visible
+    /// No link stands: the arrow and the cut mark (`←…`) stand for every parent, one stretch.
+    readonly property bool marked: moreLabel.visible && plate.parentsShown === 0
     /// The pointer rests on the count, which asks for the parents' card — the pane's to open (`DetailsAuthorCards`),
-    /// asked through the row (`CommitAuthorRow.parentsPointed`).
-    readonly property bool morePointed: moreHover.hovered
+    /// asked through the row (`CommitAuthorRow.parentsPointed`). In the mark's form, on the arrow too.
+    readonly property bool morePointed: moreHover.hovered || (plate.marked && arrowHover.hovered)
     /// Automation: where each word of the plate sits on the page, in `item`'s y (-1 for one not drawn).
     function baselines(item) {
         const link = plate.linkAt(0)
@@ -169,7 +224,8 @@ ColumnLayout {
     function parentSeatRect(item) {
         const line = plate.parentLineRect(item)
         const link = plate.linkAt(0)
-        if (!link)
+        // With no link shown (`←…`) the line's own box is the seat.
+        if (!link || !link.visible)
             return line
         const hash = link.field.mapToItem(item, Qt.point(0, 0))
         return Qt.rect(line.x, hash.y, line.width, link.field.height)
@@ -179,6 +235,20 @@ ColumnLayout {
         return parentLine.mapToItem(item, Qt.point(0, 0)).x
     }
     readonly property real parentLineWidth: parentLine.width
+    /// What each line of the plate draws, right-aligned in its one column: the hash's button on the first line, the
+    /// parent line on the second (none without parents). The words beside the plate reach the one on their own line,
+    /// not the column's edge (`CommitAuthorRow.textRoom`): with one parent the line is narrower than the hash, and the
+    /// date would be cut beside a blank. The line's natural width as drawn (which `tst_parentline` holds to the fit's
+    /// price, `lineWidth`), held while the parents' card is out (`unrolled`), when the line stands as one parent's
+    /// would and the date would otherwise take back its time under the card.
+    readonly property real firstLineWidth: hashCopy.implicitWidth
+    readonly property real secondLineWidth: plate.parents.length === 0 ? 0 : plate.rolledLineWidth
+    property real rolledLineWidth: 0
+    Binding on rolledLineWidth {
+        when: !plate.unrolled
+        value: parentLine.implicitWidth
+        restoreMode: Binding.RestoreNone
+    }
 
     /// The parent links, in git's order; a link past `parentsShown` is laid out nowhere.
     function linkAt(index) {
@@ -360,6 +430,8 @@ ColumnLayout {
         }
         contentItem: RowLayout {
             spacing: Theme.spaceXs
+            // The whole short hash in the field, cut at its end to `shaDigits` (`LineText`): the copy hands over the
+            // whole hash whatever shows.
             LineText {
                 id: shaText
                 text: plate.sha8
@@ -367,6 +439,8 @@ ColumnLayout {
                 pixelSize: plate.shaSize
                 color: plate.shaColor
                 grabbable: false
+                Layout.preferredWidth: plate.shaDigits >= plate.wholeDigits ? shaText.implicitWidth
+                                                                            : plate.shaWidth(plate.shaDigits)
                 Layout.alignment: Qt.AlignVCenter
             }
             // Seated to the mark's ink, not its 16px box, so the air beside it is not spent twice (デザイン規約 §余白).
@@ -431,8 +505,10 @@ ColumnLayout {
         // set inline: its cell is its seat (`leadWidth`). A mark, not a target: each hash is its own way to its parent
         // — the underline and the press are each link's own (`linkFace`), never the arrow's (`tst_parentline`'s
         // `test_h`) — and the arrow stays outside the card the count opens: the card's frame stands from the arrow
-        // seat's right edge, only the seat's own air between them. Inline, a mark and outside the card: user decisions
-        // (ask before changing).
+        // seat's right edge, only the seat's own air between them. With no link standing (`marked`, `←…`) the arrow
+        // and the mark are one stretch: the count's underline runs under both and resting on either opens the card,
+        // as the credit's line runs from its face to its count — and still no press, and the arrow keeps the links'
+        // blue. Inline, a mark, outside the card and the mark's stretch: user decisions (ask before changing).
         // The `←` ahead of the hashes, drawn in its place (デザイン規約 §アイコンの席 の字の代替): the capitals' scale,
         // on the face's own `+`'s middle; its box is the line's (`lineRef`).
         Item {
@@ -440,6 +516,10 @@ ColumnLayout {
             Layout.preferredWidth: plate.leadWidth
             Layout.preferredHeight: lineRef.implicitHeight
             Layout.alignment: Qt.AlignVCenter
+            // Read only in the mark's form (`morePointed`); passive, so a press still goes nowhere.
+            HoverHandler {
+                id: arrowHover
+            }
             NavIcon {
                 id: parentBack
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -528,26 +608,40 @@ ColumnLayout {
         }
         // The parents the room could not hold, counted as the credit line counts its names (デザイン規約
         // §co-author の表示). Resting on it opens them all (`ParentListCard`). A step ahead of it, not a comma
-        // (`a, b, c +5`): the count is not one of the links.
+        // (`a, b, c +5`): the count is not one of the links. With no link left it is the cut mark beside the arrow
+        // (`←…`, `moreMark`) in the count's seat, standing for them all and opening them the same way.
         PlainTextLabel {
             id: moreLabel
             visible: !plate.unrolled && plate.parentsLeft > 0
-            text: "+" + plate.parentsLeft
+            text: plate.parentsShown > 0 ? "+" + plate.parentsLeft : ""
             color: Theme.textSecondary
             font.pixelSize: Theme.fontSm
-            Layout.leftMargin: Theme.spaceXs
+            Layout.leftMargin: plate.parentsShown > 0 ? Theme.spaceXs : 0
+            Layout.preferredWidth: plate.parentsShown > 0 ? moreLabel.implicitWidth
+                                                          : Math.ceil(plate.markInk.advanceWidth)
             Layout.alignment: Qt.AlignVCenter
             // On the hashes' baseline, as the credit's count is on its name's.
             transform: Translate {
                 y: lineRef.y + lineRef.baselineOffset - moreLabel.y - moreLabel.baselineOffset
             }
-            // "Hover opens more", said before the hover as the credit line says it, a step down from the count.
+            // "Hover opens more", said before the hover as the credit line says it, a step down from the count. In the
+            // mark's form it reaches back under the arrow (`marked`).
             BandRule {
                 color: Theme.borderStrong
+                anchors.leftMargin: plate.marked ? arrowSeat.x - moreLabel.x : 0
             }
             // A handler is passive, so the card it opens keeps its own hover (規約 §hover のツールチップ).
             HoverHandler {
                 id: moreHover
+            }
+            // The cut mark, on the count's baseline in the count's face (`CutMark`).
+            CutMark {
+                id: moreMark
+                visible: plate.parentsShown === 0
+                height: moreLabel.height
+                base: moreLabel.baselineOffset
+                color: moreLabel.color
+                font: moreLabel.font
             }
         }
         // While the card is out, the room its first row stands in: where a single parent's hash would. As tall as the

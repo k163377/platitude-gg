@@ -26,9 +26,21 @@ Item {
     property string signatureKind: ""
     property string signatureCode: ""
     property string signatureSigner: ""
-    /// Headless stand-ins for hover, which cannot be injected (avatar-hover / signature-tip).
+    /// Headless stand-ins for hover, which cannot be injected (avatar-hover / signature-tip / date-tip).
     property bool avatarPointedAt: false
     property bool signaturePointedAt: false
+    property bool datePointedAt: false
+    /// A date short of its stamp says the whole of it on the hover — day, hour and minute (user decision), as a cut
+    /// name is read in full on its hover (規約 §右のペインの字は掴める「切れた名前はカードで読む」). Not while it
+    /// stands whole: the box would repeat it. Left of the date, level with it, as a row's box stands (user decision):
+    /// over it, the box would cover the name's line.
+    readonly property TipAsk dateTip: TipAsk {
+        id: dateTip
+        target: detailsDate
+        asked: (dateHover.hovered || authorRow.datePointedAt) && detailsDate.clipped
+        words: Words.stamp(authorRow.details.authorTime)
+        rowSide: "left"
+    }
     /// The pane's width; the credit line takes half of it.
     property real paneWidth: 0
     /// A stash entry: its parents past the first are the index and untracked commits git files it with, which the graph
@@ -53,10 +65,11 @@ Item {
     readonly property bool matesLit: authorRow.matesPointed || authorRow.mateCardInside
 
     // ---- the parents' card -----------------------------------------
-    // Every parent over the parent line, opened from its count (`ParentListCard`; the line is `HashPlate`'s).
+    // Every parent, opened from the parent line's count or, at its mark, its arrow (`ParentListCard`; the line is
+    // `HashPlate`'s): over the line where it unrolls in place, under it where it is narrower than that.
     /// Whether the pointer is on the count — the same pair of writers as `matesPointed`.
     property bool parentsPointed: false
-    /// The card is out, and the line stands as one parent's would under it (`HashPlate.unrolled`).
+    /// The card is out. Where the line can, it stands as one parent's would under it (`HashPlate.unrolled`).
     property bool parentsUnrolled: false
 
     // ---- the author's own card --------------------------------------
@@ -129,49 +142,84 @@ Item {
             return hashPlate.parentSelected()
         return ""
     }
-    /// The width the parent line may take: what neither line's words need, each line keeping a `spaceXs` slack of its
-    /// own (a row's slack is a way into its values, 規約 §右のペインの字は掴める「行の余白は必ず残す」). Both lines, since
-    /// the plate is one column as wide as its widest row: a wider parent line narrows the name's line too. Read off the
-    /// lines' natural widths, which the plate's width does not move. The date's words thus stand clear of the line by
-    /// the date line's step, the row's step and the slack (12px), and by the two steps (8px) where the line sits at
-    /// its floor and crowds the date line.
-    readonly property real parentRoom: rowContent.width - avatarBadge.width - 2 * rowContent.spacing
-        - Math.max(nameLine.implicitWidth, authorRow.dateNeed) - Theme.spaceXs
-    /// The date line's words at their own widths, with the step before its slack — counted here rather than read off
+    /// The row beside the face, which the date line's words and the parent line beside them share.
+    readonly property real textAcross: rowContent.width - avatarBadge.width - 2 * rowContent.spacing
+    /// The name's line at its own width — the name, the signature mark and its word.
+    readonly property real nameNeed: nameLine.implicitWidth
+    /// The own hash's digits (user decision — ask before changing): whole while the name's line has room beside it,
+    /// then cut a digit at a time down to three before the name is cut — a long name reads further, and the copy hands
+    /// over the whole hash whatever shows (`HashPlate.shaDigits`). No slack of the line's own: the row's step to the
+    /// plate and the button's padding stand between the name and the hash however short the line (`nameLine`).
+    readonly property int shaDigits: {
+        const room = authorRow.textAcross - authorRow.nameNeed
+        for (let digits = hashPlate.wholeDigits; digits > hashPlate.cutDigits; digits--) {
+            if (hashPlate.firstLineWidthAt(digits) <= room)
+                return digits
+        }
+        return hashPlate.cutDigits
+    }
+    /// The width the parent line may take (user decision — ask before changing): what the date line's words do not
+    /// need, keeping a `spaceXs` slack of its own (a row's slack is a way into its values, 規約 §右のペインの字は掴める
+    /// 「行の余白は必ず残す」), down to its kept form — one link at three digits and the count (`←9dc… +1`,
+    /// `HashPlate.keptLineWidth`). Past that the date line gives way first — the credit, then the time, down to the
+    /// day (`dateFloorNeed`) — and only a date line that would go under its day beside the kept form takes the parent
+    /// line to its mark (`←…`), beside which the time stays given up (`parentsMarked`). The date line's alone: each
+    /// line of words reaches the plate's word on its own line (`HashPlate.firstLineWidth` / `secondLineWidth`, the
+    /// lines' margins below), so a wider parent line leaves the name's line as it was. Read off the line's natural
+    /// widths, which the plate's width does not move. The date's words thus stand clear of the line by the slack and
+    /// the row's step (8px), and by the row's step alone (4px) where the line sits at its kept form or its mark and
+    /// crowds the date line — a line's own steps stand between its words only, none before a slack gone to nothing.
+    readonly property real parentRoom: {
+        const free = authorRow.textAcross - authorRow.dateNeed - Theme.spaceXs
+        const kept = hashPlate.keptLineWidth
+        return free < kept && authorRow.textAcross - kept >= authorRow.dateFloorNeed ? kept : free
+    }
+    /// The date line at its least beside the parent line's kept form: the date at its day, the credit folded.
+    readonly property real dateFloorNeed: authorRow.dateDayRoom
+        + (coBlock.visible ? Theme.spaceXs + coBlock.foldedWidth : 0)
+    /// The date line's words at their own widths, the credit a step after the date — counted here rather than read off
     /// the line, whose date is held to what the line is handed (`detailsDate`), which the plate's width moves.
-    readonly property real dateNeed: detailsDate.implicitWidth + dateLine.spacing
-        + (coBlock.visible ? Math.ceil(coBlock.implicitWidth) + dateLine.spacing : 0)
+    readonly property real dateNeed: detailsDate.implicitWidth
+        + (coBlock.visible ? Theme.spaceXs + Math.ceil(coBlock.implicitWidth) : 0)
     /// Who gives way on the date line when it is short (user decision — ask before changing): the credit's name is
-    /// cut, then folded to its face and count, and only then does the date give up its time — whole, leaving the day
-    /// and the cut mark (`2026-10-04…`): a time cut through its figures (`2026-10-04 1…`) reads as another time, and a
-    /// cut by pixels halves a glyph. While the time is given up the credit stays folded (what the time gave is not the
-    /// name's), and the field keeps the whole stamp (`Ctrl+A` takes the time too). The folded credit is the floor:
-    /// under it the face and count run into the parent line (13 parents × 12 co-authors at the least width: 14px).
-    /// Where this starts depends on the face: at the right pane's least width, with two or more parents and a credit,
-    /// Yu Gothic UI and Noto Sans JP keep the time and the wider Hiragino Sans (macOS) gives it up. Measured top down —
-    /// the row less the face and the plate — not off the line, whose items are laid out to these: a floor read off the
+    /// cut, then folded to its face and count, and only then does the date give up its time — a unit at a time, its
+    /// minutes and then its hour, leaving the hour and the cut mark (`2026-10-04 13…`), then the day
+    /// (`2026-10-04…`): a time cut through its figures (`2026-10-04 1…`) reads as another time, and a cut by pixels
+    /// halves a glyph. While the time is given up the credit stays folded (what the time gave is not the name's), and
+    /// the field keeps the whole stamp (`Ctrl+A` takes the time too). The folded credit is the floor:
+    /// under it the face and count would run into the parent line. All this beside the parent line at its kept form,
+    /// or at its mark once the day would not stand beside that (`parentRoom`). Measured top down —
+    /// the row less the face and the parent line beside the date (`HashPlate.secondLineWidth`; the date line reaches
+    /// under the plate's column up to it) — not off the line, whose items are laid out to these: a floor read off the
     /// width it holds up would hold it up for good.
-    readonly property real textRoom: Math.max(0, rowContent.width - avatarBadge.width - 2 * rowContent.spacing
-        - hashPlate.implicitWidth)
+    readonly property real textRoom: Math.max(0, authorRow.textAcross - hashPlate.secondLineWidth)
     /// What the line can spare the date, the credit at its floor.
     readonly property real dateSpare: Math.max(0, authorRow.textRoom
-        - dateLine.spacing - (coBlock.visible ? coBlock.foldedWidth + dateLine.spacing : 0))
-    /// The date cut back to its day and the mark — the one step it takes: the time goes whole, since a stamp cut
-    /// through its figures reads as another time. Under the day's own width there is only the cut the field makes.
+        - (coBlock.visible ? Theme.spaceXs + coBlock.foldedWidth : 0))
+    /// The date cut back to its hour, or to its day, and the mark — the steps it takes: a unit at a time, since a
+    /// stamp cut through its figures reads as another time. Under the day's own width there is only the cut the field
+    /// makes.
+    readonly property real dateHourRoom: Math.ceil(hourRuler.implicitWidth) + detailsDate.markWidth
     readonly property real dateDayRoom: Math.ceil(dayRuler.implicitWidth) + detailsDate.markWidth
-    readonly property real dateRoom: authorRow.dateSpare >= detailsDate.implicitWidth ? detailsDate.implicitWidth
+    /// The parent line stands at its mark (`←…`): beside it the date stands at its day at most — the time gave way
+    /// before the line went under its kept form (`parentRoom`), so what the mark frees does not bring it back.
+    readonly property bool parentsMarked: hashPlate.parents.length > 0 && hashPlate.parentsShown === 0
+    readonly property real dateRoom: authorRow.parentsMarked ? Math.min(authorRow.dateSpare, authorRow.dateDayRoom)
+        : authorRow.dateSpare >= detailsDate.implicitWidth ? detailsDate.implicitWidth
+        : authorRow.dateSpare >= authorRow.dateHourRoom ? authorRow.dateHourRoom
         : Math.min(authorRow.dateSpare, authorRow.dateDayRoom)
     readonly property bool dateShort: authorRow.dateRoom < detailsDate.implicitWidth
     /// The credit stays at its floor while the date is short of its time: what the time gave up is not the name's.
     readonly property real creditCeiling: authorRow.dateShort ? coBlock.foldedWidth : Math.ceil(coBlock.implicitWidth)
     readonly property real creditRoom: Math.min(authorRow.creditCeiling, Math.max(coBlock.foldedWidth,
-        authorRow.textRoom - authorRow.dateRoom - 2 * dateLine.spacing))
+        authorRow.textRoom - authorRow.dateRoom - Theme.spaceXs))
     /// Automation: the date and the credit as laid out, which reach `dateRoom` / `creditRoom` a pass after a width is
     /// handed down.
     readonly property real dateWidth: detailsDate.width
     readonly property real creditWidth: coBlock.width
-    /// …and how the date came out: `whole`, cut back to its `day`, or `cut` by the field under that.
+    /// …and how the date came out: `whole`, cut back to its `hour` or its `day`, or `cut` by the field under that.
     readonly property string dateSaid: !detailsDate.clipped ? "whole"
+        : Math.abs(detailsDate.width - authorRow.dateHourRoom) < 0.5 ? "hour"
         : Math.abs(detailsDate.width - authorRow.dateDayRoom) < 0.5 ? "day" : "cut"
     /// Where the date line's drawn words end, in `item`'s x: the credit's stretch, or the date where nobody is
     /// credited.
@@ -226,9 +274,6 @@ Item {
     }
     /// Automation (verify-ui `details-parents`): the plate, and where the date line's words end in the row's x.
     readonly property alias plate: hashPlate
-    function dateLineEnd() {
-        return dateLine.mapToItem(authorRow, Qt.point(0, 0)).x + authorRow.dateNeed - dateLine.spacing
-    }
     // ---- what a sweep over this row needs to know (`SweepRoom`) ------
     //
     // A gesture belongs to one of the two lines, decided by where the press landed (nearness to the glyphs picks the
@@ -362,7 +407,15 @@ Item {
             authorRow.settleAuthorRequested()
     }
 
-    // The stamp's day in the date's own face: the step the date is cut back to (`dateDayRoom`).
+    // The stamp's hour and its day in the date's own face: the steps the date is cut back to (`dateHourRoom` /
+    // `dateDayRoom`).
+    PlainTextLabel {
+        id: hourRuler
+        visible: false
+        text: Words.stampHour(authorRow.details.authorTime)
+        font.family: Theme.uiFamily
+        font.pixelSize: detailsDate.pixelSize
+    }
     PlainTextLabel {
         id: dayRuler
         visible: false
@@ -409,7 +462,13 @@ Item {
             RowLayout {
                 id: nameLine
                 Layout.fillWidth: true
-                spacing: Theme.spaceXs
+                // Under the plate's column up to the hash's button, the word on this line: a parent line wider than
+                // the hash leaves that blank on this line (`HashPlate.firstLineWidth`).
+                Layout.rightMargin: -Math.max(0, hashPlate.implicitWidth - hashPlate.firstLineWidth)
+                // The line's steps stand between its words alone (the mark's and the word's margins): a step before the
+                // slack would hold a cut name a step off the hash after the slack had gone to nothing — the row's own
+                // step to the plate is the slack's floor (規約 §右のペインの字は掴める「行の余白は必ず残す」).
+                spacing: 0
                 // A field, so the name can be dragged over (規約 §右のペインの字は掴める). It has no `elide`: a long name
                 // is clipped with a mark and read in full in the hover card.
                 LineText {
@@ -437,8 +496,8 @@ Item {
                     }
                 }
                 // On the name's shoulder like every `!` on a word's right (デザイン規約 §アイコンの席 の右肩; the
-                // `iconSm` box), set straight into the name's line: pulled half a gap in by negative margins, both
-                // distances measured to the ink, which differs per mark (`SignatureMark.inkAir*`). Top-aligned and
+                // `iconSm` box), set straight into the name's line: half a gap past the name and nothing after it,
+                // both distances measured to the ink, which differs per mark (`SignatureMark.inkAir*`). Top-aligned and
                 // left there — a shoulder mark and the signature line up on the box's top, and pulled down they float
                 // off the name (a `!` left of a word is another seat, on the capitals' middle).
                 SignatureMark {
@@ -451,7 +510,7 @@ Item {
                     // (デザイン規約 §アイコンの席 の右肩).
                     stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
                     Layout.alignment: Qt.AlignTop
-                    Layout.leftMargin: -(Theme.spaceXs / 2 + sigMark.inkAirLeft)
+                    Layout.leftMargin: Theme.spaceXs / 2 - sigMark.inkAirLeft
                     Layout.rightMargin: -sigMark.inkAirRight
                 }
                 Label {
@@ -460,6 +519,7 @@ Item {
                     color: sigMark.tone
                     font.pixelSize: Theme.fontSm
                     Layout.alignment: Qt.AlignVCenter
+                    Layout.leftMargin: Theme.spaceXs
                 }
                 // The slack goes past all three so the mark and the word stay against the name; it is also the hand's
                 // widest way into this line (`SweepRoom`).
@@ -471,9 +531,11 @@ Item {
             RowLayout {
                 id: dateLine
                 Layout.fillWidth: true
-                // The date's minutes stand from the credit's face as the face from its name (user decision — ask before
-                // changing).
-                spacing: Theme.spaceXs
+                // Under the plate's column up to the parent line, the words on this line (`textRoom`): one parent's
+                // line is narrower than the hash, and the date would be cut beside a blank.
+                Layout.rightMargin: -Math.max(0, hashPlate.implicitWidth - hashPlate.secondLineWidth)
+                // Between the words alone, as on the name's line (the credit's margin): none before the slack.
+                spacing: 0
                 LineText {
                     id: detailsDate
                     text: Words.stamp(authorRow.details.authorTime)
@@ -488,6 +550,10 @@ Item {
                     Layout.preferredWidth: authorRow.dateRoom
                     Layout.minimumWidth: authorRow.dateRoom
                     Layout.maximumWidth: authorRow.dateRoom
+                    // A handler is passive: the field keeps its press and drag (`dateTip`).
+                    HoverHandler {
+                        id: dateHover
+                    }
                 }
                 // The first co-author's face and name, then `+N` (`CoAuthorLine`).
                 CoAuthorLine {
@@ -504,6 +570,9 @@ Item {
                     // Folded is as small as it draws: under that its face and count would run into the parents.
                     Layout.minimumWidth: coBlock.foldedWidth
                     Layout.alignment: Qt.AlignBaseline
+                    // The date's minutes stand from the credit's face as the face from its name (user decision — ask
+                    // before changing).
+                    Layout.leftMargin: Theme.spaceXs
                     onPointerChanged: inside => authorRow.showCoAuthors(inside)
                 }
                 Item {
@@ -520,7 +589,8 @@ Item {
             parents: authorRow.stashed && authorRow.details.parentHex !== "" ? [authorRow.details.parentHex]
                                                                              : authorRow.details.parentHexes
             parentRoom: authorRow.parentRoom
-            unrolled: authorRow.parentsUnrolled
+            shaDigits: authorRow.shaDigits
+            unrolled: authorRow.parentsUnrolled && hashPlate.unrollsInPlace
             firstBase: authorRow.firstBase - authorRow.laidY(hashPlate)
             secondBase: authorRow.secondBase - authorRow.laidY(hashPlate)
             onMorePointedChanged: authorRow.showParents(hashPlate.morePointed)

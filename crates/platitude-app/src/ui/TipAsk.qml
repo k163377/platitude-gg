@@ -42,13 +42,14 @@ QtObject {
     /// decision, ask before changing; デザイン規約 §立っている質問は 1 か所で聞く) — and a box's cut name, on the side its
     /// list comes down (`AppCombo.cutTip`, `SlimField.cutTip`).
     property bool under: false
-    /// The target is a row among rows, naming the side its box stands on first (`"left"` / `"right"`); empty for any
-    /// other target (規約 §hover のツールチップ「行の的は、行の横に立つ」). Named by `FileRowDelegate`,
-    /// `NavItemDelegate`, `HeadPinRow`, `AppMenuItem`, `DiffStageMark` and `DiffLineCell`'s end mark; not by
+    /// The target is a row among rows — or the details pane's date, whose box above would cover the name's line —
+    /// naming the side its box stands on first (`"left"` / `"right"`); empty for any other target (規約 §hover の
+    /// ツールチップ「行の的は、行の横に立つ」). Named by `FileRowDelegate`, `NavItemDelegate`, `HeadPinRow`, `AppMenuItem`,
+    /// `DiffStageMark`, `DiffLineCell`'s end mark and the details pane's date (`CommitAuthorRow.dateTip`); not by
     /// `CommandRowDelegate`, whose whole text folds to many times a row's height. The seat is measured with the box's
     /// drawn `width`, not its implicit one (`TipSeat.rowSeatX`). Pinned twice: the four seat shapes by
     /// `tst_tipseat.qml`'s row seats, the window's wiring by `aside=` of `path-tip` / `nav-tip` / `delete-blocked-tip`
-    /// (`AutoActDriver.tipAside`).
+    /// (`AutoActDriver.tipAside`) and `left=` of `date-tip`.
     property string rowSide: ""
     /// A word in `words` that is a place to go, and its href (`HoverToolButton.tipPlace`).
     property string place: ""

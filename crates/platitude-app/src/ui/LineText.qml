@@ -90,7 +90,7 @@ Item {
         return Math.max(0, next - from)
     }
     /// How wide the mark is, with a middle cut's head (`markInk`): what a holder that cuts the value back to a word of
-    /// its own choosing leaves past that word (`CommitAuthorRow.dateDayRoom`).
+    /// its own choosing leaves past that word (`CommitAuthorRow.dateHourRoom` / `dateDayRoom`).
     readonly property real markWidth: line.markInk
     /// What is selected right now, for a run that has no pointer to drag with.
     readonly property alias selected: field.selectedText

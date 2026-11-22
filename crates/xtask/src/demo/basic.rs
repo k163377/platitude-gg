@@ -484,7 +484,7 @@ pub(super) fn octopus_mates(repo: &mut DemoRepo) -> Result<(), String> {
         ),
     ];
     repo.commit("README.md", "# demo\n", "docs: start the readme")?;
-    // Twelve branches and main: thirteen parents, so even the floor's two leave a count of two digits.
+    // Twelve branches and main: thirteen parents, so the kept form's count has two digits.
     let crowd: Vec<String> = (1..=12).map(|i| format!("crowd/{i:02}")).collect();
     let twelve: Vec<String> = (1..=12)
         .map(|i| format!("Co-authored-by: Pair Programmer {i:02} <pair{i:02}@example.com>"))

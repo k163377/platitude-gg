@@ -4,8 +4,8 @@ import QtTest
 import platitude.ui
 
 // How the parent line fits the room its row leaves it (`HashPlate.parentFit`): every parent cut evenly from
-// whole down to three digits and the mark, then the tail given to `+N`, and two standing whatever the room. The room
-// is set by hand here; where it comes from is the row's (`details-parents`).
+// whole down to three digits and the mark, then the tail given to `+N` down to one link, then the arrow and the mark
+// alone (`←…`). The room is set by hand here; where it comes from is the row's (`details-parents`).
 //
 // A control, to hand the plate the window's font as `Main` does: the count and the commas are priced in the face their
 // labels draw in, and a default face with other figures lays the line out a pixel off its price.
@@ -103,25 +103,39 @@ Control {
             compare(drawn()[4], root.eight[4].substring(0, 8), "the ones kept are the first ones")
         }
 
-        // The floor: two parents at three digits, whatever the row can spare (the pane's narrowest included).
-        function test_d_two_stand_in_no_room_at_all() {
-            plate.parentRoom = 0
-            compare(plate.parentsShown, 2)
-            compare(plate.parentDigits, 3)
-            compare(plate.moreStands, false)
+        // Down to one link, the rest counted; with no room for that, the arrow and the mark that stands for them all.
+        function test_d_past_one_link_the_mark_stands_for_them_all() {
+            plate.parentRoom = plate.lineWidth(1, 3, 1)
+            compare(plate.parentsShown, 1)
+            compare(plate.moreSaid, "+1")
+            laidOut()
+            plate.parentRoom = plate.lineWidth(1, 3, 1) - 1
+            compare(plate.parentsShown, 0)
+            compare(plate.moreStands, true)
+            compare(plate.moreSaid, "…")
+            laidOut()
+            compare(drawn().length, 0, "no link stands beside the mark")
             plate.parents = root.eight
-            compare(plate.parentsShown, 2)
-            compare(plate.moreSaid, "+6")
+            plate.parentRoom = 0
+            compare(plate.parentsShown, 0)
+            compare(plate.moreSaid, "…")
         }
 
-        // One parent is never cut: it is the line every commit but a merge draws, and it fits under the own hash.
-        function test_e_one_parent_stands_whole() {
+        // One parent gives way as the others do: cut to three digits, then to the mark.
+        function test_e_one_parent_gives_way_too() {
             plate.parents = [root.two[0]]
-            plate.parentRoom = 0
-            compare(plate.parentsShown, 1)
+            plate.parentRoom = plate.lineWidth(1, 8, 0)
             compare(plate.parentDigits, 8)
+            compare(plate.moreStands, false)
+            plate.parentRoom = plate.lineWidth(1, 4, 0)
+            compare(plate.parentsShown, 1)
+            compare(plate.parentDigits, 4)
             laidOut()
-            verify(!plate.linkAt(0).field.clipped)
+            verify(plate.linkAt(0).field.clipped)
+            plate.parentRoom = 0
+            compare(plate.parentsShown, 0)
+            compare(plate.moreSaid, "…")
+            laidOut()
         }
 
         function test_f_each_link_goes_to_its_own_parent() {
@@ -180,6 +194,48 @@ Control {
             compare(plate.parentLineLeft(root) + plate.parentLineWidth, right, "the line still ends where it did")
             // The seat and the arrow stand at the right end; the rest of the width is held, so the plate keeps it.
             compare(plate.parentLineWidth, wide, "and is as wide as it was")
+        }
+
+        /// Whether the count's underline runs under the arrow, read off the drawn plate: the rule's ink in the column
+        /// through the arrow's middle, below the arrow's own middle.
+        function ruleUnderArrow() {
+            const image = grabImage(plate)
+            const box = plate.arrowBox(plate)
+            const x = Math.round(box.x + box.width / 2)
+            const rule = Theme.borderStrong
+            for (let y = Math.round(box.y + box.height / 2); y < image.height; y++) {
+                const c = image.pixel(x, y)
+                if (Math.abs(c.r - rule.r) < 0.02 && Math.abs(c.g - rule.g) < 0.02 && Math.abs(c.b - rule.b) < 0.02)
+                    return true
+            }
+            return false
+        }
+
+        // With no link standing the arrow and the mark are one stretch (`marked`): resting on the arrow asks for the
+        // card as resting on the mark does, and a press there still goes nowhere. Beside a link the arrow is a mark
+        // alone and asks for nothing. Hover reaches a handler in the move that brings the pointer, so each answer is
+        // read right after its move.
+        function test_k_beside_the_mark_the_arrow_is_the_mark_s() {
+            plate.parentRoom = plate.lineWidth(1, 3, 1)
+            laidOut()
+            compare(plate.marked, false)
+            let arrow = plate.arrowBox(root)
+            mouseMove(root, arrow.x + arrow.width / 2, arrow.y + arrow.height / 2)
+            compare(plate.morePointed, false, "beside a link the arrow asks for nothing")
+            verify(!ruleUnderArrow(), "and the count's underline stops short of it")
+            plate.parentRoom = plate.lineWidth(1, 3, 1) - 1
+            laidOut()
+            compare(plate.marked, true)
+            arrow = plate.arrowBox(root)
+            const p = Qt.point(arrow.x + arrow.width / 2 + 1, arrow.y + arrow.height / 2)
+            mouseMove(root, p.x, p.y)
+            compare(plate.morePointed, true, "beside the mark the arrow asks for the card")
+            verify(ruleUnderArrow(), "the mark's underline runs under the arrow")
+            verify(!plate.claims(root, p), "no control claims it")
+            mouseClick(root, p.x, p.y)
+            compare(root.visited, "", "and a press there went nowhere")
+            mouseMove(root, 1, 1)
+            compare(plate.morePointed, false, "off the line, the ask is gone")
         }
 
         // The row reads its details again for the same commit (a picture, the tree view) and hands over a new list of
