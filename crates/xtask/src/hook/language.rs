@@ -11,7 +11,7 @@ use std::io::{Read, Seek, SeekFrom};
 use super::payload::{array_items, deny, own_string_field, own_value_field, string_field};
 
 /// The wrap-up box the app draws under the closing message.
-const WRAP_UP: &str = "mcp__ccd_turn__wrap_up";
+pub(super) const WRAP_UP: &str = "mcp__ccd_turn__wrap_up";
 
 /// How much of the session record's end is read for a call's own message.
 /// Its lines sit ahead of the results of the calls made beside it, which a
@@ -185,7 +185,7 @@ fn prose(text: &str) -> String {
 }
 
 /// `line` with each markdown link's `(target)` dropped and its text kept.
-fn without_link_targets(line: &str) -> String {
+pub(super) fn without_link_targets(line: &str) -> String {
     let mut kept = String::new();
     let mut rest = line;
     while let Some(at) = rest.find("](") {

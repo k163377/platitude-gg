@@ -2,8 +2,9 @@
 //! wire the git, launches, kills, seats, chips and board window a session
 //! touches only when the user asks, a side session's detach and the land
 //! command kept out of what reaches another session (`contact`), the
-//! language of what the user reads (`language`), and background runs in a
-//! wrapper whose end wakes the session (`background`).
+//! language of what the user reads (`language`), a proposal to change the
+//! screen put to the user with its pictures (`proposal`), and background
+//! runs in a wrapper whose end wakes the session (`background`).
 //! Main moves on the permit the user's own `/land` opens (`permit`), and on
 //! that alone.
 //! Codex's hooks share activity and landing prompts (`codex`), and refuse
@@ -45,6 +46,7 @@ mod language;
 mod launch;
 mod payload;
 pub(crate) mod permit;
+mod proposal;
 mod python;
 mod repeat;
 mod review;
@@ -115,10 +117,15 @@ pub fn run(args: &[String]) -> Result<(), String> {
 /// PreToolUse, of any tool: a landing's hold ended (`background`), then
 /// the guards on tools no matcher names — the land command carried to
 /// another session (`contact`), the board (`board`), the wrap-up box's
-/// language (`language`) and the chips. One decision per call.
+/// language (`language`), a question proposing a change to the screen
+/// with no pictures (`proposal`) and the chips. One decision per call.
 fn pre_tool(input: &str) -> Result<(), String> {
     background::at_a_call(input);
-    if contact::pre_tool(input) || board::pre_tool(input) || language::pre_tool(input) {
+    if contact::pre_tool(input)
+        || board::pre_tool(input)
+        || language::pre_tool(input)
+        || proposal::pre_tool(input)
+    {
         return Ok(());
     }
     chips::pre_spawn(input)
@@ -157,11 +164,11 @@ fn prompt_submit(input: &str) -> Result<(), String> {
 
 /// Stop. Repository state cannot tell whether the request is complete;
 /// that is the session's to check against the user's instructions. The
-/// reasons to go on — a side session's detach, the chips' order, the
-/// closing's language — are judged together on the turn's first Stop: the
-/// next one comes with `stop_hook_active` and judges none of them. The
-/// user's notice waits for the Stop that ends the turn, so a turn that goes
-/// on does not show it twice.
+/// reasons to go on — a side session's detach, the chips' order, a
+/// proposal with no pictures, the closing's language — are judged together
+/// on the turn's first Stop: the next one comes with `stop_hook_active`
+/// and judges none of them. The user's notice waits for the Stop that ends
+/// the turn, so a turn that goes on does not show it twice.
 fn stop(input: &str) -> Result<(), String> {
     let first = payload::bool_field(input, "stop_hook_active") != Some(true);
     let (detach, chips) = if first {
@@ -173,6 +180,7 @@ fn stop(input: &str) -> Result<(), String> {
     let reasons = detach
         .into_iter()
         .chain(chips)
+        .chain(proposal::stop(input))
         .chain(language::stop(input).map(str::to_string))
         .collect::<Vec<_>>();
     if !reasons.is_empty() {

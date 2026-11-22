@@ -1,6 +1,7 @@
-//! The Write and Edit guards: where a write may land, and the notes an
-//! edit gets after (seat re-claim, QML registration and fonts, doc shape,
-//! prose width).
+//! The Write and Edit guards: where a write may land, a proposal to change
+//! the screen parked in a P<n>-確認事項 (`proposal`), and the notes an edit
+//! gets after (seat re-claim, QML registration and fonts, doc shape, prose
+//! width).
 //!
 //! Not guarded, on purpose: an Edit that quotes more `old_string` than it
 //! needs. One deny costs an order of magnitude more than a tighter quote
@@ -22,6 +23,7 @@ pub(super) fn pre_write(input: &str) -> Result<(), String> {
     let Some((decision, reason)) = second_test_binary(&path)
         .map(|reason| ("deny", reason))
         .or_else(|| seat::write_objection(input, &path))
+        .or_else(|| super::proposal::pre_write(input, &path).map(|reason| ("deny", reason)))
     else {
         return Ok(());
     };
