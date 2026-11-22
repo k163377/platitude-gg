@@ -31,7 +31,8 @@ Item {
             page.activateRow(graphModel.oidAt(Number(arg)))
             signatureTimer.start()
         } else if (act === "signature-tip") {
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            // `<row>[:<width>]`, as `details-parents`.
+            driver.readRowAt("" + arg)
             signatureTipTimer.start()
         } else if (act === "stash-tip") {
             // Why the box refuses the caret — the row decides which refusal (`offers::message_edit`): a stash's says
@@ -77,21 +78,21 @@ Item {
                 tipCopyTimer.start()
         } else if (act === "author-card" || act === "author-card-open") {
             // `-open` writes what the hover handler writes; read the pair together — "stayed shut" means something
-            // only beside a run where it opened.
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            // only beside a run where it opened. `<row>[:<width>]`, as `details-parents`.
+            driver.readRowAt("" + arg)
             authorCardTimer.order = act === "author-card-open" ? ["shown"] : []
             authorCardTimer.start()
         } else if (act === "co-authors" || act === "co-authors-open") {
-            // Same pairing as author-card. `<row>[:<width>]`, as `details-parents`: `min` is the pane's floor, where
-            // the credit folds (`CoAuthorLine.folded`).
-            const widthAt = ("" + arg).indexOf(":")
-            page.activateRow(graphModel.oidAt(Number(widthAt > 0 ? arg.substring(0, widthAt) : arg)))
-            if (widthAt > 0) {
-                const width = arg.substring(widthAt + 1)
-                page.setDetailsWidth(width === "min" ? 0 : Number(width))
-            }
+            // Same pairing as author-card. At the pane's floor (`:min`) the credit folds (`CoAuthorLine.folded`).
+            driver.readRowAt("" + arg)
             coAuthorTimer.order = act === "co-authors-open" ? ["shown"] : []
             coAuthorTimer.start()
+        } else if (act === "date-tip") {
+            // `<row>[:<width>]`. The tip stands only beside a date drawn short of its stamp, so the row is one the
+            // pane's floor squeezes: `16:min --preset octopus-mates`, the row squeezed hardest (`details-align`). A row
+            // whose date stands whole raises none: the run says so (`short=false`) and goes red on its claim.
+            driver.readRowAt("" + arg)
+            dateTipTimer.start()
         } else {
             return false
         }
@@ -360,11 +361,51 @@ Item {
                                 + " folded=" + detailsPane.messageBlock.matesFolded
                                 + " said=" + detailsPane.messageBlock.matesSaid
                                 // Unjudged: which step the date beside the credit came out at is the face's answer
-                                // — `whole` (to the minute), `day` (the time given up whole for the date and `…`),
-                                // `cut` (below that). At the floor Windows / Linux say `whole`, the wider mac face
-                                // `day`.
+                                // (`CommitAuthorRow.dateSaid`).
                                 + " date=" + detailsPane.messageBlock.valueRow.dateSaid
                                 + " pane=" + Math.round(detailsPane.width) })
+        }
+    }
+    // date-tip: pointed at once the row stands still at its width with its date short, reported once the tip is up.
+    // `said=` (judged) is the window's box carrying the date's whole stamp, day to minute — the date field's own value,
+    // which keeps the stamp whole however the line cut it (`CommitAuthorRow.dateTip`, `LineText`);
+    // `left=` (judged) the box standing wholly left of the date, off the name's line above it; `date=` the step the
+    // date came out at, which is the face's (`CommitAuthorRow.dateSaid`).
+    PageStage {
+        id: dateTipTimer
+        name: "date_tip"
+        order: ["pointed"]
+        onTriggered: {
+            const op = dateTipTimer
+            const row = detailsPane.valueRow
+            if (op.at("start")) {
+                if (!Awaited.all("date_tip_ready", { "ready": driver.cardSettled && detailsPane.width > 0 }))
+                    return
+                // A width asked for arrives a polish pass after the row it resizes.
+                const geom = Math.round(detailsPane.width) + "/" + Math.round(row.width) + "/" + row.dateSaid
+                if (!op.still("date_tip_geom", geom))
+                    return
+                // Settled, a whole date is the answer, not a wait (rules-refs/app-ui.md「欠けた前提は言って止まる」).
+                if (!row.dateClipped) {
+                    op.complete({ "name": "date_tip_whole", "when": () => ({}),
+                                  "report": () => "date_tip short=false date=" + row.dateSaid })
+                    return
+                }
+                op.input("pointed", () => {
+                    row.datePointedAt = true
+                })
+                return
+            }
+            op.complete({
+                "name": "date_tip_up",
+                "when": () => ({ "up": row.dateTip.shown }),
+                "report": () => {
+                    const said = row.dateTip.shown ? Tips.box.text : ""
+                    const box = Tips.box
+                    return "date_tip said=" + (said !== "" && said === row.fieldFor("date").text)
+                           + " left=" + (box.visible && box.parent === row.fieldFor("date") && box.x + box.width <= 0)
+                           + " date=" + row.dateSaid + " tip=" + said
+                } })
         }
     }
 }

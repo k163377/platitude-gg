@@ -38,6 +38,7 @@ fonts	code-swap late.txt --preset widelate	-	room= narrower= read the code colum
 fonts	corner 1	-	shown= reads the room the details pane leaves
 fonts	corner 1 --preset long	-	room= reads the room the details pane leaves
 fonts	corner wip	-	room= reads the room the working tree pane leaves
+fonts	date-tip 16:min --preset octopus-mates	-	said= reads the tip off a date the fonts draw short at the floor
 fonts	details-align 0 --preset octopus-mates	-	line1= line2= read the author row's measured baselines
 fonts	details-align 16:min --preset octopus-mates	-	line1= line2= read the author row's measured baselines
 fonts	details-align 7 --preset edges	-	line1= line2= read the author row's measured baselines
@@ -45,7 +46,9 @@ fonts	details-fit 7 --preset edges	-	fills= fits= read the details pane's measur
 fonts	details-grow 7 --preset edges	-	keeps= reads the description's laid-out height
 fonts	details-grow-squeeze 7 --preset edges	-	keeps= reads the description's laid-out height
 fonts	details-parents 0 --preset octopus	-	said= crowd= read the parent line's measured cut
-fonts	details-parents 8:min --preset octopus	-	floor= crowd= read the parent line's measured cut at the pane's floor
+fonts	details-parents 8:min --preset octopus	-	floor= crowd= date= read the parent line's measured cut and the date's step at the pane's floor
+fonts	details-parents-card 0:min --preset octopus-mates	-	under= ends= read the card under a line the fonts narrow to its mark
+fonts	details-parents-card 8:min --preset octopus	-	under= ends= read the card under a line the fonts narrow to one link
 fonts	details-parents-card 0 --preset octopus	-	seat= clear= read the card's measured place on the line
 fonts	diff-band-sweep unstaged:crates/platitude-core/src/session/integration/support/fixtures/refs_join_snapshot.rs --preset longpaths	-	cut= reads whether a long path fits the band
 fonts	graph-min --preset co-authors	-	w= min= read the graph column's measured floor
@@ -67,8 +70,14 @@ fonts	tab-pin-go	-	crushed= reads the tabs' measured widths
 fonts	tab-widths	-	cut= reads the tabs' measured widths
 fonts	tab-widths short	-	cut= folded= read the tabs' measured widths
 fonts	window-fill log --screen 960x420	-	under= inside= order= read the log and the panes against the floor the fonts set
-fonts	window-fill narrow --screen 600x700	-	under= inside= folded= read the three panes against the width floor the fonts set
-fonts	window-fill narrow-back --screen 600x700	-	folded= width= read the list against the width floor the fonts set
+fonts	window-fill narrow --screen 560x700	-	under= inside= folded= read the three panes against the width floor the fonts set
+fonts	window-fill narrow --screen 720x700	-	folded= rightMin= read the room a fold frees against the width floor the fonts set
+fonts	window-fill narrow-diff --screen 720x700	-	fromMin= rightKept= read the right pane across a diff's fold against the width floor the fonts set
+fonts	window-fill narrow-open-diff --screen 700x700	-	fromMin= rightKept= read the right pane across a diff's fold against the width floor the fonts set
+fonts	window-fill narrow-right-diff --screen 820x700	-	fromMin= rightKept= read the right pane across a diff's fold against the width floor the fonts set
+fonts	window-fill fold-drag	-	clickKept= widened= kept= floored= gave= read the right pane dragged under a diff's fold against the width floor the fonts set
+fonts	window-fill narrow-back --screen 600x700	-	folded= width= rightBack= rightSaved= read the list and the right pane against the width floor the fonts set
+fonts	window-fill narrow-right --screen 820x700	-	under= folded= read the right pane against the width floor the fonts set
 fonts	window-fill narrow-open --screen 700x700	-	inside= held= read the open list and the middle against the width floor the fonts set
 fonts	wip-grow-squeeze	-	keeps= reads the description's laid-out height
 

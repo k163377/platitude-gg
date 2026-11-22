@@ -26,7 +26,17 @@ pub(super) const VERBS: &str = "  verify-ui <verb> [arg] [options]
       does the same across a `--screen` narrower than the floor, judged
       on the list folding to its rail; `narrow-open` then asks the list
       open, and `narrow-back` puts the window back and judges the list
-      open again at the width it had. And so is
+      open again at the width it had, and the right pane back at the
+      reader's width and saved at it. `narrow-right` stands it a little
+      over the floor, judged on the right pane giving way before the
+      list folds; `narrow`, `narrow-open` and `narrow-right` also judge
+      the right pane at its minimum, and `narrow-diff` opens a diff in
+      `narrow`'s window and judges the right pane unmoved —
+      `narrow-open-diff` over the list held open, `narrow-right-diff`
+      over the open list a little over the floor. `fold-drag` wants no
+      screen: a window just over its floor and a diff's fold, judged on
+      the right pane's bar pressed there — let go unmoved, dragged, and
+      the window narrowed under it. And so is
       `commands-clear`, where the panel the reader emptied goes down with
       the press and what is judged is what it left behind: a window with
       no panel in it, and a quiet mark in a corner of the band. Its

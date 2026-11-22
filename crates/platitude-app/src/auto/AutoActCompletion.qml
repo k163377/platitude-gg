@@ -254,7 +254,7 @@ QtObject {
                 // The same first beat, then the paint: the colours are read off the note, which has nothing to say
                 // until the card has laid it out.
                 "card-note-lit",
-                "author-card", "author-card-open", "co-authors", "co-authors-open",
+                "author-card", "author-card-open", "co-authors", "co-authors-open", "date-tip",
                 "details-grow", "details-grow-squeeze", "wip-grow", "wip-grow-squeeze",
                 "details-fit", "details-align", "details-parents", "details-parents-card", "details-parents-go",
                 "details-select", "details-select-away", "details-sweep", "details-hand", "field-menu", "key-menu",

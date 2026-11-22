@@ -24,7 +24,34 @@ pub(super) const TABLE: &[Verb] = &[
     // giving way. `narrow-back`: maximised from a window that squeezed the
     // list, then put back and widened — the list open again at the
     // reader's width (`width=true`), which a fold that kept the squeezed
-    // width would lose.
+    // width would lose; the right pane, squeezed in the maximised window
+    // (`rightSqueezed=true`), back at the reader's width
+    // (`rightBack=true`), and saved there at it, not at the squeezed one
+    // (`rightSaved=true`). `narrow-right`: a screen a little over the floor,
+    // where the right pane has given way before the list (`folded=false`).
+    // `rightMin=true` on `narrow`, `narrow-open` and `narrow-right`: the
+    // right pane stands at its minimum — given way before the list folds,
+    // and not handed back the room a fold frees (a screen between the
+    // rail's floor and the open list's, 720x700, is where that shows).
+    // `headed=true` on `narrow` and `narrow-right`: at that minimum the
+    // heading still reads its first word, the floor it answers.
+    // `narrow-diff`: a diff opened in `narrow`'s window folds the list as
+    // the diff's, not the reader's, and the right pane keeps its width
+    // (`rightKept=true`) — its floor as the diff was asked
+    // (`fromMin=true`), which a fold handing the room back would leave.
+    // `narrow-open-diff` asks it over the list held open,
+    // `narrow-right-diff` over the open list a little over the floor,
+    // where the right pane stands squeezed beside it. `fold-drag`: no
+    // screen — a window just over its floor and a diff's fold, the right
+    // pane beside it under the reader's width (`squeezed=true`), its bar
+    // pressed as a hand's press comes: let go unmoved, the reader's width
+    // stands (`clickKept=true`); dragged to the middle's floor it widens
+    // (`widened=true`) and stays there let go (`kept=true`); the window
+    // narrowed to its floor then takes the pane in, not the middle
+    // (`floored=true gave=true`); the diff's fold is not handed to the
+    // next tab (`carried=false`) until the window has no room for the
+    // list either (`roomCarried=true`), and its width goes with the fold
+    // (`dropped=true`).
     Verb {
         name: "window-fill",
         when: &[
@@ -35,16 +62,39 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Is("narrow"),
                 "window_fill fills=true narrow=true under=true inside=true folded=true kept=true \
-                 held=false",
+                 held=false rightMin=true headed=true",
             ),
             (
                 Arg::Is("narrow-open"),
                 "window_fill fills=true narrow=true under=true inside=true folded=false kept=true \
-                 held=true",
+                 held=true rightMin=true",
+            ),
+            (
+                Arg::Is("narrow-right"),
+                "window_fill fills=true narrow=true under=false inside=true folded=false kept=true \
+                 held=false rightMin=true headed=true",
+            ),
+            (
+                Arg::Is("narrow-diff"),
+                "diff=true fromMin=true rightKept=true",
+            ),
+            (
+                Arg::Is("narrow-open-diff"),
+                "diff=true fromMin=true rightKept=true",
+            ),
+            (
+                Arg::Is("narrow-right-diff"),
+                "diff=true fromMin=true rightKept=true",
+            ),
+            (
+                Arg::Is("fold-drag"),
+                "window_fill drag=true squeezed=true clickKept=true widened=true kept=true \
+                 floored=true gave=true carried=false roomCarried=true dropped=true",
             ),
             (
                 Arg::Is("narrow-back"),
-                "window_fill back=true folded=true open=true width=true kept=true",
+                "window_fill back=true folded=true open=true width=true kept=true rightSqueezed=true \
+                 rightBack=true rightSaved=true",
             ),
         ],
         plain: "window_fill fills=true",

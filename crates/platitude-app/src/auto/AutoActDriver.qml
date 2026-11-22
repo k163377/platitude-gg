@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls.Fusion
-import QtQuick.Layouts
 import platitude
 import platitude.ui
 import platitude.ui.hover
@@ -34,7 +33,7 @@ Item {
     property WipPane wipPane
     property CarriedPane carriedPane
     property RebasePlanPane planPane
-    property RowLayout gitCorner
+    property GitVersionCorner gitCorner
 
     property AppMenu refMenu
     /// The cards the ref menu's rows hang behind. A verb photographing a row opens its card first
@@ -205,6 +204,16 @@ Item {
         const head = cut > 0 ? arg.substring(0, cut) : ""
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
         return { "bucket": named ? head : "unstaged", "path": named ? arg.substring(cut + 1) : arg }
+    }
+    /// A details argument, `[<row>][:<width>]`: reads the commit on that graph row (row 0 when it is left out), the
+    /// pane at that width — `min` asks for nothing, which the split view holds at the pane's floor.
+    function readRowAt(arg) {
+        const widthAt = arg.indexOf(":")
+        page.activateRow(graphModel.oidAt(Number(widthAt >= 0 ? arg.substring(0, widthAt) : arg)))
+        if (widthAt >= 0) {
+            const width = arg.substring(widthAt + 1)
+            page.setDetailsWidth(width === "min" ? 0 : Number(width))
+        }
     }
 
     /// The page starts this once its models are attached: a verb run before them would act on a repository nothing

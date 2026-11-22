@@ -51,7 +51,8 @@ Item {
                 page.showWip()
             fieldMenuTimer.start()
         } else if (act === "hash-tip" || act === "hash-tip-counting") {
-            page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
+            // `[<row>][:<width>]`, as `details-parents`; no row is row 0.
+            driver.readRowAt("" + arg)
             hashTipTimer.counting = act === "hash-tip-counting"
             // Counting, the press goes in with the ask for the tip; otherwise it waits for the tip to be up.
             hashTipTimer.order = hashTipTimer.counting ? ["asked"] : ["asked", "tapped"]
@@ -79,31 +80,14 @@ Item {
             descGrowTimer.squeeze = act === "wip-grow-squeeze"
             descGrowTimer.start()
         } else if (act === "details-parents") {
-            // `<row>[:<width>]`; `min` asks for nothing, which the split view holds at the pane's floor.
-            const widthAt = arg.indexOf(":")
-            page.activateRow(graphModel.oidAt(Number(widthAt > 0 ? arg.substring(0, widthAt) : arg)))
-            if (widthAt > 0) {
-                const width = arg.substring(widthAt + 1)
-                page.setDetailsWidth(width === "min" ? 0 : Number(width))
-            }
+            driver.readRowAt(arg)
             detailsParentsTimer.start()
         } else if (act === "details-align") {
-            // `<row>[:<width>]`, as `details-parents`.
-            const alignAt = arg.indexOf(":")
-            page.activateRow(graphModel.oidAt(Number(alignAt > 0 ? arg.substring(0, alignAt) : arg)))
-            if (alignAt > 0) {
-                const alignWidth = arg.substring(alignAt + 1)
-                page.setDetailsWidth(alignWidth === "min" ? 0 : Number(alignWidth))
-            }
+            driver.readRowAt(arg)
             detailsAlignTimer.start()
         } else if (act === "details-parents-card" || act === "details-parents-go") {
-            // `<row>[:<width>]`, as `details-parents`; `-go` then presses the card's second row.
-            const cardWidthAt = arg.indexOf(":")
-            page.activateRow(graphModel.oidAt(Number(cardWidthAt > 0 ? arg.substring(0, cardWidthAt) : arg)))
-            if (cardWidthAt > 0) {
-                const cardWidth = arg.substring(cardWidthAt + 1)
-                page.setDetailsWidth(cardWidth === "min" ? 0 : Number(cardWidth))
-            }
+            // `-go` then presses the card's second row.
+            driver.readRowAt(arg)
             parentsCardTimer.going = act === "details-parents-go"
             parentsCardTimer.order = parentsCardTimer.going ? ["card_asked", "row_pressed"] : ["card_asked"]
             parentsCardTimer.start()
@@ -315,16 +299,17 @@ Item {
         name: "hash_tip"
         /// Whether the press goes in ahead of the tip.
         property bool counting: false
-        /// The plate's hash ready, and its tip up: the tip waits out its own rest, and an empty answer is "not up yet".
+        /// The plate's hash laid out at its digits (`HashPlate.shaLaid`), and its tip up: the tip waits out its own
+        /// rest, and an empty answer is "not up yet".
         function up() {
             const row = detailsPane.valueRow
-            return { "ready": !(!driver.cardSettled || !row.valueReady("hash")), "up": row.hashTipSaid() !== "" }
+            return { "ready": driver.cardSettled && row.plate.shaLaid, "up": row.hashTipSaid() !== "" }
         }
         onTriggered: {
             const op = hashTipTimer
             const row = detailsPane.valueRow
             if (op.at("start")) {
-                if (!Awaited.all("hash_tip_ready", { "ready": !(!driver.cardSettled || !row.valueReady("hash")) }))
+                if (!Awaited.all("hash_tip_ready", { "ready": driver.cardSettled && row.plate.shaLaid }))
                     return
                 op.input("asked", () => {
                     row.forceHashTip(true)
@@ -515,9 +500,14 @@ Item {
     }
 
     /// The parent line against the room the row leaves it (`HashPlate.parentFit`). Headless sees neither a cut
-    /// digit nor a crowded date, so the row says them: two parents always stand (`floor`), a count stands exactly when
-    /// parents were left out and says how many (`said`), the links are git's parents in git's order (`order`), every
-    /// link is cut alike (`even`), the name and the date lines are whole (`crowd`) and the pane holds its row (`fits`).
+    /// digit nor a crowded date, so the row says them: the line always says its parents, a link or the mark that
+    /// stands for them all (`floor`), the count or that mark stands exactly when parents were left out — `+N` beside a
+    /// link saying how many, `…` alone (`said`), the links are git's parents in git's order (`order`), every link is
+    /// cut alike (`even`), the line took no room the date line's words needed (`crowd`) and the pane holds its row
+    /// (`fits`). Crowding: a line wider than its kept form (one link at three digits and the count, `←9dc… +1`) beside
+    /// a credit or a date cut, or any link beside a date cut under its day (`CommitAuthorRow.parentRoom`). `gap=` is
+    /// the room between the date line's drawn words and the line.
+    /// `date=` says how the date came out (`CommitAuthorRow.dateSaid`).
     PageStage {
         id: detailsParentsTimer
         name: "details_parents"
@@ -539,17 +529,21 @@ Item {
                 even = even && link.field.clipped === (plate.parentDigits < plate.wholeDigits)
             }
             const more = want.length - drawn
-            const said = plate.moreStands === (more > 0) && (more === 0 || plate.moreSaid === "+" + more)
-            const crowd = row.nameClipped || row.dateClipped || row.matesClipped
-            return "details_parents floor=" + (want.length < 2 || drawn >= 2)
+            const said = plate.moreStands === (more > 0)
+                && (more === 0 || plate.moreSaid === (drawn > 0 ? "+" + more : "…"))
+            const kept = drawn === 1 && plate.parentDigits === plate.cutDigits
+            const crowd = ((row.dateClipped || row.matesClipped) && drawn > 0 && !kept)
+                || (row.dateSaid === "cut" && drawn > 0)
+            return "details_parents floor=" + (want.length === 0 || drawn > 0 || plate.moreStands)
                    + " said=" + said + " order=" + ordered + " even=" + even
                    + " crowd=" + crowd + " fits=" + (detailsPane.contentOverflow < 1)
+                   + " date=" + row.dateSaid
                    + " of=" + want.length + " drawn=" + drawn + " more=" + more
                    + " git=" + driver.detailsModel.parentHexes.length
                    + " digits=" + plate.parentDigits
                    + " pane=" + Math.round(detailsPane.width) + " room=" + Math.round(row.parentRoom)
                    + " line=" + Math.round(plate.parentLineWidth)
-                   + " gap=" + Math.round(plate.parentLineLeft(row) - row.dateLineEnd())
+                   + " gap=" + Math.round(plate.parentLineLeft(row) - row.dateWordsEnd(row))
         }
         /// The row on the commit read: the card settled, the pane sized, the plate handed its parents.
         function ready() {
@@ -636,12 +630,17 @@ Item {
     /// hash on the seat a single parent's hash has, at the line's right end and middle (`seat`), the arrow left outside
     /// the card (`clear`), nothing else of the line standing beside it (`bare`), every parent on a row of its own and
     /// whole (`whole`, `rows`). `-go` presses a row and reads where the page went (`landed`) and that the card went
-    /// with the press (`shut`). The card opens only off a `+N` (`--preset octopus` row 0): a row whose parents all
-    /// stand waits out the watchdog. The picture is scene.png (the card is an overlay). Whether a real press reaches
-    /// the card's row, and a drag on it selects, is `tst_parentcard.qml`'s.
+    /// with the press (`shut`). The card opens off the count or the mark: a row whose parents all stand waits out the
+    /// watchdog. The registered rows stand the line at a `+N` (`--preset octopus` row 0), where a link's hash marks
+    /// the seat, and at the pane's floor at its two narrow forms (`form=`: the mark, `0:min --preset octopus-mates`;
+    /// one link and the count, `8:min --preset octopus`), where the card opens flush under the line (`under`, its
+    /// hashes ending where the line does, `ends`) and the arrow and the plate stand still (`still`). The picture is
+    /// scene.png (the card is an overlay). Whether a real press reaches the card's row, a drag on it selects, and the
+    /// arrow's hover opens it, is `tst_parentcard.qml`'s and `tst_parentline.qml`'s.
     ///
-    /// Witnessed as the card was asked for: `seatY`, the first hash's row of pixels, and `plateWidth`, the plate's
-    /// width, before the card came out; as the row was pressed: `want`, the parent the press names.
+    /// Witnessed as the card was asked for: `seatY`, the first hash's row of pixels, `arrowX`, the arrow's place, and
+    /// `plateWidth`, the plate's width, before the card came out; as the row was pressed: `want`, the parent the press
+    /// names.
     PageStage {
         id: parentsCardTimer
         name: "parents_card"
@@ -656,17 +655,50 @@ Item {
             }
             return null
         }
-        /// The card out, sized, its first row built and the line unrolled under it.
+        /// The card out, sized, its first row built and the line unrolled under it — or, a line narrower than the
+        /// seat, left as it was (`HashPlate.unrollsInPlace`).
         function open() {
             const card = detailsPane.authorCards.parentCard
+            const plate = detailsPane.valueRow.plate
             return { "opened": card.opened,
                      "sized": card.width > 0,
                      "row": parentsCardTimer.rowBuilt(0) !== null,
-                     "unrolled": detailsPane.valueRow.plate.unrolled }
+                     "unrolled": plate.unrolled === plate.unrollsInPlace }
+        }
+        /// A line narrower than the seat: the card flush under it (`under`), its first hash ending where the line does
+        /// (`ends`), the arrow and the plate where they stood (`still`), every parent whole on a row (`whole`).
+        function underLine() {
+            const plate = detailsPane.valueRow.plate
+            const card = detailsPane.authorCards.parentCard
+            const field = parentsCardTimer.rowBuilt(0).field
+            const hash = field.mapToItem(null, Qt.point(0, 0))
+            const line = plate.parentLineRect(null)
+            const top = card.contentItem.mapToItem(null, Qt.point(0, 0)).y - card.padding
+            const dx = hash.x + field.width - (line.x + line.width)
+            const dy = top - (line.y + line.height)
+            const arrow = plate.arrowBox(null)
+            let rows = 0
+            let whole = true
+            for (let i = 0; i < plate.parents.length; i++) {
+                const r = parentsCardTimer.rowBuilt(i)
+                if (!r)
+                    continue
+                rows++
+                whole = whole && !r.field.clipped && r.field.text === plate.parents[i].substring(0, 8)
+            }
+            return "parents_card open=" + card.opened
+                   + " form=" + (plate.marked ? "mark" : "kept")
+                   + " under=" + (Math.abs(dy) < 0.5) + " ends=" + (Math.abs(dx) < 0.5)
+                   + " still=" + (Math.abs(arrow.x - parentsCardTimer.witnessed("arrowX")) < 0.5
+                                  && Math.abs(plate.width - parentsCardTimer.witnessed("plateWidth")) < 0.5)
+                   + " whole=" + whole + " rows=" + rows + " of=" + plate.parents.length
+                   + " at=" + Math.round(dx) + "," + Math.round(dy) + " width=" + Math.round(card.width)
         }
         /// The card as it stands now.
         function openLine() {
             const plate = detailsPane.valueRow.plate
+            if (!plate.unrollsInPlace)
+                return parentsCardTimer.underLine()
             const card = detailsPane.authorCards.parentCard
             const arrow = plate.arrowBox(null)
             const field = parentsCardTimer.rowBuilt(0).field
@@ -710,8 +742,11 @@ Item {
                     return
                 op.input("card_asked", () => {
                     // The first hash's row of pixels before the card comes out: the card's first hash has to stand
-                    // on it.
-                    op.witness("seatY", plate.linkAt(0).field.mapToItem(null, Qt.point(0, 0)).y)
+                    // on it. A narrow line does not unroll (`HashPlate.unrollsInPlace`), so it has no seat to stand
+                    // on: there the arrow has to stay where it stands.
+                    op.witness("seatY", plate.unrollsInPlace ? plate.linkAt(0).field.mapToItem(null, Qt.point(0, 0)).y
+                                                             : 0)
+                    op.witness("arrowX", plate.arrowBox(null).x)
                     // And the plate's width: the name beside it must not move as the card comes out.
                     op.witness("plateWidth", plate.width)
                     row.showParents(true)
@@ -780,8 +815,9 @@ Item {
     PageStage {
         id: cornerTimer
         name: "corner"
-        // `shown=` is the label's own visibility: reporting the room that decided it would go
-        // green with the binding cut. The PNG answers it too — the pale words in the corner, there or not. The
+        // `shown=` is the corner's own visibility: reporting the room that decided it would go
+        // green with the binding cut. The PNG answers it too — the pale words in the corner, there or not. `gives=` is
+        // the last step the line gave way by (`BuildLine.gives`), which the pane's width and the build decide. The
         // worktree's pane has no corner to give (`shown=false room=0` on any preset), so the pair is read on the
         // details pane only; the third right pane, another worktree's, is not this verb's — `carried-stand`'s
         // `corner=` claims it. The preset rows apply only to a run that names its preset (`verify/verbs/panes.rs`).
@@ -806,7 +842,8 @@ Item {
                                    "report": () => "git_corner pane=" + (page.wipShown ? "wip" : "details")
                                                    + " shown=" + gitCorner.visible
                                                    + " room=" + Math.round(gitCorner.roomLeft)
-                                                   + " needs=" + Math.round(gitCorner.roomNeeded) })
+                                                   + " needs=" + Math.round(gitCorner.roomNeeded)
+                                                   + " gives=" + gitCorner.gives })
         }
     }
     // The message has to be in the box, and the box laid out with it, before there is a ceiling to pull on. In the

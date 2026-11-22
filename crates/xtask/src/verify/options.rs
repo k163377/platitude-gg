@@ -384,6 +384,19 @@ pub(super) fn parse(args: &[String]) -> Result<Options, String> {
     Ok(opts)
 }
 
+/// The `window-fill` forms that read the window against its floor, each on
+/// a `--screen` of its own (`WindowFrameActs.qml`'s `fillActTimer`).
+const WINDOW_FILL_SCREENED: [&str; 8] = [
+    "log",
+    "narrow",
+    "narrow-open",
+    "narrow-back",
+    "narrow-right",
+    "narrow-diff",
+    "narrow-open-diff",
+    "narrow-right-diff",
+];
+
 /// The verb and its one argument off the positional words, and the verbs
 /// refused without theirs.
 fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> {
@@ -410,15 +423,18 @@ fn name_the_verb(opts: &mut Options, positional: &[&str]) -> Result<(), String> 
     if opts.verb == "corner" && opts.arg.is_empty() {
         return Err("corner needs the pane it is about: wip, or the row to land on".into());
     }
-    // Judged on the window standing under its floor (`under=true`), which
-    // the platform's own 800x800 never makes: the run could only go red.
+    // Judged on where the window stands against its floor (`under=`),
+    // which the form's screen sets and the platform's own 800x800 does not
+    // say: the run could only go red, or green by accident.
     if opts.verb == "window-fill"
-        && ["log", "narrow", "narrow-open", "narrow-back"].contains(&opts.arg.as_str())
+        && WINDOW_FILL_SCREENED.contains(&opts.arg.as_str())
         && opts.screen.is_none()
     {
         return Err(format!(
-            "window-fill {} needs --screen <W>x<H> under the window's floor (960x420 for log, \
-             600x700 for narrow and narrow-back, 700x700 for narrow-open)",
+            "window-fill {} needs --screen <W>x<H> against the window's floor (960x420 for log, \
+             560x700 or 720x700 for narrow, 600x700 for narrow-back, 700x700 for narrow-open, \
+             820x700 for narrow-right, 720x700 for narrow-diff, 700x700 for narrow-open-diff, 820x700 for \
+             narrow-right-diff)",
             opts.arg
         ));
     }
@@ -687,7 +703,7 @@ mod tests {
             opts.typable_line().as_deref(),
             Some("window-fill log --screen 960x420")
         );
-        for form in ["log", "narrow", "narrow-open", "narrow-back"] {
+        for form in super::WINDOW_FILL_SCREENED {
             let Err(unscreened) = parse(&["window-fill".to_string(), form.to_string()]) else {
                 panic!("the {form} form asks nothing on the platform's own screen");
             };

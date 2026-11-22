@@ -46,24 +46,26 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "details_fit fills=true fits=true",
     },
-    // The parent line cut to the room the row leaves it: nothing on the
-    // name or the date line gave way to it, and whatever it left out is
-    // counted. How many digits and links stand is the font's, so only the
-    // merge of two (`--preset octopus` row 8) names the count — and the
-    // stash filed with its untracked files (`--preset stashes` row 0),
-    // whose three parents in git are one in the graph.
+    // The parent line cut to the room the row leaves it: wider than its
+    // kept form (one link at three digits and the count) nothing on the
+    // date line gave way to it, and whatever it left out is counted. How
+    // many digits and links stand is the font's, so the merge of two at the
+    // pane's floor (`--preset octopus` row 8) claims the date whole beside
+    // whatever is left of its parents, and the stash filed with its
+    // untracked files (`--preset stashes` row 0) the count: its three
+    // parents in git are one in the graph.
     Verb {
         name: "details-parents",
         when: &[
             (
-                Arg::Starts("8"),
+                Arg::Is("8:min"),
                 "details_parents floor=true said=true order=true even=true crowd=false fits=true \
-                 of=2 drawn=2 more=0",
+                 date=whole of=2",
             ),
             (
                 Arg::WithPreset("stashes"),
                 "details_parents floor=true said=true order=true even=true crowd=false fits=true \
-                 of=1 drawn=1 more=0 git=3",
+                 date=whole of=1 drawn=1 more=0 git=3",
             ),
         ],
         plain: "details_parents floor=true said=true order=true even=true crowd=false fits=true",
@@ -71,13 +73,29 @@ pub(super) const TABLE: &[Verb] = &[
     // The count's card: its first hash on a single parent's seat, the
     // arrow left outside it, nothing else of the line beside it, every hash
     // whole, and the plate as wide as before, so the name beside it holds
-    // still. The eight rows are `--preset octopus` row 0's.
+    // still. The eight rows are `--preset octopus` row 0's. At the pane's
+    // floor the line is narrower than that seat — down to its mark
+    // (`0:min --preset octopus-mates`) or to one link and the count
+    // (`8:min --preset octopus`): the card opens flush under it, its
+    // hashes ending where the line does, the arrow and the plate unmoved.
+    // `form=` names which of the two the line stood at, so a face that
+    // lands the mark's row on the kept form cannot pass as the mark's.
     Verb {
         name: "details-parents-card",
-        when: &[(
-            Arg::WithPreset("octopus"),
-            "parents_card open=true seat=true clear=true bare=true whole=true still=true rows=8 of=8",
-        )],
+        when: &[
+            (
+                Arg::IsOn("0:min", "octopus-mates"),
+                "parents_card open=true form=mark under=true ends=true still=true whole=true rows=8 of=8",
+            ),
+            (
+                Arg::IsOn("8:min", "octopus"),
+                "parents_card open=true form=kept under=true ends=true still=true whole=true rows=2 of=2",
+            ),
+            (
+                Arg::WithPreset("octopus"),
+                "parents_card open=true seat=true clear=true bare=true whole=true still=true rows=8 of=8",
+            ),
+        ],
         plain: "parents_card open=true seat=true clear=true bare=true whole=true still=true",
     },
     // The author row's two lines, each on one baseline whatever the faces
@@ -95,10 +113,9 @@ pub(super) const TABLE: &[Verb] = &[
     // sliver.
     //
     // The name folds when not even its first three letters and `…` fit,
-    // and whether that happens is the OS's font: two parents beside one
-    // co-author (`14:min`) fold on Windows and keep four letters on Linux.
-    // So only `0:min` / `8:min`, which fold on both, are named here; that
-    // no name is left a sliver or a bare underline is read on the picture.
+    // and whether that happens at the floor is the OS's font. So only
+    // `0:min` / `8:min`, which fold on both, are named here; that no name
+    // is left a sliver or a bare underline is read on the picture.
     Verb {
         name: "co-authors",
         when: &[
@@ -112,6 +129,15 @@ pub(super) const TABLE: &[Verb] = &[
             ),
         ],
         plain: "co_authors count=3 cut=false first=Claude Opus 5 open=false folded=false said=+2",
+    },
+    // The date's tip, beside a date the pane's floor draws short of its
+    // stamp: the window's box carries the whole stamp, day to minute, and
+    // stands left of the date. Which step the date came out at is the
+    // face's, so it is not claimed.
+    Verb {
+        name: "date-tip",
+        when: &[],
+        plain: "date_tip said=true left=true",
     },
     // A press on the card's row: the page lands on that parent and the
     // card goes down with the press.

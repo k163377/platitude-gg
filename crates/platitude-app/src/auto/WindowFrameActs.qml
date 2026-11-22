@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import QtQuick.Window
 import platitude
@@ -36,14 +37,33 @@ Item {
     // list open as the rail's block does, which holds it open with the middle giving way. `narrow-back` first stands
     // the window just over its floor, where the split squeezes the list under the reader's width, then maximises it,
     // puts it back and widens it: the list has to come back at the reader's width, not the squeezed one (`backLine`).
+    // So does the right pane, squeezed to its floor in the maximised window, and what the page saves there for the
+    // next page and the next start is the reader's width too (`PageLayout.reportLayout`, read back at once as
+    // `AppBackend.startDetailsWidth`).
+    // `narrow-right`: a `--screen` a little over the window's floor: the right pane gives way down to its floor before
+    // the list folds (`PageLayout.rightFloorWidth`), so the list still stands open. `narrow-diff`: `narrow`'s window,
+    // then a file's diff opened — its fold is the diff's, not the reader's, so the right pane keeps the width it had
+    // (`PageLayout.foldedForOther`; `rightKept=`, off the width read as the diff was asked, which is the pane's floor
+    // — `fromMin=`, the width a fold that handed the room back would move it from). `narrow-open-diff` asks the same
+    // over `narrow-open`'s list held open, `narrow-right-diff` over `narrow-right`'s window, where the right pane
+    // stands squeezed beside the open list.
     WindowStage {
         id: fillActTimer
         name: "window_fill"
-        order: Harness.autoActArg === "log" || Harness.autoActArg === "narrow" ? ["maximized", "filled"]
+        order: Harness.autoActArg === "log" || Harness.autoActArg === "narrow" || Harness.autoActArg === "narrow-right"
+             ? ["maximized", "filled"]
              : Harness.autoActArg === "narrow-open" ? ["maximized", "filled", "opened"]
+             : Harness.autoActArg === "narrow-open-diff" ? ["maximized", "filled", "opened", "diffed"]
+             : Harness.autoActArg === "narrow-diff" || Harness.autoActArg === "narrow-right-diff"
+               ? ["maximized", "filled", "diffed"]
              : Harness.autoActArg === "narrow-back" ? ["squeezed", "maximized", "filled", "windowed", "widened"]
              : ["maximized", "filled", "windowed"]
-        running: Harness.autoAct === "window-fill"
+        running: Harness.autoAct === "window-fill" && Harness.autoActArg !== "fold-drag"
+        /// The diff the `-diff` forms open, the right pane's width read as it is asked (`rightKept=`, `fromMin=`).
+        function openDiff() {
+            fillActTimer.witness("rightBefore", acts.widthReading().rightW)
+            window.curPage.openDiff("unstaged", "docs/guide.md", "")
+        }
         onTriggered: {
             const op = fillActTimer
             const arg = Harness.autoActArg
@@ -69,6 +89,7 @@ Item {
                     if (logs)
                         window.curPage.commandsOpen = true
                     op.witness("readerWidth", reads ? window.curPage.pageSidebar.openWidth : 0)
+                    op.witness("readerRight", reads ? window.curPage.pageLayout.rightPane.SplitView.preferredWidth : 0)
                     window.visibility = Window.Maximized
                 })
                 return
@@ -94,7 +115,7 @@ Item {
                         "page": PageSettled.windowSettled(window),
                         "laid": !reads || op.still("split_laid", acts.layoutKey()) }))
                     return
-                if (logs || arg === "narrow") {
+                if (logs || arg === "narrow" || arg === "narrow-right") {
                     op.complete({ "name": "window_fill_" + arg,
                                   "when": () => ({ "maximized": window.visibility === Window.Maximized,
                                                    "log": Harness.autoActArg !== "log"
@@ -102,16 +123,27 @@ Item {
                                   "report": () => acts.fillLine() })
                     return
                 }
-                if (arg === "narrow-open") {
+                if (arg === "narrow-open" || arg === "narrow-open-diff") {
                     op.input("opened", () => {
                         window.curPage.pageSidebar.foldRequested(false)
                     })
+                    return
+                }
+                if (arg === "narrow-diff" || arg === "narrow-right-diff") {
+                    op.input("diffed", () => fillActTimer.openDiff())
                     return
                 }
                 if (!op.input("windowed", () => {
                         op.witness("filledLine", acts.fillLine())
                         op.witness("narrowFolded", reads && window.curPage.pageSidebar.collapsed
                                                    && !window.curPage.sidebarCollapsed)
+                        if (arg === "narrow-back") {
+                            // Saved while squeezed, as the window's timer saves it, and read back at once: the
+                            // timer saves again before the completion, past the widening.
+                            op.witness("rightSqueezed", acts.widthReading().rightW)
+                            window.curPage.reportLayout()
+                            op.witness("rightSaved", AppBackend.startDetailsWidth())
+                        }
                         window.visibility = Window.Windowed
                     }))
                     return
@@ -121,10 +153,33 @@ Item {
                         "open": !window.curPage.pageSidebar.collapsed,
                         "laid": op.still("open_laid", acts.layoutKey()) }))
                     return
+                if (arg === "narrow-open-diff") {
+                    op.input("diffed", () => fillActTimer.openDiff())
+                    return
+                }
                 op.complete({ "name": "window_fill_narrow_open",
                               "when": () => ({ "maximized": window.visibility === Window.Maximized,
                                                "open": !window.curPage.pageSidebar.collapsed }),
                               "report": () => acts.fillLine() })
+                return
+            }
+            // The diff's rows landed too (`DiffPane.diffSettled`), so the picture is of the diff it asked for.
+            if (op.at("diffed")) {
+                const diff = window.curPage.pageDiff
+                if (!Awaited.all("window_fill_diffed", {
+                        "diff": window.curPage.diffShown,
+                        "rows": diff.diffSettled() && diff.picturesSettled,
+                        "laid": op.still("diff_laid", acts.layoutKey()) }))
+                    return
+                op.complete({ "name": "window_fill_narrow_diff",
+                              "when": () => ({ "diff": window.curPage.diffShown,
+                                               "rows": window.curPage.pageDiff.diffSettled() }),
+                              "report": () => acts.fillLine() + " diff=" + window.curPage.diffShown
+                                              + " fromMin=" + (Math.abs(op.witnessed("rightBefore")
+                                                                        - window.curPage.pageLayout.rightFloorWidth)
+                                                               < 1)
+                                              + " rightKept=" + (Math.abs(acts.widthReading().rightW
+                                                                          - op.witnessed("rightBefore")) < 1) })
                 return
             }
             // Put back, the window comes back at the squeezed width it was maximised from: widened past it, the list has
@@ -152,6 +207,158 @@ Item {
                           "report": () => op.witnessed("filledLine") })
         }
     }
+    // `fold-drag`: a window just over its floor, as `narrow-back` squeezes it, and a diff's fold, where the right pane
+    // stands at its width beside the open list, under the reader's (`squeezed=`). A hand on the right pane's bar, as
+    // its own press comes (`PageLayout.holdSplitBar`, through the page) — no input reaches a `SplitView`'s handle
+    // headless, so the drag is what the split's own writes, the pane's `preferredWidth`. A press let go without a move
+    // leaves the reader's width (`clickKept=`); a drag as far as the middle's floor widens the pane (`widened=`), which
+    // stands where it was let go (`kept=`); the window then narrowed to its floor — the rail's, the diff's fold being
+    // the list's — takes the pane in, the middle held at its own (`floored=`, `gave=`). The middle is read off the
+    // diff, which fills it: out of sight under a diff the graph stands at its own width. The diff's fold is its page's
+    // own, so the width is not handed to the next tab (`carried=false`) — until the window, at the rail's floor, has
+    // no room for the list either, a fold the next tab's page stands on too (`roomCarried=`); and it goes with the
+    // fold as the diff closes (`dropped=`).
+    WindowStage {
+        id: foldDragTimer
+        name: "fold_drag"
+        order: ["shaped", "diffed", "clicked", "pressed", "dragged", "released", "narrowed", "closed"]
+        running: Harness.autoAct === "window-fill" && Harness.autoActArg === "fold-drag"
+        onTriggered: {
+            const op = foldDragTimer
+            const page = window.curPage
+            if (op.at("start")) {
+                if (!Awaited.all("fold_drag_page", { "page": page !== null && PageSettled.settledUnder(window) }))
+                    return
+                op.input("shaped", () => {
+                    window.width = op.witness("wide", Math.ceil(window.floorWidth) + 10)
+                })
+                return
+            }
+            const layout = page.pageLayout
+            const r = acts.widthReading()
+            if (op.at("shaped")) {
+                if (!Awaited.all("fold_drag_shaped", {
+                        "wide": window.width === op.witnessed("wide"),
+                        "laid": op.still("shaped_laid", acts.layoutKey()) }))
+                    return
+                op.input("diffed", () => {
+                    op.witness("reader", layout.rightPane.SplitView.preferredWidth)
+                    page.openDiff("unstaged", "docs/guide.md", "")
+                })
+                return
+            }
+            if (op.at("diffed")) {
+                if (!Awaited.all("fold_drag_diffed", {
+                        "diff": page.diffShown && page.pageDiff.diffSettled(),
+                        "folded": page.pageSidebar.collapsed,
+                        "laid": op.still("diffed_laid", acts.layoutKey()) }))
+                    return
+                op.input("clicked", () => {
+                    const bar = acts.rightBar()
+                    if (bar === null)
+                        return false
+                    op.witness("held", r.rightW)
+                    page.holdSplitBar(bar, true)
+                    page.holdSplitBar(bar, false)
+                })
+                return
+            }
+            if (op.at("clicked")) {
+                if (!Awaited.all("fold_drag_clicked", { "laid": op.still("clicked_laid", acts.layoutKey()) }))
+                    return
+                op.input("pressed", () => {
+                    op.witness("clickReader", layout.rightPane.SplitView.preferredWidth)
+                    page.holdSplitBar(acts.rightBar(), true)
+                })
+                return
+            }
+            if (op.at("pressed")) {
+                if (!Awaited.all("fold_drag_pressed", { "laid": op.still("pressed_laid", acts.layoutKey()) }))
+                    return
+                op.input("dragged", () => {
+                    layout.rightPane.SplitView.preferredWidth = r.rightW + page.pageDiff.width - layout.centreMinWidth
+                })
+                return
+            }
+            if (op.at("dragged")) {
+                if (!Awaited.all("fold_drag_dragged", { "laid": op.still("dragged_laid", acts.layoutKey()) }))
+                    return
+                op.input("released", () => {
+                    op.witness("dragged", r.rightW)
+                    page.holdSplitBar(layout.rightBarInHand, false)
+                    page.reportLayout()
+                    op.witness("carried", AppBackend.startRightDraggedWidth())
+                })
+                return
+            }
+            if (op.at("released")) {
+                if (!Awaited.all("fold_drag_released", { "laid": op.still("released_laid", acts.layoutKey()) }))
+                    return
+                op.input("narrowed", () => {
+                    op.witness("kept", r.rightW)
+                    window.width = op.witness("narrow", Math.ceil(window.floorWidth))
+                })
+                return
+            }
+            if (op.at("narrowed")) {
+                if (!Awaited.all("fold_drag_narrowed", {
+                        "narrow": window.width === op.witnessed("narrow"),
+                        "laid": op.still("narrowed_laid", acts.layoutKey()) }))
+                    return
+                op.input("closed", () => {
+                    op.witness("narrowedRight", r.rightW)
+                    op.witness("narrowedCentre", page.pageDiff.width)
+                    op.witness("crowded", layout.listCrowded)
+                    page.reportLayout()
+                    op.witness("roomCarried", AppBackend.startRightDraggedWidth())
+                    page.closeDiff()
+                })
+                return
+            }
+            if (!Awaited.all("fold_drag_closed", {
+                    "closed": !page.diffShown,
+                    "open": !page.pageSidebar.collapsed,
+                    "laid": op.still("closed_laid", acts.layoutKey()) }))
+                return
+            op.complete({ "name": "fold_drag",
+                          "when": () => ({ "closed": !window.curPage.diffShown }),
+                          "report": () => acts.dragLine() })
+        }
+    }
+    /// The bar on the right pane's left edge, among the panes' split's: the split parents its bars to itself and its
+    /// items to its content item, so the bar stands beside the pane's parent or under it.
+    function rightBar() {
+        const pane = window.curPage.pageLayout.rightPane
+        for (const seat of [pane.parent, pane.parent.parent]) {
+            for (const bar of seat.children) {
+                if (bar.sideways === true && bar.visible && Math.abs(bar.mapToItem(pane, bar.width, 0).x) < 1)
+                    return bar
+            }
+        }
+        return null
+    }
+    /// `fold-drag`, read once the diff closed.
+    function dragLine() {
+        const op = foldDragTimer
+        const layout = window.curPage.pageLayout
+        const reader = op.witnessed("reader")
+        const held = op.witnessed("held")
+        const dragged = op.witnessed("dragged")
+        return "window_fill drag=true"
+            + " squeezed=" + (held < reader - 1)
+            + " clickKept=" + (Math.abs(op.witnessed("clickReader") - reader) < 1)
+            + " widened=" + (dragged > held + 1)
+            + " kept=" + (Math.abs(op.witnessed("kept") - dragged) < 1)
+            + " floored=" + (op.witnessed("narrowedCentre") >= layout.centreMinWidth - 1)
+            + " gave=" + (op.witnessed("narrowedRight") < dragged - 1)
+            + " carried=" + (op.witnessed("carried") > 0)
+            + " roomCarried=" + (op.witnessed("crowded") && Math.abs(op.witnessed("roomCarried") - dragged) < 1)
+            + " dropped=" + (layout.rightDraggedWidth === 0)
+            + " reader=" + reader + " held=" + held + " dragged=" + dragged
+            + " narrowedRight=" + op.witnessed("narrowedRight") + " narrowedCentre=" + op.witnessed("narrowedCentre")
+            + " centreFloor=" + layout.centreMinWidth + " window=" + window.width + "x" + window.height
+    }
+
     /// What has to stand across a polish pass before a form reads its split.
     function layoutKey() {
         return JSON.stringify(Harness.autoActArg === "log" ? acts.splitReading() : acts.widthReading())
@@ -211,6 +418,9 @@ Item {
     /// `under=`: the window narrower than its own floor. `inside=`: the right pane ends inside the page and the page
     /// inside the window — past its floor the split lays its items out past its own right edge. `folded=` is the list
     /// on its rail, `kept=` the reader's own fold untouched by it, `held=` the reader's unfold holding it open.
+    /// `rightMin=`: the right pane at its minimum in the split, its floor (`PageLayout.rightFloorWidth`) — it gives way
+    /// before the list folds, and the room a fold frees goes to the middle, not back to it. `headed=`: there, the
+    /// heading still reads its first word (`WipPane.headingReads`, the floor the heading answers).
     function widthLine() {
         const page = window.curPage
         const layout = page.pageLayout
@@ -222,9 +432,12 @@ Item {
             + " folded=" + side.collapsed
             + " kept=" + !page.sidebarCollapsed
             + " held=" + (page.listHeldOpen === true)
+            + " rightMin=" + (Math.abs(r.rightW - layout.rightFloorWidth) < 1)
+            + " headed=" + page.pageWip.headingReads
             + " floorW=" + Math.ceil(window.floorWidth)
             + " sideW=" + r.sideW + " centreW=" + r.centreW + " centreFloor=" + layout.centreMinWidth
-            + " rightW=" + r.rightW + " rightEnd=" + r.rightEnd + " pageEnd=" + r.pageEnd
+            + " rightW=" + r.rightW + " rightMinW=" + layout.rightFloorWidth
+            + " rightEnd=" + r.rightEnd + " pageEnd=" + r.pageEnd
     }
     /// `narrow-back`, read once the window is back: `folded=` is the list as it stood maximised, `open=` it back on
     /// screen, `width=` at the width it had before the window went narrow, `kept=` the reader's fold untouched.
@@ -232,12 +445,16 @@ Item {
         const page = window.curPage
         const side = page.pageSidebar
         const before = fillActTimer.witnessed("readerWidth")
+        const readerRight = fillActTimer.witnessed("readerRight")
         return "window_fill back=" + (window.visibility === Window.Windowed)
             + " folded=" + fillActTimer.witnessed("narrowFolded")
             + " open=" + !side.collapsed
             + " width=" + (Math.abs(side.width - before) < 1)
             + " kept=" + !page.sidebarCollapsed
-            + " sideW=" + side.width + " before=" + before
+            + " rightSqueezed=" + (fillActTimer.witnessed("rightSqueezed") < readerRight - 1)
+            + " rightBack=" + (Math.abs(acts.widthReading().rightW - readerRight) < 1)
+            + " rightSaved=" + (Math.abs(fillActTimer.witnessed("rightSaved") - readerRight) < 1)
+            + " sideW=" + side.width + " before=" + before + " rightBefore=" + readerRight
             + " window=" + window.width + "x" + window.height
     }
 

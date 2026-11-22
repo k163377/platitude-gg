@@ -7,9 +7,9 @@
 用ドライバから、実 hover と同じ表示経路へ状態を渡す。**絵は次の 3 つの道で出す**。上から順に検討する:
 
 1. **既にその状態の動詞がある** — [verbs.md](verbs.md) の一覧を見た目の種類から逆引きする。ツールチップ(`TipAsk` →
-   `TipSeat`): `signature-tip` / `stash-tip` / `path-tip` / `tab-name` / `fetch-hover <失敗数>`(いずれも overlay.png
-   側。**意匠は `TipSeat` の箱 1 つ**なので、どれか 1 枚で全ツールチップの見た目が言える)。hover カード: `row-card` /
-   `ref-list-card` / `author-card-open` / `co-authors-open` / `badges-hover` / `eol-hover` / `eol-commit` /
+   `TipSeat`): `signature-tip` / `stash-tip` / `path-tip` / `date-tip` / `tab-name` / `fetch-hover <失敗数>`(いずれも
+   overlay.png 側。**意匠は `TipSeat` の箱 1 つ**なので、どれか 1 枚で全ツールチップの見た目が言える)。hover カード:
+   `row-card` / `ref-list-card` / `author-card-open` / `co-authors-open` / `badges-hover` / `eol-hover` / `eol-commit` /
    `avatar-hover`。ポインタの下で色・印・道具が変わる形: `tab-mark` / `card-note-lit` / `line-tools` / `hunk-tools` /
    `stage-many` / `graph-divider` / `graph-bar` / `nav-peek` 系 / `avatar-row-lit`。
 2. **配線済みだが動詞が無い** — 動詞を 1 つ足すのが正道で、**安い**: xtask は `_PGG_AUTO_ACT` へ素通しするので、実装は
