@@ -37,8 +37,8 @@ const PASSES: usize = 16;
 pub(super) fn judge(program: &mut Program) -> Vec<Finding> {
     let mut found: BTreeSet<(usize, usize, &'static str)> = BTreeSet::new();
     let mut what: HashMap<(usize, usize, &'static str), String> = HashMap::new();
-    for d in 0..program.harness {
-        for line in &program.docs[d].unread {
+    for (d, doc) in program.docs.iter().enumerate().take(program.harness) {
+        for line in &doc.unread {
             found.insert((d, *line, "unread"));
         }
     }
