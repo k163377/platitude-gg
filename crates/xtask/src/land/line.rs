@@ -54,7 +54,8 @@ const READ_BEFORE_PREPARING: [&str; 2] = [".claude/", "internal-docs/"];
 /// since the epoch: two `/land`s in one second keep their order.
 #[derive(Debug, PartialEq, Clone)]
 struct Entry {
-    /// When the user typed `/land`.
+    /// When the user typed the `/land` that took this place — a `/land`
+    /// saying more for the same landing keeps it (`enter`).
     queued_at: u64,
     /// Where the session sat when it typed it.
     cwd: String,
@@ -86,17 +87,31 @@ impl Entry {
 /// where the session sat, `at` the message's time in milliseconds. The
 /// conversation's entries under earlier session ids go: this message is
 /// theirs too.
-pub(crate) fn enter(permit: &Path, cwd: &str, host: Option<&str>, at: u64) {
+///
+/// `more` is a `/land` from a session that stood in the line as it spoke
+/// ([`stands_in`], read before the permit was written over): the landing
+/// asked for is not over, and this says more for it — the entry keeps its
+/// place, and the head stays the head. Every other `/land` goes to the end:
+/// after a landing moved main, after any other message, from a seat that
+/// left the line or from where the line had no place for it.
+pub(crate) fn enter(permit: &Path, cwd: &str, host: Option<&str>, at: u64, more: bool) {
     let Some((permits, _held)) = locked_beside(permit) else {
         return;
     };
+    let path = beside(permit);
+    let standing = more
+        .then(|| load(&path))
+        .flatten()
+        .filter(|entry| entry.left.is_empty());
+    let (queued_at, head_since) =
+        standing.map_or((at, 0), |entry| (entry.queued_at, entry.head_since));
     store(
-        &beside(permit),
+        &path,
         &Entry {
-            queued_at: at,
+            queued_at,
             cwd: cwd.replace('\\', "/"),
             host: host.unwrap_or_default().to_string(),
-            head_since: 0,
+            head_since,
             left: String::new(),
             left_at: 0,
         },
@@ -169,6 +184,15 @@ pub(crate) fn leave(dir: &str, session: &str, why: &str) -> bool {
     entry.left_at = now();
     store(&path, &entry);
     true
+}
+
+/// Whether `session` has a place in the line now, as the line reads it:
+/// its permit open, its entry not left, typed in a seat whose claim is not
+/// another conversation's. Read by the prompt hook for a `/land` only — the
+/// reading asks git.
+pub(crate) fn stands_in(dir: &str, session: &str) -> bool {
+    let me = Identity::current(Some(session));
+    read(dir).is_ok_and(|line| line.place_of(&me).is_some())
 }
 
 /// Whether the entry beside `permit` is written and has not left — off
@@ -976,7 +1000,7 @@ mod tests {
             .join(format!("{session}.land"));
         std::fs::create_dir_all(permit.parent().expect("dir")).expect("permits dir");
         std::fs::write(&permit, format!("{standing}\t{}\t/land\n", at / 1000)).expect("permit");
-        super::enter(&permit, cwd, host, at);
+        super::enter(&permit, cwd, host, at, false);
     }
 
     /// A throwaway repository on main with one commit, and its path as
@@ -1050,6 +1074,38 @@ mod tests {
                 .contains("left the line")
         );
         assert_eq!(super::read(&repo).expect("line").places.len(), 2);
+    }
+
+    #[test]
+    fn more_for_a_landing_keeps_a_standing_place_and_a_place_left_goes_to_the_end() {
+        let (_yard, repo) = repository("line-more");
+        let seat_b = seat(&repo, "b", "claude-seat s1");
+        let seat_c = seat(&repo, "c", "claude-seat s2");
+        asked(&repo, "s1", "open", &seat_b, None, 100_000);
+        asked(&repo, "s2", "open", &seat_c, None, 200_000);
+        let permit = Path::new(&repo).join(".permits").join("s1.land");
+        let head_since = |repo: &str| super::read(repo).expect("line").places[0].entry.head_since;
+        let dated = head_since(&repo);
+        super::enter(&permit, &seat_b, None, 300_000, true);
+        assert_eq!(
+            super::load(&super::beside(&permit))
+                .expect("entry")
+                .head_since,
+            dated,
+            "the head keeps its date"
+        );
+        let order = |repo: &str| {
+            super::read(repo)
+                .expect("line")
+                .places
+                .iter()
+                .map(|place| place.session.clone())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(order(&repo), ["s1", "s2"], "more said keeps the head");
+        assert!(super::leave(&repo, "s1", "gate failed: qmltest"));
+        super::enter(&permit, &seat_b, None, 400_000, true);
+        assert_eq!(order(&repo), ["s2", "s1"], "a place left goes to the end");
     }
 
     #[test]

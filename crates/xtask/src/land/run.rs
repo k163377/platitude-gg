@@ -47,10 +47,11 @@ fn named(args: &[String]) -> Result<(std::path::PathBuf, Option<String>), String
 /// stopped, a red gate, runs awaiting approval, a closed permit, a refused
 /// fast-forward — leaves the line of landings: what stopped it is the
 /// user's to settle, and their next `/land` puts the seat back at the end
-/// (`line::leave`). A refusal ahead of the turn — a dirty seat, a gate
-/// running in it, a branch checked out nowhere — is the session's to put
-/// right and land again;
-/// a branch with nothing to land ends its place too (`preflight`).
+/// (`line::leave`) — unless the user's latest `/land` came after this
+/// landing began: the place is that `/land`'s. A refusal ahead of the turn
+/// — a dirty seat, a gate running in it, a branch checked out nowhere — is
+/// the session's to put right and land again; a branch with nothing to land
+/// ends its place too (`preflight`).
 fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
     let (root, branch) = named(args)?;
     phases.target(&root, "");
@@ -60,9 +61,13 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
         return Ok(());
     };
     through(&root, &here, &ready, &me, phases).map_err(|why| {
-        // A place behind another head is the user's latest `/land`'s, not the
+        // A place the user's latest `/land` holds — behind another head, or
+        // asked after this landing began — is that `/land`'s, not the
         // stopped landing's to give up.
-        if !line::stands_behind(&here, &me) && line::leave(&here, &me.session, &why) {
+        if !line::stands_behind(&here, &me)
+            && said_since(&here, &me, ready.began.as_ref()).is_none()
+            && line::leave(&here, &me.session, &why)
+        {
             format!(
                 "{why}\n— this seat left the line of landings; the user's next {} puts it back \
                  at the end.",
@@ -75,22 +80,24 @@ fn land(args: &[String], phases: &mut Phases) -> Result<(), String> {
 }
 
 /// A landing that has taken its turn: the branch, the trees as listed
-/// (the primary first), which of them has the branch out, and the turn
-/// itself — held until the landing is over.
+/// (the primary first), which of them has the branch out, the user's
+/// message it runs on, and the turn itself — held until the landing is
+/// over.
 struct Ready {
     branch: String,
     listing: String,
     trees: Vec<WorktreeBlock>,
     seat_at: usize,
     ahead: u32,
+    began: Option<crate::hook::permit::Asked>,
     _turn: crate::budget::Admitted,
 }
 
 /// Everything ahead of the turn. A refusal here — a dirty seat, a gate
 /// running in it, a branch checked out nowhere, a seat behind the head —
-/// is the session's to put
-/// right and land again. None is a branch with nothing to land: its place
-/// in the line ends there, with the permit unspent.
+/// is the session's to put right and land again. None is a branch with
+/// nothing to land: its place in the line ends there, with the permit
+/// unspent.
 fn preflight(
     root: &std::path::Path,
     here: &str,
@@ -149,6 +156,9 @@ fn preflight(
     let seat_dir = std::path::Path::new(&trees[seat_at].path);
     phases.target(seat_dir, &branch);
     crate::hook::codex_land::sync(here)?;
+    // The message this landing runs on; one after it says more for it
+    // (`still_the_ask`).
+    let began = crate::hook::permit::asked(here, &me.session);
     // A landing that waits moves nothing.
     approval::awaited(here, &listing, &branch)?;
     // The line of landings: only its head lands (`line`).
@@ -172,6 +182,7 @@ fn preflight(
         trees,
         seat_at,
         ahead,
+        began,
         _turn: turn,
     }))
 }
@@ -191,11 +202,12 @@ fn through(
         trees,
         seat_at,
         ahead,
+        began,
         ..
     } = ready;
     let (seat, primary) = (&trees[*seat_at], &trees[0]);
     let seat_dir = std::path::Path::new(&seat.path);
-    permit_still_open(here, me)?;
+    still_the_ask(here, me, began.as_ref())?;
     prepare_gate(root, &seat.path)?;
     phases.mark("prepare");
     // What the branch held before any rebase: a copy taken from it before
@@ -212,8 +224,9 @@ fn through(
     // the background): once main moves, the board is cleared of it unseen.
     approval::awaited(here, listing, branch)?;
     // And the permit: a landing in the background outlives the user's next
-    // message, which closes it — nothing moves on a closed permit.
-    permit_still_open(here, me)?;
+    // message — nothing moves on a closed permit, nor on one a later
+    // `/land` said more on.
+    still_the_ask(here, me, began.as_ref())?;
     // And the place: a landing in the background outlives it. A message
     // and a `/land` after it put the seat at the end behind a head already
     // preparing, and a landing that went red and left the line may be run
@@ -229,8 +242,16 @@ fn through(
     phases.mark("fast-forward (verdict included)");
     let after = git_query(here, &["rev-parse", "--short", "main"]).unwrap_or_default();
     // The permit is spent only here: a landing that stopped before this
-    // line moved nothing.
-    crate::hook::permit::landed(here, &me.session);
+    // line moved nothing. Only the one this landing began on — a `/land`
+    // after its last look keeps its own.
+    crate::hook::permit::landed(here, &me.session, began.as_ref());
+    if let Some(more) = said_since(here, me, began.as_ref()) {
+        println!(
+            "the user said more after this landing's last look: {} — main moved without it; its \
+             permit stays open and the seat in the line, for the landing that takes it in.",
+            more.said()
+        );
+    }
     // Again, now that main moved: git runs a copy of the hook script, and
     // a landing that changed the script would leave the old copy answering.
     println!("{}", crate::gate::hooks::install(root)?);
@@ -254,9 +275,18 @@ fn through(
 }
 
 /// The permit read again: a landing that runs in the background outlives
-/// the user's next message, and that message closes the permit. A session
-/// with no permit on record — a hand run — is not asked.
-fn permit_still_open(here: &str, me: &Identity) -> Result<(), String> {
+/// the user's next message. One that is not `/land` closes the permit. A
+/// `/land` after the one this landing `began` on says more — the landing
+/// stops short of main, so that the session takes it in and lands again,
+/// and the seat stays in the line where that `/land` put it: at its place
+/// when the seat stood there as it was said, at the end after any other
+/// message (`line::enter`). A session with no permit on record — a hand
+/// run — is not asked.
+fn still_the_ask(
+    here: &str,
+    me: &Identity,
+    began: Option<&crate::hook::permit::Asked>,
+) -> Result<(), String> {
     if std::env::var("CODEX_THREAD_ID").ok().as_deref() == Some(&me.session) {
         crate::hook::codex_land::sync(here)?;
     }
@@ -266,16 +296,35 @@ fn permit_still_open(here: &str, me: &Identity) -> Result<(), String> {
     let Some(asked) = crate::hook::permit::asked(here, &me.session) else {
         return Ok(());
     };
-    if crate::hook::permit::is_open(here, &me.session) {
-        return Ok(());
+    if !crate::hook::permit::is_open(here, &me.session) {
+        return Err(format!(
+            "the permit is no longer open, so this landing moves nothing: the user's latest \
+             message is {}, and main moves once on their own {} — their next {} lands the branch",
+            asked.said(),
+            crate::hook::permit::COMMAND,
+            crate::hook::permit::COMMAND
+        ));
     }
-    Err(format!(
-        "the permit is no longer open, so this landing moves nothing: the user's latest message \
-         is {}, and main moves once on their own {} — their next {} lands the branch",
-        asked.said(),
-        crate::hook::permit::COMMAND,
-        crate::hook::permit::COMMAND
-    ))
+    if let Some(more) = said_since(here, me, began) {
+        return Err(format!(
+            "the user said more since this landing began: {} — nothing moved, and the seat stays \
+             in the line where that /land put it. Take that in, and land again.",
+            more.said()
+        ));
+    }
+    Ok(())
+}
+
+/// The user's `/land` after the one this landing `began` on, while the
+/// permit stands open: more for the same landing.
+fn said_since(
+    here: &str,
+    me: &Identity,
+    began: Option<&crate::hook::permit::Asked>,
+) -> Option<crate::hook::permit::Asked> {
+    let began = began?;
+    let asked = crate::hook::permit::asked(here, &me.session)?;
+    (crate::hook::permit::is_open(here, &me.session) && !began.is(&asked)).then_some(asked)
 }
 
 /// What would land is what stands committed, so the seat must be clean:
@@ -647,11 +696,11 @@ fn reattach(primary: &WorktreeBlock) {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_slot_tree, clock, landed_claim, permit_still_open};
+    use super::{build_slot_tree, clock, landed_claim, still_the_ask};
     use crate::seats::{Identity, worktree_blocks};
 
     #[test]
-    fn the_permit_is_read_again_and_only_an_open_one_lets_the_landing_on() {
+    fn the_permit_is_read_again_and_only_the_open_one_it_began_on_lets_the_landing_on() {
         let yard = crate::yard::Yard::new("land-permit");
         let repo = crate::seats::slashed(&yard);
         assert!(crate::subprocess::git_query(&repo, &["init", "-q", "-b", "main"]).is_some());
@@ -660,25 +709,41 @@ mod tests {
             pid: None,
             host: None,
         };
-        assert!(permit_still_open(&repo, &me("")).is_ok(), "a hand run");
+        assert!(still_the_ask(&repo, &me(""), None).is_ok(), "a hand run");
         assert!(
-            permit_still_open(&repo, &me("s")).is_ok(),
+            still_the_ask(&repo, &me("s"), None).is_ok(),
             "no permit on record"
         );
         let permits = yard.join(".permits");
         std::fs::create_dir_all(&permits).expect("permits");
         std::fs::write(permits.join("s.land"), "open\t1\t/land\n").expect("permit");
-        assert!(permit_still_open(&repo, &me("s")).is_ok());
+        let began = crate::hook::permit::asked(&repo, "s");
+        assert!(still_the_ask(&repo, &me("s"), began.as_ref()).is_ok());
         for standing in ["closed\t2\t見た", "spent\t1\t/land", "waiting\t1\t/land"] {
             std::fs::write(permits.join("s.land"), format!("{standing}\n")).expect("permit");
-            let refused = permit_still_open(&repo, &me("s")).expect_err(standing);
+            let refused = still_the_ask(&repo, &me("s"), began.as_ref()).expect_err(standing);
             assert!(refused.contains("no longer open"), "{refused}");
         }
         assert!(
-            permit_still_open(&repo, &me("s"))
+            still_the_ask(&repo, &me("s"), began.as_ref())
                 .expect_err("waiting")
                 .contains("「/land」")
         );
+        std::fs::write(permits.join("s.land"), "open\t2\t/land push\n").expect("permit");
+        let more = still_the_ask(&repo, &me("s"), began.as_ref()).expect_err("said more");
+        assert!(
+            more.contains("said more") && more.contains("「/land push」"),
+            "{more}"
+        );
+        // A landing past its last look spends only the message it began on.
+        crate::hook::permit::landed(&repo, "s", began.as_ref());
+        assert!(
+            crate::hook::permit::is_open(&repo, "s"),
+            "the later /land's"
+        );
+        let later = crate::hook::permit::asked(&repo, "s");
+        crate::hook::permit::landed(&repo, "s", later.as_ref());
+        assert!(!crate::hook::permit::is_open(&repo, "s"));
     }
 
     /// A tree root spelled the way the running system spells one.

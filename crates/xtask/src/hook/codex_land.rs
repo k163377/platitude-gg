@@ -87,11 +87,14 @@ fn observe(cwd: &str, session: &str, turn: &str, prompt: &str, at: u64) -> Resul
         seen.push_str(prior);
     }
     let seat = owned_seat(cwd, session)?;
+    // Read off the permit the message comes on, before the reservation
+    // closes it.
+    let more = permit::more_for_a_landing(&seat, session, words);
     // Reserve the receipt before publishing authority: a failed write
     // cannot allow the same message to restore a consumed permit.
-    permit::record_prompt_at(&seat, session, "", at)?;
+    permit::reserve_at(&seat, session, at)?;
     permit::write_whole(&receipt, &format!("{at}\n{key}{seen}")).map_err(|e| e.to_string())?;
-    permit::record_prompt_at(&seat, session, words, at)?;
+    permit::record_prompt_with(&seat, session, words, at, more)?;
     Ok(())
 }
 

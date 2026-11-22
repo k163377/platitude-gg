@@ -79,7 +79,7 @@ mod tests {
         std::fs::create_dir_all(permit.parent().unwrap()).unwrap();
         // A landing that spent its permit, with its hold still on file.
         std::fs::write(&permit, "spent\t1\t/land\n").unwrap();
-        crate::land::line::enter(&permit, &root, None, 1_000);
+        crate::land::line::enter(&permit, &root, None, 1_000, false);
         let hold = super::super::permit::kept_file_in(&primary, "s", "hold").unwrap();
         std::fs::write(&hold, format!("{}\n", crate::subprocess::NO_SUCH_PID)).unwrap();
         let call = |agent: &str| {

@@ -176,11 +176,20 @@ mod tests {
         let entry = super::super::permit::kept_file(root, "codex-test", "line").unwrap();
         let line = std::fs::read_to_string(&entry).unwrap();
         assert!(line.contains(&seat.to_string_lossy().replace('\\', "/")));
-        super::super::permit::landed(root, "codex-test");
+        super::super::permit::landed(root, "codex-test", None);
         super::run(&input("first", "/land"));
         assert!(!super::super::permit::is_open(root, "codex-test"));
         super::run(&input("second", "/land"));
         assert!(super::super::permit::is_open(root, "codex-test"));
+        // More for the same landing: the place stays where it was taken.
+        let queued = |entry: &std::path::Path| {
+            let text = std::fs::read_to_string(entry).unwrap();
+            text.split('\t').next().unwrap().to_string()
+        };
+        let place = queued(&entry);
+        super::run(&input("second-more", "/land push"));
+        assert!(super::super::permit::is_open(root, "codex-test"));
+        assert_eq!(queued(&entry), place);
         super::run(&input("third", "continue"));
         assert!(!super::super::permit::is_open(root, "codex-test"));
         assert!(!entry.exists());
@@ -216,7 +225,7 @@ mod tests {
         assert!(!permit::is_open(root, "codex-test"));
         write("next", "/land", at + 1);
         sync_from(root, "codex-test", &sessions).unwrap();
-        permit::landed(root, "codex-test");
+        permit::landed(root, "codex-test", None);
         sync_from(root, "codex-test", &sessions).unwrap();
         assert!(!permit::is_open(root, "codex-test"));
         write("old", "/land", at - 1);

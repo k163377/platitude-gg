@@ -99,6 +99,27 @@ pub(super) fn record_prompt_at(
     prompt: &str,
     at: u64,
 ) -> Result<(), String> {
+    let more = more_for_a_landing(cwd, session, prompt);
+    record_prompt_with(cwd, session, prompt, at, more)
+}
+
+/// Whether `prompt` is a `/land` saying more for a landing already asked
+/// for: the session stands in the line of landings as it speaks
+/// (`line::stands_in`). Read before the message is written over the
+/// permit it stands on.
+pub(super) fn more_for_a_landing(cwd: &str, session: &str, prompt: &str) -> bool {
+    the_users_words(prompt).is_some_and(is_land) && crate::land::line::stands_in(cwd, session)
+}
+
+/// The same, with whether it says more for a landing read already
+/// ([`more_for_a_landing`]).
+pub(super) fn record_prompt_with(
+    cwd: &str,
+    session: &str,
+    prompt: &str,
+    at: u64,
+    more: bool,
+) -> Result<(), String> {
     let Some(words) = the_users_words(prompt) else {
         return Ok(());
     };
@@ -120,7 +141,7 @@ pub(super) fn record_prompt_at(
     // it, any other message gives the place up (`land::line`).
     let host = crate::seats::Identity::current(Some(session)).host;
     if invoked {
-        crate::land::line::enter(&path, cwd, host.as_deref(), at);
+        crate::land::line::enter(&path, cwd, host.as_deref(), at, more);
     } else {
         crate::land::line::clear(&path, host.as_deref());
     }
@@ -155,13 +176,33 @@ pub(super) fn landing_denied(input: &str, what: &str) -> bool {
 }
 
 /// Called by the land verb at the fast-forward: spends this session's
-/// open permit. `dir` is any directory of the repository. A permit that
-/// is not open is left as it is — a landing the user ran by hand answered
-/// nobody's message.
-pub(crate) fn landed(dir: &str, session: &str) {
+/// open permit — the one `on` opened, the message the landing began on,
+/// where it names one. A `/land` said after that message keeps its permit
+/// open: main moved without what it said. `dir` is any directory of the
+/// repository. A permit that is not open is left as it is — a landing the
+/// user ran by hand answered nobody's message.
+pub(crate) fn landed(dir: &str, session: &str, on: Option<&Asked>) {
+    if on.is_some_and(|on| asked(dir, session).is_some_and(|now| !on.is(&now))) {
+        return;
+    }
     if let Some(path) = permit_file(dir, session) {
         spend(&path);
     }
+}
+
+/// Closes this session's permit for the message at `at` without touching
+/// its place in the line — the Codex path's reservation before the
+/// message's words are recorded (`codex_land`).
+pub(super) fn reserve_at(cwd: &str, session: &str, at: u64) -> Result<(), String> {
+    let Some(path) = permit_file(cwd, session) else {
+        return Err("cannot locate landing permit".into());
+    };
+    let permit = Permit {
+        standing: Standing::Closed,
+        asked_at: at / 1000,
+        excerpt: String::new(),
+    };
+    try_store(&path, &permit).map_err(|e| e.to_string())
 }
 
 /// Whether this session's permit stands open now — read again by a
@@ -201,6 +242,12 @@ impl Asked {
     /// the user's next message answers that.
     pub(crate) fn waits(&self) -> bool {
         self.waiting
+    }
+
+    /// Whether `other` is this same message, read again — not one the
+    /// user sent after it.
+    pub(crate) fn is(&self, other: &Asked) -> bool {
+        self.at == other.at && self.excerpt == other.excerpt
     }
 }
 

@@ -309,7 +309,7 @@ mod tests {
         let permit = permit::kept_file_in(&primary, SESSION, "land").unwrap();
         std::fs::create_dir_all(permit.parent().unwrap()).unwrap();
         set(&permit, "open");
-        crate::land::line::enter(&permit, &root, None, 1_000);
+        crate::land::line::enter(&permit, &root, None, 1_000, false);
         (yard, root, permit, crate::subprocess::NO_SUCH_PID)
     }
 

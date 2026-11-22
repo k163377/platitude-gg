@@ -466,3 +466,141 @@ fn a_landing_that_stops_past_its_turn_leaves_the_line() {
     assert!(!ok && text.contains("left the line"), "{text}");
     assert_eq!(sb.main_sha(), before);
 }
+
+/// Another session's `/land` from seat b, behind this one's.
+fn other_lands(sb: &Sandbox, seat_b: &Path) {
+    hook(
+        sb,
+        "prompt-submit",
+        &format!(
+            "{{\"session_id\":\"other\",\"cwd\":\"{}\",\
+             \"hook_event_name\":\"UserPromptSubmit\",\"prompt\":\"/land\"}}",
+            forward(seat_b)
+        ),
+    );
+}
+
+/// A `/land` while the seat stands in the line is more for the same
+/// landing: the seat keeps its place. Any other message gives the place
+/// up, and the `/land` after it goes to the end.
+#[test]
+fn a_land_while_the_seat_stands_in_the_line_keeps_its_place() {
+    let sb = Sandbox::new("permit-more");
+    sb.write_refs(&sb.seat, 35);
+    sb.commit_all(&sb.seat, "feat(core): thirty-five", &[]);
+    assert!(says(&sb, "/land").contains("Before landing"));
+    let seat_b = sb.roster_tree("b", "worktree-b");
+    sb.write_refs(&seat_b, 36);
+    sb.commit_all(&seat_b, "feat(core): thirty-six", &[]);
+    other_lands(&sb, &seat_b);
+
+    assert!(says(&sb, "/land 同名だが別概念の物を消さないこと").contains("Before landing"));
+    let (ok, text) = sb.land_as("worktree-b", "other");
+    assert!(!ok && text.contains("next in the line"), "{text}");
+
+    assert_eq!(says(&sb, "見た"), "");
+    says(&sb, "/land");
+    let (ok, text) = sb.land_as("worktree-b", "other");
+    assert!(ok && text.contains("landed worktree-b"), "{text}");
+}
+
+/// A process that holds the landings' turn until it is let go
+/// (`budget hold --turn`), killed with the test.
+struct Turn {
+    child: std::process::Child,
+    release: std::path::PathBuf,
+}
+
+impl Turn {
+    fn taken(sb: &Sandbox) -> Self {
+        let (said, release) = (sb.root.join("turn-said"), sb.root.join("turn-go"));
+        let mut command = Command::new(EXE);
+        command
+            .args([
+                "budget", "hold", "--turn", "--what", "holder", "--seat", "holder",
+            ])
+            .arg("--dir")
+            .arg(&sb.repo)
+            .arg("--say")
+            .arg(&said)
+            .arg("--until")
+            .arg(&release)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        sb.env(&mut command);
+        let turn = Self {
+            child: command.spawn().expect("spawn the turn's holder"),
+            release,
+        };
+        crate::wait::until("the turn taken", || said.exists(), |taken| *taken);
+        turn
+    }
+
+    fn let_go(mut self) {
+        std::fs::write(&self.release, b"go\n").expect("the word to let go");
+        assert!(self.child.wait().expect("the holder").success());
+    }
+}
+
+impl Drop for Turn {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// The user says more while the landing runs in the background, as a
+/// `/land` with more to it: the landing stops short of main, the seat keeps
+/// its place, and the next landing takes it in.
+#[test]
+fn a_landing_stops_short_of_main_on_a_land_said_after_it_began() {
+    let sb = Sandbox::new("permit-said-more");
+    sb.write_refs(&sb.seat, 37);
+    sb.commit_all(&sb.seat, "feat(core): thirty-seven", &[]);
+    let before = sb.main_sha();
+    assert!(says(&sb, "/land").contains("Before landing"));
+    let turn = Turn::taken(&sb);
+    let mut command = Command::new(EXE);
+    command
+        .args(["land", "worktree-a", "--dir"])
+        .arg(&sb.repo)
+        .current_dir(&sb.repo)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    sb.env(&mut command);
+    command
+        .env("CLAUDE_CODE_SESSION_ID", SESSION)
+        .env_remove("CLAUDE_PID");
+    let landing = command.spawn().expect("spawn the landing");
+    crate::wait::until(
+        "the landing waiting for its turn",
+        || {
+            let mut budget = Command::new(EXE);
+            budget.args(["budget", "--dir"]).arg(&sb.repo);
+            sb.env(&mut budget);
+            String::from_utf8_lossy(&budget.output().expect("the budget").stdout).into_owned()
+        },
+        |standing| standing.contains("— land worktree-a"),
+    );
+
+    assert!(says(&sb, "/land 同名だが別概念の物を消さないこと").contains("Before landing"));
+    turn.let_go();
+    let output = landing.wait_with_output().expect("the landing");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{text}");
+    assert!(
+        text.contains("said more since this landing began"),
+        "{text}"
+    );
+    assert!(text.contains("同名だが別概念"), "{text}");
+    assert!(!text.contains("left the line"), "{text}");
+    assert_eq!(sb.main_sha(), before, "{text}");
+
+    let (ok, text) = sb.land_as("worktree-a", SESSION);
+    assert!(ok && text.contains("landed worktree-a"), "{text}");
+}
