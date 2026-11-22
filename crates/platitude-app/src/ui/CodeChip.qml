@@ -46,8 +46,8 @@ Item {
     property bool buttonWord: false
 
     /// Where a word that will not fit gives way: `middle` — the tail tells two branch names apart — or `end`: a
-    /// remote's name, whose head is the remote (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」), or a line cut at
-    /// the end (`CodeLine`).
+    /// remote's name, whose head is the remote (デザイン規約 §寸法「upstream 名(remote-tracking 名)だけは末尾で切る」), a line cut at
+    /// the end (`CodeLine`), or a phrase's command (`ActionButtonLabel`'s head chip), whose head is the git verb.
     property string cutAt: "middle"
     /// Whether the word gave way (`cap`, `cutToWidth`): the hover gives it back.
     readonly property bool cut: wordLabel.width + 0.5 < wordLabel.implicitWidth

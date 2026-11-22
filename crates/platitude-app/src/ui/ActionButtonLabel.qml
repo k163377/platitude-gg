@@ -171,47 +171,89 @@ Item {
         sourceComponent: Row {
             id: phraseRow
 
-            readonly property bool signatureTipShown: phraseAvatar.signatureTipShown
+            readonly property bool signatureTipShown: phraseAvatar.visible ? phraseAvatar.signatureTipShown
+                                                                           : shoulderMark.tipShown
             // What gives when the phrase is short of room, in this order (user decision — ask before changing): `+N`,
-            // then the app's words, then the ref. `+N` first: the one part whose loss leaves where the commit lands
-            // unchanged. The count stands apart on the fixed side — the phrase's one number, almost free to keep — as
-            // do the command's chip, `by`, the face and the signature mark (each its own fixed length) and the note
-            // (`%n already pushed`: a count and set words, nothing to grow). The ref is cut in the middle, since branch
-            // names differ at the tail (`feature/…-a` / `feature/…-b`). A remote-tracking name is to be cut at the end,
-            // keeping its remote — no phrase shows one today, and the phrase's chips keep `CodeChip.cutAt`'s default
-            // (`middle`), so a phrase that adds one sets it. Nothing is cut before the phrase has taken the frame's
-            // whole width.
+            // then the app's words, then the ref past half the phrase (`tailShare`), then the command's chip, then
+            // `by <face>` (its `+N` with it, its signature mark staying), and the ref last — which branch the commit
+            // lands on is the thing to get wrong here, so it keeps a name longest, but a long one takes no more than
+            // half the phrase while the command and who commits can stand beside it. Every phrase gives in this order,
+            // the commit button's and the stopped operations' ways out alike. Each part gives only once every part
+            // before it is down to its least (`given`). `+N` first: the one part whose loss leaves where the commit
+            // lands unchanged. The count never gives — the phrase's one number, almost free to keep — nor do the hold
+            // mark, the `!` and the note (`%n already pushed`: a count and set words, nothing to grow). The command's
+            // chip is cut at its end, as words are; the ref in the middle, since branch names differ at the tail
+            // (`feature/…-a` / `feature/…-b`), down to a floor (`Theme.buttonMinWidth`): elided past it a branch name
+            // says nothing. A remote-tracking name is to be cut at the end, keeping its remote — no phrase shows one
+            // today, and the ref's chip keeps `CodeChip.cutAt`'s default (`middle`), so a phrase that adds one sets it.
+            // Nothing is cut before the phrase has taken the frame's whole width.
             /// The parts that never give, each with its following gap — per part, since a `Row` charges a gap only for
             /// a visible child.
             readonly property real phraseFixed:
                 (btnLabel.phraseHoldPresses > 0 ? phraseHoldSeat.width + phraseRow.spacing : 0)
                 + (phraseAlert.visible ? phraseAlert.width + phraseRow.spacing : 0)
-                + headChip.implicitWidth + phraseRow.spacing
                 + (countWord.visible ? countWord.implicitWidth + phraseRow.spacing : 0)
                 + (noteWord.visible ? noteWord.implicitWidth + phraseRow.spacing : 0)
-                + (btnLabel.phraseFace >= 0 ? byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing : 0)
-            readonly property real phraseFree: Math.max(0, btnLabel.phraseRoom - phraseRow.phraseFixed)
-            /// The ref gets what the weaker two do not need, down to a floor: elided past it a branch name says
-            /// nothing.
-            readonly property real tailCap:
-                btnLabel.phraseRoom <= 0 ? 0 : Math.max(Theme.buttonMinWidth,
-                                                        phraseRow.phraseFree - phraseRow.midCap - phraseRow.mateRoom)
-            /// The floor for anything that gives: a cut leaves a `…` behind (user decision — ask before changing). A
-            /// part gone in silence reaches the reader as a sentence that never said it; words and `+N` alike keep one
-            /// mark's width (`by <face> …` says there are more names).
+            /// The floor of `+N`, the words and `by <face>`: a cut leaves a `…` behind (user decision — ask before
+            /// changing). A part gone in silence reaches the reader as a sentence that never said it; each keeps one
+            /// mark's width, and `by <face>` and `+N` gone together share one (`by <face> …` says there are more
+            /// names).
             readonly property real cutMark: cutRuler.advanceWidth
+            readonly property bool faced: btnLabel.phraseFace >= 0
+            /// What the signature mark takes on the shoulder of the mark `by <face>` leaves (`shoulderSeat`): half a
+            /// gap past it and the tick's ink.
+            readonly property real shoulderRoom: btnLabel.phraseSignature === "" ? 0
+                : Theme.spaceXs / 2 + Math.ceil(shoulderMark.implicitWidth - shoulderMark.inkAirLeft
+                                                - shoulderMark.inkAirRight)
+            /// The ref's share of the phrase, which it gives up last: half the phrase, and never under the ref's floor.
+            readonly property real tailShare: Math.max(Theme.buttonMinWidth, Math.floor(btnLabel.phraseRoom / 2))
+            /// The parts that give, in the order they give: each whole and at its least, the gaps it brings into the
+            /// row included. The ref stands twice: what it holds past its share (third), and its share (last); its chip
+            /// is handed both.
+            readonly property var giving: [
+                btnLabel.phraseMates <= 0 ? { "whole": 0, "least": 0 }
+                : { "whole": mateFull.implicitWidth + phraseRow.spacing,
+                    "least": Math.min(mateFull.implicitWidth, phraseRow.cutMark) + phraseRow.spacing },
+                btnLabel.text === "" ? { "whole": 0, "least": 0 }
+                : { "whole": midWords.implicitWidth + phraseRow.spacing,
+                    "least": Math.min(midWords.implicitWidth, phraseRow.cutMark) + phraseRow.spacing },
+                { "whole": Math.max(0, tailWord.wantWidth - phraseRow.tailShare), "least": 0 },
+                { "whole": headChip.wantWidth + phraseRow.spacing,
+                  "least": Math.min(headChip.wantWidth, Math.ceil(headLeast.advanceWidth) + 1) + phraseRow.spacing },
+                // Given way, it leaves the one mark `+N`'s least already holds where there are names to count.
+                !phraseRow.faced ? { "whole": 0, "least": 0 }
+                : { "whole": byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing,
+                    "least": (btnLabel.phraseMates > 0 ? 0 : phraseRow.cutMark + phraseRow.spacing)
+                             + phraseRow.shoulderRoom },
+                { "whole": Math.min(tailWord.wantWidth, phraseRow.tailShare),
+                  "least": Math.min(tailWord.wantWidth, Theme.buttonMinWidth) }
+            ]
+            /// What each giving part is handed, gap included: the room past the parts before it at their least and the
+            /// parts after it whole, between its own least and its whole. Every part whole before the phrase has a
+            /// width.
+            readonly property var given: {
+                const parts = phraseRow.giving
+                const room = btnLabel.phraseRoom - phraseRow.phraseFixed
+                return parts.map((part, at) => {
+                    if (btnLabel.phraseRoom <= 0)
+                        return part.whole
+                    let others = 0
+                    for (let i = 0; i < parts.length; i++) {
+                        if (i !== at)
+                            others += i < at ? parts[i].least : parts[i].whole
+                    }
+                    return Math.max(part.least, Math.min(part.whole, room - others))
+                })
+            }
+            readonly property bool mateFits: phraseRow.given[0] >= phraseRow.giving[0].whole
             readonly property real midCap:
-                btnLabel.phraseRoom <= 0 || btnLabel.text === "" ? 0
-                : Math.max(phraseRow.cutMark, Math.min(midWords.implicitWidth,
-                                                      phraseRow.phraseFree - tailWord.wantWidth - phraseRow.mateRoom
-                                                      - phraseRow.spacing))
-            readonly property bool mateFits:
-                phraseRow.phraseFree - tailWord.wantWidth - midWords.implicitWidth
-                >= mateFull.implicitWidth + phraseRow.spacing
+                btnLabel.text === "" ? 0 : Math.max(phraseRow.cutMark, phraseRow.given[1] - phraseRow.spacing)
+            /// The command's chip whole, or cut down to what it is handed (0 = no cap).
+            readonly property real headCap: phraseRow.given[3] >= phraseRow.giving[3].whole
+                                            ? 0 : phraseRow.given[3] - phraseRow.spacing
+            readonly property bool faceFits: phraseRow.given[4] >= phraseRow.giving[4].whole
+            readonly property real tailCap: phraseRow.given[2] + phraseRow.given[5]
             readonly property string mateWord: qsTr("+%1").arg(btnLabel.phraseMates)
-            readonly property real mateRoom:
-                btnLabel.phraseMates <= 0 ? 0
-                : (phraseRow.mateFits ? mateFull.implicitWidth : phraseRow.cutMark) + phraseRow.spacing
 
             spacing: Theme.spaceXs
             // Rulers for the cut mark (`CutMark`, the face's own `…`) and the whole `+N`: both are read to work out who
@@ -228,6 +270,15 @@ Item {
                 text: phraseRow.mateWord
                 font.family: Theme.uiFamily
                 font.pixelSize: btnLabel.fontSize
+            }
+            // The command's chip at its least: its first letter and the mark, in the chip's own face. A pixel more
+            // where it is read (`giving`): an elide handed exactly the two glyphs' advance keeps the mark alone.
+            TextMetrics {
+                id: headLeast
+                font.family: Theme.monoFamily
+                font.wordSpacing: -Theme.spaceXs
+                font.pixelSize: btnLabel.fontSize
+                text: btnLabel.phraseHead.substring(0, 1) + WordFace.cutGlyph
             }
             // The hold mark is a letter of the phrase (デザイン規約 §アイコンの席 の名指し): as tall as the plain
             // words' capitals and on the middle they are drawn to (`lineRef`, centred in the row as each word is), in
@@ -268,12 +319,17 @@ Item {
                 height: lineRef.height
                 anchors.verticalCenter: parent.verticalCenter
             }
+            // Cut at its end as words are, once `+N` and the words are down to their mark and the ref to its share
+            // (`headCap`). Character by character: a cut may stand just past a flag's `-` (`merge -…` in a face that
+            // keeps it), unlike the corner's version (`BuildLine`) — accepted (user decision).
             CodeChip {
                 id: headChip
                 word: btnLabel.phraseHead
                 tint: btnLabel.tint
                 size: btnLabel.fontSize
                 buttonWord: true
+                cap: phraseRow.headCap
+                cutAt: "end"
                 anchors.verticalCenter: parent.verticalCenter
             }
             // Invisible when empty: a `Row` charges a gap for a visible child of no width.
@@ -322,7 +378,7 @@ Item {
             }
             Label {
                 id: byWord
-                visible: btnLabel.phraseFace >= 0
+                visible: phraseRow.faced && phraseRow.faceFits
                 text: qsTr("by")
                 color: btnLabel.tint
                 font.family: Theme.uiFamily
@@ -333,12 +389,14 @@ Item {
             // one target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
             AvatarButton {
                 id: phraseAvatar
-                visible: btnLabel.phraseFace >= 0
+                visible: phraseRow.faced && phraseRow.faceFits
                 face: btnLabel.phraseFace
                 faceUrl: btnLabel.phraseFaceUrl
                 signatureKind: btnLabel.phraseSignature
                 signatureTip: btnLabel.phraseSignatureTip
-                signaturePointedAt: btnLabel.phraseSignaturePointedAt
+                // The stand-in reaches the drawn mark alone (`shoulderMark`): a hidden one asking too takes the
+                // window's one tip.
+                signaturePointedAt: btnLabel.phraseSignaturePointedAt && phraseAvatar.visible
                 // A small face drops its badge a step too, so the badge keeps its share of the face (`AvatarButton`).
                 badgeInk: Theme.iconXs
                 // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how far
@@ -351,24 +409,49 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
             }
+            // `+N`, or its mark; and the one mark `by <face>` leaves when it gives, its `+N` with it.
             PlainTextLabel {
                 id: mateCount
-                visible: btnLabel.phraseMates > 0 && phraseRow.mateFits
+                visible: btnLabel.phraseMates > 0 && phraseRow.faceFits && phraseRow.mateFits
                 text: phraseRow.mateWord
                 color: btnLabel.tint
                 font.family: Theme.uiFamily
                 font.pixelSize: btnLabel.fontSize
                 anchors.verticalCenter: parent.verticalCenter
             }
-            // …or, short of room for it, the mark in its place: in a word's line box, on its baseline (`mateFull`, the
-            // same face).
+            // …or, short of room for it or with `by <face>` given way, the one mark in their place: in a word's line
+            // box, on its baseline (`mateFull`, the same face).
             CutMark {
-                visible: btnLabel.phraseMates > 0 && !phraseRow.mateFits
+                visible: phraseRow.faced && !phraseRow.faceFits
+                         || btnLabel.phraseMates > 0 && !(phraseRow.faceFits && phraseRow.mateFits)
                 height: mateFull.height
                 base: mateFull.baselineOffset
                 color: btnLabel.tint
                 font: mateFull.font
                 anchors.verticalCenter: parent.verticalCenter
+            }
+            // `by <face>` given way, its signature mark stays (user decision — ask before changing): signing on still
+            // says, before the press, that git may ask for the key's passphrase (`WipCommitBlock`). On the right
+            // shoulder of the mark left in the face's place, as on a name's (デザイン規約 §アイコンの席 の右肩,
+            // `CommitAuthorRow`): the `iconSm` box's line, half a gap past the mark, the box's top on the line box's
+            // top. The seat is the ink (`shoulderRoom`); the row's gap before it is given back by standing the tick
+            // left of it.
+            Item {
+                id: shoulderSeat
+                visible: phraseRow.faced && !phraseRow.faceFits && btnLabel.phraseSignature !== ""
+                width: phraseRow.shoulderRoom - phraseRow.spacing
+                height: mateFull.height
+                anchors.verticalCenter: parent.verticalCenter
+                SignatureMark {
+                    id: shoulderMark
+                    x: Theme.spaceXs / 2 - phraseRow.spacing - shoulderMark.inkAirLeft
+                    kind: btnLabel.phraseSignature
+                    tip: btnLabel.phraseSignatureTip
+                    pointedAt: btnLabel.phraseSignaturePointedAt && shoulderSeat.visible
+                    stroke: Metrics.iconStroke * Theme.iconSm / Theme.iconMd
+                    width: shoulderMark.implicitWidth
+                    height: shoulderMark.implicitHeight
+                }
             }
         }
     }
