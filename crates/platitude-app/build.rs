@@ -1,7 +1,8 @@
 //! Hands the linker the Windows resource with the exe's icon and the name
 //! the shell shows for it (without it, `platitude-gg.exe`), and the binary
 //! the commit it is built from (`models::build_id`); builds the C++ of the
-//! preview's image provider (`preview_images`, its decoder `preview_decode`).
+//! preview's image provider (`preview_images`, its decoder `preview_decode`)
+//! and of the slot wires' metatypes (`encode::metatype`).
 //!
 //! `assets/platitude.res` is checked in compiled: the resource compiler
 //! comes only with the Windows SDK. `assets/platitude.rc` says how to
@@ -23,17 +24,27 @@ fn main() {
     println!("cargo:rerun-if-changed={RESOURCE}");
     stamp_commit();
     link_resource();
-    build_image_provider();
+    build_bridges();
 }
+
+/// The header the slot wires' metatype bridge includes. cxx-qt-build
+/// reruns on every header it copies; named here as well, by its path from
+/// the crate, so the gate's graph reaches this script from it — the
+/// bridge's `include!` spells it from the include root, which resolves to
+/// no file of the tree.
+const METATYPE_H: &str = "src/encode/metatype.h";
 
 /// The preview's image provider (`src/preview_images.rs`) and the device it
 /// streams a picture through (`src/preview_decode.rs`): the C++ classes
-/// their bridges generate, against Qt Quick.
-fn build_image_provider() {
+/// their bridges generate, against Qt Quick. The slot wires' metatypes
+/// (`src/encode/metatype.rs`, its header [`METATYPE_H`]).
+fn build_bridges() {
+    println!("cargo:rerun-if-changed={METATYPE_H}");
     cxx_qt_build::CxxQtBuilder::new()
         .qt_module("Quick")
         .file("src/preview_images.rs")
         .file("src/preview_decode.rs")
+        .file("src/encode/metatype.rs")
         .build();
 }
 

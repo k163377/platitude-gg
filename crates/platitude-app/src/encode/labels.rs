@@ -321,7 +321,7 @@ mod tests {
         assert!(chips[5].home && !chips[3].home);
         assert_eq!(
             <Chips as QVariantConvertible>::try_from_qvariant(&chips.to_qvariant()),
-            Ok(chips)
+            Some(chips)
         );
     }
 

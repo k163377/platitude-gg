@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(chosen[0].mates[0].name, "Bob");
         assert_eq!(
             <ChosenRows as QVariantConvertible>::try_from_qvariant(&chosen.to_qvariant()),
-            Ok(chosen)
+            Some(chosen)
         );
     }
 }

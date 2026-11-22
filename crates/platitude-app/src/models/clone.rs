@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use qtbridge::{QmlObject, qobject};
+use qtbridge::qobject;
 
 use crate::hub::{CloneMsg, Feed, Hub};
 use crate::urlpath::file_url_to_path;
@@ -63,7 +63,7 @@ impl CloneModel {
             return;
         }
         if !self.attached {
-            self.feed.attach(self.get_qml_method_invoker());
+            self.feed.attach(crate::hub::Wake::drain(self, Self::drain));
             self.attached = true;
         }
         let feed = Arc::clone(&self.feed);

@@ -176,7 +176,7 @@ mod tests {
         ]);
         assert_eq!(
             <Lanes as QVariantConvertible>::try_from_qvariant(&lanes.to_qvariant()),
-            Ok(lanes.clone())
+            Some(lanes.clone())
         );
         // The words the canvas branches on, spelled out whole.
         let first = lanes[0].to_map();
@@ -194,7 +194,7 @@ mod tests {
         );
         assert_eq!(
             <Lanes as QVariantConvertible>::try_from_qvariant(&lanes_of(&[]).to_qvariant()),
-            Ok(Lanes::default())
+            Some(Lanes::default())
         );
     }
 

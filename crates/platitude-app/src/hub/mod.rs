@@ -1,9 +1,7 @@
 //! Main-thread hub: tab registry, per-tab event feeds and the session sink.
 //!
 //! Background tasks push into `Feed` queues and wake the owning QML object
-//! with a queued `drain`, which pulls on the main thread. `drain` is the
-//! only method invoked through a `QmlMethodInvoker`: one lowercase word is
-//! immune to camel-case conversion.
+//! with a queued `drain` (`Wake`), which pulls on the main thread.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -24,7 +22,7 @@ use platitude_core::settings::{Settings, State, Store};
 use platitude_core::stash::StashEntry;
 use platitude_core::status::WorktreeStatus;
 use platitude_core::{OperationId, OperationKind};
-use qtbridge::QmlMethodInvoker;
+use qtbridge::QmlObject;
 
 mod feed;
 mod life;
@@ -38,7 +36,7 @@ pub(crate) mod testkit;
 #[cfg(test)]
 mod tests;
 
-pub use feed::{Feed, Feeds, attach_feed, attached};
+pub use feed::{Feed, Feeds, Wake, attach_feed, attached};
 pub use msg::{
     CarriedStatusMsg, CloneMsg, CommandMsg, DetailsMsg, DiffMsg, GraphMsg, HeadMsg, OpProgressMsg,
     OpenMsg, PlanMsg, RefsMsg, StashList, StateMsg, StatusMsg, TabMsg, WorktreeList,

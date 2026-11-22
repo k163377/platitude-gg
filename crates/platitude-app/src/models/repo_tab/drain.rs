@@ -281,39 +281,29 @@ impl RepoTab {
     /// posted ahead of them all: a drain takes whatever its feed holds when
     /// it runs, not what it held when it was posted (`hub::Feed`). So the
     /// write is not through here. The tab posts itself a call instead
-    /// (`readsDrained`), which Qt delivers behind everything posted by now
+    /// (`self_handle`), which Qt delivers behind everything posted by now
     /// — posted events of one priority go out in posting order (qthread.cpp,
-    /// `QPostEventList::addEvent` appends) — and the write is through where
-    /// that call runs ([`Self::settle_drained`]). Not a message on this
-    /// tab's feed: the next of its drains takes that, and one more may be
-    /// standing ahead of the models'. Not `Qt.callLater`: it shares one
-    /// engine-wide tick and rides one posted earlier, so it orders nothing.
+    /// `QPostEventList::addEvent` appends; the drains' wakes are posted the
+    /// same way, `hub::Wake`) — and the write is through where that call
+    /// runs ([`Self::settle_drained`]). Not a message on this tab's feed:
+    /// the next of its drains takes that, and one more may be standing
+    /// ahead of the models'. Not `Qt.callLater`: it shares one engine-wide
+    /// tick and rides one posted earlier, so it orders nothing.
     ///
     /// The id is kept for the log's receipts at once (`settled`): a
     /// completion read between here and the call still waits on that
     /// receipt.
-    ///
-    /// The name is the slot's (`RepoTab::reads_drained`, camel-cased by the
-    /// bridge), spelled twice: `#[qslot(qml_name = …)]` takes a literal, not
-    /// a constant. Nothing fails to build or to test where the two part —
-    /// the tab's unit tests have no QObject to post through — and the tab
-    /// would stay settling for good (stash, the stopped operation's ways
-    /// out, the push's doors, the menus all grey), so a call Qt did not
-    /// queue is said. The tab is alive here, its own drain running: a
-    /// `false` is a name or an argument Qt found no slot for.
     fn settle_heard(&mut self, id: u64) {
         self.settled.push_back(id);
         if self.settled.len() > KEEP_SETTLED {
             self.settled.pop_front();
         }
-        if let Some(me) = &self.self_invoker
-            && !qtbridge::invoke_method!(me, "readsDrained", bridge_id(id))
-        {
-            tracing::warn!(id, "readsDrained was not queued: the tab stays settling");
+        if let Some(me) = &self.self_handle {
+            me.invoke_mut(move |tab| tab.settle_drained_told(bridge_id(id)));
         }
     }
 
-    /// Behind `readsDrained`, the call [`Self::settle_heard`] posted for
+    /// Behind the call [`Self::settle_heard`] posted for
     /// `id`: every drain carrying what that write left has run, so its
     /// reads are in the models — the run's watch opens on it (by id), the
     /// tab stops settling for it, and the ring of a fetch or a push stops

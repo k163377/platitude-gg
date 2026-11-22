@@ -85,7 +85,7 @@ mod tests {
         assert_eq!(mates[1].email, "");
         assert_eq!(
             <Mates as QVariantConvertible>::try_from_qvariant(&mates.to_qvariant()),
-            Ok(mates)
+            Some(mates)
         );
     }
 

@@ -288,7 +288,7 @@ mod tests {
         assert_eq!(records(&candidates), [(true, "4:1ab\u{1f600}".to_string())]);
         assert_eq!(
             <Candidates as QVariantConvertible>::try_from_qvariant(&candidates.to_qvariant()),
-            Ok(candidates)
+            Some(candidates)
         );
     }
 

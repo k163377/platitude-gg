@@ -8,7 +8,7 @@ use std::sync::Arc;
 use qtbridge::qtbridge_type_lib::{
     QByteArray, QHash_i32_QByteArray, QModelIndex, QString, QVariant,
 };
-use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, QmlObject, qobject};
+use qtbridge::{QAbstractItemModel, QAbstractItemModelBase, QModelItem, qobject};
 
 use crate::encode::{Fields, Landed, Landing, Listed, One, Optional, Record, field};
 use crate::hub::{CarriedStatusMsg, Feed, Hub, RefsMsg, StatusMsg, attached};

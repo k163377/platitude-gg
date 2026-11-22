@@ -291,7 +291,7 @@ pub(super) fn slots(text: &str) -> Vec<(String, String, bool)> {
             || tokens[open..close].iter().any(|t| {
                 matches!(
                     t.text.as_str(),
-                    "borrow_mut" | "set" | "replace" | "take" | "emit" | "invoke_method"
+                    "borrow_mut" | "set" | "replace" | "take" | "emit" | "invoke_mut"
                 ) || t.text.ends_with("_changed")
             });
         out.push((implemented.clone(), camel(&name.text), changes));

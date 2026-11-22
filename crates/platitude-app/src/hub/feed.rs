@@ -10,7 +10,7 @@ pub struct Feed<T> {
 struct FeedState<T> {
     queue: VecDeque<T>,
     latest: Option<u64>,
-    invoker: Option<QmlMethodInvoker>,
+    consumer: Option<Wake>,
 }
 
 impl<T> Default for Feed<T> {
@@ -19,9 +19,29 @@ impl<T> Default for Feed<T> {
             state: Mutex::new(FeedState {
                 queue: VecDeque::new(),
                 latest: None,
-                invoker: None,
+                consumer: None,
             }),
         }
+    }
+}
+
+/// What wakes a feed's consumer: its `drain`, posted to the Qt main thread
+/// (qtbridge's `QThreadHandle`), so a push from any thread only queues the
+/// call. A consumer QML has destroyed by the time the call is delivered is
+/// skipped there. Not `Clone`: one per feed, taken where it is handed over.
+pub struct Wake(Box<dyn Fn() + Send>);
+
+impl Wake {
+    /// `consumer.drain()`, posted. Taken on the main thread once QML has
+    /// built the consumer (a slot): before that it names no QObject, and
+    /// every call it posts is dropped.
+    pub fn drain<C: QmlObject + 'static>(consumer: &C, drain: fn(&mut C)) -> Self {
+        let handle = consumer.get_thread_handle();
+        Self(Box::new(move || handle.invoke_mut(drain)))
+    }
+
+    fn post(&self) {
+        (self.0)();
     }
 }
 
@@ -85,25 +105,22 @@ impl<T> Feed<T> {
     }
 
     fn wake(guard: MutexGuard<'_, FeedState<T>>) {
-        // Invoking while holding the lock is fine: it only posts a queued
-        // call to the Qt event loop and never runs the slot synchronously.
-        // Its answer is not read, as the tab's own call's is
-        // (`RepoTab::settle_heard`): a consumer QML has destroyed while its
-        // feed still holds it answers `false` too, at every push after.
-        if let Some(inv) = &guard.invoker {
-            inv.invoke_method("drain");
+        // Posting while holding the lock is fine: the drain runs from the
+        // Qt event loop, never in place.
+        if let Some(consumer) = &guard.consumer {
+            consumer.post();
         }
     }
 
     /// Registers the consumer (Qt main thread) and wakes it if messages
     /// are already waiting.
-    pub fn attach(&self, invoker: QmlMethodInvoker) {
+    pub fn attach(&self, consumer: Wake) {
         let mut s = self.lock();
         let has_pending = !s.queue.is_empty();
         if has_pending {
-            invoker.invoke_method("drain");
+            consumer.post();
         }
-        s.invoker = Some(invoker);
+        s.consumer = Some(consumer);
     }
 
     /// Takes everything queued (called from the consumer's `drain` slot).
@@ -120,12 +137,12 @@ impl<T> Feed<T> {
     /// Drops what is queued and lets go of the consumer — what a tab does
     /// on its way off the front (`Hub::release_tab`). Both halves matter:
     /// a queued refs snapshot is the very memory the release is for, and
-    /// the invoker names a QML object about to be destroyed (the page that
+    /// the wake names a QML object about to be destroyed (the page that
     /// comes back attaches its own).
     pub fn release(&self) {
         let mut s = self.lock();
         s.queue.clear();
-        s.invoker = None;
+        s.consumer = None;
     }
 
     /// Drops what is queued and keeps the consumer.
@@ -262,12 +279,10 @@ impl Feeds {
     }
 }
 
-/// Hands `invoker` to `feed` and gives the caller its own handle on it.
-/// By value: an invoker is not `Clone` (.claude/rules/app-ui.md
-/// §Qt Bridges・QML の不変条件).
-pub fn attached<T>(feed: &Arc<Feed<T>>, invoker: QmlMethodInvoker) -> Arc<Feed<T>> {
+/// Hands `consumer` to `feed` and gives the caller its own handle on it.
+pub fn attached<T>(feed: &Arc<Feed<T>>, consumer: Wake) -> Arc<Feed<T>> {
     let feed = Arc::clone(feed);
-    feed.attach(invoker);
+    feed.attach(consumer);
     feed
 }
 
@@ -277,8 +292,8 @@ pub fn attached<T>(feed: &Arc<Feed<T>>, invoker: QmlMethodInvoker) -> Arc<Feed<T
 pub fn attach_feed<T>(
     tab_id: i32,
     pick: impl FnOnce(&Feeds) -> &Arc<Feed<T>>,
-    invoker: QmlMethodInvoker,
+    consumer: Wake,
 ) -> Option<Arc<Feed<T>>> {
     let feeds = Hub::with(|hub| hub.feeds(tab_id))??;
-    Some(attached(pick(&feeds), invoker))
+    Some(attached(pick(&feeds), consumer))
 }

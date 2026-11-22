@@ -128,7 +128,7 @@ impl TabsModel {
     }
 
     #[qslot]
-    fn drain(&mut self) {
+    pub(super) fn drain(&mut self) {
         for msg in self.asks.drain() {
             // One ask is out at a time (`TabsModel::asking`).
             let Some(ask) = self.asking.pop_front() else {

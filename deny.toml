@@ -33,7 +33,6 @@ exceptions = [
     { crate = "qtbridge", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-build-utils", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-gen", allow = ["LGPL-3.0-only"] },
-    { crate = "qtbridge-gen-common", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-interfaces", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-runtime", allow = ["LGPL-3.0-only"] },
     { crate = "qtbridge-type-lib", allow = ["LGPL-3.0-only"] },

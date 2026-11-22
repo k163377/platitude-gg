@@ -28,7 +28,7 @@ tree-sitter = "0.27"
 tree-sitter-highlight = "0.27"
 tree-sitter-bash = "0.25"
 tree-sitter-c = "0.24"
-tree-sitter-c-sharp = "0.23"
+tree-sitter-c-sharp = "0.24"
 tree-sitter-cmake = "0.7"
 tree-sitter-cpp = "0.23"
 tree-sitter-css = "0.25"
@@ -56,6 +56,11 @@ tree-sitter-qmljs = "0.3"
 tree-sitter-ruby = "0.23"
 tree-sitter-rust = "0.24"
 tree-sitter-scala = "0.26"
+# The heaviest grammar in the exe: from 0.3.12 the dialects it reads (GRANT,
+# policies, T-SQL procedures, PIVOT, QUALIFY…) keep 6237 parse states as
+# dense rows, about 10MB of its 13.7MB, where 0.3.11 kept 393 (0.6MB).
+# Kept at the newest all the same (user decision — ask before pinning it
+# back): a pin to 0.3.11 holds the tree's cc on ~1.2 too.
 tree-sitter-sequel = "0.3"
 tree-sitter-swift = "0.7"
 tree-sitter-toml-ng = "0.7"

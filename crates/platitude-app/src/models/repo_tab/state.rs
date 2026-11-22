@@ -147,7 +147,7 @@ impl Default for RepoTab {
             fetch_log_raised: false,
             auto_fetch_suspended: false,
             feed: None,
-            self_invoker: None,
+            self_handle: None,
         }
     }
 }

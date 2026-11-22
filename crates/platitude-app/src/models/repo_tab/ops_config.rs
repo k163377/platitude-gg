@@ -48,9 +48,9 @@ impl RepoTab {
         self.read_stand_in();
         self.changed();
         // Before the feed can wake a drain that posts through it.
-        self.self_invoker = Some(self.get_qml_method_invoker());
-        let invoker = self.get_qml_method_invoker();
-        self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, invoker);
+        self.self_handle = Some(self.get_thread_handle());
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, consumer);
     }
 
     pub(super) fn write_identity(&mut self, name: String, email: String, global: bool) {

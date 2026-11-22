@@ -599,7 +599,7 @@ impl AppBackend {
     }
 
     #[qslot]
-    fn drain(&mut self) {
+    pub(super) fn drain(&mut self) {
         self.take_feed()
     }
 }

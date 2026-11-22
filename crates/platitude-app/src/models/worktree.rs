@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use qtbridge::{QmlObject, qobject};
+use qtbridge::qobject;
 
 use crate::hub::{Feed, HeadMsg, OpProgressMsg, StateMsg, StatusMsg};
 
@@ -423,10 +423,10 @@ impl WorktreeModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        let invoker = self.get_qml_method_invoker();
-        self.feed = crate::hub::attach_feed(tab_id, |f| &f.status, invoker);
-        let invoker = self.get_qml_method_invoker();
-        self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, invoker);
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.status, consumer);
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.progress_feed = crate::hub::attach_feed(tab_id, |f| &f.op_progress, consumer);
     }
 
     /// The tab now stands in another worktree (`Hub::restand_tab`):

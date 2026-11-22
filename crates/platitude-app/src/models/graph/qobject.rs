@@ -211,8 +211,8 @@ impl GraphModel {
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.tab_id = tab_id;
-        let invoker = self.get_qml_method_invoker();
-        self.feed = crate::hub::attach_feed(tab_id, |f| &f.graph, invoker);
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.graph, consumer);
     }
 
     /// The tab now stands in another worktree of the same repository,

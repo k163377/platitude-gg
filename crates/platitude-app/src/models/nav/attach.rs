@@ -9,13 +9,13 @@ impl NavSectionModel {
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };
-        let invoker = self.get_qml_method_invoker();
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
         match self.section.as_str() {
-            "branches" => self.refs_feed = Some(attached(&feeds.refs_branches, invoker)),
-            "remotes" => self.refs_feed = Some(attached(&feeds.refs_remotes, invoker)),
-            "tags" => self.refs_feed = Some(attached(&feeds.refs_tags, invoker)),
-            "stashes" => self.stash_feed = Some(attached(&feeds.stash, invoker)),
-            "worktrees" => self.worktrees_feed = Some(attached(&feeds.worktrees, invoker)),
+            "branches" => self.refs_feed = Some(attached(&feeds.refs_branches, consumer)),
+            "remotes" => self.refs_feed = Some(attached(&feeds.refs_remotes, consumer)),
+            "tags" => self.refs_feed = Some(attached(&feeds.refs_tags, consumer)),
+            "stashes" => self.stash_feed = Some(attached(&feeds.stash, consumer)),
+            "worktrees" => self.worktrees_feed = Some(attached(&feeds.worktrees, consumer)),
             other => tracing::warn!(section = other, "unknown sidebar section"),
         }
     }
@@ -35,7 +35,7 @@ impl NavSectionModel {
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };
-        let invoker = self.get_qml_method_invoker();
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
         let feed = match self.run.as_str() {
             "conflicts" => &feeds.status_nav_conflicts,
             "staged" => &feeds.status_nav_staged,
@@ -45,7 +45,7 @@ impl NavSectionModel {
                 return;
             }
         };
-        self.status_feed = Some(attached(feed, invoker));
+        self.status_feed = Some(attached(feed, consumer));
     }
 
     /// The list that shows another worktree's changes
@@ -62,7 +62,7 @@ impl NavSectionModel {
         let Some(Some(feeds)) = Hub::with(|hub| hub.feeds(tab_id)) else {
             return;
         };
-        let invoker = self.get_qml_method_invoker();
-        self.carried_feed = Some(attached(&feeds.carried_nav, invoker));
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.carried_feed = Some(attached(&feeds.carried_nav, consumer));
     }
 }

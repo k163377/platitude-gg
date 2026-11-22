@@ -19,8 +19,8 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
 
 - 全 QObject は `Rc<RefCell<_>>`(メインスレッド専有)。**借用を持ったまま signal・通知を出すと二重借用で panic** — 聞いた
   QML は同期で同じオブジェクトを呼び戻すので、出す前に借用を手放すか、聞く側が一手遅らせる(`Qt.callLater`)
-- バックグラウンド → UI は `QmlObject::get_qml_method_invoker()` の `QmlMethodInvoker` をスレッドへ移して
-  `invoke_method*`(queued)。UI を触るのはこの経路だけ。invoker は Send・Clone 不可 — 渡す先の数だけ取る
+- バックグラウンド → UI は `QmlObject::get_thread_handle()` の `QThreadHandle<T>` をスレッドへ移して `invoke_mut` /
+  `invoke`(閉包を Qt のスレッドへ投函)。UI を触るのはこの経路だけ。feed の consumer は `hub::Wake`
 - モデルの proxy(`try_get_rust_proxy_ptr()`)は `&*proxy` の共有参照でだけ触る — Qt が通知の最中に同じ proxy へ再入す
   る(各論は rules-refs の `QListModelBase` の行)
 - **橋を渡る値は `encode::wire` の形だけ**: レコードの列は `Listed<T>`(QML は欄を名前で読む)、欄の無い列は `Vec<String>`

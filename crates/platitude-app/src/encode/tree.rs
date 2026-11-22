@@ -130,7 +130,7 @@ mod tests {
     fn a_reading_round_trips() {
         let held = Reading::new(reading());
         let back = <Reading as QVariantConvertible>::try_from_qvariant(&held.to_qvariant());
-        assert_eq!(back.map(|b| (*b).clone()), Ok(reading()));
+        assert_eq!(back.map(|b| (*b).clone()), Some(reading()));
     }
 
     /// What a slot taking the standing alone receives of a whole reading.
@@ -139,6 +139,6 @@ mod tests {
         let held = Reading::new(reading());
         let standing =
             <One<TreeStanding> as QVariantConvertible>::try_from_qvariant(&held.to_qvariant());
-        assert_eq!(standing.map(|s| (*s).clone()), Ok(reading().standing));
+        assert_eq!(standing.map(|s| (*s).clone()), Some(reading().standing));
     }
 }

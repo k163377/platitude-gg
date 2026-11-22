@@ -55,8 +55,10 @@ pub(super) fn deny_policy() -> String {
 pub(super) fn clippy_config() -> String {
     format!("{}.toml", "clippy")
 }
-/// The crates the workspace `Cargo.toml` patches in (`[patch.crates-io]`):
-/// built into whatever depends on them, read by no graph of the sources.
+/// Where a crate the workspace `Cargo.toml` patches in
+/// (`[patch.crates-io]`) stands, while one does — a published crate
+/// changed to get round an upstream bug until a release carries the fix:
+/// built into whatever depends on it, read by no graph of the sources.
 const VENDOR: &str = "vendor";
 /// What every cargo build reads besides the sources: the manifest, the
 /// lock and the toolchain, cargo's own configuration (`.cargo/` — its

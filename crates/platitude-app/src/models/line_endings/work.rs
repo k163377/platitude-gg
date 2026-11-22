@@ -11,7 +11,7 @@ impl LineEndingsModel {
         if self.attached {
             return;
         }
-        self.feed.attach(self.get_qml_method_invoker());
+        self.feed.attach(crate::hub::Wake::drain(self, Self::drain));
         self.attached = true;
     }
 

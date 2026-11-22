@@ -21,7 +21,7 @@ memprobe = []
 
 [dependencies]
 platitude-core.workspace = true
-qtbridge = "0.3"
+qtbridge = "0.4"
 # `QUrl` (`urlpath`) and the Qt types the image provider's bridge names
 # (`preview_images`), which qtbridge's type library does not re-export. The
 # version and features qtbridge-type-lib already takes it with, so the tree

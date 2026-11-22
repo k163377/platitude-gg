@@ -667,3 +667,42 @@ fn a_path_declared_up_the_tree_folds_to_the_files_own_name() {
         PathBuf::from("crates/x/src/y.rs")
     );
 }
+
+/// A C++ header a bridge includes is read by its crate's build script,
+/// which builds it: a change to the header alone reaches the crate.
+#[test]
+fn every_header_a_crate_holds_reaches_its_build_script() {
+    let root = crate::tree::workspace_root();
+    let g = build(&root).expect("the graph of this tree");
+    let crates = root.join("crates");
+    let mut headers = Vec::new();
+    let mut dirs = vec![crates.clone()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir)
+            .expect("a directory of the tree")
+            .flatten()
+        {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() && name != "target" {
+                dirs.push(path);
+            } else if name.ends_with(".h") {
+                headers.push(path);
+            }
+        }
+    }
+    assert!(!headers.is_empty(), "the bridges' headers");
+    for header in headers {
+        let named = header
+            .trim_prefix(&root)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let package: String = named.split('/').take(2).collect::<Vec<_>>().join("/");
+        let script = format!("{package}/build.rs");
+        let reach = g.reach(std::slice::from_ref(&named));
+        assert!(
+            reach.contains_key(&script),
+            "{named} reaches no {script}: {reach:?}"
+        );
+    }
+}

@@ -19,10 +19,10 @@
 //! not.
 
 use qtbridge::qtbridge_runtime::QMetaTypeGet;
-use qtbridge::qtbridge_type_lib::{
-    QMetaType, QMetaTypeType, QString, QVariant, QVariantList, QVariantMap,
-};
+use qtbridge::qtbridge_type_lib::{QMetaType, QString, QVariant, QVariantList, QVariantMap};
 use qtbridge::{QMetaTypeCompatible, QVariantConvertible};
+
+use super::metatype;
 
 /// A record with a JS object's shape: named fields, each read by QML as
 /// its own type.
@@ -54,7 +54,7 @@ macro_rules! field_by_bridge {
 
         impl<$($generic)*> FieldRead for $ty {
             fn read(variant: &QVariant) -> Result<Self, ()> {
-                QVariantConvertible::try_from_qvariant(variant)
+                QVariantConvertible::try_from_qvariant(variant).ok_or(())
             }
         })*
     };
@@ -169,7 +169,7 @@ macro_rules! slot_wire {
 
         impl QMetaTypeGet for $name {
             fn get_qmetatype() -> QMetaType {
-                QMetaType::new(i32::from(QMetaTypeType::$metatype))
+                metatype::$metatype()
             }
         }
     };
@@ -177,15 +177,15 @@ macro_rules! slot_wire {
 
 slot_wire!(
     /// [`Listed`] in a slot: a `QVariantList`.
-    ListWire(QVariantList) = QVariantList
+    ListWire(QVariantList) = variant_list
 );
 slot_wire!(
     /// [`One`] in a slot: a `QVariantMap`.
-    MapWire(QVariantMap) = QVariantMap
+    MapWire(QVariantMap) = variant_map
 );
 slot_wire!(
     /// [`Optional`] in a slot: a `QVariant`, invalid for nothing.
-    VariantWire(QVariant) = QVariant
+    VariantWire(QVariant) = variant
 );
 
 // ---------------------------------------------------------------------------
@@ -242,10 +242,10 @@ impl<T: Record> QVariantConvertible for Listed<T> {
         QVariant::from(&self.to_list())
     }
 
-    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
-        Ok(Self::new(Self::read(
-            &value.value::<QVariantList>().ok_or(())?,
-        )?))
+    fn try_from_qvariant(value: &QVariant) -> Option<Self> {
+        Self::read(&value.value::<QVariantList>()?)
+            .ok()
+            .map(Self::new)
     }
 }
 
@@ -258,7 +258,11 @@ impl<T: Record> QMetaTypeCompatible for Listed<T> {
 
     /// An element that does not read is no shape this side hands out: it
     /// is logged and left out rather than taking the call down.
-    fn from_compatible(wire: &ListWire) -> Self {
+    #[expect(
+        unsafe_code,
+        reason = "qtbridge's trait marks it unsafe for a QObject pointer, which a record never holds"
+    )]
+    unsafe fn from_compatible(wire: &ListWire) -> Self {
         let mut out = Vec::with_capacity(usize::try_from(wire.0.len()).unwrap_or(0));
         for (i, element) in wire.0.iter().enumerate() {
             match element
@@ -310,10 +314,10 @@ impl<T: Record> QVariantConvertible for One<T> {
         QVariant::from(&self.value.to_map())
     }
 
-    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
-        Ok(Self::new(T::from_map(
-            &value.value::<QVariantMap>().ok_or(())?,
-        )?))
+    fn try_from_qvariant(value: &QVariant) -> Option<Self> {
+        T::from_map(&value.value::<QVariantMap>()?)
+            .ok()
+            .map(Self::new)
     }
 }
 
@@ -326,7 +330,8 @@ impl<T: Record + Default> QMetaTypeCompatible for One<T> {
 
     /// A record that does not read is logged and answered as the default
     /// (as for [`Listed`]).
-    fn from_compatible(wire: &MapWire) -> Self {
+    #[expect(unsafe_code, reason = "as for `Listed`")]
+    unsafe fn from_compatible(wire: &MapWire) -> Self {
         T::from_map(&wire.0).map_or_else(
             |()| {
                 tracing::warn!(
@@ -399,13 +404,13 @@ impl<T: Record> QVariantConvertible for Optional<T> {
     }
 
     /// An invalid value is "nothing", not a refusal.
-    fn try_from_qvariant(value: &QVariant) -> Result<Self, ()> {
+    fn try_from_qvariant(value: &QVariant) -> Option<Self> {
         if !value.is_valid() {
-            return Ok(Self::none());
+            return Some(Self::none());
         }
-        Ok(Self::some(T::from_map(
-            &value.value::<QVariantMap>().ok_or(())?,
-        )?))
+        T::from_map(&value.value::<QVariantMap>()?)
+            .ok()
+            .map(Self::some)
     }
 }
 
@@ -416,8 +421,9 @@ impl<T: Record> QMetaTypeCompatible for Optional<T> {
         VariantWire(QVariantConvertible::to_qvariant(self))
     }
 
-    fn from_compatible(wire: &VariantWire) -> Self {
-        QVariantConvertible::try_from_qvariant(&wire.0).unwrap_or_else(|()| {
+    #[expect(unsafe_code, reason = "as for `Listed`")]
+    unsafe fn from_compatible(wire: &VariantWire) -> Self {
+        QVariantConvertible::try_from_qvariant(&wire.0).unwrap_or_else(|| {
             tracing::warn!(
                 record = std::any::type_name::<T>(),
                 "a record handed back from QML did not read"
@@ -490,7 +496,17 @@ mod tests {
     /// back in Rust — no meta-call and no QML engine. What QML hands a
     /// slot, and makes of its answer, is `encode::tests::wire_qml`'s.
     fn through_a_slot<W: QMetaTypeCompatible>(value: &W) -> W {
-        W::from_compatible(&value.to_compatible())
+        from_a_slot(&value.to_compatible())
+    }
+
+    /// The bridge's read of a slot's argument.
+    #[expect(
+        unsafe_code,
+        reason = "the trait's method is unsafe for QObject pointers"
+    )]
+    fn from_a_slot<W: QMetaTypeCompatible>(wire: &W::CompatibleType) -> W {
+        // SAFETY: the wires under test carry records, which hold no QObject.
+        unsafe { W::from_compatible(wire) }
     }
 
     /// By the same conversions the bridge runs for a role, a property and a
@@ -501,12 +517,12 @@ mod tests {
         let variant = listed.to_qvariant();
         assert_eq!(
             Listed::<Probe>::try_from_qvariant(&variant),
-            Ok(listed.clone())
+            Some(listed.clone())
         );
         assert_eq!(through_a_slot(&listed), listed);
         assert_eq!(
             Listed::<Probe>::try_from_qvariant(&Listed::<Probe>::default().to_qvariant()),
-            Ok(Listed::default())
+            Some(Listed::default())
         );
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0].word, "main");
@@ -534,22 +550,22 @@ mod tests {
         let one = One::new(probes().remove(0));
         assert_eq!(
             One::<Probe>::try_from_qvariant(&one.to_qvariant()),
-            Ok(one.clone())
+            Some(one.clone())
         );
         assert_eq!(through_a_slot(&one), one);
         assert_eq!(one.word, "main");
 
         let some = Optional::some(probes().remove(1));
         let back = Optional::<Probe>::try_from_qvariant(&some.to_qvariant()).map(|o| o.value);
-        assert_eq!(back, Ok(Some(probes().remove(1))));
+        assert_eq!(back, Some(Some(probes().remove(1))));
         assert_eq!(*through_a_slot(&some), *some);
         assert!(some.is_some());
         let none = Optional::<Probe>::none();
         assert!(!none.to_qvariant().is_valid());
         let back = Optional::<Probe>::try_from_qvariant(&none.to_qvariant()).map(|o| o.value);
-        assert_eq!(back, Ok(None));
+        assert_eq!(back, Some(None));
         assert_eq!(
-            *Optional::<Probe>::from_compatible(&VariantWire(QVariant::default())),
+            *from_a_slot::<Optional<Probe>>(&VariantWire(QVariant::default())),
             None
         );
     }
@@ -562,13 +578,13 @@ mod tests {
         list.append(QVariant::from(&short));
         assert_eq!(Listed::<Probe>::read(&list), Err(()));
         // The slot road leaves such an element out instead.
-        assert_eq!(Listed::<Probe>::from_compatible(&ListWire(list)).len(), 0);
+        assert_eq!(from_a_slot::<Listed<Probe>>(&ListWire(list)).len(), 0);
         assert_eq!(
-            One::<Probe>::from_compatible(&MapWire(short.clone())),
+            from_a_slot::<One<Probe>>(&MapWire(short.clone())),
             One::default()
         );
         assert_eq!(
-            *Optional::<Probe>::from_compatible(&VariantWire(QVariant::from(&short))),
+            *from_a_slot::<Optional<Probe>>(&VariantWire(QVariant::from(&short))),
             None
         );
     }

@@ -354,7 +354,7 @@ mod tests {
         let runs = spelled_ranges(text, &[0..3, 4..5]);
         assert_eq!(
             <Runs as QVariantConvertible>::try_from_qvariant(&runs.to_qvariant()),
-            Ok(runs)
+            Some(runs)
         );
     }
 

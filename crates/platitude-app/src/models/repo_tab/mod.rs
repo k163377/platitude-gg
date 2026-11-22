@@ -559,9 +559,8 @@ pub struct RepoTab {
     auto_fetch_suspended: bool,
     feed: Option<Arc<Feed<TabMsg>>>,
     /// For the calls the tab posts itself (`drain::settle_heard`). Its
-    /// own: the feed keeps the one it was attached with, and an invoker
-    /// cannot be cloned.
-    self_invoker: Option<qtbridge::QmlMethodInvoker>,
+    /// own: the feed keeps the wake it was attached with.
+    self_handle: Option<qtbridge::QThreadHandle<RepoTab>>,
 }
 
 /// One write's answer as it arrived, for the readers that wait on a

@@ -49,7 +49,7 @@ mod tests {
             place: 12,
         });
         let back = <Ended as QVariantConvertible>::try_from_qvariant(&ended.to_qvariant());
-        assert_eq!(back.map(|b| (*b).clone()), Ok((*ended).clone()));
+        assert_eq!(back.map(|b| (*b).clone()), Some((*ended).clone()));
         assert!(!Ended::none().to_qvariant().is_valid());
     }
 }

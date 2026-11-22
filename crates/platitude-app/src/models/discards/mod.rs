@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use platitude_core::Oid;
 use platitude_core::discards::Discard;
-use qtbridge::{QmlObject, qobject};
+use qtbridge::qobject;
 use tokio_util::sync::CancellationToken;
 
 use crate::encode::DiscardRows;
@@ -76,7 +76,7 @@ impl DiscardModel {
         if self.attached {
             return;
         }
-        self.feed.attach(self.get_qml_method_invoker());
+        self.feed.attach(crate::hub::Wake::drain(self, Self::drain));
         self.attached = true;
     }
 

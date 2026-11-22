@@ -58,7 +58,7 @@ impl RepoConfigModel {
 
     /// The only slot an invoker ever calls (`models::mod`).
     #[qslot]
-    fn drain(&mut self) {
+    pub(super) fn drain(&mut self) {
         self.take_feed()
     }
 }

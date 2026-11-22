@@ -4,7 +4,8 @@ use super::*;
 
 impl AppBackend {
     pub(super) fn start_up(&mut self) {
-        self.check_feed.attach(self.get_qml_method_invoker());
+        self.check_feed
+            .attach(crate::hub::Wake::drain(self, Self::drain));
         if self.stop_listener.is_none() {
             match stop::listen(Arc::clone(&self.check_feed)) {
                 Ok(listener) => self.stop_listener = listener,

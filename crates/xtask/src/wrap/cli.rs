@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn the_documents_left_are_named_by_path_or_by_directory() {
-        assert!(left("vendor/qtbridge-interfaces/README.md").is_some());
+        assert!(left("vendor/patched/README.md").is_some());
         assert!(left(".claude/rules-refs/app-ui.md").is_some());
         assert!(left(".claude/skills/verify-ui/verbs.md").is_some());
         assert!(left(".claude/skills/verify-ui/SKILL.md").is_none());

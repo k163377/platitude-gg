@@ -48,7 +48,7 @@ mod tests {
             path: "src/日本語.txt".into(),
         });
         let back = <Landed as QVariantConvertible>::try_from_qvariant(&landed.to_qvariant());
-        assert_eq!(back.map(|b| (*b).clone()), Ok((*landed).clone()));
+        assert_eq!(back.map(|b| (*b).clone()), Some((*landed).clone()));
         assert_eq!(landed.as_ref().map(|l| l.row), Some(3));
         assert!(!Landed::none().to_qvariant().is_valid());
     }

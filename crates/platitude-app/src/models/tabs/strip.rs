@@ -67,7 +67,7 @@ impl TabsModel {
         };
         let path = std::path::PathBuf::from(&ask.path);
         if !self.attached {
-            self.asks.attach(self.get_qml_method_invoker());
+            self.asks.attach(crate::hub::Wake::drain(self, Self::drain));
             self.attached = true;
         }
         let feed = Arc::clone(&self.asks);

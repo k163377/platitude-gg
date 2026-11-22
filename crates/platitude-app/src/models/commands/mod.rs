@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, QmlObject, qobject};
+use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use platitude_core::session::Recording;
 
@@ -215,8 +215,8 @@ impl CommandsModel {
     fn attach(&mut self, tab_id: i32) {
         self.held = crate::harness::HeldRecords::from_knobs();
         self.tab_id = tab_id;
-        let invoker = self.get_qml_method_invoker();
-        self.feed = crate::hub::attach_feed(tab_id, |f| &f.commands, invoker);
+        let consumer = crate::hub::Wake::drain(self, Self::drain);
+        self.feed = crate::hub::attach_feed(tab_id, |f| &f.commands, consumer);
     }
 
     /// Empties the log. Only the record goes; nothing about the

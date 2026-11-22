@@ -9,6 +9,7 @@ mod labels;
 mod landing;
 mod markup;
 mod mates;
+mod metatype;
 mod rows;
 mod select;
 mod text_end;
