@@ -323,7 +323,7 @@ const DEPS: &str = "deps";
 ///
 /// What cannot be moved waits for the next landing's sweep. Silent when
 /// this binary is in nobody's way; a move that fails says so. The hold
-/// (`hold`) steps out the same way, for as long as it runs.
+/// (`hold`) steps out the same way, once no gate of its tree runs.
 pub(super) fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
     let exe = std::env::current_exe().ok()?;
     let mine = build_slot_tree(&exe)?;
@@ -360,8 +360,10 @@ pub(super) fn step_out_of_the_build_slot(trees: &[&str]) -> Option<String> {
 /// in `deps/` the slot is linked to.
 ///
 /// By name, not by inode: Windows offers one only through an unstable
-/// interface. A hash not in use is an older build of this binary, which
-/// cargo relinks anyway.
+/// interface. So a name of another binary goes too: `xtask-<hash>` is also
+/// the `--bin xtask` unit-test harness (on windows-msvc the binary itself
+/// has no hash) — its next `cargo test` relinks it, and a harness running
+/// then cannot start itself again by `current_exe()`.
 fn names_of_this_image(exe: &std::path::Path, dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut names = vec![exe.to_path_buf()];
     let Ok(entries) = std::fs::read_dir(dir.join(DEPS)) else {

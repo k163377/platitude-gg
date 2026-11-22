@@ -100,9 +100,41 @@ pub(crate) fn sole(note: &Path, what: &str) -> Result<Sole, String> {
     })
 }
 
+/// Whether a gate holds `note`'s tree now: the lock beside the note taken,
+/// whatever the note says. A tree no gate has run in has no lock file; a
+/// lock file that cannot be opened is no answer.
+///
+/// The look takes the lock for an instant when it is free. A gate starting
+/// in that instant reads a held lock, and [`sole`] looks again — unless a
+/// killed gate's note still stands, which it then names as the holder.
+pub(crate) fn held(note: &Path) -> Result<bool, String> {
+    let path = note.with_extension(LOCK);
+    let lock = match std::fs::File::open(&path) {
+        Ok(lock) => lock,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(format!(
+                "could not open the gate lock at {}: {error}",
+                path.display()
+            ));
+        }
+    };
+    match lock.try_lock() {
+        Ok(()) => {
+            let _ = lock.unlock();
+            Ok(false)
+        }
+        Err(TryLockError::WouldBlock) => Ok(true),
+        Err(TryLockError::Error(error)) => Err(format!(
+            "could not probe the gate lock at {}: {error}",
+            note.display()
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{locks, sole};
+    use super::{held, locks, sole};
     use crate::yard::Yard;
 
     /// A `.git`-shaped directory of this test's own, gone when the test is.
@@ -121,6 +153,30 @@ mod tests {
         drop(first);
         assert!(!note.exists(), "the note comes down with the gate");
         let _again = sole(&note, "gate").expect("the tree, once the first gate is done");
+    }
+
+    #[test]
+    fn a_look_at_the_lock_says_whether_a_gate_holds_the_tree_and_takes_nothing() {
+        let dir = common("held");
+        let note = dir.join("target").join("gate-running");
+        assert_eq!(held(&note), Ok(false), "no gate has run here");
+        let gate = sole(&note, "gate").expect("the gate");
+        assert_eq!(held(&note), Ok(true));
+        drop(gate);
+        assert_eq!(held(&note), Ok(false), "the lock file stays, nobody's");
+        let _next = sole(&note, "gate").expect("a look leaves the tree to the next gate");
+    }
+
+    /// A lock that is there and cannot be opened is said, not read as no
+    /// gate. Windows only, where opening a directory as a file is refused.
+    #[test]
+    #[cfg(windows)]
+    fn a_lock_that_cannot_be_opened_is_no_answer() {
+        let dir = common("unopened");
+        let note = dir.join("target").join("gate-running");
+        std::fs::create_dir_all(note.with_extension(super::LOCK)).expect("a directory there");
+        let said = held(&note).expect_err("no answer for a lock it could not open");
+        assert!(said.contains("gate lock"), "{said}");
     }
 
     /// What the unlock is for: a child handed the lock's open file

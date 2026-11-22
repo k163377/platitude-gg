@@ -277,3 +277,8 @@ pub(super) fn short(sha: &str) -> String {
 fn running_note(dir: &Path) -> std::path::PathBuf {
     dir.join("target").join("gate-running")
 }
+
+/// Whether a gate is running in the tree at `dir` now (`lanes::held`).
+pub(crate) fn running_in(dir: &Path) -> Result<bool, String> {
+    crate::lanes::held(&running_note(dir))
+}

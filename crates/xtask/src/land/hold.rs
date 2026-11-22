@@ -36,7 +36,7 @@
 //! it was started from: the gate and the landing rebuild the task runner
 //! there, and a running image cannot be replaced
 //! (`run::step_out_of_the_build_slot`). The next cargo run in the seat
-//! builds the runner again.
+//! builds the runner again. Not while a gate of that tree runs ([`Slot`]).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -79,18 +79,79 @@ pub(super) fn run(args: &[String]) -> Result<(), String> {
     let primary = crate::tree::primary_root(&here)
         .ok_or_else(|| format!("{here} is in no checkout with a primary one"))?;
     let file = start(&primary, &me.session, std::process::id())?;
-    if let Some(word) = super::run::step_out_of_the_build_slot(&[here.as_str()]) {
-        println!("{word}");
-    }
     println!(
         "holding this session's turns while it stands in the line of landings; the session's \
          own next tool call after that ends the hold, and the notice of its end needs no answer"
     );
     println!(
         "hold ended: {}",
-        hold(&primary, &me.session, &file, (claude, CLAUDE))
+        hold(
+            &primary,
+            &me.session,
+            &file,
+            (claude, CLAUDE),
+            &mut Slot::of(&here)
+        )
     );
     Ok(())
+}
+
+/// The build slot the hold was started from, until it has stepped out.
+///
+/// Not while a gate of the slot's tree runs: that gate's tests start the
+/// task runner from the slot by name (`CARGO_BIN_EXE_xtask`), and the step
+/// out takes every name of it away until a cargo builds it again — every
+/// start in between is a runner not found. Nothing is lost by waiting: a
+/// gate started as `cargo xtask gate` runs from the slot itself, so the
+/// slot is not free before it ends, and `land` steps out by itself before
+/// its gate rebuilds the runner (`run::prepare_gate`).
+struct Slot {
+    tree: String,
+    /// Stepped out: nothing more to look at.
+    out: bool,
+    /// Said once that a gate keeps the hold in the slot.
+    waiting: bool,
+}
+
+impl Slot {
+    fn of(tree: &str) -> Self {
+        Self {
+            tree: tree.to_string(),
+            out: false,
+            waiting: false,
+        }
+    }
+
+    /// One look: steps out of the slot unless a gate of its tree runs, and
+    /// what to say of it — the step out, or, at the first look a gate runs,
+    /// that the hold stays. A lock that cannot be looked at is no gate the
+    /// hold knows of, and is said.
+    fn look(&mut self) -> Option<String> {
+        if self.out {
+            return None;
+        }
+        let gate = crate::gate::running_in(Path::new(&self.tree));
+        if gate == Ok(true) {
+            if self.waiting {
+                return None;
+            }
+            self.waiting = true;
+            return Some(format!(
+                "a gate is running in {}: this hold stays in the build slot until that gate is \
+                 over — its tests start the task runner there by name",
+                self.tree
+            ));
+        }
+        self.out = true;
+        let said = super::run::step_out_of_the_build_slot(&[self.tree.as_str()]);
+        match gate {
+            Err(why) => Some(format!(
+                "{why} — stepped out as with no gate running{}",
+                said.map(|word| format!("\n{word}")).unwrap_or_default()
+            )),
+            Ok(_) => said,
+        }
+    }
 }
 
 /// Writes this hold's file for `session`, which has to stand in the line,
@@ -116,11 +177,21 @@ fn start(primary: &Path, session: &str, pid: u32) -> Result<PathBuf, String> {
 }
 
 /// Looks until this hold has to end, and says why. `claude` is the Claude
-/// process's pid and the name it runs under.
-fn hold(primary: &Path, session: &str, file: &Path, claude: (u32, &str)) -> &'static str {
+/// process's pid and the name it runs under. Every look is also the
+/// `slot`'s ([`Slot::look`]), the first before anything can end the hold.
+fn hold(
+    primary: &Path,
+    session: &str,
+    file: &Path,
+    claude: (u32, &str),
+    slot: &mut Slot,
+) -> &'static str {
     let mine = std::process::id();
     let mut looks: u32 = 0;
     loop {
+        if let Some(word) = slot.look() {
+            println!("{word}");
+        }
         // A file being written over — a newer hold's — reads as no pid for
         // the moment it is empty; only a file not there is gone.
         match held_by(file) {
@@ -221,7 +292,7 @@ fn sweep(permits: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::{KIND, end_if_out, held_by, hold, start};
+    use super::{KIND, Slot, end_if_out, held_by, hold, start};
     use crate::hook::permit;
     use std::path::{Path, PathBuf};
 
@@ -249,21 +320,75 @@ mod tests {
 
     /// Runs the hold loop of this process on `file` in a thread, with
     /// `claude` as its Claude process — this very process by its own name
-    /// unless a pid nobody has — and hands back what it said.
+    /// unless a pid nobody has — and hands back what it said, with its
+    /// slot: the checkout's, which a test binary is never started from, so
+    /// a step out moves nothing.
     fn holding(
         primary: &Path,
         file: &Path,
         claude: u32,
-    ) -> std::sync::mpsc::Receiver<&'static str> {
+    ) -> std::sync::mpsc::Receiver<(&'static str, Slot)> {
         let me = std::process::id();
         std::fs::write(file, format!("{me}\n")).unwrap();
         let image = crate::subprocess::image_of(me).expect("this process is behind its own pid");
         let (primary, file) = (primary.to_path_buf(), file.to_path_buf());
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _sent = tx.send(hold(&primary, SESSION, &file, (claude, &image)));
+            let mut slot = Slot::of(&primary.to_string_lossy());
+            let why = hold(&primary, SESSION, &file, (claude, &image), &mut slot);
+            let _sent = tx.send((why, slot));
         });
         rx
+    }
+
+    /// The checkout's gate, running: the lock its note stands beside
+    /// (`gate::run::running_note`).
+    fn gate_running(primary: &Path) -> crate::lanes::Sole {
+        let note = primary.join("target").join("gate-running");
+        crate::lanes::sole(&note, "gate").expect("the checkout's gate")
+    }
+
+    #[test]
+    fn a_hold_stays_in_its_build_slot_while_its_trees_gate_runs() {
+        let (yard, root, _permit, _gone) = standing();
+        let primary = crate::tree::primary_root(&root).unwrap();
+        let mut slot = Slot::of(&primary.to_string_lossy());
+        let gate = gate_running(&primary);
+        let said = slot.look().expect("a word that the hold stays");
+        assert!(said.contains("a gate is running"), "{said}");
+        assert_eq!(slot.look(), None, "said once");
+        assert!(!slot.out, "stepped out from under the running gate");
+        drop(gate);
+        let _said = slot.look();
+        assert!(slot.out, "the gate is over");
+        drop(yard);
+    }
+
+    /// Every look of the loop asks the slot before anything can end it, so
+    /// a hold ended mid-gate has looked while the gate ran, and one ended
+    /// after has looked with none.
+    #[test]
+    fn the_hold_loop_steps_out_at_a_look_with_no_gate_running_and_at_no_other() {
+        let (yard, root, _permit, _gone) = standing();
+        let primary = crate::tree::primary_root(&root).unwrap();
+        let file = permit::kept_file_in(&primary, SESSION, KIND).unwrap();
+        let gate = gate_running(&primary);
+        let said = holding(&primary, &file, std::process::id());
+        std::fs::remove_file(&file).unwrap();
+        let (why, slot) = crate::wait::heard("the hold", "its end", &said);
+        assert!(why.contains("file is gone"), "{why}");
+        assert!(
+            !slot.out,
+            "a hold ended in the middle of the gate never left the slot"
+        );
+
+        drop(gate);
+        let said = holding(&primary, &file, std::process::id());
+        std::fs::remove_file(&file).unwrap();
+        let (why, slot) = crate::wait::heard("the hold", "its end", &said);
+        assert!(why.contains("file is gone"), "{why}");
+        assert!(slot.out, "a look with the gate over steps out");
+        drop(yard);
     }
 
     #[test]
@@ -346,12 +471,12 @@ mod tests {
         let claude = std::process::id();
         let said = holding(&primary, &file, claude);
         std::fs::write(&file, format!("{gone}\n")).unwrap();
-        let why = crate::wait::heard("the hold", "its end", &said);
+        let (why, _slot) = crate::wait::heard("the hold", "its end", &said);
         assert!(why.contains("newer hold"), "{why}");
         assert!(file.is_file(), "the newer hold's file stays");
 
         let said = holding(&primary, &file, gone);
-        let why = crate::wait::heard("the hold", "its end", &said);
+        let (why, _slot) = crate::wait::heard("the hold", "its end", &said);
         assert!(why.contains("Claude process"), "{why}");
         assert!(!file.is_file(), "it takes its own file away");
         drop(yard);
@@ -364,7 +489,7 @@ mod tests {
         let file = permit::kept_file_in(&primary, SESSION, KIND).unwrap();
         crate::land::line::clear(&permit, None);
         let said = holding(&primary, &file, std::process::id());
-        let why = crate::wait::heard("the hold", "its end", &said);
+        let (why, _slot) = crate::wait::heard("the hold", "its end", &said);
         assert!(why.contains("another session id"), "{why}");
         assert!(!file.is_file());
         drop(yard);
