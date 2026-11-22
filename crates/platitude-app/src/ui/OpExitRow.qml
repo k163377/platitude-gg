@@ -6,10 +6,13 @@ import platitude.ui.face
 import platitude.ui.words
 
 // One row of the stopped operation's card: `AppMenuItem`'s row standing in a pane — the menu's chip, sentence and hold
-// mark exactly, so the menu's reader reads it untaught. Not `MenuItem` itself, which only lays out inside a Menu.
-// **The sentence wraps where a menu's is cut** (user decision — ask before changing): a menu is as wide as its widest
-// row and says the rest on hover, while this card is only as wide as the pane — and what a row does is the one thing
-// it is there to say. The chip, the mark and the note stand on the first line.
+// mark exactly, so the menu's reader reads it untaught. Not `MenuItem` itself, which only lays out inside a Menu. **The
+// sentence wraps where a menu's is cut** (user decision — ask before changing): a menu is as wide as its widest row and
+// says the rest on hover, while this card is only as wide as the pane — and what a row does is the one thing it is
+// there to say. The chip, the mark and the note stand on the first line. Where the sentence beside the chip would break
+// inside a word, it goes down under the chip instead, whole words to a line (`stacked`; user decision — ask before
+// changing; the card asks it of every row at once, so the rows keep one shape): the card stands in a pane as narrow as
+// its floor rather than widen it, which would fold the list before the right pane gave way.
 Item {
     id: opRow
 
@@ -34,6 +37,13 @@ Item {
     readonly property real codeColSeat: codeLabel.implicitWidth
     /// The column the card settled on.
     property real codeColW: 0
+    /// The sentence stands under the chip rather than beside it (`OpExitCard.stacked`).
+    property bool stacked: false
+    /// Beside the chip, the sentence would break inside a word: its widest word is wider than the room the chip, the
+    /// note and the gaps leave it. Read off the row's own width, so it does not move with `stacked`.
+    readonly property bool breaksBeside: opRow.width - 2 * Theme.spaceXs - opRow.holdIndent
+        - Math.max(opRow.codeColW, codeLabel.implicitWidth) - Theme.spaceSm
+        - (opRow.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0) < Math.ceil(widestWord.contentWidth)
     /// How far the words are pushed in to leave room for the mark — the same on every row, confirmed or not.
     property real holdIndent: 0
     /// How far the fill reaches past the row into the card's side padding (`HoldFill.bleed`).
@@ -76,7 +86,9 @@ Item {
     /// row's words stand (`AppMenuItem.capsLift`).
     readonly property real capsLift: -WordFace.capitalDropOf(rowLabel.baselineOffset, rowLabel.font.pixelSize,
                                                              opRow.lineHeight)
-    implicitHeight: opRow.visible ? Theme.rowHeight + rowLabel.implicitHeight - opRow.lineHeight : 0
+    // Stacked, every line of the sentence stands under the first line's band.
+    implicitHeight: !opRow.visible ? 0
+                  : Theme.rowHeight + rowLabel.implicitHeight - (opRow.stacked ? 0 : opRow.lineHeight)
     Accessible.description: opRow.holdPresses > 0 ? Words.pressToActivate(opRow.holdPresses) : ""
 
     /// Over the fill the words lift, the wait included: the row goes off while its own work runs.
@@ -110,11 +122,12 @@ Item {
 
     // In the seat the words leave for it at the row's left edge, centred there as a menu row's mark is
     // (`AppMenuItem`). The head of the row's words: as tall as the sentence's capitals and on their middle, its
-    // first line's (デザイン規約 §アイコンの席 の文頭記号).
+    // first line's (デザイン規約 §アイコンの席 の文頭記号) — the chip's, once the sentence stands under it.
     HoldIcon {
         id: holdMark
         x: Math.round((opRow.holdIndent - holdMark.width) / 2)
-        y: Math.round(opWords.y + rowLabel.y + rowLabel.baselineOffset
+        y: Math.round(opWords.y + (opRow.stacked ? codeSeat.y + codeLabel.y + codeLabel.baselineOffset
+                                                 : rowLabel.y + rowLabel.baselineOffset)
                       - WordFace.drawnCapitalMiddle(holdMark.size) - holdMark.height / 2)
         size: rowLabel.font.pixelSize
         progress: opRow.holdProgress
@@ -134,8 +147,9 @@ Item {
 
     // `AppMenuItem`'s padding, so the card's rows and a menu's read alike. Hung from the top with the first line
     // centred in a menu row's band and lifted to its capitals as a menu row's words are (`capsLift`), so a one-line
-    // row stands where a menu row's words do.
-    RowLayout {
+    // row stands where a menu row's words do. Stacked, the sentence takes the line under the chip's, from the chip's
+    // left edge across the row, and the note stays at the first line's end.
+    GridLayout {
         id: opWords
         anchors.left: parent.left
         anchors.right: parent.right
@@ -143,11 +157,17 @@ Item {
         anchors.leftMargin: Theme.spaceXs + opRow.holdIndent
         anchors.rightMargin: Theme.spaceXs
         anchors.topMargin: (Theme.rowHeight - opRow.firstBand) / 2 + opRow.capsLift
-        spacing: Theme.spaceSm
+        columns: 3
+        rowSpacing: 0
+        columnSpacing: Theme.spaceSm
         Item {
             id: codeSeat
+            Layout.row: 0
+            Layout.column: 0
             Layout.alignment: Qt.AlignTop
+            // As tall as the first line's band, so a sentence under it starts under the band.
             Layout.topMargin: (opRow.firstBand - codeLabel.implicitHeight) / 2
+            Layout.bottomMargin: (opRow.firstBand - codeLabel.implicitHeight) / 2
             implicitWidth: Math.max(opRow.codeColW, codeLabel.implicitWidth)
             implicitHeight: codeLabel.implicitHeight
             CodeGround {
@@ -172,16 +192,28 @@ Item {
         }
         PlainTextLabel {
             id: rowLabel
+            Layout.row: opRow.stacked ? 1 : 0
+            Layout.column: opRow.stacked ? 0 : 1
+            Layout.columnSpan: opRow.stacked ? 3 : 1
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignTop
-            Layout.topMargin: (opRow.firstBand - opRow.lineHeight) / 2
+            Layout.topMargin: opRow.stacked ? 0 : (opRow.firstBand - opRow.lineHeight) / 2
             text: opRow.text
             font.pixelSize: Theme.fontMd
             wrapMode: Text.Wrap
             color: opRow.wordColor
         }
+        // Stacked, what holds the note at the first line's end.
+        Item {
+            visible: opRow.stacked
+            Layout.row: 0
+            Layout.column: 1
+            Layout.fillWidth: true
+        }
         PlainTextLabel {
             id: noteLabel
+            Layout.row: 0
+            Layout.column: 2
             Layout.alignment: Qt.AlignTop
             Layout.topMargin: (opRow.firstBand - noteLabel.implicitHeight) / 2
             visible: opRow.note !== ""
@@ -189,6 +221,16 @@ Item {
             color: opRow.noteColor
             font.pixelSize: Theme.fontSm
         }
+    }
+    // The sentence's widest word in its own face (`breaksBeside`): wrapped at word boundaries only into no room, each
+    // word stands on a line of its own.
+    PlainTextLabel {
+        id: widestWord
+        visible: false
+        width: 1
+        text: opRow.text
+        font: rowLabel.font
+        wrapMode: Text.WordWrap
     }
 
     MouseArea {

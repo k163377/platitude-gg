@@ -40,6 +40,16 @@ Rectangle {
         }
         return widest
     }
+    /// Every row's sentence stands under its chip once any row's would break inside a word beside it
+    /// (`OpExitRow.stacked`): rows of two shapes would read as two kinds of row.
+    readonly property bool stacked: {
+        for (let i = 0; i < opExitCol.children.length; i++) {
+            const row = opExitCol.children[i]
+            if (row && row.visible && row.breaksBeside === true)
+                return true
+        }
+        return false
+    }
 
     /// Automation: whether the card offers a row — the picture cannot say, since the card sizes itself to what it
     /// holds. `--abort` goes to the merge's button first: its `code` is the bool "the label is a command", not a
@@ -170,6 +180,7 @@ Rectangle {
         OpExitRow {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
+            stacked: opExitCard.stacked
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
             waiting: opExitCard.commandOut
@@ -188,6 +199,7 @@ Rectangle {
             id: skipRow
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
+            stacked: opExitCard.stacked
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
             waiting: opExitCard.commandOut
@@ -213,6 +225,7 @@ Rectangle {
         OpExitRow {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
+            stacked: opExitCard.stacked
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
             waiting: opExitCard.commandOut
@@ -228,6 +241,7 @@ Rectangle {
         OpExitRow {
             Layout.fillWidth: true
             codeColW: opExitCard.codeColW
+            stacked: opExitCard.stacked
             holdIndent: opExitCard.holdIndent
             fillBleed: Theme.spaceXs - Theme.borderWidth
             waiting: opExitCard.commandOut
@@ -257,7 +271,7 @@ Rectangle {
             // one-row exit the chip is the only thing naming the operation. The words read on from the chip as one
             // sentence and name where it lands, as the commit button above names where it commits
             // (`WipPane.commitTarget`): nothing done since the merge began survives it (user decision — ask before
-            // changing).
+            // changing). Short of room, the phrase gives way as every phrase does (`ActionButtonLabel`).
             phraseHead: "merge --abort"
             //: Reads on from the `merge --abort` chip; then the branch it lands on, or HEAD when detached, as a chip.
             text: qsTr("and go back to")
