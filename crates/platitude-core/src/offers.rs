@@ -25,7 +25,7 @@ mod moves;
 mod pull;
 mod tree;
 
-pub use far::TagDeleteHeld;
+pub use far::{BranchFar, FarSide, Reading, TagDeleteHeld, TagFar};
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
     SwitchAction, SwitchTarget, leave_code, leaving_undoes, move_landed, moves_blocked,
@@ -45,8 +45,8 @@ pub enum RefKind {
     Tag,
     Stash,
     /// Another worktree, named by its path. What the row leads to is
-    /// that worktree: `held_by_worktree` in [`ref_menu`] is its own path while
-    /// it is not the one the tab stands in.
+    /// that worktree: `held` in [`ref_menu`] says so while it is not the one
+    /// the tab stands in.
     Worktree,
 }
 
@@ -91,7 +91,7 @@ impl<'a> RefTarget<'a> {
     }
 }
 
-/// Which sides of a tag exist, in the words the menu asks with.
+/// Which sides of a tag exist ([`TagFar::sides`]).
 ///
 /// The rows differ by side (`tag --delete` needs a local tag,
 /// `push --delete` a remote one, sending a local one), and the sidebar lists
@@ -107,9 +107,8 @@ pub enum TagSides {
 }
 
 impl TagSides {
-    /// Decoded from the word `GitFacts.refMenuOffers` is handed; `None`
-    /// for every row that is not a tag, and for a tag whose section has
-    /// not been read yet.
+    /// Decoded from the word a tag's record carries (`encode::far`); `None`
+    /// for a tag whose section has not been read yet.
     pub fn from_word(word: &str) -> Option<Self> {
         match word {
             "here" => Some(Self::Here),
@@ -162,7 +161,7 @@ pub struct RefMenuOffers {
     pub delete: bool,
     /// The branch's remote reading, deleted without touching the local
     /// one — still possible in both of the refused cases above, and out
-    /// where the two have drifted (`remote_drifted` in [`ref_menu`]).
+    /// where the two have drifted ([`Reading::Drifted`]).
     pub delete_remote: bool,
     /// The tag sent to the remote this repository pushes to. Only a tag —
     /// a branch goes out through the toolbar, where its counts are
@@ -242,47 +241,38 @@ impl RefMenuOffers {
 /// The offers themselves.
 ///
 /// `target` is the row; `open` is the tab-lifecycle gate; `tree` is where
-/// the worktree stands; `held_by_worktree` is the path of the other
-/// worktree holding this row's branch, empty when none does;
-/// `remote_counterpart` is the remote reading a local branch carries;
-/// `remote_drifted` says that reading stands on another commit
-/// ([`crate::session::BranchItem::upstream_drifted`] /
-/// [`crate::session::RefsSnapshot::tag_drifts`]); `tracked` says a local
-/// branch has an upstream at all — the reading above, or one gone or
-/// here that leaves `remote_counterpart` empty; `default_remote` is
-/// where pushes go, empty with no remote; `tag_sides` is
-/// [`TagSides::from_word`]'s word (ignored for other kinds). The `pull`
-/// row is [`pull_row`]'s.
-#[expect(clippy::too_many_arguments)]
+/// the worktree stands; `held` says another worktree holds this row's
+/// branch — a remote row's through the local branch of its name — or, on
+/// a worktree's row, that the tab does not stand in it; `far` is what the
+/// row's card reads over there, [`FarSide::Unread`] for the row's own
+/// menu. The `pull` row is [`pull_row`]'s.
 pub fn ref_menu(
     target: RefTarget<'_>,
     oid_hex: &str,
     open: bool,
     tree: &TreeStanding,
-    held_by_worktree: &str,
-    remote_counterpart: &str,
-    remote_drifted: bool,
-    tracked: bool,
-    default_remote: &str,
-    tag_sides: &str,
+    held: bool,
+    far: FarSide,
 ) -> RefMenuOffers {
     let RefTarget { kind, name } = target;
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
-    let held = !held_by_worktree.is_empty();
     let current = tree.is_current(name);
     let on_current_branch = kind == RefKind::Branch && current;
-    // Only a tag has sides; every other row's local half is simply there.
-    let sides = (kind == RefKind::Tag)
-        .then(|| TagSides::from_word(tag_sides))
-        .flatten();
-    // Unread reads as "here", keeping the everyday delete on a row whose
-    // section has not answered; rows needing a remote reading stay out
-    // until there is one.
+    let (upstream, tag) = match far.on(kind) {
+        FarSide::Unread => (None, None),
+        FarSide::Branch(upstream) => (Some(upstream), None),
+        FarSide::Tag(tag) => (None, Some(tag)),
+    };
+    // Every row but a tag's has its local half simply there, and an
+    // unread tag reads as one here ([`TagFar::sides`]).
+    let sides = tag.and_then(|tag| tag.sides);
     let tag_here = sides.is_none_or(TagSides::here);
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
+    let tag_reaches = tag.is_some_and(|tag| tag.has_remote);
+    let tag_held = tag.is_some_and(|tag| tag.held_back != TagDeleteHeld::No);
     RefMenuOffers {
         // A worktree leads to itself — unless the tab already stands
-        // in it, which is when the caller hands no holder.
+        // in it, which the caller hands as not held.
         switch_to: (branchy && !current) || (kind == RefKind::Worktree && held),
         switch_asks: !held && tree.moves_blocked,
         branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
@@ -294,17 +284,14 @@ pub fn ref_menu(
             && !(kind == RefKind::Branch && (current || held))
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
-        delete_remote: !remote_counterpart.is_empty() && !remote_drifted,
+        delete_remote: upstream.is_some_and(|upstream| upstream.reading == Reading::Together),
         // Not gated on drift: a remote holding the name elsewhere turns
         // the row into the leased overwrite (デザイン規約 §相手の履歴を置き換える).
-        push_tag: kind == RefKind::Tag && !default_remote.is_empty() && tag_here,
-        delete_remote_tag: !default_remote.is_empty() && tag_on_remote && !remote_drifted,
-        delete_tag_everywhere: !default_remote.is_empty()
-            && tag_on_remote
-            && tag_here
-            && !remote_drifted,
-        set_upstream: kind == RefKind::Branch && !default_remote.is_empty(),
-        unset_upstream: kind == RefKind::Branch && tracked,
+        push_tag: tag_reaches && tag_here,
+        delete_remote_tag: tag_reaches && tag_on_remote && !tag_held,
+        delete_tag_everywhere: tag_reaches && tag_on_remote && tag_here && !tag_held,
+        set_upstream: upstream.is_some_and(|upstream| upstream.has_remote),
+        unset_upstream: upstream.is_some_and(|upstream| upstream.tracked),
         on_current_branch,
     }
 }

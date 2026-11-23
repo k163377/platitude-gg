@@ -245,20 +245,46 @@ impl GitFacts {
         default_remote: String,
         tag_sides: String,
     ) -> Vec<String> {
+        use platitude_core::offers::{
+            BranchFar, FarSide, Reading, TagDeleteHeld, TagFar, TagSides,
+        };
         let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
             return Vec::new();
+        };
+        // The far side the row's kind has, read off the words each entrance
+        // hands: `remote_drifted` is a branch's drifted reading, and on a tag
+        // its rows that delete over there held back.
+        let has_remote = !default_remote.is_empty();
+        let far = match kind.as_str() {
+            "branch" => FarSide::Branch(BranchFar {
+                reading: if remote_counterpart.is_empty() {
+                    Reading::None
+                } else if remote_drifted {
+                    Reading::Drifted
+                } else {
+                    Reading::Together
+                },
+                tracked,
+                has_remote,
+            }),
+            "tag" => FarSide::Tag(TagFar {
+                sides: TagSides::from_word(&tag_sides),
+                has_remote,
+                held_back: if remote_drifted {
+                    TagDeleteHeld::Drifted
+                } else {
+                    TagDeleteHeld::No
+                },
+            }),
+            _ => FarSide::Unread,
         };
         platitude_core::offers::ref_menu(
             target,
             &oid_hex,
             open,
             &tree,
-            &held_by_worktree,
-            &remote_counterpart,
-            remote_drifted,
-            tracked,
-            &default_remote,
-            &tag_sides,
+            !held_by_worktree.is_empty(),
+            far,
         )
         .words()
         .into_iter()

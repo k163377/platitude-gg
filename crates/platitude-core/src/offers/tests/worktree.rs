@@ -1,27 +1,22 @@
 use super::super::testkit::target;
 use super::super::*;
 
-/// A worktree's row on an idle repository on `main`: `holder` is the
-/// worktree's own path where it is another worktree, empty where the tab
-/// stands in it.
-fn worktree_row(holder: &str) -> RefMenuOffers {
+/// A worktree's row on an idle repository on `main`: `elsewhere` where it
+/// is another worktree, not where the tab stands in it.
+fn worktree_row(elsewhere: bool) -> RefMenuOffers {
     ref_menu(
         target(RefKind::Worktree, "C:/work/topic"),
         "abc123",
         true,
         &TreeStanding::on("main"),
-        holder,
-        "",
-        false,
-        false,
-        "origin",
-        "",
+        elsewhere,
+        FarSide::Unread,
     )
 }
 
 #[test]
 fn another_worktree_leads_to_itself_and_offers_what_its_commit_does() {
-    let offers = worktree_row("C:/work/topic");
+    let offers = worktree_row(true);
     assert!(offers.switch_to, "the row opens that worktree");
     assert!(!offers.switch_asks, "opening another worktree asks nothing");
     assert!(offers.branch_here);
@@ -33,7 +28,7 @@ fn another_worktree_leads_to_itself_and_offers_what_its_commit_does() {
 
 #[test]
 fn the_worktree_the_tab_stands_in_leads_nowhere() {
-    assert!(!worktree_row("").switch_to);
+    assert!(!worktree_row(false).switch_to);
 }
 
 #[test]
