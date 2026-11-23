@@ -6,17 +6,18 @@ import QtQuick.Layouts
 import platitude.ui
 import platitude.ui.words
 
-// Everything between the two bands, scrolling when the pane is too short: past a file list at zero nothing else
-// gives, and the rest would run out of the pane's bottom (規約 §窓の床). The bands stay put — the pane's heading and
-// `CHANGES` (a list whose heading has scrolled away no longer says what it lists) — and the list keeps two rows
-// (`DetailsPane.blockRoom`), as `WipCommitBlock` does for the worktree pane. The root is that surface
-// (rules-refs/structure.md).
+// Everything between the two bands, scrolling when the pane is too short: past a file list at its floor and a
+// description at its own nothing else gives, and the rest would run out of the pane's bottom (規約 §窓の床). The bands
+// stay put — the pane's heading and `CHANGES` (a list whose heading has scrolled away no longer says what it lists) —
+// and the list keeps its floor (`DetailsPane.listFloor`), as `WipCommitBlock` does for the worktree pane. The root is
+// that surface (rules-refs/structure.md).
 Flickable {
     id: block
 
     required property var details
     required property real blockRoom
     required property real listHeight
+    required property real listFloor
     required property real paneWidth
     required property bool editable
     required property string editBlocked
@@ -58,6 +59,11 @@ Flickable {
 
     /// What the block would take with nothing in its way — the pane holds it against `blockRoom`.
     readonly property real wants: blockCol.implicitHeight
+    /// What stands in the block beside the message pair (`MessageEditor.besidePair`): the column's margins, the author
+    /// row and the save row, each with its step — a row the column gains goes in here too, or the block scrolls with
+    /// the description still at rest.
+    readonly property real besidePair: 2 * Theme.spaceXs + authorRow.implicitHeight + Theme.spaceXs
+        + (saveRow.visible ? saveRow.implicitHeight + Theme.spaceXs : 0)
 
     // -- what the pane reads back out of here --
     /// The row that draws the commit's values, handed on whole rather than relayed piece by piece.
@@ -184,8 +190,10 @@ Flickable {
                 blockedTip: block.editBlocked
                 summaryPointedAt: block.summaryPointedAt
                 listHeight: block.listHeight
+                listFloor: block.listFloor
                 blockRoom: block.blockRoom
                 blockHeight: blockCol.implicitHeight
+                besidePair: block.besidePair
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
                 // Escape drops the draft and puts the resting text back (the commit's own message, or the reword a
                 // plan holds for it), unasked (`DetailsPane.syncMessage`).

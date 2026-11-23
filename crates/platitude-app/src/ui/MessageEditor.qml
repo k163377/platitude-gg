@@ -9,12 +9,15 @@ import platitude.ui
 // message's own hierarchy.
 //
 // **One block of one height**: at rest one summary line over five description lines (`Theme.messageMaxHeight`), and
-// that total does not move with either text — a summary that wraps to two or three lines takes them from the
-// description, so the CHANGES band, the file list and the commit button beside the pair never jump with the commit
-// chosen. The description gives way down to two lines (`descFloor`); past that the block itself grows, until the
-// summary's own cap (`messageMaxHeight`) stops it. The pair's height is one number the layout splits: the description
-// fills what the summary leaves (`fillHeight`). Two heights computed apart and meant to add up would break the sum
-// quietly on a line height's fraction, a layout's rounding or a clamp.
+// while the description has empty room to give that total does not move with either text — a summary that wraps takes
+// its lines from that empty room, so the CHANGES band, the file list and the commit button beside the pair stay put.
+// Written words are not cut for it: a summary that would cut them grows the block into the room the list spares, as
+// the version corner and empty rows are lower than the words (`descWordRoom`). A pane too short for the whole block
+// takes what it lacks from the description, so the buttons stay on screen (`descShare`). The description gives way
+// down to its floor (`descFloor` — where its text counts: an empty box gives more than one with words in it); past
+// that the block itself grows, until the summary's own cap (`messageMaxHeight`) stops it. The pair's height is one
+// number the layout splits: the description fills what the summary leaves (`fillHeight`). Two heights computed apart
+// and meant to add up would break the sum quietly on a line height's fraction, a layout's rounding or a clamp.
 //
 // A new message always opens from its first line: a text that overflows leaves the caret at its end and the box scrolls
 // there, so it would start mid-text with nobody having moved it. Held at the top until the reader moves it — a wheel,
@@ -23,7 +26,8 @@ import platitude.ui
 // The `Co-authored-by:` lines stay inside the description: the box is the amend's editor, and taken out of it the box
 // and the saved message would disagree, with no way left to remove or fix a co-author.
 //
-// What stands around the pair is the pane's and comes in as numbers (`listHeight` / `blockRoom` / `blockHeight`).
+// What stands around the pair is the pane's and comes in as numbers (`listHeight` / `listFloor` / `blockRoom` /
+// `blockHeight` / `besidePair`).
 // The readouts go back out under the panes' names — automation reads the panes, and the panes forward.
 ColumnLayout {
     id: editor
@@ -52,13 +56,23 @@ ColumnLayout {
     function dropAttention() { editor.attention = false }
 
     // ---- what the pane says about its own geometry ------------------
-    /// The pane's file list height — the one thing under the block that gives. What it has past two rows is all this
-    /// pair may borrow (`DescriptionBox`'s grip): under two rows it stops being a list.
+    /// The pane's file list height — the one thing under the block that gives. What it has past `listFloor` is all this
+    /// pair may borrow (`DescriptionBox`'s grip).
     property real listHeight: 0
-    /// How much of the pane the block holding this pair may take — the pane's to say; the two panes differ.
-    property real blockRoom: 0
+    /// How short that list may go, in `listHeight`'s terms — the pane's to say (`WipPane.listFloor`,
+    /// `DetailsPane.listFloor`).
+    property real listFloor: 2 * Theme.rowHeight
+    /// How much of the pane the block holding this pair may take — the pane's to say; the two panes differ. Unsaid,
+    /// the pair stands as in a pane with room.
+    property real blockRoom: Infinity
     /// What that block asks for (its column's implicitHeight); `descOwed` says why it is held against `blockRoom`.
     property real blockHeight: 0
+    /// What stands in the block beside the pair — its margins, its steps and the rows over and under the pair — read
+    /// off those rows by the block (`WipCommitBlock.besidePair`, `DetailsMessageBlock.besidePair`): the column's own
+    /// height carries the pair's, and reading it here would ring.
+    property real besidePair: 0
+    /// How tall the pair may stand before the block scrolls.
+    readonly property real pairRoom: editor.blockRoom - editor.besidePair
 
     // ---- what the pair holds ----------------------------------------
     readonly property string subjectText: summaryArea.text
@@ -77,29 +91,50 @@ ColumnLayout {
     readonly property real summaryNeed:
         Math.min(Math.ceil(summaryArea.implicitHeight) + Theme.spaceSm,
                  Theme.messageMaxHeight)
-    /// The description gives up its lines to a wrapping summary down to two, and no further.
-    readonly property real descFloor: 2 * Theme.fontMdLine + Theme.spaceSm
-    /// At rest: one summary line and five description lines, with the gap between them.
+    /// The least the description stands at, to a short pane or a wrapping summary: empty, one line — its name or the
+    /// standing message's first; with words in it, a line and the top half of the next, enough to read that more lines
+    /// follow (its own lines where it has fewer). Written words hold their room longer than an empty box does (user
+    /// decisions — ask before changing).
+    readonly property real descFloor: descBox.text === ""
+        ? Theme.fontMdLine + Theme.spaceSm
+        : Math.min(1.5 * Theme.fontMdLine + Theme.spaceSm, descBox.wants)
+    /// The description's share at rest: five lines, less only what the block lacks once the list is down to its floor
+    /// — the description gives way to keep the block's buttons on screen, and nothing to a list that has room already;
+    /// the block scrolls only once the description is at its floor (user decision — ask before changing).
+    readonly property real descShare:
+        Math.max(editor.descFloor, Math.min(Theme.messageMaxHeight,
+                                            editor.pairRoom - Theme.fontLgLine - Theme.spaceSm - Theme.spaceXs))
+    /// At rest: one summary line and the description's share, with the gap between them.
     readonly property real pairRest:
-        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + Theme.messageMaxHeight
-    /// What the pair is laid out at: once the description is at its floor, the block grows, up to the summary's cap.
+        Theme.fontLgLine + Theme.spaceSm + Theme.spaceXs + editor.descShare
+    /// What a wrapping summary may not take from the description: its words — their own lines, up to its share (an
+    /// empty box, its floor). The summary takes the box's empty room and the band stays; past that the block grows into
+    /// the list's spare room, as the version corner and the empty rows are lower than written words, down to the list's
+    /// floor — only there do the words give way, to `descFloor` (user decision — ask before changing).
+    readonly property real descWordRoom: descBox.text === ""
+        ? editor.descFloor
+        : Math.max(editor.descFloor, Math.min(editor.descShare, descBox.wants))
+    /// What the pair is laid out at: the rest height while the summary takes only the description's empty room; past
+    /// that the summary over the description's words, as far as the pane has room; never less than the summary over the
+    /// description's floor, up to the summary's cap.
     readonly property real pairBase:
         Math.max(editor.pairRest,
-                 editor.summaryNeed + Theme.spaceXs + editor.descFloor)
+                 editor.summaryNeed + Theme.spaceXs + editor.descFloor,
+                 Math.min(editor.summaryNeed + Theme.spaceXs + editor.descWordRoom, editor.pairRoom))
     readonly property real descRest:
         editor.pairBase - editor.summaryNeed - Theme.spaceXs
 
     // -- what the pane lends the description box --
     // The box carries the pull and the grip (`DescriptionBox`); the bound is the pane's (`listHeight`).
     readonly property real descRoom:
-        Math.max(0, editor.listHeight - 2 * Theme.rowHeight)
+        Math.max(0, editor.listHeight - editor.listFloor)
     /// How far past the bound the pane already is — what the hand has to give back. The second term is the block's
     /// overflow past the pane's edge: the list stops answering at zero, and without it the give-back stalls short.
     ///
     /// Held against the room the block is *allowed* (`blockRoom`), not a laid-out height: that height follows the
     /// box, so comparing with it is a ring — the box is told it owes last frame's growth and gives it all back.
     readonly property real descOwed:
-        Math.max(0, 2 * Theme.rowHeight - editor.listHeight)
+        Math.max(0, editor.listFloor - editor.listHeight)
         + Math.max(0, editor.blockHeight - editor.blockRoom)
     /// Whether the grip is refusing a pull, and where the hand is while it does (scene coordinates). The page draws the
     /// badge (`RepoPage.refusalSource`).

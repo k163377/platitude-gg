@@ -107,7 +107,7 @@ ColumnLayout {
     // **One list per bucket**, conflicts → unstaged → staged, each with its own heading and scroll (user decision — ask
     // before changing): joined into one, 70 unstaged files push the staged ones out of the pane, and the side that
     // makes the commit is off screen. Only rows are shared out — a heading and the hairline between buckets are not
-    // a bucket's to give up. The list keeps two rows besides the headings as the window shrinks (`blockRoom`).
+    // a bucket's to give up. The list keeps its floor, headings included, as the window shrinks (`listFloor`).
     // **The headings stand at 0 and do not scroll**: with nothing staged the pane would never say where staging goes;
     // after `Stage all` it would lose the heading that says where to take things back, and the next unstage would grow
     // one under the hand; and `Stage all` is about the whole bucket, not the rows it rides with. **The conflicts
@@ -790,12 +790,18 @@ ColumnLayout {
     readonly property bool descriptionFocused: commitBlock.descriptionFocused
 
     // -- what this pane lends the message editor --
-    /// What the block under the list may take before it scrolls: all of the pane but two rows of list, the grip's bound
-    /// (`DescriptionBox`), and **the bucket frame** — a heading counted as one of the two rows
-    /// leaves a pane at the window's floor nothing but headings. A clean tree owes the list nothing.
+    /// How short the list may go: **the bucket frame** and two rows — a heading counted as one of the two rows leaves a
+    /// pane at the window's floor nothing but headings — or the rows it has, where it has fewer: a row's room with
+    /// nothing in it would stand empty while the description gives way under it (user decision — ask before changing).
+    /// A clean tree owes the list nothing.
+    readonly property real listFloor: !wipPane.bucketsStanding ? 0
+        : wipPane.bucketFrame + Math.min(2 * Theme.rowHeight,
+                                         (conflictsBucket.visible ? conflictsBucket.wants : 0)
+                                         + unstagedBucket.wants + stagedBucket.wants)
+    /// What the block under the list may take before it scrolls: all of the pane but the list's floor and the hairline
+    /// over the block, the grip's bound too (`DescriptionBox`).
     readonly property real blockRoom:
-        Math.max(0, wipPane.height - headerBand.height
-                    - (wipPane.bucketsStanding ? wipPane.bucketFrame + 2 * Theme.rowHeight : 0))
+        Math.max(0, wipPane.height - headerBand.height - wipPane.listFloor - Theme.borderWidth)
     /// Moves the block by a wheel a box on it could not use (`WipCommitBlock.rollBlock`).
     function rollBlock(pixels) {
         commitBlock.rollBlock(pixels)
@@ -977,9 +983,9 @@ ColumnLayout {
     }
 
     // Under the list, the block that scrolls on its own when the pane is too short (`WipCommitBlock`). The list keeps
-    // two rows throughout (the grip's bound), so the two scrolling surfaces never share an edge: a wheel is over
-    // exactly one of them. The list's `Layout.fillHeight` pushes the block to the floor: aligning the block there by
-    // `Layout.alignment` leaves the list unable to take the rest, and the block floats.
+    // its floor throughout (`listFloor`, the grip's bound), so the two scrolling surfaces never share an edge: a wheel
+    // is over exactly one of them. The list's `Layout.fillHeight` pushes the block to the floor: aligning the block
+    // there by `Layout.alignment` leaves the list unable to take the rest, and the block floats.
     //
     // The hairline is the one every band closes with (`PaneHeader`): without it the list just stops a bare inset above
     // the summary box.
@@ -1005,6 +1011,7 @@ ColumnLayout {
         commitPointedAt: wipPane.pointAtCommit
         blockRoom: wipPane.blockRoom
         listHeight: buckets.height
+        listFloor: wipPane.listFloor
         onAmendToggled: on => wipPane.amendToggled(on)
         onCommitClicked: wipPane.commitClicked()
     }

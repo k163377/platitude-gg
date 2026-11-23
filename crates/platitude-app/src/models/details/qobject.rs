@@ -60,6 +60,7 @@ impl DetailsModel {
     qproperty!("loading", Member = loading, Notify = changed);
     qproperty!("treeView", Member = tree_view, Notify = changed);
     qproperty!("fileTotal", Member = file_total, Notify = changed);
+    qproperty!("floorRows", Member = floor_rows, Notify = changed);
 
     #[qsignal]
     pub(super) fn changed(&mut self);

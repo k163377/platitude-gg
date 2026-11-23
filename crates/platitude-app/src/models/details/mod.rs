@@ -52,6 +52,8 @@ pub struct DetailsModel {
     /// Flat entries in git output order; display rows derive from these.
     pub(super) raw_files: Vec<FileItem>,
     file_total: i32,
+    /// What the pane keeps of the list however short (`tree::floor_rows`).
+    floor_rows: i32,
     pub(super) tree_view: bool,
     /// Explicit folder open/close choices (key = directory path); cleared
     /// per commit, anything absent defaults to open.
@@ -118,6 +120,7 @@ impl Default for DetailsModel {
             files: Vec::new(),
             raw_files: Vec::new(),
             file_total: 0,
+            floor_rows: 0,
             tree_view: true,
             folder_overrides: HashMap::new(),
             sha_hex: String::new(),
@@ -172,6 +175,7 @@ impl DetailsModel {
             })
             .collect();
         self.file_total = self.raw_files.len() as i32;
+        self.floor_rows = tree::floor_rows(&self.raw_files);
         self.folder_overrides.clear();
         self.rebuild_rows();
         self.reset();

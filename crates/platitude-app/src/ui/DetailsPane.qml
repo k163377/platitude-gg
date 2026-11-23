@@ -298,12 +298,20 @@ ColumnLayout {
     readonly property real descriptionAt: block.descriptionAt
 
     // -- what this pane lends the message editor --
-    // The pair's geometry lives in `MessageEditor`; everything else keeps its own height (`DescriptionBox`'s bound),
-    // so the file list is the one thing here that gives.
-    /// Leaves the file list its band and two rows; past this the block scrolls and the pane's bottom holds
+    // The pair's geometry lives in `MessageEditor`: in a short pane the file list gives down to its floor, then the
+    // description down to its own (`MessageEditor.descShare`); everything else keeps its height.
+    /// How short the file list may go: two rows, or the rows it has where it has fewer (`WipPane.listFloor`, same
+    /// reason) — counted with every folder open (`DetailsModel.floorRows`), not off the rows standing: the list is
+    /// under the block here, and a floor that moved as a folder opened or shut, or the view turned, would move the list
+    /// under the hand that pressed. A folder shut by hand leaves an empty row standing; counting files instead would
+    /// hide the file under an open folder (user decision — ask before changing). It changes when the next commit's
+    /// answer lands, with the message beside it (the list keeps the last commit's rows until then,
+    /// `DetailsModel.request`).
+    readonly property real listFloor: detailsPane.details.floorRows * Theme.rowHeight
+    /// Leaves the file list its band and its floor; past this the block scrolls and the pane's bottom holds
     /// (規約 §窓の床).
     readonly property real blockRoom: Math.max(0, detailsPane.height - Theme.headerHeight
-        - (changesBand.visible ? changesBand.height : 0) - 2 * Theme.rowHeight)
+        - (changesBand.visible ? changesBand.height : 0) - detailsPane.listFloor)
     // -- smoke hooks and readouts: automation reads the panes, `MessageEditor` holds the numbers --
     function growDescription(dy) { block.growDescription(dy) }
     function pullDescriptionPast(down) { block.pullDescriptionPast(down) }
@@ -448,6 +456,7 @@ ColumnLayout {
         details: detailsPane.details
         blockRoom: detailsPane.blockRoom
         listHeight: fileList.height
+        listFloor: detailsPane.listFloor
         paneWidth: detailsPane.width
         editable: detailsPane.editable
         editBlocked: detailsPane.editBlocked

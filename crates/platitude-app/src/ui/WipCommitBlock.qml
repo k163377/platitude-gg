@@ -10,12 +10,13 @@ import platitude.ui.words
 // commit button, and the way out of a stopped operation — which alone stands while a rebase, pick or revert is
 // stopped anywhere but an `edit` step (`composeHidden`).
 //
-// Scrolls on its own when the pane is too short: its contents keep their height, so once the list is down to its two
-// rows they would be laid out below the pane's edge, and the window's floor cannot grow with a card git puts up
-// (規約 §窓の床) — the exit card comes and goes with what git is in the middle of, so a floor holding it would widen
-// the window the moment a rebase stops. In the right pane only the run between the bands and the list scrolls: the pane's heading and the
-// bucket bands stay put (a list whose heading has scrolled away no longer says what it lists), and the list keeps two
-// rows (`WipPane.blockRoom`). `DetailsMessageBlock` is the details pane's same surface.
+// Scrolls on its own when the pane is too short: once the list is down to its floor and the description to its own
+// (`MessageEditor.descFloor`), the rest would be laid out below the pane's edge, and the window's floor cannot grow
+// with a card git puts up (規約 §窓の床) — the exit card comes and goes with what git is in the middle of, so a floor
+// holding it would widen the window the moment a rebase stops. In the right pane only the run between the bands and
+// the list scrolls: the pane's heading and the bucket bands stay put (a list whose heading has scrolled away no longer
+// says what it lists), and the list keeps its floor (`WipPane.listFloor`). `DetailsMessageBlock` is the details
+// pane's same surface.
 Flickable {
     id: block
 
@@ -35,6 +36,7 @@ Flickable {
     required property bool commitPointedAt
     required property real blockRoom
     required property real listHeight
+    required property real listFloor
 
     /// Up to the pane: the amend tick and the press (the button's warning card is the pane's, asked off `commitWarned`
     /// and `commitPointed`).
@@ -43,6 +45,14 @@ Flickable {
 
     /// What the block would take with nothing in its way — the pane holds it against `blockRoom`.
     readonly property real wants: blockCol.implicitHeight
+    /// What stands in the block beside the message pair (`MessageEditor.besidePair`): the column's margins and each row
+    /// under the pair with its step — a row the column gains under the pair goes in here too, or the block scrolls
+    /// with the description still at rest.
+    readonly property real besidePair: 2 * Theme.spaceXs
+        + (amendRow.visible ? amendRow.implicitHeight + Theme.spaceXs : 0)
+        + (authorBox.visible ? authorBox.implicitHeight + Theme.spaceXs : 0)
+        + (commitButton.visible ? commitButton.implicitHeight + Theme.spaceXs : 0)
+        + (opExitSeat.visible ? opExitSeat.implicitHeight + Theme.spaceXs : 0)
     /// A rebase, cherry-pick or revert standing anywhere but an `edit` step: the message pair, the amend row and the
     /// commit button go, and the exit card stands in the button's seat (user decision — ask before changing). Its rows
     /// are the way on there, and a commit of one's own would drop what the stopped commit carries — a rebase's author
@@ -166,8 +176,10 @@ Flickable {
                 standingSubject: block.standingSubject
                 standingBody: block.standingBody
                 listHeight: block.listHeight
+                listFloor: block.listFloor
                 blockRoom: block.blockRoom
                 blockHeight: blockCol.implicitHeight
+                besidePair: block.besidePair
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
             }
             RowLayout {

@@ -7,7 +7,7 @@ import platitude.ui
 // taller. Its rest height is the pair's split (`MessageEditor`); the two description boxes (details pane, commit
 // editor) can be pulled down from there by hand — a body longer than its rest is everyday, a summary that long an
 // accident, so only this box grows. The pane owns the bound (`room` / `owed`): the pull stops where everything beside
-// the box stays in view and the file list keeps two rows (under that it stops being a list). What shares the block
+// the box stays in view and the file list keeps its floor (`MessageEditor.listFloor`). What shares the block
 // with the box (the committer row and the CHANGES band in the details pane, the check rows and the commit button in
 // the commit editor) never gives, so that one bound guards them all. The box also stops at its own text: a box taller
 // than its words stands as an empty frame under the next, shorter commit. A pane that shrinks under a pull — the
@@ -265,6 +265,9 @@ Rectangle {
         }
         TextArea {
             id: area
+            /// The placeholder stands: nothing typed, nothing being composed.
+            readonly property bool placeholderShown: !area.length && !area.preeditText
+                && (!area.activeFocus || area.horizontalAlignment !== Qt.AlignHCenter)
             wrapMode: TextArea.Wrap
             font.pixelSize: Theme.fontMd
             Keys.onEscapePressed: event => {
@@ -281,14 +284,15 @@ Rectangle {
             padding: 0
             // What a screen reader says the box wants: Qt takes it from `placeholderText`, left empty here.
             Accessible.description: box.placeholder
-            // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it: a standing
-            // message that wraps grows the text as the style's placeholder did, and the view scrolls it.
+            // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it while it stands: a
+            // standing message that wraps grows the text as the style's placeholder did, and the view scrolls it. Not
+            // once words are typed over it (`SummaryArea`, same reason): `wants` is the words' own height.
             implicitWidth: Math.max(contentWidth + leftPadding + rightPadding,
                                     implicitBackgroundWidth + leftInset + rightInset,
-                                    hint.implicitWidth + leftPadding + rightPadding)
+                                    area.placeholderShown ? hint.implicitWidth + leftPadding + rightPadding : 0)
             implicitHeight: Math.max(contentHeight + topPadding + bottomPadding,
                                      implicitBackgroundHeight + topInset + bottomInset,
-                                     hint.implicitHeight + topPadding + bottomPadding)
+                                     area.placeholderShown ? hint.implicitHeight + topPadding + bottomPadding : 0)
             onActiveFocusChanged: if (area.activeFocus) box.unpin()
             // The product's right-click menu, not the style's, and the menu key's (`FieldMenuSeat`).
             ContextMenu.menu: null
@@ -306,8 +310,7 @@ Rectangle {
                 color: area.placeholderTextColor
                 horizontalAlignment: area.horizontalAlignment
                 verticalAlignment: area.verticalAlignment
-                visible: !area.length && !area.preeditText
-                         && (!area.activeFocus || area.horizontalAlignment !== Qt.AlignHCenter)
+                visible: area.placeholderShown
                 wrapMode: area.wrapMode
                 // Wrapped, the hint fits a box of one line and more; clipped at its box, never cut with a typed `…`.
                 clip: true

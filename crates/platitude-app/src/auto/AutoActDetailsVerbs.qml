@@ -860,9 +860,10 @@ Item {
     //
     // `keeps=` says what the box borrowed room from (the author card / the commit button) is still on screen — the
     // picture cannot, because the overflow draws over the window's own footer. `grip=` stays out of must_say: a run
-    // with no grip is one side of the pair (`--preset edges` row 7 offers it; row 4 has no body and none). `rows=2` is
-    // the floor itself. Read the PNG every time: with every number right, the text inside the box can stop at its old
-    // height (the TextEdit viewport's repaint, rules-refs/app-ui.md), which only the picture shows.
+    // with no grip is one side of the pair (`--preset edges` row 7 offers it; row 4 has no body and none). `rows=` at
+    // the pane's `listFloor` is the floor itself. Read the PNG every time: with every number right, the text inside the
+    // box can stop at its old height (the TextEdit viewport's repaint, rules-refs/app-ui.md), which only the picture
+    // shows.
     PageStage {
         id: descGrowTimer
         name: "desc_grow"
@@ -879,14 +880,14 @@ Item {
         /// hand the box answers (規約 §掴める境界は答える).
         property string refuse: ""
         /// Whether the box is laid out at the end a refused pull ran past: past the ceiling, at the bound itself — the
-        /// list down to its two-row floor, or the box at its own text — and past the rest, with no pull standing (the
-        /// `cap` witnessed before the press).
+        /// list down to its floor (the pane's `listFloor`), or the box at its own text — and past the rest, with no
+        /// pull standing (the `cap` witnessed before the press).
         function stops() {
             const op = descGrowTimer
             const laidOut = Math.round(op.pane.descHeight) === Math.round(op.pane.descCap)
             if (op.refuse === "desc-min")
                 return laidOut && op.pane.descCap === op.witnessed("cap")
-            return laidOut && (op.pane.descListRows === 2
+            return laidOut && (op.pane.descListRows === Math.round(op.pane.listFloor / Theme.rowHeight)
                                || Math.round(op.pane.descHeight) === Math.round(op.pane.descWants))
         }
         /// What the box did with the pull, read as it stands.

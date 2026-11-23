@@ -125,6 +125,61 @@ fn a_file_under_a_closed_folder_is_at_no_row() {
     );
 }
 
+/// What the pane keeps of the list is the tree's rows with every folder open, up to two — and the same with a folder
+/// shut or the paths view up, so neither moves the list.
+#[test]
+fn the_list_keeps_the_open_trees_rows_up_to_two() {
+    let landed = |paths: &[&str]| {
+        let mut model = DetailsModel::default();
+        let files: Vec<_> = paths
+            .iter()
+            .map(|path| platitude_core::parse::name_status::FileChange {
+                status: 'M',
+                score: None,
+                path: (*path).to_string(),
+                orig_path: None,
+            })
+            .collect();
+        model.take_files(&files);
+        model
+    };
+    for (paths, rows, why) in [
+        (&[][..], 0, "nothing changed, nothing kept"),
+        (&["top.txt"][..], 1, "a lone file at the top is one row"),
+        (
+            &["docs/guide.md"][..],
+            2,
+            "a lone file under its folder is two rows",
+        ),
+        (&["a.txt", "b.txt"][..], 2, "two files are two rows"),
+        (
+            &["a.txt", "b.txt", "c/d.txt"][..],
+            2,
+            "and no more than two",
+        ),
+    ] {
+        let model = landed(paths);
+        assert_eq!(model.floor_rows, rows, "{why}");
+        assert_eq!(
+            model.files.len().min(2) as i32,
+            rows,
+            "the open tree's own rows, up to two: {why}"
+        );
+    }
+
+    let mut model = landed(&["docs/guide.md"]);
+    model.folder_overrides.insert("docs".to_string(), false);
+    model.rebuild_rows();
+    assert_eq!(model.files.len(), 1, "the folder shut stands as one row");
+    assert_eq!(
+        model.floor_rows, 2,
+        "and the floor keeps the two rows it has open"
+    );
+    model.tree_view = false;
+    model.rebuild_rows();
+    assert_eq!(model.floor_rows, 2, "the paths view keeps it too");
+}
+
 /// The walk hands the diff a rename's source, so git reads both ends.
 #[test]
 fn a_renamed_file_gives_up_its_source_by_path() {

@@ -51,6 +51,18 @@ fn build_file_tree(raw: &[FileItem], overrides: &HashMap<String, bool>) -> Vec<F
     out
 }
 
+/// The rows the tree stands at with every folder open, counted up to two — what the details pane keeps of the list
+/// however short (`DetailsPane.listFloor`). Read off the files alone, so a folder opened or shut, or the view turned
+/// between tree and paths, leaves it where it is and the list does not move under the hand that pressed: two files
+/// are two rows in either view, one file one row at the top or two under its folder.
+pub(super) fn floor_rows(raw: &[FileItem]) -> i32 {
+    match raw {
+        [] => 0,
+        [one] if !one.path.contains('/') => 1,
+        _ => 2,
+    }
+}
+
 impl DetailsModel {
     pub(super) fn rebuild_rows(&mut self) {
         self.files = if self.tree_view {

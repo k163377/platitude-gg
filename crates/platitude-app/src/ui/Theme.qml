@@ -215,8 +215,8 @@ QtObject {
     // The pinned bar (`PaneScrollBar`): its thickness, and the groove a row leaves for it.
     readonly property int navBarReach: 5
     readonly property int navBarGutter: 8
-    // `fontMdLine` × 5 + `spaceSm`, a resting height and a ceiling (デザイン規約 §寸法): git puts no ceiling on a
-    // message, and a box that grows with it pushes the file list out of the pane.
+    // `fontMdLine` × 5 + `spaceSm`, a resting height where the pane has room and a ceiling (デザイン規約 §寸法): git puts
+    // no ceiling on a message, and a box that grows with it pushes the file list out of the pane.
     readonly property int messageMaxHeight: 108
     // The most of a name said in a part that grows with its words, in `n`s of the name's own face, as a tab's floor is
     // (デザイン規約 §寸法「名前の天井」): git puts no ceiling on a name either. A part with a width ceiling of its own

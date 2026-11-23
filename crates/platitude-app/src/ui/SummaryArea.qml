@@ -13,14 +13,18 @@ TextArea {
     /// the repository's, and Qt's `PlaceholderText` reads its markup (`<b>` or a bare `&lt;` turns it rich —
     /// `merge-standing`). `placeholderText` stays empty, so the style draws nothing.
     property string placeholder: ""
-    // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it: a standing message
-    // that wraps grows the box, as the style's placeholder did.
+    /// The placeholder stands: nothing typed, nothing being composed.
+    readonly property bool placeholderShown: !summary.length && !summary.preeditText
+        && (!summary.activeFocus || summary.horizontalAlignment !== Qt.AlignHCenter)
+    // The style's own size formula (Fusion's TextArea.qml) with this box's placeholder in it while it stands: a
+    // standing message that wraps grows the box, as the style's placeholder did. Not once words are typed over it — the
+    // style counts its placeholder always, and a one-line summary over a two-line merge subject keeps an empty line.
     implicitWidth: Math.max(contentWidth + leftPadding + rightPadding,
                             implicitBackgroundWidth + leftInset + rightInset,
-                            hint.implicitWidth + leftPadding + rightPadding)
+                            summary.placeholderShown ? hint.implicitWidth + leftPadding + rightPadding : 0)
     implicitHeight: Math.max(contentHeight + topPadding + bottomPadding,
                              implicitBackgroundHeight + topInset + bottomInset,
-                             hint.implicitHeight + topPadding + bottomPadding)
+                             summary.placeholderShown ? hint.implicitHeight + topPadding + bottomPadding : 0)
     wrapMode: TextArea.Wrap
     font.pixelSize: Theme.fontLg
     font.weight: Theme.fontWeightStrong
@@ -59,8 +63,7 @@ TextArea {
         color: summary.placeholderTextColor
         horizontalAlignment: summary.horizontalAlignment
         verticalAlignment: summary.verticalAlignment
-        visible: !summary.length && !summary.preeditText
-                 && (!summary.activeFocus || summary.horizontalAlignment !== Qt.AlignHCenter)
+        visible: summary.placeholderShown
         wrapMode: summary.wrapMode
         // Wrapped, the hint fits a box of one line and more; clipped at its box, never cut with a typed `…`.
         clip: true
