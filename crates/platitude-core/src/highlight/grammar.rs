@@ -78,6 +78,20 @@ fn configured(
 ) -> Option<HighlightConfiguration> {
     let mut config =
         HighlightConfiguration::new(language, name, highlights, injections, "").ok()?;
+    // tree-sitter-highlight evaluates the text predicates (`#eq?`,
+    // `#match?`, `#any-of?`) and the property ones, and ignores the rest
+    // — editors' own, `#lua-match?` and `#has-ancestor?` — so a pattern
+    // carrying one would claim every node of its shape.
+    for pattern in 0..config.query.pattern_count() {
+        if !config.query.general_predicates(pattern).is_empty() {
+            config.query.disable_pattern(pattern);
+        }
+    }
+    // Spell-check marks share a node with its colour (`@comment @spell`),
+    // and the later capture on a node is the one painted.
+    for mark in ["spell", "nospell"] {
+        config.query.disable_capture(mark);
+    }
     let names: Vec<&str> = CAPTURES.iter().map(|(n, _)| *n).collect();
     config.configure(&names);
     Some(config)
@@ -286,6 +300,75 @@ mod tests {
                 entry.name
             );
         }
+    }
+
+    /// The colour the grammar called `name` paints `needle`'s first
+    /// occurrence in `text` — one colour across all of it.
+    fn colour_of(name: &str, text: &str, needle: &str) -> Rgb {
+        let entry = ENTRIES
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| panic!("no grammar is called {name}"));
+        let lang = lang_of(entry).expect("every entry builds its configuration");
+        let at = text.find(needle).expect("the needle is in the text");
+        let mut highlighter = Highlighter::new();
+        let events = highlighter
+            .highlight(&lang.config, text.as_bytes(), None, None, |name| {
+                injection(name)
+            })
+            .expect("a grammar reads its own language");
+        let mut stack: Vec<usize> = Vec::new();
+        let mut seen: Vec<Rgb> = Vec::new();
+        for event in events {
+            match event.expect("a highlight runs to the end of its text") {
+                HighlightEvent::HighlightStart(h) => stack.push(h.0),
+                HighlightEvent::HighlightEnd => {
+                    stack.pop();
+                }
+                HighlightEvent::Source { start, end } if start < at + needle.len() && at < end => {
+                    seen.push(stack.last().and_then(|&i| style(i)).unwrap_or(PLAIN));
+                }
+                HighlightEvent::Source { .. } => {}
+            }
+        }
+        seen.dedup();
+        assert_eq!(seen.len(), 1, "{needle:?} in {name} is painted in {seen:?}");
+        seen[0]
+    }
+
+    fn assert_colours(cases: &[(&str, &str, &str, u32)]) {
+        for &(name, text, needle, rgb) in cases {
+            assert_eq!(
+                colour_of(name, text, needle),
+                Rgb::of(rgb),
+                "{needle:?} in {name}: {text:?}"
+            );
+        }
+    }
+
+    /// A pattern whose predicate tree-sitter-highlight does not evaluate
+    /// claims nothing, rather than every node of its shape: objc's
+    /// `#has-ancestor?` property and zig's `#lua-match?` constant would
+    /// otherwise take every identifier.
+    #[test]
+    fn a_predicate_the_highlighter_skips_claims_nothing() {
+        assert_colours(&[
+            ("objc", "void f() { NSLog(@\"hi\"); }", "NSLog", FUNCTION),
+            ("zig", "const Point = struct { x: i32 };", "Point", TYPE),
+        ]);
+    }
+
+    /// A spell-check mark beside a colour on one node (`@comment @spell`)
+    /// leaves the node its colour.
+    #[test]
+    fn a_spell_check_mark_leaves_a_comment_its_colour() {
+        assert_colours(&[
+            ("sql", "-- note\nSELECT 1;", "note", COMMENT),
+            ("swift", "// note\nlet s = 1", "note", COMMENT),
+            ("haskell", "-- note\nmain = 1", "note", COMMENT),
+            ("cmake", "# note\nset(VAR 1)", "note", COMMENT),
+            ("zig", "// note\nconst s = 1;", "note", COMMENT),
+        ]);
     }
 
     #[test]
