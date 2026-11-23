@@ -54,15 +54,16 @@ Item {
         carry.carryTo(index, Math.max(runFrom, Math.min(want, runTo)))
     }
 
-    /// One tick of the strip travelling under a tab held against its end, at the speed the hand is asking for.
-    function driftRun() {
+    /// One step of the strip travelling under a tab held against its end, at the speed the hand is asking for, as far
+    /// as `ms` milliseconds send.
+    function driftRun(ms) {
         const at = carry.heldIndex()
         if (at < 0)
             return
         // The run from the list's origin (`TabRun.clamp`).
         const origin = carry.view.originX
         const room = carry.view.contentWidth - carry.view.width
-        const asked = carry.view.contentX + Metrics.handSent(carry.heldPush, run.interval)
+        const asked = carry.view.contentX + Metrics.handSent(carry.heldPush, ms)
         const settled = Math.max(origin, Math.min(asked, origin + room))
         if (settled === carry.view.contentX)
             return
@@ -136,14 +137,13 @@ Item {
         carry.heldPush = 0
     }
 
-    // The strip travels while a tab is held past the end of the run: one frame a tick, on the app's other autoscroll
-    // curve (`Metrics.handSent`, `MiddleAutoScroll`), dead zone included — the first pixels past the edge
-    // are a hand steadying a tab on the last place.
-    Timer {
+    // The strip travels while a tab is held past the end of the run: a step each animation frame
+    // (rules-refs/app-ui.md「押さえた手の送りはフレームで進める」), on the app's other autoscroll curve
+    // (`Metrics.handSent`, `MiddleAutoScroll`), dead zone included — the first pixels past the edge are a hand
+    // steadying a tab on the last place.
+    FrameAnimation {
         id: run
-        interval: 16
-        repeat: true
         running: carry.heldId >= 0 && carry.heldPush !== 0 && carry.view.contentWidth > carry.view.width
-        onTriggered: carry.driftRun()
+        onTriggered: carry.driftRun(run.frameTime * 1000)
     }
 }

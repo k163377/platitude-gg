@@ -2698,10 +2698,11 @@ FocusScope {
     }
     /// What the discard log draws, worded.
     readonly property var recoverEntries: recoverWords.entries
-    /// The moment the log's times are read against; a minute's step is the finest a time there says.
+    /// The moment the log's times are read against. Re-read at half the finest step a time there moves by
+    /// (`RecoverEntries.stepMs`), so a count shown is never more than half a step behind.
     property real recoverNow: Math.floor(Date.now() / 1000)
     Timer {
-        interval: 30000
+        interval: recoverWords.stepMs / 2
         running: page.recoverOpen
         repeat: true
         onTriggered: page.recoverNow = Math.floor(Date.now() / 1000)

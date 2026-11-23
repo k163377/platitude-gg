@@ -207,20 +207,18 @@ Item {
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
-    /// What one tick of the ticker below sends the rows: the browser's selection autoscroll (`Metrics.selectSent`),
-    /// from a belt inside the frame's top and bottom — the log stands on the window's foot, and a window against the
-    /// screen's foot leaves the hand no room past it. Zero between the belts, which stops the ticker.
-    readonly property real sentY: Metrics.selectSent(pick.handPosition.y, pick.height, edge.interval)
+    /// How far the hand is past a belt inside the frame's top or bottom (`Metrics.selectPast`), which the browser's
+    /// selection autoscroll sends the rows by — the log stands on the window's foot, and a window against the screen's
+    /// foot leaves the hand no room past it. Zero between the belts, which stops the stepping below.
+    readonly property real pastY: Metrics.selectPast(pick.handPosition.y, pick.height)
     // A drag that has taken text scrolls the log while the hand is in a belt, and re-reads the row every step: the
-    // rows move under a still pointer without any mouse event.
-    Timer {
+    // rows move under a still pointer without any mouse event. A step each animation frame
+    // (rules-refs/app-ui.md「押さえた手の送りはフレームで進める」).
+    FrameAnimation {
         id: edge
-        running: pick.dragging && pick.selecting && pick.sentY !== 0
-        // One frame, the tick every drift in the app uses.
-        interval: 16
-        repeat: true
+        running: pick.dragging && pick.selecting && pick.pastY !== 0
         onTriggered: {
-            pick.scrollWanted(pick.sentY)
+            pick.scrollWanted(Metrics.selectSent(pick.pastY, edge.frameTime * 1000))
             const row = pick.rowAt(pick.handPosition.y)
             if (row >= 0)
                 pick.dragText(row, pick.byteAt(row, pick.handPosition))

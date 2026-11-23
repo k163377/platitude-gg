@@ -6,10 +6,12 @@ import platitude.ui
 // A drag of the diff's or the log's text near the frame's edge sends the rows after it the way a browser sends a
 // selection (デザイン規約 §右のペインの字は掴める): from a belt `Metrics.selectScrollBelt` inside each edge, the
 // distance past the belt's line at `Metrics.selectScrollGain` — so a frame standing against the screen's edge, which
-// the hand cannot get past, still sends. Each tick of the edge's ticker asks the pane for one tick of that. Pressed and
-// dragged the way a hand does, through Qt's delivery, so the frame's own `MouseArea` is what follows the hand.
+// the hand cannot get past, still sends. Each animation frame of the edge's ticker asks the pane for the milliseconds
+// since the frame before. Pressed and dragged the way a hand does, through Qt's delivery, so the frame's own
+// `MouseArea` is what follows the hand.
 //
-// The ticker is found in the hand's own tree (`tickerOf`): the amount is per tick, and a tick is the one that ticks.
+// The ticker is found in the hand's own tree (`tickerOf`): the amount is per frame, and the frame's length is the one
+// the ticker read (`frameTime`), not one the test assumes.
 Item {
     id: root
     width: 900
@@ -146,7 +148,7 @@ Item {
         /// The hand's edge ticker, read out of its tree.
         function tickerOf(pick) {
             for (let i = 0; i < pick.data.length; i++) {
-                if (pick.data[i] instanceof Timer)
+                if (pick.data[i] instanceof FrameAnimation)
                     return pick.data[i]
             }
             return null
@@ -170,7 +172,8 @@ Item {
         }
 
         /// Pressed on the text and taken to `at` (the hand's own coordinates), held there until the ticker has asked
-        /// twice — the first ask could be one the move itself raced.
+        /// twice — the first ask could be one the move itself raced. The last ask, with the milliseconds of the frame
+        /// that asked it (read in the same turn, before another frame can come).
         function heldAt(pick, at) {
             const from = start(pick)
             mousePress(pick, from.x, from.y, Qt.LeftButton)
@@ -178,8 +181,9 @@ Item {
             mouseMove(pick, at.x, at.y, -1, Qt.LeftButton)
             tryVerify(function () { return sent.count >= 2 }, undefined, "the ticker asked " + sent.count + " times")
             const asked = sent.signalArguments[sent.count - 1]
+            const ms = tickerOf(pick).frameTime * 1000
             mouseRelease(pick, at.x, at.y, Qt.LeftButton)
-            return asked
+            return { "y": asked[0], "x": asked[1], "ms": ms }
         }
 
         /// How far past the belt's line the hand is held, signed toward the edge it is near: inside the belt, on the
@@ -206,30 +210,30 @@ Item {
             const belt = Metrics.selectScrollBelt
             return past > 0 ? length - belt + past : belt + past
         }
-        /// What one tick sends a hand `past` beyond the belt's line.
-        function sentInTick(past, tick) {
-            return past * Metrics.selectScrollGain * tick
+        /// What `ms` milliseconds send a hand `past` beyond the belt's line.
+        function sentIn(past, ms) {
+            return past * Metrics.selectScrollGain * ms
         }
 
         function test_the_log_is_sent_up_and_down_from_its_belts_data() { return bothEnds() }
 
         function test_the_log_is_sent_up_and_down_from_its_belts(data) {
             const made = built(commandsScene)
-            const tick = tickerOf(made.pick).interval
             const asked = heldAt(made.pick, Qt.point(start(made.pick).x + 40, along(made.pick.height, data.past)))
-            fuzzyCompare(asked[0], sentInTick(data.past, tick), 1e-9,
-                         "held " + data.past + "px past the belt's line, one tick of " + tick + "ms")
+            verify(asked.ms > 0, "the frame that asked took time")
+            fuzzyCompare(asked.y, sentIn(data.past, asked.ms), 1e-9,
+                         "held " + data.past + "px past the belt's line, a frame of " + asked.ms + "ms")
         }
 
         function test_the_diff_is_sent_up_and_down_from_its_belts_data() { return bothEnds() }
 
         function test_the_diff_is_sent_up_and_down_from_its_belts(data) {
             const made = built(diffScene)
-            const tick = tickerOf(made.pick).interval
             const asked = heldAt(made.pick, Qt.point(start(made.pick).x + 40, along(made.pick.height, data.past)))
-            fuzzyCompare(asked[0], sentInTick(data.past, tick), 1e-9,
-                         "held " + data.past + "px past the belt's line, one tick of " + tick + "ms")
-            compare(asked[1], 0, "between the side belts nothing goes sideways")
+            verify(asked.ms > 0, "the frame that asked took time")
+            fuzzyCompare(asked.y, sentIn(data.past, asked.ms), 1e-9,
+                         "held " + data.past + "px past the belt's line, a frame of " + asked.ms + "ms")
+            compare(asked.x, 0, "between the side belts nothing goes sideways")
         }
 
         function test_the_diff_is_sent_sideways_from_its_belts_data() { return bothEnds() }
@@ -237,22 +241,21 @@ Item {
         /// The text column's own edges: left of the code is still the diff's hand (the gutter is outside it).
         function test_the_diff_is_sent_sideways_from_its_belts(data) {
             const made = built(diffScene)
-            const tick = tickerOf(made.pick).interval
             const asked = heldAt(made.pick, Qt.point(along(made.pick.width, data.past), start(made.pick).y + root.rowH))
-            fuzzyCompare(asked[1], sentInTick(data.past, tick), 1e-9,
-                         "held " + data.past + "px past the belt's line, one tick of " + tick + "ms")
-            compare(asked[0], 0, "between the top and bottom belts nothing goes up or down")
+            verify(asked.ms > 0, "the frame that asked took time")
+            fuzzyCompare(asked.x, sentIn(data.past, asked.ms), 1e-9,
+                         "held " + data.past + "px past the belt's line, a frame of " + asked.ms + "ms")
+            compare(asked.y, 0, "between the top and bottom belts nothing goes up or down")
         }
 
         /// A corner is in two belts, and each axis is sent on its own.
         function test_the_diff_is_sent_on_each_axis_apart() {
             const made = built(diffScene)
-            const tick = tickerOf(made.pick).interval
             const down = Metrics.selectScrollBelt + 47
             const right = 5
             const asked = heldAt(made.pick, Qt.point(along(made.pick.width, right), along(made.pick.height, down)))
-            fuzzyCompare(asked[0], sentInTick(down, tick), 1e-9, "down")
-            fuzzyCompare(asked[1], sentInTick(right, tick), 1e-9, "sideways")
+            fuzzyCompare(asked.y, sentIn(down, asked.ms), 1e-9, "down")
+            fuzzyCompare(asked.x, sentIn(right, asked.ms), 1e-9, "sideways")
         }
 
         function test_between_the_belts_nothing_is_sent_data() {

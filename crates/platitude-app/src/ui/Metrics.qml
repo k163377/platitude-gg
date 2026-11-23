@@ -68,7 +68,9 @@ QtObject {
     readonly property int nodeIcon: Theme.iconLg
     readonly property int laneStroke: 2
     readonly property real identiconFill: 0.72
-    readonly property int wheelRows: 3
+    // The rows a wheel notch sends: the person's own setting where the OS has one (Windows `SPI_GETWHEELSCROLLLINES`,
+    // KDE's `WheelScrollLines`), Qt's 3 elsewhere — the browser's notch on Windows reads the same setting.
+    readonly property int wheelRows: Application.styleHints.wheelScrollLines
     // The three below are one curve, read through `handSent`.
     //
     // Pixels per millisecond per distance^`middleScrollCurve` — Chromium's own (`autoscroll_controller.cc`:
@@ -79,8 +81,9 @@ QtObject {
     // The pad around the anchor where the hand is holding still — without it a pixel of drift is a speed. Per axis,
     // so a hand going straight down does not creep sideways.
     readonly property int middleScrollDeadZone: 15
-    // The two below are a drag of text sending its frame, read through `selectSent` — the browser's selection
-    // autoscroll, not the middle-click hand's curve: a frame against the screen's edge leaves the hand no room past it.
+    // The two below are a drag of text sending its frame, read through `selectPast` and `selectSent` — the browser's
+    // selection autoscroll, not the middle-click hand's curve: a frame against the screen's edge leaves the hand no
+    // room past it.
     //
     // How far inside a frame's edge the sending starts. Chromium's own (`layout_box.cc`: `kAutoscrollBeltSize`).
     readonly property int selectScrollBelt: 20
@@ -151,13 +154,15 @@ QtObject {
             return 0
         return Math.sign(away) * Math.pow(off, metrics.middleScrollCurve) * metrics.middleScrollGain * ms
     }
-    /// How far a drag of text standing `at` along one axis of a frame `length` long sends the frame in `ms`
-    /// milliseconds (デザイン規約 §右のペインの字は掴める): from the belt inside either edge, the distance past the
-    /// belt's line. Signed toward that edge, zero between the belts. The diff's and the log's text
-    /// (`DiffTextSelect`, `CommandsTextSelect`).
-    function selectSent(at, length, ms) {
+    /// How far a drag of text standing `at` along one axis of a frame `length` long is past the belt inside the
+    /// nearer edge (デザイン規約 §右のペインの字は掴める): signed toward that edge, zero between the belts. The diff's
+    /// and the log's text (`DiffTextSelect`, `CommandsTextSelect`); `selectSent` turns it into a send.
+    function selectPast(at, length) {
         const belt = metrics.selectScrollBelt
-        const past = at < belt ? at - belt : at > length - belt ? at - (length - belt) : 0
+        return at < belt ? at - belt : at > length - belt ? at - (length - belt) : 0
+    }
+    /// How far a drag `past` the belt's line (`selectPast`) sends its frame in `ms` milliseconds. Signed like `past`.
+    function selectSent(past, ms) {
         return past * metrics.selectScrollGain * ms
     }
 }

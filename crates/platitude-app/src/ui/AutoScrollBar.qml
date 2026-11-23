@@ -71,8 +71,6 @@ ScrollBar {
     readonly property bool trackWaiting: trackWait.running
     /// The page a press on the track sends (`Metrics.trackPageShare` of the view, whole pixels as Chromium's).
     readonly property real trackPage: bar.view ? Math.floor(bar.view.height * Metrics.trackPageShare) : 0
-    /// When the run last sent, for the next tick's share: the timer's beat slips under load, the speed must not.
-    property real runAt: 0
     /// The glide a press's step rides. A surface that glides its wheel notches hands its own in (`WheelGlide`), so a
     /// notch after a step adds to it and every hand that halts the surface's glide halts the step as well
     /// (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」); any other bar rides one of its own.
@@ -111,15 +109,13 @@ ScrollBar {
         runWait.stop()
     }
     function startRun() {
-        bar.runAt = Date.now()
         bar.arrowRunning = true
     }
     // One even speed, whatever the view's height: an arrow does not accelerate (neither Chromium's nor Qt Widgets'
     // does — acceleration belongs to a number's up/down buttons). Sending a long list far is the track's work.
-    function runTick() {
-        const now = Date.now()
-        const share = (now - bar.runAt) / 1000
-        bar.runAt = now
+    // `share` is the seconds since the last frame, so the speed holds whatever the screen's rate and however late a
+    // frame comes.
+    function runTick(share) {
         if (bar.trackRunning)
             bar.trackTick(share)
         else
@@ -172,7 +168,6 @@ ScrollBar {
     function startTrackRun() {
         if (bar.thumbAtHand())
             return
-        bar.runAt = Date.now()
         bar.trackRunning = true
     }
     /// Pages twenty a second (the arrow's beat); the last one only as far as puts the thumb's far end on the hand.
@@ -204,11 +199,11 @@ ScrollBar {
         interval: Metrics.arrowRepeatDelayMs
         onTriggered: bar.startTrackRun()
     }
-    Timer {
-        interval: 16
-        repeat: true
+    // A step each animation frame (rules-refs/app-ui.md「押さえた手の送りはフレームで進める」).
+    FrameAnimation {
+        id: run
         running: bar.arrowRunning || bar.trackRunning
-        onTriggered: bar.runTick()
+        onTriggered: bar.runTick(run.frameTime)
     }
 
     ScrollArrow {

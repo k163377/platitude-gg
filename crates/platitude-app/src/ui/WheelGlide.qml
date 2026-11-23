@@ -4,8 +4,8 @@ import QtQuick
 import platitude.ui
 
 // A wheel notch, sent across rather than jumped: the rows it passes over have to be seen going by, or the reader
-// re-reads the page to find where they are. Amount and curve are Chromium's (`Metrics.wheelRows` /
-// `Metrics.wheelGlideMs`). One per surface that answers the wheel
+// re-reads the page to find where they are. The amount is the person's own setting (`Metrics.wheelRows`), the curve
+// Chromium's (`Metrics.wheelGlideMs`). One per surface that answers the wheel
 // (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」). The graph's lanes, sent sideways to a node a
 // press, a step or a jump lands on, go by the same curve (`GraphColumnMetrics.revealLane`, `axis: "graphX"`), at a
 // length of their own (`duration`).

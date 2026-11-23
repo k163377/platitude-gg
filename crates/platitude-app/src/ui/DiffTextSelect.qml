@@ -331,21 +331,20 @@ Item {
     }
 
     // ---- the edge ----------------------------------------------------------------------------------------------
-    /// What one tick of the ticker below sends the rows and the text, on each axis: the browser's selection autoscroll
-    /// (`Metrics.selectSent`), from a belt inside each edge of the frame — a frame against the screen's edge, which the
-    /// hand cannot get past, still sends. Zero between the belts, which stops the ticker.
-    readonly property real sentY: Metrics.selectSent(pick.handPosition.y, pick.height, edge.interval)
-    readonly property real sentX: Metrics.selectSent(pick.handPosition.x, pick.width, edge.interval)
+    /// How far the hand is past a belt inside each edge of the frame, on each axis (`Metrics.selectPast`), which the
+    /// browser's selection autoscroll sends the rows and the text by — a frame against the screen's edge, which the
+    /// hand cannot get past, still sends. Zero between the belts, which stops the stepping below.
+    readonly property real pastY: Metrics.selectPast(pick.handPosition.y, pick.height)
+    readonly property real pastX: Metrics.selectPast(pick.handPosition.x, pick.width)
     // A drag that has taken text carries the diff after it while the hand is in a belt, re-reading the row on every
-    // step: the rows move under a pointer standing still.
-    Timer {
+    // step: the rows move under a pointer standing still. A step each animation frame
+    // (rules-refs/app-ui.md「押さえた手の送りはフレームで進める」).
+    FrameAnimation {
         id: edge
-        running: pick.dragging && pick.selecting && (pick.sentY !== 0 || pick.sentX !== 0)
-        // A frame, the same tick `MiddleAutoScroll` drifts on.
-        interval: 16
-        repeat: true
+        running: pick.dragging && pick.selecting && (pick.pastY !== 0 || pick.pastX !== 0)
         onTriggered: {
-            pick.scrollWanted(pick.sentY, pick.sentX)
+            const ms = edge.frameTime * 1000
+            pick.scrollWanted(Metrics.selectSent(pick.pastY, ms), Metrics.selectSent(pick.pastX, ms))
             const at = pick.handPosition
             const row = pick.rowAt(at.y)
             if (row >= 0)

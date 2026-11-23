@@ -39,6 +39,9 @@ QtObject {
         const branch_ = shown.homeBranch
         return shown.rows.map(row => shown.entryOf(row))
     }
+    /// The finest step a time in the list moves by: `ago` counts whole minutes. Whatever reads the times against a
+    /// clock re-reads it in halves of this (`RepoPage.recoverNow`).
+    readonly property int stepMs: 60 * 1000
 
     /// A worktree's name and mark: as `calledOf` names the one at `path`, else the folder the record gives, behind the
     /// tree.

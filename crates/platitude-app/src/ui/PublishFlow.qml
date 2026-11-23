@@ -271,10 +271,12 @@ Item {
         publishFlow.publishRefused ? publishFlow.repoTab.remoteBranchTip : ""
 
     /// Asked once the typing settles: the check is a network round trip, and of the remote itself (not the tracking
-    /// ref) — the answer has to be today's.
+    /// ref) — the answer has to be today's. Settled is the platform's own measure of it, the gap that tells two
+    /// keystrokes of one input from two inputs (`QStyleHints::keyboardInputInterval`: macOS's key repeat delay, Qt's
+    /// 400 elsewhere) — how fast a hand types is the person's and the machine's, not this window's.
     Timer {
         id: publishCheckTimer
-        interval: 350
+        interval: Application.styleHints.keyboardInputInterval
         onTriggered: {
             if (publishFlow.publishAsking && publishFlow.publishRemote !== "" && publishFlow.publishBranch !== "")
                 publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote, publishFlow.publishBranch,

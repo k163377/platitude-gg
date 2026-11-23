@@ -188,17 +188,18 @@ Item {
             autoScroll.stop()
             wheel.accepted = false
         }
-        Timer {
+        // A step each animation frame, as far as the time since the last one sends
+        // (rules-refs/app-ui.md「押さえた手の送りはフレームで進める」).
+        FrameAnimation {
             id: drift
             running: autoScroll.scrolling
-            interval: 16
-            repeat: true
             onTriggered: {
                 autoScroll.ticks++
+                const ms = drift.frameTime * 1000
                 const from = autoScroll.anchorPosition
                 const at = autoScroll.currentPosition
-                const dy = Metrics.handSent(at.y - from.y, drift.interval)
-                const dx = autoScroll.panning && autoScroll.canPan ? Metrics.handSent(at.x - from.x, drift.interval) : 0
+                const dy = Metrics.handSent(at.y - from.y, ms)
+                const dx = autoScroll.panning && autoScroll.canPan ? Metrics.handSent(at.x - from.x, ms) : 0
                 autoScroll.drifted(dy, dx)
             }
         }
