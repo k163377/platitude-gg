@@ -139,7 +139,7 @@ extern "system" fn named_one(
 
 thread_local! {
     /// Whether the fit moved anything: the frame slop is only measured
-    /// on a window that stayed put (`WindowShape.settleTimer`).
+    /// on a window that stayed put (`WindowShape.settleWait`).
     static MOVED: Cell<bool> = const { Cell::new(false) };
     /// The work area the walk is fitting to, or `None` to take each
     /// window's own nearest monitor.

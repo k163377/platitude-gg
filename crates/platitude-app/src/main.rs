@@ -212,6 +212,7 @@ fn main() {
     qrc::embed!("ui/FocusRelease.qml");
     qrc::embed!("ui/FoldBlock.qml");
     qrc::embed!("ui/FormField.qml");
+    qrc::embed!("ui/FrameLater.qml");
     qrc::embed!("ui/GitHubLinks.qml");
     qrc::embed!("ui/GitHubMenu.qml");
     qrc::embed!("ui/GitVersionCorner.qml");

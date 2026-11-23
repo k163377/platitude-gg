@@ -98,6 +98,7 @@ FindOptionGlyph 1.0 FindOptionGlyph.qml
 FocusRelease 1.0 FocusRelease.qml
 FoldBlock 1.0 FoldBlock.qml
 FormField 1.0 FormField.qml
+FrameLater 1.0 FrameLater.qml
 GitHubLinks 1.0 GitHubLinks.qml
 GitHubMenu 1.0 GitHubMenu.qml
 GitVersionCorner 1.0 GitVersionCorner.qml

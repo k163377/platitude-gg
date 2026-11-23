@@ -19,7 +19,7 @@ import platitude.ui
 // calls the surface's `haltGlide()` first, or the notch in flight drags the reader back to the old row: arrow keys
 // (`GraphRowWalk.revealStep` / `DiffRowWalk.stepRows`), the bar's arrows and track (handed this glide as
 // `AutoScrollBar.stepGlide`, so a step stops it), `jumpToRow`, `GraphFind.goToMatch`, `shiftRows` / `showRowSoon` /
-// `anchorTimer` / `DiffScrollPlace`, a box's middle-click drift (`DescriptionBox.driftText` /
+// `anchorWait` / `DiffScrollPlace`, a box's middle-click drift (`DescriptionBox.driftText` /
 // `MessageEditor.driftSummary`), `startAutoScroll`, and the left menu's reveals (the menu key, a name box, an open
 // row shown and given back, the middle button's drift). The wheel cannot be injected, so a run comes in through the
 // surfaces' functions (`sendRows` / `rollBy`); checking it is regression only.

@@ -147,10 +147,10 @@ Item {
     /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
     /// OS's first-repeat delay would, before sending the repeats.
     readonly property alias settling: stepTimer.running
-    /// A centering or a row brought into view is still owed to the view (the timers below, `Metrics.anchorDelayMs`);
+    /// A centering or a row brought into view is still owed to the view (the waits below, `FrameLater`);
     /// `PageSettled` waits on it (`placing`). A reread's own send is placed in the turn it lands and owes nothing.
     /// A new delay that writes the view's `contentY` joins this property, or a run completes before the view moves.
-    readonly property bool placing: anchorTimer.running || showTimer.running
+    readonly property bool placing: anchorWait.running || showWait.running
     Timer {
         id: stepTimer
         interval: Metrics.keyStepSettleMs
@@ -170,9 +170,10 @@ Item {
         walk.view.positionViewAtIndex(row, ListView.Center)
         walk.revealNode(row)
     }
-    /// Re-centers on the current row a beat from now: a model reset zeroes contentY in the polish after our handlers.
+    /// Re-centers on the current row once the next polish has run: a model reset zeroes contentY in the polish after
+    /// our handlers.
     function anchorSoon() {
-        anchorTimer.restart()
+        anchorWait.restart()
     }
     /// Keeps the viewport over the rows it was reading after `rows` commits arrived above them — a rebuild rewrites
     /// rows in place, so the view would show other commits — in the same turn as the rebuild, so no frame shows them.
@@ -273,16 +274,15 @@ Item {
     /// that wrote them → `RepoPage.onStatsChanged`), so "on screen" is weighed after that shift and no frame shows
     /// another commit.
     function showRowSoon(row) {
-        showTimer.showRow = row
-        showTimer.restart()
+        showWait.showRow = row
+        showWait.restart()
     }
-    Timer {
-        id: showTimer
+    FrameLater {
+        id: showWait
         property int showRow: -1
-        interval: Metrics.anchorDelayMs
         onTriggered: {
-            const row = showTimer.showRow
-            showTimer.showRow = -1
+            const row = showWait.showRow
+            showWait.showRow = -1
             if (row < 0 || walk.view.rowOnScreen(row))
                 return
             walk.view.haltGlide()
@@ -313,9 +313,8 @@ Item {
         return top >= walk.view.contentY + covered
             && top + Theme.graphRowHeight <= walk.view.contentY + walk.view.height
     }
-    Timer {
-        id: anchorTimer
-        interval: Metrics.anchorDelayMs
+    FrameLater {
+        id: anchorWait
         onTriggered: {
             walk.view.haltGlide()
             if (walk.view.currentIndex >= 0)

@@ -181,7 +181,7 @@ Rectangle {
     /// hover is not to be trusted (rules-refs/app-ui.md「行を作り直した直後は、行の hover を当てにしない」), and every
     /// write rebuilds the rows under the hand: asked of the row, the next `+` could wait for the mouse to be wiggled
     /// after one line is staged — no run of presses. Asked on three triggers: this
-    /// handler's point, the list's `contentY`, and `pointedRowTimer` once replaced rows are laid out. **On the pane**:
+    /// handler's point, the list's `contentY`, and `pointedRowWait` once replaced rows are laid out. **On the pane**:
     /// laid over the rows, a `HoverHandler` takes their hover away.
     HoverHandler {
         id: panePointer
@@ -275,9 +275,8 @@ Rectangle {
     }
     // After the rows are replaced: on the frame they land the list has not laid them out — the scroll restore's wait
     // (`DiffScrollPlace`).
-    Timer {
-        id: pointedRowTimer
-        interval: Metrics.anchorDelayMs
+    FrameLater {
+        id: pointedRowWait
         onTriggered: diffPane.settlePointedRow()
     }
     // The keyboard and the reading position live in `DiffRowWalk`; callers read them off this pane's forwards.
@@ -582,7 +581,7 @@ Rectangle {
                     diffHand.rowsMoved()
                 if (count > 0) {
                     diffPane.restoreScroll()
-                    pointedRowTimer.restart()
+                    pointedRowWait.restart()
                 }
             }
             // A row moving under a pointer standing still is the same question as the pointer moving over the rows.

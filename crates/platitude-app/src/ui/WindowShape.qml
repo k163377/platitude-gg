@@ -127,7 +127,7 @@ Item {
     }
 
     /// The second step of [`applySavedWindow`], once the strip has started: the shape standing now is the one
-    /// `settleTimer` measures the slop from and a maximise comes back to — over the floor of whichever page is up.
+    /// `settleWait` measures the slop from and a maximise comes back to — over the floor of whichever page is up.
     function settleSavedWindow() {
         // The frame has to fit, and it is wider than the window says, which `insideScreen` cannot see: the platform
         // side moves the window back and says whether it had to. Before the maximise, since the shape standing then
@@ -142,7 +142,7 @@ Item {
                 shape.window.visibility = Window.Maximized
         } else if (!moved) {
             // A moved or maximised window no longer has the size it was handed, so no slop is measured.
-            settleTimer.restart()
+            settleWait.restart()
         }
     }
 
@@ -165,11 +165,10 @@ Item {
         AppBackend.flushState()
     }
 
-    Timer {
-        id: settleTimer
-        // One beat, so the window has answered the size it was given: the answer arrives as a queued platform
+    FrameLater {
+        id: settleWait
+        // A frame on, so the window has answered the size it was given: the answer arrives as a queued platform
         // event.
-        interval: Metrics.anchorDelayMs
         onTriggered: {
             // Only against the size just handed, while nothing else resized it: a maximise's or a snap's difference
             // is not a frame margin.
