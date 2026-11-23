@@ -63,6 +63,25 @@ pub enum Reading {
     Drifted,
 }
 
+impl Reading {
+    /// The word a branch's record carries it in (`encode::far`); empty for
+    /// [`Self::None`].
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Together => "together",
+            Self::Drifted => "drifted",
+        }
+    }
+
+    /// The reading [`Self::word`] wrote; `None` for any other word.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::None, Self::Together, Self::Drifted]
+            .into_iter()
+            .find(|reading| reading.word() == word)
+    }
+}
+
 /// The sides a tag's name stands on, and what its rows that reach over
 /// there stand on (`TagMenuFacts::far`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -95,24 +114,23 @@ pub enum TagSides {
 }
 
 impl TagSides {
-    /// Decoded from the word a tag's record carries (`encode::far`); `None`
-    /// for a tag whose section has not been read yet.
-    pub fn from_word(word: &str) -> Option<Self> {
-        match word {
-            "here" => Some(Self::Here),
-            "remote" => Some(Self::Remote),
-            "both" => Some(Self::Both),
-            _ => None,
-        }
-    }
-
-    /// The word [`Self::from_word`] reads.
+    /// The word a tag's record carries it in (`encode::far`, the TAGS
+    /// section's `tagSides`), where an empty one is a tag whose section has
+    /// not answered for the name.
     pub fn word(self) -> &'static str {
         match self {
             Self::Here => "here",
             Self::Remote => "remote",
             Self::Both => "both",
         }
+    }
+
+    /// The sides [`Self::word`] wrote; `None` for any other word, the
+    /// empty one included.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::Here, Self::Remote, Self::Both]
+            .into_iter()
+            .find(|sides| sides.word() == word)
     }
 
     /// Whether this repository holds the tag.
@@ -137,4 +155,51 @@ pub enum TagDeleteHeld {
     /// Several remotes carry the name, none of them the reference, and
     /// nobody named one.
     Unnamed,
+}
+
+impl TagDeleteHeld {
+    /// The word a tag's record carries it in (`encode::far`), which the TAG
+    /// card words its greyed rows by; empty for [`Self::No`].
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::No => "",
+            Self::Drifted => "drift",
+            Self::Unnamed => "unnamed",
+        }
+    }
+
+    /// The hold [`Self::word`] wrote; `None` for any other word.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::No, Self::Drifted, Self::Unnamed]
+            .into_iter()
+            .find(|held| held.word() == word)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every value goes out in a word of its own and reads back as itself;
+    /// a word none of them writes reads as nothing.
+    #[test]
+    fn every_far_word_reads_back_as_what_wrote_it() {
+        for reading in [Reading::None, Reading::Together, Reading::Drifted] {
+            assert_eq!(Reading::from_word(reading.word()), Some(reading));
+        }
+        for sides in [TagSides::Here, TagSides::Remote, TagSides::Both] {
+            assert_eq!(TagSides::from_word(sides.word()), Some(sides));
+        }
+        for held in [
+            TagDeleteHeld::No,
+            TagDeleteHeld::Drifted,
+            TagDeleteHeld::Unnamed,
+        ] {
+            assert_eq!(TagDeleteHeld::from_word(held.word()), Some(held));
+        }
+        assert_eq!(Reading::from_word("elsewhere"), None);
+        assert_eq!(TagSides::from_word(""), None, "unread is no side");
+        assert_eq!(TagSides::from_word("neither"), None);
+        assert_eq!(TagDeleteHeld::from_word("drifted"), None);
+    }
 }
