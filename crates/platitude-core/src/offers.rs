@@ -19,11 +19,13 @@
 //! `localNameFor` / `upstreamOf` / `oidOfName`), the `qsTr` wording and
 //! each row's kind condition.
 
+mod far;
 mod message;
 mod moves;
 mod pull;
 mod tree;
 
+pub use far::TagDeleteHeld;
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
     SwitchAction, SwitchTarget, leave_code, leaving_undoes, move_landed, moves_blocked,

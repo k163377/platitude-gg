@@ -8,6 +8,7 @@
 
 use super::super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::super::*;
+use crate::offers::TagDeleteHeld;
 use crate::remote::AdvertisedTag;
 
 /// One worktree: no branch is held anywhere else.

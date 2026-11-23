@@ -2,6 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
+use crate::offers::TagDeleteHeld;
 use crate::remote::{Marked, PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
@@ -577,19 +578,6 @@ pub struct TagMenuFacts {
     /// Deleting from `reach` leaves no holder of the name, so its row goes
     /// with it.
     pub row_goes: bool,
-}
-
-/// Why a tag menu's rows that delete over there stand greyed.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum TagDeleteHeld {
-    /// They do not.
-    #[default]
-    No,
-    /// The remote reached has the name on another commit than here.
-    Drifted,
-    /// Several remotes carry the name, none of them the reference, and
-    /// nobody named one.
-    Unnamed,
 }
 
 /// One remote holding one tag on a commit this repository does not have

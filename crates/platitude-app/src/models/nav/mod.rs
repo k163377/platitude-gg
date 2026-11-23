@@ -156,7 +156,7 @@ impl Record for TagMenu {
 
 impl From<platitude_core::session::TagMenuFacts> for TagMenu {
     fn from(facts: platitude_core::session::TagMenuFacts) -> Self {
-        use platitude_core::session::TagDeleteHeld;
+        use platitude_core::offers::TagDeleteHeld;
         Self {
             push_remote: facts.push_remote,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),

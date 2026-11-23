@@ -144,8 +144,7 @@ pub use remote_tags::RemoteTagIndex;
 pub use repo_session::{CloseError, RepoSession};
 pub use shown_discard::ShownDiscard;
 pub use snapshot::{
-    BranchItem, BranchPushFacts, NameClash, RefsSnapshot, TagDeleteHeld, TagDrift, TagItem,
-    TagMenuFacts,
+    BranchItem, BranchPushFacts, NameClash, RefsSnapshot, TagDrift, TagItem, TagMenuFacts,
 };
 use standing::{HeadHold, HeadOffer, HeadPublished, Standing};
 pub use state::AutoFetchTicker;
