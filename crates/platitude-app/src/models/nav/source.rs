@@ -209,26 +209,12 @@ impl Source {
     }
 
     /// What local branch `name`'s card reads of its upstream
-    /// (`RefsSnapshot::branch_far`); nothing over there in every other
+    /// (`RefsSnapshot::branch_upstream`); nothing over there in every other
     /// section, and before the branches are read.
     pub(super) fn branch_upstream(&self, name: &str) -> BranchUpstream {
-        let Self::Locals(snapshot) = self else {
-            return BranchUpstream::default();
-        };
-        let branch = snapshot.local_named(name);
-        let reading = branch.filter(|branch| !branch.upstream.is_empty());
-        BranchUpstream {
-            far: Some(snapshot.branch_far(name)),
-            counterpart: reading
-                .map_or("", |branch| branch.upstream.as_str())
-                .to_string(),
-            counterpart_oid: reading
-                .and_then(|branch| branch.upstream_oid)
-                .map(|oid| oid.to_hex())
-                .unwrap_or_default(),
-            upstream: branch
-                .map_or("", platitude_core::session::BranchItem::upstream_named)
-                .to_string(),
+        match self {
+            Self::Locals(snapshot) => snapshot.branch_upstream(name).into(),
+            _ => BranchUpstream::default(),
         }
     }
 

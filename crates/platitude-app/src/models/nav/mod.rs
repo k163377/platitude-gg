@@ -176,7 +176,7 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 /// reading it speaks for and that reading's commit — what the card's
 /// remote deletes name and are leased to —, the upstream it is configured
 /// with, and core's part flat beside them (`encode::put_far`), off the same
-/// row (`RefsSnapshot::branch_far`). QML hands the record to
+/// row (`RefsSnapshot::branch_upstream`). QML hands the record to
 /// `GitFacts.refMenuOffers` as it is.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BranchUpstream {
@@ -216,6 +216,20 @@ impl Record for BranchUpstream {
             counterpart_oid: field(map, "remoteCounterpartOid")?,
             upstream: field(map, "upstream")?,
         })
+    }
+}
+
+impl From<platitude_core::session::BranchUpstreamFacts> for BranchUpstream {
+    fn from(facts: platitude_core::session::BranchUpstreamFacts) -> Self {
+        Self {
+            far: Some(facts.far),
+            counterpart: facts.counterpart,
+            counterpart_oid: facts
+                .counterpart_oid
+                .map(|oid| oid.to_hex())
+                .unwrap_or_default(),
+            upstream: facts.upstream,
+        }
     }
 }
 

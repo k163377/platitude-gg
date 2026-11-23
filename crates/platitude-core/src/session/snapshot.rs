@@ -93,6 +93,22 @@ pub struct BranchPushFacts {
     pub upstream: String,
 }
 
+/// What the BRANCH card of one local branch reads of its upstream
+/// ([`RefsSnapshot::branch_upstream`]), all off the branch's one row.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BranchUpstreamFacts {
+    /// What the card's rows read over there (`offers::ref_menu`).
+    pub far: BranchFar,
+    /// The remote reading the branch speaks for, by short name — what the
+    /// card's remote deletes name; empty where none is listed.
+    pub counterpart: String,
+    /// That reading's commit, which those deletes are leased to.
+    pub counterpart_oid: Option<Oid>,
+    /// The upstream it is configured with, listed or gone, a branch here
+    /// too ([`BranchItem::upstream_named`]) — what taking it off names.
+    pub upstream: String,
+}
+
 impl RefsSnapshot {
     /// The local branch called `short`, by binary search over the sorted
     /// list.
@@ -312,6 +328,23 @@ impl RefsSnapshot {
             reading: branch.map_or(Reading::None, BranchItem::reading),
             tracked: branch.is_some_and(|branch| !branch.upstream_named().is_empty()),
             has_remote: !self.remote_names.is_empty(),
+        }
+    }
+
+    /// What the BRANCH card of local branch `short` reads of its upstream:
+    /// [`Self::branch_far`], and the reading, its commit and the configured
+    /// upstream the card's rows name. A name this snapshot does not list
+    /// names none of them.
+    pub fn branch_upstream(&self, short: &str) -> BranchUpstreamFacts {
+        let branch = self.local_named(short);
+        let reading = branch.filter(|branch| branch.reading() != Reading::None);
+        BranchUpstreamFacts {
+            far: self.branch_far(short),
+            counterpart: reading
+                .map_or("", |branch| branch.upstream.as_str())
+                .to_string(),
+            counterpart_oid: reading.and_then(|branch| branch.upstream_oid),
+            upstream: branch.map_or("", BranchItem::upstream_named).to_string(),
         }
     }
 
