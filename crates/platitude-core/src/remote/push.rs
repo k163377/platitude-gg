@@ -16,7 +16,7 @@ use super::RemoteBranch;
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
-use super::route::{Marked, THIS_REPOSITORY};
+use super::route::Marked;
 use super::standing::PushTrack;
 use crate::oid::Oid;
 
@@ -84,7 +84,8 @@ pub async fn plan_current_push(
 /// The branch goes under its own name wherever it is not going to the
 /// remote it tracks, as git's triangular-push refspec does.
 ///
-/// Wherever this comes to this repository (`.`, [`THIS_REPOSITORY`];
+/// Wherever this comes to this repository (`.`,
+/// [`THIS_REPOSITORY`](super::route::THIS_REPOSITORY);
 /// `PushStanding::StaysHere`) it is an error rather than a `git push .`,
 /// whose refspec moves a branch here (exit 0; git's own plain push, under
 /// the default `push.default=simple`, refuses the differing name instead):
@@ -136,7 +137,7 @@ fn decide_push(
         }
         Marked::Remote(remote) => remote,
         Marked::Unmarked => match tracks {
-            Some(THIS_REPOSITORY) => {
+            Some(_) if marks.upstream_is_here() => {
                 return Err(refused(format!(
                     "the upstream of {branch} is a local branch, and no remote is set to push it to"
                 )));
@@ -371,7 +372,6 @@ fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
 mod tests {
     use super::*;
     use crate::remote::marks::PushDefault;
-    use crate::remote::route::{Marked, PushRoute, Upstream};
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 
@@ -410,22 +410,36 @@ mod tests {
         push_default: &str,
         fallback: &str,
     ) -> Result<PushSpec, GitError> {
-        let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
         decide_push(
             branch,
-            &PushMarks {
-                push_remote: some(push_remote),
-                push_default: some(push_default).map(|remote| PushDefault {
-                    remote,
-                    local: true,
-                }),
-                tracks: some(tracks),
-                merge: some(merge),
-                fetch: Vec::new(),
-            },
+            &marks(tracks, merge, push_remote, push_default),
             fallback,
             PushForce::None,
         )
+    }
+
+    /// The keys [`push_marks`] reads, empty standing for one that is not
+    /// set; every remote fetches its branches under its own name.
+    fn marks(tracks: &str, merge: &str, push_remote: &str, push_default: &str) -> PushMarks {
+        let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
+        PushMarks {
+            push_remote: some(push_remote),
+            push_default: some(push_default).map(|remote| PushDefault {
+                remote,
+                local: true,
+            }),
+            tracks: some(tracks),
+            merge: some(merge),
+            fetch: REMOTES
+                .iter()
+                .map(|remote| {
+                    (
+                        (*remote).to_string(),
+                        format!("+refs/heads/*:refs/remotes/{remote}/*"),
+                    )
+                })
+                .collect(),
+        }
     }
 
     #[test]
@@ -635,10 +649,14 @@ mod tests {
         }
     }
 
-    /// The toolbar label ([`PushRoute::target`], from the snapshot) and the send
-    /// ([`decide_push`], from git's keys) spell one order twice, so this
-    /// walks every arrangement of the three keys against both. Where the
-    /// send has nowhere to go, the label names nothing.
+    /// The label ([`PushRoute::target`]) and the send ([`decide_push`])
+    /// spell one order twice — the label off the upstream's name, the send
+    /// off the keys — so this walks every arrangement of the three keys
+    /// through both, from the same [`PushMarks`]: the label as the status
+    /// tick builds it, the upstream named from the keys
+    /// ([`PushMarks::upstream_name`]) and the route taken off them
+    /// ([`PushMarks::route`]). Where the send has nowhere to go, the label
+    /// names nothing.
     #[test]
     fn the_label_names_the_remote_the_send_uses() {
         // (branch.main.pushRemote, remote.pushDefault, what the branch tracks)
@@ -665,22 +683,12 @@ mod tests {
             } else {
                 "refs/heads/main"
             };
-            let sent = plan("main", tracks, merge, push_remote, push_default, "origin")
+            let keys = marks(tracks, merge, push_remote, push_default);
+            let sent = decide_push("main", &keys, "origin", PushForce::None)
                 .map(|spec| spec.target.to_string())
                 .unwrap_or_default();
-            // As the status shortens it: a branch here called `main` is
-            // `main`, and only the configuration says it is here.
-            let upstream = match tracks {
-                "" => String::new(),
-                "." => "main".to_string(),
-                remote => format!("{remote}/main"),
-            };
-            let set = |mark: &'static str| Some(mark).filter(|mark| !mark.is_empty());
-            let route = PushRoute::new(
-                Upstream::of(&upstream, tracks == "."),
-                Marked::of(set(push_remote), set(push_default)),
-                REMOTES,
-            );
+            let upstream = keys.upstream_name().unwrap_or_default();
+            let route = keys.route(&upstream, REMOTES);
             assert_eq!(
                 route.target("main", "origin").unwrap_or_default(),
                 sent,
