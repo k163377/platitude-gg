@@ -88,14 +88,7 @@ async fn toolbar(
         None
     };
     let label = route.target(&branch, "origin").unwrap_or_default();
-    let standing = remote::push_standing(
-        false,
-        false,
-        &branch,
-        route,
-        status.upstream_counts,
-        track.as_ref(),
-    );
+    let standing = remote::push_standing(route, status.upstream_counts, track.as_ref());
     (label, standing)
 }
 

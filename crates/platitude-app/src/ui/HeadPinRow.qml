@@ -166,7 +166,7 @@ Rectangle {
         // The row's own listing pair (`drain::settle_head_marks`), not the status read's: that one is held at 0 while
         // `countsSettled` is false — from a branch moving to the next status — so right after a switch, the very moment
         // this row stands, the counts alone would vanish. `countsSettled`'s contract stays with `WorktreeModel`'s three
-        // and `PublishFlow`, which reads the flag.
+        // and the toolbar's push (`remote::HeadPush::settled`), which reads it.
         HeadTrack {
             visible: headPin.branchesModel.headAhead > 0 || headPin.branchesModel.headBehind > 0
             ahead: headPin.branchesModel.headAhead

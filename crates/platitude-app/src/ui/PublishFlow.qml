@@ -39,15 +39,27 @@ Item {
     anchors.fill: parent
 
     // ---- push ------------------------------------------------------
+    /// The branch's push, read whole by core off one destination (`GitFacts.toolbarPush`, `remote::HeadPush::facts`)
+    /// — the one the send resolves: the standing, the label, the tip's counts, the overwrite's lease and the first
+    /// push's upstream below are all its fields, never re-derived here, or the label and the send part ways. The
+    /// branch's push is the model's record, handed on as read (`WorktreeModel.headPush`: whether the upstream is a
+    /// branch here is the status's word, never read off its name, and the branch's own mark rides with the status).
+    ///
+    /// Where a mark sends the push to another remote than the upstream's — a branch here being on none — the counts
+    /// that speak for it are the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
+    /// ask before changing): git refuses a non-fast-forward against the destination's ref, so read against the upstream
+    /// a plain `push` would stand over a diverged destination and dead-end. The status tick reads the destination's
+    /// counts only in this case (`remote::push_track`). The tip's counts and the overwrite's lease come off that same
+    /// destination: one of them reading the upstream would say the diverged counts and lease on origin's tip, refused
+    /// as `stale info`. Headless: `push-target` / `push-hover` / `force-push` on `--preset forkdiverged`, and
+    /// `push-target forkmark --preset forkmark` for no tracking ref.
+    readonly property var pushFacts:
+        GitFacts.toolbarPush(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
+                             publishFlow.repoTab.remoteNames, publishFlow.repoTab.defaultRemote)
     /// Where the button would send this branch: the branch's own mark, then the repository's, then the upstream
-    /// (デザイン規約 §リモートを書き留める). **The order is core's** (`platitude_core::remote::push_target`), the same the send
-    /// reads — never re-derive it here, or the label and the send part ways. The branch's push is the model's record,
-    /// handed on as read (`WorktreeModel.headPush`: whether the upstream is a branch here is the status's word, never
-    /// read off its name, and the branch's own mark rides with the status). Headless: `push-target` — the label is in
-    /// a tooltip, which no picture can judge: read it plain and on `--preset forkmark` / `--preset forkdiverged`.
-    readonly property string pushTargetLabel:
-        GitFacts.pushTarget(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
-                            publishFlow.repoTab.remoteNames, publishFlow.repoTab.defaultRemote)
+    /// (デザイン規約 §リモートを書き留める). Headless: `push-target` — the label is in a tooltip, which no picture can judge:
+    /// read it plain and on `--preset forkmark` / `--preset forkdiverged`.
+    readonly property string pushTargetLabel: publishFlow.pushFacts.target
     /// What the branch can do with its remote (デザイン規約 §リモートへ送る):
     ///
     /// - `closed`        — no branch to send
@@ -61,39 +73,17 @@ Item {
     /// - `behind`        — the remote moved on; nothing to add
     /// - `diverged`      — both moved; only an overwrite can land
     ///
-    /// The table is core's (`platitude_core::remote::push_standing`, through a pure `GitFacts` slot whose inputs are
-    /// all bound here), read against the destination's own counts where the push goes elsewhere (`pushElsewhere`).
-    /// The counts are the last fetch's, so they prove the negative only: a push may still be refused.
-    readonly property string pushState:
-        // `closed` too until the counts are about HEAD's branch (`WorktreeModel.countsSettled`).
-        publishFlow.repoTab.state !== "open" || !publishFlow.worktree.countsSettled ? "closed"
-        : GitFacts.pushStanding(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
-                                publishFlow.repoTab.remoteNames)
-    /// A mark sends the push to another remote than the upstream's — a branch here being on none: the counts that
-    /// speak for it are then the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
-    /// ask before changing): git refuses a non-fast-forward against the destination's ref, so read against the
-    /// upstream a plain `push` would stand over a diverged destination and dead-end. Core's rule, the one `pushState`
-    /// weighs. The status tick reads the destination's counts only in this case (`remote::push_track`). The tip's
-    /// counts and the overwrite's lease (`pushAhead` / `pushBehind` / `pushMeasured`) are picked by this same flag:
-    /// one of them reading the upstream would say the diverged counts and lease on origin's tip, refused as
-    /// `stale info`. `elsewhere` is only for a destination with no tracking ref here (a fetch refspec outside
-    /// `refs/remotes/`, or a `remote.<name>.push` that renames). Headless: `push-target` / `push-hover` / `force-push`
-    /// on `--preset forkdiverged`, and `push-target forkmark --preset forkmark` for no tracking ref.
-    readonly property bool pushElsewhere:
-        GitFacts.pushGoesElsewhere(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
-                                   publishFlow.repoTab.remoteNames)
+    /// The table is core's (`platitude_core::remote::push_standing`), `closed` too until the counts are about HEAD's
+    /// branch (`HeadPush::settled`). `elsewhere` is only for a destination with no tracking ref here (a fetch refspec
+    /// outside `refs/remotes/`, or a `remote.<name>.push` that renames). The counts are the last fetch's, so they prove
+    /// the negative only: a push may still be refused. A tab that is not open stands closed whatever its branch says.
+    readonly property string pushState: publishFlow.repoTab.state !== "open" ? "closed" : publishFlow.pushFacts.state
     /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
     /// are against, which an overwrite leases to — none where the push would stay here, as the branch row's
-    /// (`RefsSnapshot::branch_push`).
-    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushAhead
-                                                               : publishFlow.worktree.ahead
-    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushBehind
-                                                                : publishFlow.worktree.behind
-    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushTracking
-                                         : publishFlow.worktree.headPush.upstreamHere
-                                           || publishFlow.pushState === "stays-here"
-                                           ? ""
-                                         : publishFlow.worktree.upstream
+    /// (`RefsSnapshot::branch_push`; both read `remote::push_reading`).
+    readonly property int pushAhead: publishFlow.pushFacts.ahead
+    readonly property int pushBehind: publishFlow.pushFacts.behind
+    readonly property string pushMeasured: publishFlow.pushFacts.measured
     /// Nothing this window asked git for is out — from the press, not from when the queue starts it (`settling` rises
     /// at the ask, `busyCount` only once the write runs). A push is answered by its one owner (`RepoTab.pushAnswer`),
     /// so the doors that send one beside another — the toolbar's button, the question's pill — wait on this, and only
@@ -124,10 +114,7 @@ Item {
     function pushNow() {
         if (publishFlow.pushState === "publish") {
             // A gone branch here names no remote, whatever its name reads like (`startPublishAsk`).
-            publishFlow.startPublishAsk(publishFlow.worktree.branch,
-                                        publishFlow.worktree.headPush.upstreamHere ? ""
-                                                                                   : publishFlow.worktree.upstream,
-                                        "")
+            publishFlow.startPublishAsk(publishFlow.worktree.branch, publishFlow.pushFacts.upstream, "")
             return
         }
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "", "")
@@ -396,12 +383,12 @@ Item {
 
     /// Asks where `branch` goes, opening on `upstream` — the remote branch it is configured for, fetched or not; "" for
     /// none, or for a branch here, which names no remote — and marking the row `oidHex` ("" for none: the toolbar's is
-    /// the worktree's own). The toolbar hands `worktree.upstream`, a branch row `branchPush`'s `upstream` (the
-    /// configured name, here or not). `pushState === "publish"` is both "no upstream" and "no tracking ref"; the
-    /// second has its destination written already, and the question opens on it (user decision — ask before
-    /// changing): opening on the default remote and the branch's own name would ask again for the answer just given,
-    /// and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it. Otherwise the field
-    /// defaults to the branch's own name. Net: `publish-upstream`.
+    /// the worktree's own). The toolbar hands `pushFacts`' `upstream`, a branch row `branchPush`'s — the same field off
+    /// the same reading (`remote::Upstream::remote_branch`). `pushState === "publish"` is both "no upstream" and "no
+    /// tracking ref"; the second has its destination written already, and the question opens on it (user decision —
+    /// ask before changing): opening on the default remote and the branch's own name would ask again for the answer
+    /// just given, and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it. Otherwise the
+    /// field defaults to the branch's own name. Net: `publish-upstream`.
     function startPublishAsk(branch, upstream, oidHex) {
         // Open on the upstream where there is one, even with no tracking ref — but only on a remote still configured:
         // `remoteOfRef` cuts a lost name at the first slash, and the chooser cannot pick back a row it does not hold.

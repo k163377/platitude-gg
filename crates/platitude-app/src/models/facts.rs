@@ -188,60 +188,32 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
-    /// What a push of the current branch can do, in the word
-    /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
-    /// add: this answers for the repository alone.
+    /// What the toolbar's push stands on, read whole
+    /// (`remote::HeadPush::facts`): the standing in the word
+    /// `PublishFlow.pushState` branches on, where the label says it goes,
+    /// the counts the tip says and the remote branch an overwrite leases
+    /// to — all off one destination, the one the send
+    /// (`remote::plan_current_push`) resolves. A closed tab is the caller's
+    /// to add: this answers for the repository alone.
     ///
     /// `head` is the model's own record handed on as it was read
     /// (`WorktreeModel.headPush`); QML builds none. The repository's mark
-    /// (`RepoTab.pushDefault`, empty for none) and the configured remotes
-    /// are the tab's. The two push slots beside this take them so.
+    /// (`RepoTab.pushDefault`, empty for none), the configured remotes and
+    /// the remote a branch that tracks nothing, marked nowhere, goes to are
+    /// the tab's.
     #[qslot]
-    fn push_standing(
-        &self,
-        head: crate::encode::Push,
-        push_default: String,
-        remote_names: Vec<String>,
-    ) -> String {
-        let push_default = marked(&push_default);
-        head.standing(head.route(push_default, names(&remote_names)))
-            .as_str()
-            .to_string()
-    }
-
-    /// Whether a mark sends the push to another remote than the
-    /// upstream's — where the counts that speak for it are the
-    /// destination's own, and so the ones a tooltip says and a lease pins
-    /// to (`PublishFlow.pushElsewhere`). The same rule `push_standing`
-    /// weighs, so the words and the standing read one set of counts.
-    #[qslot]
-    fn push_goes_elsewhere(
-        &self,
-        head: crate::encode::Push,
-        push_default: String,
-        remote_names: Vec<String>,
-    ) -> bool {
-        head.route(marked(&push_default), names(&remote_names))
-            .goes_elsewhere()
-    }
-
-    /// Where the toolbar's push button would send this branch, spelled as
-    /// the label shows it; empty where there is no branch or nowhere to
-    /// send it. Asked of core because the send (`remote::plan_current_push`)
-    /// reads the same table: a second spelling in a binding lets the label
-    /// name another remote than the push goes to. `default_remote` is where
-    /// a branch that tracks nothing, marked nowhere, goes.
-    #[qslot]
-    fn push_target(
+    fn toolbar_push(
         &self,
         head: crate::encode::Push,
         push_default: String,
         remote_names: Vec<String>,
         default_remote: String,
-    ) -> String {
-        head.route(marked(&push_default), names(&remote_names))
-            .target(&head.branch, &default_remote)
-            .unwrap_or_default()
+    ) -> One<crate::encode::ToolbarPush> {
+        let push_default = crate::encode::named(push_default.as_str());
+        One::new(
+            head.facts(push_default, names(&remote_names), &default_remote)
+                .into(),
+        )
     }
 
     /// What the right-click menu on a ref may offer, as the words
@@ -657,12 +629,6 @@ fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
 }
 
-/// The repository's mark as the tab holds it (`RepoTab.pushDefault`):
-/// empty is its word for none.
-fn marked(push_default: &str) -> Option<&str> {
-    Some(push_default).filter(|mark| !mark.is_empty())
-}
-
 /// The lines of a file QML names by its first and last line numbers,
 /// numbered from 1; `None` where `first` is no line or `last` is negative.
 /// A `last` before `first` — `0` among them — is `first`.
@@ -708,6 +674,7 @@ mod tests {
     fn head(track: Option<PushTrack>) -> crate::encode::Push {
         crate::encode::Push::new(HeadPush {
             branch: "main".into(),
+            settled: true,
             upstream: "origin/main".into(),
             upstream_counts: Some(platitude_core::AheadBehind {
                 ahead: 1,
@@ -722,38 +689,56 @@ mod tests {
     }
 
     /// The tab's empty mark is no mark; one on another remote takes the
-    /// push there, under the branch's own name.
+    /// push there, under the branch's own name, read by the counts there.
     #[test]
     fn the_toolbars_push_is_read_off_the_models_record_under_the_tabs_mark() {
-        let remotes = || vec!["fork".to_string(), "origin".to_string()];
+        let push = |track: Option<PushTrack>, push_default: &str| {
+            let answer = GitFacts.toolbar_push(
+                head(track),
+                push_default.to_string(),
+                vec!["fork".to_string(), "origin".to_string()],
+                "origin".to_string(),
+            );
+            (*answer).clone()
+        };
         assert_eq!(
-            GitFacts.push_standing(head(None), String::new(), remotes()),
-            "ready"
+            push(None, ""),
+            crate::encode::ToolbarPush {
+                state: "ready".into(),
+                target: "origin/main".into(),
+                measured: "origin/main".into(),
+                ahead: 1,
+                behind: 0,
+                upstream: "origin/main".into(),
+            }
+        );
+        let elsewhere = push(None, "fork");
+        assert_eq!(
+            (elsewhere.state.as_str(), elsewhere.target.as_str()),
+            ("elsewhere", "fork/main")
         );
         assert_eq!(
-            GitFacts.push_standing(head(None), "fork".into(), remotes()),
-            "elsewhere"
+            (elsewhere.measured.as_str(), elsewhere.ahead),
+            ("", 0),
+            "nothing counted over there"
         );
         let there = PushTrack {
             tracking: "fork/main".into(),
             counts: platitude_core::AheadBehind {
                 ahead: 1,
-                behind: 1,
+                behind: 2,
             },
         };
+        let diverged = push(Some(there), "fork");
         assert_eq!(
-            GitFacts.push_standing(head(Some(there)), "fork".into(), remotes()),
-            "diverged"
-        );
-        assert!(GitFacts.push_goes_elsewhere(head(None), "fork".into(), remotes()));
-        assert!(!GitFacts.push_goes_elsewhere(head(None), String::new(), remotes()));
-        assert_eq!(
-            GitFacts.push_target(head(None), "fork".into(), remotes(), "origin".into()),
-            "fork/main"
-        );
-        assert_eq!(
-            GitFacts.push_target(head(None), String::new(), remotes(), "origin".into()),
-            "origin/main"
+            (
+                diverged.state.as_str(),
+                diverged.measured.as_str(),
+                diverged.ahead,
+                diverged.behind
+            ),
+            ("diverged", "fork/main", 1, 2),
+            "the destination's own counts, and its ref to lease to"
         );
     }
 

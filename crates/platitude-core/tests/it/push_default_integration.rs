@@ -259,14 +259,7 @@ async fn standing_of(
         marks.marked(),
         ["fork", "origin"],
     );
-    remote::push_standing(
-        false,
-        false,
-        "main",
-        route,
-        status.upstream_counts,
-        track.as_ref(),
-    )
+    remote::push_standing(route, status.upstream_counts, track.as_ref())
 }
 
 /// The toolbar's held overwrite, leased to `expect`.

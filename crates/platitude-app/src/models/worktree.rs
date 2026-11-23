@@ -471,6 +471,7 @@ impl WorktreeModel {
             branch: self.branch.clone(),
             detached: self.detached,
             unborn: self.unborn,
+            settled,
             upstream: self.upstream.clone(),
             upstream_counts: self.status_upstream_counts.filter(|_| settled),
             status: platitude_core::remote::StatusPush {

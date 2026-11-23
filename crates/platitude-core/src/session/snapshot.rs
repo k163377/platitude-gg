@@ -2,7 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
-use crate::remote::{Marked, PushRoute, PushStanding, RemoteTagRef, Upstream};
+use crate::remote::{Marked, PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
 ///
@@ -249,7 +249,7 @@ impl RefsSnapshot {
     }
 
     /// What a menu's `push` row on the local branch `short` stands on: the
-    /// toolbar's table and destination (`remote::push_standing` /
+    /// toolbar's table and destination (`remote::push_reading` /
     /// `PushRoute::target`, the one resolver), fed this branch's row, its own
     /// mark and the counts of where that mark sends it. `fallback` is the
     /// remote a branch that tracks nothing, marked nowhere, goes to.
@@ -300,27 +300,15 @@ impl RefsSnapshot {
                 crate::refs::split_remote_ref(&track.tracking, remotes())
                     .is_some_and(|(on, _)| route.marked() == Marked::Remote(on))
             });
-        let standing =
-            crate::remote::push_standing(false, false, short, route, upstream_counts, track);
-        // The remote branch the counts are against: none where the push
-        // stays here; where a mark sends it elsewhere, its tracking ref
-        // there; else the upstream, when it is a remote's and fetched.
-        let measured = match standing {
-            PushStanding::StaysHere => "",
-            _ if route.goes_elsewhere() => track.map_or("", |track| track.tracking.as_str()),
-            _ => match upstream {
-                Upstream::Remote(name) if upstream_counts.is_some() => name,
-                _ => "",
-            },
-        };
+        let read = crate::remote::push_reading(route, upstream_counts, track);
         BranchPushFacts {
-            standing,
+            standing: read.standing,
             target: route.target(short, fallback).unwrap_or_default(),
-            lease: self.remote_named(measured).map(|remote| remote.oid),
-            upstream: match upstream {
-                Upstream::Remote(name) => name.to_string(),
-                Upstream::Here | Upstream::None => String::new(),
-            },
+            lease: read
+                .measured
+                .and_then(|measured| self.remote_named(measured))
+                .map(|remote| remote.oid),
+            upstream: upstream.remote_branch().unwrap_or_default().to_string(),
         }
     }
 

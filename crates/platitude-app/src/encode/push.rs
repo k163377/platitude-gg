@@ -1,21 +1,74 @@
 //! The push of the branch HEAD is on, as one value QML hands on and never
-//! builds (`WorktreeModel.headPush`).
+//! builds (`WorktreeModel.headPush`), and the toolbar's answer to it
+//! (`GitFacts.toolbarPush`).
 
 use platitude_core::AheadBehind;
-use platitude_core::remote::{HeadPush, PushTrack, StatusPush};
+use platitude_core::remote::{HeadPush, HeadPushFacts, PushTrack, StatusPush};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, One, Record, field};
 
-/// What the toolbar's push slots take (`GitFacts.pushStanding` and the two
-/// beside it).
+/// What the toolbar's push slot takes (`GitFacts.toolbarPush`).
 pub type Push = One<HeadPush>;
 
-/// Flat, under the names the model's own properties had: Qt's spellings of
-/// "nothing" — a flag down beside the upstream's counts, an empty name for
-/// the mark and the destination's tracking ref — read back as none here,
-/// and nowhere else. The counts are Qt's `int`s, a count past one drawn as
-/// its largest.
+/// What the toolbar's push stands on, read whole (`HeadPushFacts`): the
+/// fields a menu's `push` row reads of its branch (`nav::BranchPush`), the
+/// remote branch an overwrite leases to by name (`PublishFlow.leaseOid`
+/// reads its commit off the remotes as the press goes out), and the counts
+/// the tip says.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ToolbarPush {
+    /// `PushStanding`'s word (`publish` / `ready` / `stays-here` …).
+    pub state: String,
+    pub target: String,
+    pub measured: String,
+    pub ahead: i32,
+    pub behind: i32,
+    pub upstream: String,
+}
+
+impl From<HeadPushFacts> for ToolbarPush {
+    fn from(facts: HeadPushFacts) -> Self {
+        Self {
+            state: facts.standing.as_str().to_string(),
+            target: facts.target,
+            measured: facts.measured,
+            ahead: shown(facts.counts.ahead),
+            behind: shown(facts.counts.behind),
+            upstream: facts.upstream,
+        }
+    }
+}
+
+impl Record for ToolbarPush {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("state", &self.state)
+            .put("target", &self.target)
+            .put("measured", &self.measured)
+            .put("ahead", &self.ahead)
+            .put("behind", &self.behind)
+            .put("upstream", &self.upstream)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            state: field(map, "state")?,
+            target: field(map, "target")?,
+            measured: field(map, "measured")?,
+            ahead: field(map, "ahead")?,
+            behind: field(map, "behind")?,
+            upstream: field(map, "upstream")?,
+        })
+    }
+}
+
+/// Flat, under `WorktreeModel`'s property names (`pushRemote`, `tracked` —
+/// what the harness reads off it), in Qt's spellings of "nothing": a flag
+/// down beside the upstream's counts, an empty name for the mark and the
+/// destination's tracking ref ([`named`]). The counts are Qt's `int`s, a
+/// count past one drawn as its largest.
 impl Record for HeadPush {
     fn to_map(&self) -> QVariantMap {
         let counts = self.upstream_counts.unwrap_or_default();
@@ -25,6 +78,7 @@ impl Record for HeadPush {
             .put("branch", &self.branch)
             .put("detached", &self.detached)
             .put("unborn", &self.unborn)
+            .put("settled", &self.settled)
             .put("upstream", &self.upstream)
             .put("upstreamHere", &self.status.upstream_here)
             .put("tracked", &self.upstream_counts.is_some())
@@ -44,7 +98,6 @@ impl Record for HeadPush {
     }
 
     fn from_map(map: &QVariantMap) -> Option<Self> {
-        let named = |name: String| Some(name).filter(|name| !name.is_empty());
         let tracked: bool = field(map, "tracked")?;
         let counts = counts_of(field(map, "ahead")?, field(map, "behind")?);
         let pushed = counts_of(field(map, "pushAhead")?, field(map, "pushBehind")?);
@@ -52,6 +105,7 @@ impl Record for HeadPush {
             branch: field(map, "branch")?,
             detached: field(map, "detached")?,
             unborn: field(map, "unborn")?,
+            settled: field(map, "settled")?,
             upstream: field(map, "upstream")?,
             upstream_counts: tracked.then_some(counts),
             status: StatusPush {
@@ -64,6 +118,13 @@ impl Record for HeadPush {
             },
         })
     }
+}
+
+/// Qt's word for no name — an empty string — read as none: the one place
+/// the toolbar's push reads it so, for the record's mark and tracking ref
+/// as for the tab's mark (`GitFacts.toolbarPush`).
+pub fn named<S: AsRef<str>>(name: S) -> Option<S> {
+    Some(name).filter(|name| !name.as_ref().is_empty())
 }
 
 fn shown(count: u32) -> i32 {
@@ -89,6 +150,7 @@ mod tests {
             branch: "feature/日本語".into(),
             detached: false,
             unborn: false,
+            settled: true,
             upstream: "origin/feature/日本語".into(),
             upstream_counts: Some(AheadBehind {
                 ahead: 2,
