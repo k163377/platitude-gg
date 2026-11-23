@@ -670,9 +670,11 @@ Item {
                 op.input("fetched", () => op.fetchUnder())
                 return
             }
-            // Read first at every stage under the write: a write that has landed ends the run on saying so. Each
-            // completion is photographed during the write it presses: the page's reads are on their way by design
-            // (`arriving`).
+            // Read first at every stage under the write: a write that has landed ends the run on saying so. A
+            // completion waits for the page settled, as any does. Under the hook or the tool this tree's polls stand
+            // down (`RepoSession::begin_poll`) while the reads the press asked for land; under a merge the polls go
+            // on, since it replays history, and the page settles between them. Only the replay's is photographed with
+            // its reads still coming: the rewrite moves HEAD on under every one of them (`replayRow`).
             const landed = driver.wroteAndSettled()
             if (op.at("pressed")) {
                 // A hook holds the commit of the plain form, `after` and the merge form until the run lets it go or the
@@ -683,7 +685,7 @@ Item {
                 // rows to (`RepoPage.treeAtAsk`).
                 if (landed) {
                     op.complete({ "name": "menu_wait_out", "when": () => ({ "landed": driver.wroteAndSettled() }),
-                                  "report": () => op.missed("the menu could go up under it"), "arriving": ["*"] })
+                                  "report": () => op.missed("the menu could go up under it") })
                     return
                 }
                 if (!Awaited.all("menu_wait_out", {
@@ -700,23 +702,21 @@ Item {
                 // them landed.
                 if (landed) {
                     op.complete({ "name": "menu_wait_during", "when": () => ({ "landed": driver.wroteAndSettled() }),
-                                  "report": () => op.missed("its reads could settle under the menu"),
-                                  "arriving": ["*"] })
+                                  "report": () => op.missed("its reads could settle under the menu") })
                     return
                 }
-                op.complete({
-                    "name": "menu_wait_during",
-                    "when": () => ({ "menu": op.level.visible, "details": page.pageDetailsSettled,
-                                     "rows": PageSettled.rowsBuilt(page) }),
-                    "report": () => op.line("during"), "arriving": ["*"] })
+                op.complete({ "name": "menu_wait_during", "when": () => ({ "menu": op.level.visible }),
+                              "report": () => op.line("during") })
                 return
             }
             if (op.merges) {
                 // The menu over the merge still held by its hook, `MERGE_HEAD` standing: the cherry-pick row's
-                // tooltip, forced (verify-ui §hover の絵の撮り方), says what the row waits for.
+                // tooltip, forced (verify-ui §hover の絵の撮り方), says what the row waits for. `MERGING` comes in on
+                // a status read and the worktree row it stands up on the walk behind it: the page settles once the
+                // row is in (`PageSettled`'s `wipRow`), and the tooltip's delay can run out before then.
                 if (landed) {
                     op.complete({ "name": "menu_wait_tip", "when": () => ({ "landed": driver.wroteAndSettled() }),
-                                  "report": () => op.missed("its row's tooltip could be read"), "arriving": ["*"] })
+                                  "report": () => op.missed("its row's tooltip could be read") })
                     return
                 }
                 if (op.at("raised") && !op.input("tipped", () => {
@@ -728,7 +728,7 @@ Item {
                 }))
                     return
                 op.complete({ "name": "menu_wait_tip", "when": () => ({ "tip": op.why() !== "none" }),
-                              "report": () => op.line("during"), "arriving": ["*"] })
+                              "report": () => op.line("during") })
                 return
             }
             if (op.mode === "replay") {
@@ -736,7 +736,7 @@ Item {
                 // above the one the menu was counted on, and enough of them scroll it out of the view.
                 if (landed) {
                     op.complete({ "name": "menu_wait_row", "when": () => ({ "landed": driver.wroteAndSettled() }),
-                                  "report": () => op.missed("its worktree row stood"), "arriving": ["*"] })
+                                  "report": () => op.missed("its worktree row stood") })
                     return
                 }
                 if (op.at("raised") && !op.input("row_asked", () => acts.askReplayRow()))
@@ -758,7 +758,7 @@ Item {
             op.complete({
                 "name": "menu_wait_up",
                 "when": () => ({ "written": driver.wroteAndSettled(), "stood": !op.level.waiting }),
-                "report": () => op.line("after"), "arriving": ["*"] })
+                "report": () => op.line("after") })
         }
     }
 
