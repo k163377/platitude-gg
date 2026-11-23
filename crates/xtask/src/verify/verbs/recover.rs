@@ -69,9 +69,15 @@ pub(super) const TABLE: &[Verb] = &[
                 "tipShown=true pin=bottom card=false pick=18",
             ),
             (Arg::Has("card"), "card=true pick=-1"),
-            // The window at its floor: the graph keeps its rows under the band
-            // and what stands with it, read off the view.
-            (Arg::Has("floor"), "graphKept=true atFloor=true"),
+            // The window at its floor: the graph keeps its rows under the one
+            // bar standing, read off the view. A report or a question raised
+            // over the entry stands alone, the band waiting behind it.
+            (
+                Arg::Has("askform"),
+                "graphKept=true atFloor=true band=false",
+            ),
+            (Arg::Has("notice"), "graphKept=true atFloor=true band=false"),
+            (Arg::Has("floor"), "graphKept=true atFloor=true band=true"),
             // Past the graph's window: the press waits for the graph to
             // walk there.
             (Arg::WithPreset("discards-deep"), "reach=false restores=0"),

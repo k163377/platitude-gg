@@ -269,5 +269,51 @@ Item {
             tryVerify(() => partsView().height > 0 && partsView().height === partsView().contentHeight
                       && Math.abs(middleOf(press) - middleOf(partsView())) <= 1)
         }
+
+        // Coming back in place of a bar that went in the same frame (`BarTravel`): the band stands at that bar's
+        // height and travels to its own, so the rows under it never jump.
+        function test_the_band_takes_a_bars_place_at_its_height() {
+            show(entry("Reset main", 1, false), 800)
+            tryVerify(() => band.ownHeight > 0 && band.implicitHeight === band.ownHeight)
+            band.visible = false
+            const from = band.ownHeight - 30
+            band.enterFrom = from
+            band.visible = true
+            compare(band.implicitHeight, from, "at the gone bar's height, in the frame it went")
+            verify(band.clip, "its lines short of their room stay inside it")
+            // Its own height as it stands now: shown again, its lines are laid out again.
+            tryVerify(() => !band.travelling && band.implicitHeight === band.ownHeight)
+            verify(!band.clip)
+        }
+        // A bar of its own height before it: nothing travels, and nothing is left travelling — no arrival would put it
+        // down, and the next pick would animate.
+        function test_the_band_taking_a_place_at_its_own_height_does_not_travel() {
+            show(entry("Reset main", 1, false), 800)
+            tryVerify(() => band.ownHeight > 0 && band.implicitHeight === band.ownHeight)
+            band.visible = false
+            band.enterFrom = band.ownHeight
+            band.visible = true
+            compare(band.implicitHeight, band.ownHeight)
+            verify(!band.travelling)
+            verify(!band.clip)
+        }
+        // A pick has no bar before it: the band stands at once.
+        function test_the_band_with_nothing_before_it_stands_at_once() {
+            show(entry("Reset main", 1, false), 800)
+            band.visible = false
+            band.visible = true
+            compare(band.implicitHeight, band.ownHeight)
+            verify(!band.travelling)
+        }
+        // A height handed over for a turn the band did not come back in is put down with that turn, so a later pick
+        // does not travel from it.
+        function test_a_height_the_band_did_not_take_is_put_down() {
+            show(entry("Reset main", 1, false), 800)
+            band.enterFrom = 10
+            tryCompare(band, "enterFrom", 0)
+            band.visible = false
+            band.visible = true
+            compare(band.implicitHeight, band.ownHeight)
+        }
     }
 }

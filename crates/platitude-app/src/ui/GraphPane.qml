@@ -344,20 +344,36 @@ Rectangle {
     readonly property alias askForm: askBar.formItem
     /// The bar itself — automation-only exposure, like `view`.
     readonly property alias askCard: askBar
-    /// What the question takes off the list: the band over this pane gives way to it (`RecoverBand.room`).
+    /// Where the question stands now, as a bar coming over it takes its place (`RepoPage.raiseNotice`, `BarTravel`).
     readonly property real askHeight: askBar.height
+    /// An answer is under way on the question's pill — pressed through, or its full fill standing: a report waits
+    /// (`AskBar.answering`).
+    readonly property alias askAnswering: askBar.answering
     /// The most the question may stand at, which the page works out with the graph's rows kept (`AskBar.room`).
     property alias askRoom: askBar.room
     /// The least the window's floor keeps for a question (`AskBar.floorHeight`).
     readonly property real askFloorHeight: askBar.floorHeight
-    /// Whether a question is standing in this pane — **product-facing**, unlike the bar above: the report bar over the
-    /// middle of the page reads it to know Escape is not its own (`RepoPage`).
+    /// Whether a question is standing in this pane, on screen or waiting its turn (`askHeld`) — **product-facing**,
+    /// unlike the bar above.
     readonly property alias asking: askBar.open
+    /// The question waits behind the report over the middle of the page, which the page says (`AskBar.held`).
+    property alias askHeld: askBar.held
+    /// Something waits behind the question for the middle, so it goes at once when answered (`AskBar.givesWay`).
+    property alias askGivesWay: askBar.givesWay
+    /// The height of the bar the question takes the place of (`AskBar.enterFrom`).
+    property alias askEnterFrom: askBar.enterFrom
+    /// No question on screen and the bar all the way up: the discard band over the pane comes back (`RepoPage`).
+    readonly property alias askShut: askBar.shut
     function stopAsking() {
         // Only lowered: the bar stays on screen for its whole exit, and the next question is what re-dresses it
         // (`AskBar.open`).
         askBar.open = false
         graphList.askOid = ""
+    }
+    /// A bar over the middle of the page is about to hand it to another in place: the rows stay where they stand
+    /// (`GraphList.keepPlace`).
+    function keepRowsInPlace() {
+        graphList.keepPlace()
     }
     /// Automation: answer a held question the way a person does, by pressing the pill through to its last press.
     function completeHold() {
@@ -365,6 +381,9 @@ Rectangle {
     }
     signal askConfirmed()
     signal askCancelled()
+    /// The question leaves the middle in one frame for what comes after it, standing at `height` until now
+    /// (`AskBar.handingOver`).
+    signal askHandingOver(real height)
 
     /// The list itself — automation-only exposure (rules-refs/app-ui.md「製品の部品はハーネスへ答える相手を丸ごと渡す」);
     /// app code goes through the functions.
@@ -447,6 +466,7 @@ Rectangle {
         z: 3
         onConfirmed: graphArea.askConfirmed()
         onCancelled: graphArea.askCancelled()
+        onHandingOver: height => graphArea.askHandingOver(height)
     }
     // Hangs from the top-right corner, over the list — declared here because a Flickable adopts what is declared in
     // it and scrolls it away. Only one of the two is ever up: a question already standing keeps the place, since it
@@ -493,6 +513,7 @@ Rectangle {
         }
         graphModel: graphArea.graphModel
         worktree: graphArea.worktree
+        askShown: askBar.shown
         askTone: askBar.tone
         columns: metrics
         dividers: columnDividers

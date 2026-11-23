@@ -195,8 +195,10 @@ Item {
     // This row's chip column is a name box right now.
     readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
-    // and nothing else.
-    readonly property bool marked: rowItem.ListView.view ? rowItem.ListView.view.askOid === rowItem.oid_hex : false
+    // and nothing else, while those words are on screen (`GraphList.askShown`).
+    readonly property bool marked: rowItem.ListView.view ? rowItem.ListView.view.askShown
+                                                           && rowItem.ListView.view.askOid === rowItem.oid_hex
+                                                         : false
     /// The three grounds below as they add up over the pane's (`Qt.tint` folds a wash over what is under it): what the
     /// lanes sink into at the column's edge (`GraphLaneCell.ground`). Change a ground there, change it here.
     readonly property color laneGround: {

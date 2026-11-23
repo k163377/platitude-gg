@@ -143,6 +143,9 @@ AppListView {
     // Which row the standing question is about, and the bar's tone it wears (`AskBar.tone`); the words are on the bar.
     property string askOid: ""
     property color askTone: Theme.warning
+    // A question waiting behind a report marks no row: the mark answers "which one" for words on screen
+    // (`AskBar.shown`).
+    property bool askShown: true
     // Rows dim while a search is on; written by the pane, which owns the find card.
     property bool findOn: false
     // The row the worktree stands on writes its message in the branch's blue, as its stand-in does (`GraphHeadPin`),
@@ -268,6 +271,18 @@ AppListView {
     onHeightChanged: {
         if (graphList.graphModel.provisionalOn)
             spanLater.restart()
+    }
+    /// The bars over the middle of the page hand it over in place (`BarTravel`): the question's bar is anchored in this
+    /// pane and the page's are in its layout, so the list sees the swap in two passes, and the rows stay where they
+    /// stood only if the place is kept through them (`PlaceKeep`). A span kept against the passing height
+    /// (`keepToSpan`, run a turn later) is put back too.
+    function keepPlace() {
+        placeKeep.keep()
+    }
+    readonly property PlaceKeep placeKeep: PlaceKeep {
+        id: placeKeep
+        view: graphList
+        still: !graphList.moving && !send.sending
     }
     /// One notch, glided — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {

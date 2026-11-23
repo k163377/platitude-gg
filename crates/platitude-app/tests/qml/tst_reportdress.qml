@@ -41,7 +41,6 @@ Item {
 
         function init() {
             bar.open = false
-            bar.yieldsEscape = false
             bar.room = Infinity
             acknowledged.clear()
             elsewhere.forceActiveFocus()
@@ -528,7 +527,7 @@ Item {
             dress("update-rule", "origin", "main", "")
             // The pill is pressed where it is standing, so the bar has to be all the way down first.
             tryVerify(() => bar.settled)
-            verify(bar.escapes, "the report takes Escape while nothing stands over it")
+            verify(bar.escapes, "the report takes Escape while it stands")
 
             mouseClick(bar, bar.width - 40, bar.height / 2)
             compare(acknowledged.count, 1)
@@ -536,17 +535,6 @@ Item {
 
             bar.dismiss()
             compare(acknowledged.count, 2, "the key walks the pill's own body")
-        }
-
-        /// Two enabled `StandardKey.Cancel` shortcuts in one window fire neither (`tst_escape.qml`), so the bar gives
-        /// way under a question, keeping its words.
-        function test_a_question_standing_over_it_takes_the_key() {
-            dress("update-rule", "origin", "main", "")
-            bar.yieldsEscape = true
-            verify(!bar.escapes)
-            compare(bar.label, "origin would not update main", "giving way is not going away")
-            bar.yieldsEscape = false
-            verify(bar.escapes)
         }
 
         /// The second line's field when it names no place, found by what it shows: the one visible text item holding

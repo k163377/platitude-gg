@@ -60,7 +60,8 @@ fonts	hunk-tools notes.txt --preset manyhunks	-	level= caption= read the baselin
 fonts	nav-fold	-	counts= reads where the face puts the folded rail's counts under their marks
 fonts	no-lfs-card floor --preset lfs	-	fitted= deep= read the band's measured fold
 fonts	old-git-fold	-	fitted= mark= read the band's measured floor
-fonts	recover-open 9,floor,notice,askform,long --preset discards-ceilings	-	graphKept= reads whether the rows the face leaves under the band and what stands with it reach three at the window's floor
+fonts	recover-open 9,floor,askform,long --preset discards-ceilings	-	graphKept= reads whether the rows the face leaves under the question with a form, the band waiting behind it, reach three at the window's floor
+fonts	recover-open 9,floor,notice,long --preset discards-ceilings	-	graphKept= reads whether the rows the face leaves under the report alone, its long name wrapped and the band waiting behind it, reach three at the window's floor
 fonts	settings-narrow column	-	lead= rail= column= content= read the rail and the chapters against the floor the fonts set
 fonts	settings-narrow lane	-	lead= rail= column= content= read the rail and the chapters against the floor the fonts set
 fonts	settings-narrow lead	-	lead= rail= column= content= read the rail and the chapters against the floor the fonts set

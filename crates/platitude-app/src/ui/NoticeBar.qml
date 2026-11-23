@@ -4,9 +4,11 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.bars
 
 // A report with nothing to decide (デザイン規約 §答えの要らない報せ): the question bar's shape, with the pill turned into
-// the one word that takes it back up. One report stands at a time, above whatever question is standing.
+// the one word that takes it back up. One report stands at a time, and a standing question waits its turn behind it
+// (`AskBar.held`): one bar comes down over the middle of the page at a time, the upper first.
 //
 // `OK` only says "read": one click takes the bar down, and Escape does the same — a count of presses is for an answer
 // that loses something (§回数押し). No ✕: the question bar's ✕ walks away without answering, and a report has nowhere
@@ -47,9 +49,12 @@ Rectangle {
     }
     /// Whether the report stands. **The words stay put while the bar goes back up** (`AskBar.open`).
     property bool open: false
-    /// Whether Escape goes to something standing above this report — two enabled `StandardKey.Cancel` shortcuts in
-    /// one window fire neither, and `RepoPage` decides (rules-refs/app-ui.md「Esc は窓に 1 本しか生きられない」).
-    property bool yieldsEscape: false
+    /// Something waits behind the report to take the middle (`RepoPage.centreColumn`): read, it goes in one frame
+    /// rather than back up, and what comes takes its place at its height (`BarTravel`).
+    property bool givesWay: false
+    /// The height of the bar this report takes the place of, gone in the same frame (`AskBar.givesWay`, the hand-over
+    /// in place). Read once and put down; 0 for a report coming down from nothing.
+    property real enterFrom: 0
 
     /// Read and taken down. Nothing else follows from it — the write it is about is long over.
     signal acknowledged()
@@ -59,9 +64,9 @@ Rectangle {
         bar.acknowledged()
     }
 
-    /// The most the bar may stand at: what its column leaves it with the graph's rows kept and what else stands there
-    /// at its least (`RepoPage`, デザイン規約 §窓の床). Past it the words scroll, a line of them at the least; the `OK`
-    /// stays on the bar's middle.
+    /// The most the bar may stand at: what its column leaves it with the graph's rows kept, the one bar standing there
+    /// (`RepoPage.centreColumn`, デザイン規約 §窓の床). Past it the words scroll, a line of them at the least; the `OK` stays on
+    /// the bar's middle.
     property real room: Infinity
     /// The bar at its least — a line of the heading beside the `OK` — which the column and the window's floor keep for
     /// it (`PageLayout.panesMinHeight`), whatever words it holds (`lineRuler`).
@@ -132,10 +137,13 @@ Rectangle {
     // Opening hands the pill the focus — a tick later, or the gesture still being delivered takes it back (`AskBar`).
     onOpenChanged: {
         // First, ahead of the height binding (`travelling`) — and the first report builds the words (`noticeBody`),
-        // ahead of it too.
-        bar.travelling = true
+        // ahead of it too. Giving way, it goes in one frame (`givesWay`).
+        bar.travelling = bar.open || !bar.givesWay
         if (bar.open) {
             noticeBody.active = true
+            if (bar.enterFrom > 0)
+                BarTravel.standThenTravel(bar, bar.enterFrom, () => bar.openHeight)
+            bar.enterFrom = 0
             // A bar built open hears this while it is still completing, its words not built yet: it takes the
             // opening as it completes (`Component.onCompleted`).
             if (noticeBody.item !== null)
@@ -289,13 +297,14 @@ Rectangle {
             }
         }
     }
-    // Escape as a shortcut: the focus may be back on the list underneath (`AskBar`). It gives way to a standing
-    // question (`yieldsEscape`) — this is only news.
+    // Escape as a shortcut: the focus may be back on the list underneath (`AskBar`). A standing question's lives only
+    // while it is on screen, which it is not while this stands (`AskBar.held`), so the window never holds both
+    // (rules-refs/app-ui.md「Esc は窓に 1 本しか生きられない」).
     Shortcut {
         id: escapeKey
         // `sequences`: Cancel is more than one key on some platforms, and `sequence` takes only the first.
         sequences: [StandardKey.Cancel]
-        enabled: bar.open && !bar.yieldsEscape
+        enabled: bar.open
         onActivated: bar.dismiss()
     }
     /// A bar built open heard `open` change before its words could be built: they stand once it completes, and it

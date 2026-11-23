@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.bars
 import platitude.ui.face
 import platitude.ui.words
 
@@ -21,10 +22,10 @@ import platitude.ui.words
 // scroll (`CappedLines`); the heading and the date stay put, a list whose heading has scrolled away no longer saying
 // what it lists (`DetailsMessageBlock`), and so do the controls. The heading is cut at `Theme.recoverBandHeadRows`, its
 // whole under the hand: past those it is a rebase's branches, each said on a line of its own below, or long names in a
-// graph at its narrowest. A report and a question stand in the same column (`room`), and what they leave short comes
-// off the band first, down to one line of each kind (user decision — ask before changing), then off their own words
-// (`NoticeBar.room`, `AskBar.room`) — never off the graph's rows, which the window's floor holds with all three
-// at their least (`leastHeight`, `floorHeight`; `PageLayout.panesMinHeight`).
+// graph at its narrowest. A column short of room takes it off the band, down to one line of each kind (user decision —
+// ask before changing) — never off the graph's rows, which the window's floor holds (`leastHeight`, `floorHeight`;
+// `PageLayout.panesMinHeight`). A report or a question comes before it: the band steps aside while either stands, one
+// bar over the middle at a time (`RepoPage.centreColumn`, user decision).
 //
 // The band, its lines and its presses are user decisions — ask before changing.
 Rectangle {
@@ -43,8 +44,7 @@ Rectangle {
     property int step: 0
     /// A write is out: the presses wait for it.
     property bool busy: false
-    /// What its column has for it with everything else there standing and the graph's rows kept
-    /// (`Theme.graphRowsKept`).
+    /// What its column has for it with the graph's rows kept (`Theme.graphRowsKept`).
     property real room: Theme.recoverBandMaxHeight
 
     /// The press that brings it back — every part, or the one `part` (-1 for all).
@@ -73,8 +73,8 @@ Rectangle {
         return Math.ceil(2 * Theme.spaceSm + headLine + Theme.spaceXs + dateHeight + Theme.spaceXs
                          + Math.max(lines, (lines + Theme.controlHeight) / 2))
     }
-    /// The least as it stands: what the column keeps for it while what stands with it gives way (`RepoPage`). Read
-    /// off the lines (`bandBody`), so none without an entry.
+    /// The least as it stands: what the panes give way to under the window's floor (`PageLayout.panesLeastHeight`).
+    /// Read off the lines (`bandBody`), so none without an entry.
     readonly property real leastHeight: bandBody.item !== null ? bandBody.item.leastHeight : 0
     /// The least the window's floor holds for it, whatever entry is on the graph: its lines read off lines that set a
     /// name (`headRuler`, `lineRuler`), the date on one, every part on the graph (`PageLayout.panesMinHeight`). Past
@@ -95,7 +95,33 @@ Rectangle {
         return qsTr("%1 — %2").arg(taken).arg(restore)
     }
 
-    implicitHeight: bandBody.implicitHeight + 2 * Theme.spaceSm
+    /// The band's own height: its lines and its margins.
+    readonly property real ownHeight: bandBody.implicitHeight + 2 * Theme.spaceSm
+    /// The height of the bar the band takes the place of, gone in the same frame (`BarTravel`). Read once and put down
+    /// — the very turn, should the band not come back in it; 0 for none, where the band stands at once, as on a pick.
+    property real enterFrom: 0
+    onEnterFromChanged: if (band.enterFrom > 0) enterFromLater.restart()
+    readonly property TurnLater enterFromLater: TurnLater {
+        id: enterFromLater
+        onTriggered: band.enterFrom = 0
+    }
+    onVisibleChanged: {
+        if (band.visible && band.enterFrom > 0)
+            BarTravel.standThenTravel(band, band.enterFrom, () => band.ownHeight)
+        band.enterFrom = 0
+    }
+    /// Only that travel animates (`AskBar.travelling`): a pick, another entry or a read stands the band at its
+    /// height at once.
+    property bool travelling: false
+    onImplicitHeightChanged: if (band.travelling && band.implicitHeight === band.ownHeight) band.travelling = false
+    Behavior on implicitHeight {
+        enabled: band.travelling
+        NumberAnimation { duration: Metrics.animStandardMs }
+    }
+
+    implicitHeight: band.ownHeight
+    // Only while it travels: at a height short of its lines, they would run over the graph.
+    clip: band.travelling
     color: Theme.bgElevated
     // Another entry's lines start at their top: the band stays standing from pick to pick. The bar's step in flight
     // goes with the lines it was sending (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」).

@@ -41,18 +41,21 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "move_ask hold=true code= branch=main says=main loses 1 commit.",
     },
-    // The question with a report already standing under it. Two enabled
+    // The question asked with a report already standing: it waits behind
+    // the report, off screen, and comes down once the report is back up.
+    // `shown=notice` is the one-bar-at-a-time claim, and `then=question`
+    // that the question was kept, not dropped. Two enabled
     // `StandardKey.Cancel` shortcuts in one window fire neither
-    // (`tests/qml/tst_escape.qml`), so `holds=` judges the bug: `both` /
-    // `none` are it, `notice` is the order upside down. `went=` / `left=`
+    // (`tests/qml/tst_escape.qml`), so `holds=` judges that bug: `both` /
+    // `none` are it, `question` is a key on a bar nobody sees. `went=`
     // cannot catch it — the run presses the body Escape runs, so a dead
-    // shortcut's bar still goes down — they say one press moves one bar.
-    // `stood=both` is the fixture half: a report the question lowered
+    // shortcut's bar still goes up — it says one press moves one bar.
+    // `waiting=question` is the fixture half: a question never raised
     // would make the rest of the line true and mean nothing.
     Verb {
         name: "ask-over-notice",
         when: &[],
-        plain: "ask_over_notice stood=both holds=question went=question left=notice",
+        plain: "ask_over_notice shown=notice waiting=question holds=notice went=notice then=question in_place=true",
     },
     // The same bar, swept. `words=true` is the fixture half: `all=true` off
     // a bar with nothing in it (air, no fields) is green on a screen the

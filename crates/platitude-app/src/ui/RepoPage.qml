@@ -215,7 +215,7 @@ FocusScope {
     }
     /// And Escape, which every standing thing in this window answers (デザイン規約 §hover のツールチップ).
     /// **A key handler, not a shortcut**: this is reached only when no bar, popup or box took the key first, and two
-    /// enabled `StandardKey.Cancel` shortcuts fire neither (`noticeBar.yieldsEscape`, `tests/qml/tst_escape.qml`) —
+    /// enabled `StandardKey.Cancel` shortcuts fire neither (`AskBar.held`, `tests/qml/tst_escape.qml`) —
     /// anything else that wants Escape joins as a key handler. **Topmost first, the marks last** — with nothing else
     /// standing, the mark is what is left; accepted only when something was taken.
     /// Headless: `diff-escape` / `plan-escape` / `plan-escape-held` / `recover-escape`.
@@ -962,6 +962,11 @@ FocusScope {
         renameCarryFlow.asking = false
         leaveFlow.asking = false
         page.rowAskRun = run
+        // Over the discard band, the question takes its place at its height (`BarTravel`).
+        if (!graphPane.asking && recoverBand.visible) {
+            graphPane.keepRowsInPlace()
+            graphPane.askEnterFrom = recoverBand.height
+        }
         graphPane.startAsking(oidHex, label, detail, acceptText, danger, hold, tip, form, code, refName, refTint,
                               refMark, marks)
     }
@@ -972,6 +977,17 @@ FocusScope {
         renameCarryFlow.asking = false
         leaveFlow.asking = false
         graphPane.stopAsking()
+    }
+    /// The question leaves the middle in one frame (`AskBar.handingOver`) — answered or walked away from with something
+    /// behind it, as its pill's floor passes if it was pressed through, or for a report coming over it. What comes next
+    /// stands at its height — the report waiting for that answer first (`noticeWaits`), else the band — and the graph's
+    /// rows stay where they stood.
+    function askHandsOver(height) {
+        graphPane.keepRowsInPlace()
+        if (page.noticeWaits)
+            page.raiseNotice(height)
+        else if (noticeBar.shut && page.recoverBandWanted)
+            recoverBand.enterFrom = height
     }
     function answerRowAsk() {
         const run = page.rowAskRun
@@ -2103,14 +2119,46 @@ FocusScope {
         noticeBar.detailMarks = detailMarks === undefined ? [] : detailMarks
         noticeBar.detailPlace = place === undefined ? "" : place
         noticeBar.detailHref = noticeBar.detailPlace === "" ? "" : Words.commandsHref
+        // Not over a pill being pressed through or its full fill (`GraphPane.askAnswering`; user decision — ask before
+        // changing): the answer under way keeps the middle, and the report takes the question's place as it is over —
+        // as the question goes (`askHandsOver`), or over it still standing, a count given up on (`raiseNotice`).
+        page.noticeWaits = !noticeBar.open && graphPane.askAnswering
+        if (!page.noticeWaits)
+            page.raiseNotice()
+    }
+    /// A report dressed and waiting for the question's answer under way (`showNotice`): the question gives way to it
+    /// (`AskBar.givesWay`).
+    property bool noticeWaits: false
+    /// Brings the report down over the middle, standing at `from` — the height of the bar it takes the place of, read
+    /// off what stands there when left out: the band, or the question, standing or on its way up, which goes as the
+    /// report comes (`askHandsOver`; `BarTravel`).
+    function raiseNotice(from) {
+        page.noticeWaits = false
+        if (!noticeBar.open)
+            noticeBar.enterFrom = from !== undefined ? from
+                                : recoverBand.visible ? recoverBand.height
+                                : !graphPane.askShut ? graphPane.askHeight : 0
         noticeBar.open = true
     }
     /// Only lowered: the words stay while the bar slides up.
     function hideNotice() {
+        // What waits behind it takes its place at its height (`centreColumn`): the question first, else the band.
+        if (graphPane.asking) {
+            graphPane.keepRowsInPlace()
+            graphPane.askEnterFrom = noticeBar.height
+        } else if (page.recoverBandWanted) {
+            recoverBand.enterFrom = noticeBar.height
+        }
         noticeBar.open = false
     }
     /// Automation only, like `GraphPane.askCard`: a run reads `settled` / `shut` / `label` and presses `dismiss()`.
     readonly property alias noticeCard: noticeBar
+    /// Automation only: whether the discard band stands, or steps aside for the report or the question
+    /// (`centreColumn`).
+    readonly property alias recoverBandStands: recoverBand.visible
+    /// An entry of the discard log is on the graph, so its band stands over it once nothing comes before it
+    /// (`centreColumn`).
+    readonly property bool recoverBandWanted: page.recoverPicked !== null && !page.planShown && !page.diffShown
     /// Automation: whether the centre stands under the report, not behind it — a picture cannot tell. In page
     /// coordinates, so it holds for graph and diff alike.
     readonly property bool noticeClears:
@@ -3943,15 +3991,18 @@ FocusScope {
                 }
 
                 // Center: the report on a row of its own, then the commit graph ⇄ file diff. A write is answered
-                // wherever the reader stands (デザイン規約 §答えの要らない報せ; user decision — ask before changing):
-                // inside the graph it would be silent while a diff is open, and over both it would cover what it is
-                // about. The bar pushes the middle down, never covers it; with a question standing in the graph
-                // (`GraphPane`'s `AskBar`), the report stands above it, an order the nesting gives.
+                // wherever the reader stands (デザイン規約 §答えの要らない報せ; user decision — ask before changing): inside the graph
+                // it would be silent while a diff is open, and over both it would cover what it is about. The bar
+                // pushes the middle down, never covers it. **One bar over the middle at a time: the report, then the
+                // graph's question (`GraphPane`'s `AskBar`), then the discard band** — news of a write that is over
+                // first, then what waits on an answer, then the state that stands as long as an entry is picked. A
+                // question asked under a report waits until the report is gone, and one standing steps aside for a
+                // report and comes back with its words and what was typed into it (`AskBar.held`); the band steps aside
+                // for either and comes back once both are gone. **One hands the middle to the next in place**
+                // (`BarTravel`, user decision): the rows under them move by the difference in height only.
                 //
-                // Whatever stands over the graph leaves it its rows (`PageLayout.graphKeptHeight`), each bar giving way
-                // inside itself down to its least: the discard band first, then the report, and the question last —
-                // the one bar that waits on an answer (デザイン規約 §窓の床). Each is handed what the column leaves it
-                // with those after it standing as they are and those before it at their least.
+                // Whatever stands over the graph leaves it its rows (`PageLayout.graphKeptHeight`), giving way inside
+                // itself down to its least (デザイン規約 §窓の床).
                 ColumnLayout {
                     id: centreColumn
                     SplitView.fillWidth: true
@@ -3964,22 +4015,20 @@ FocusScope {
                     NoticeBar {
                         id: noticeBar
                         Layout.fillWidth: true
-                        // **The order Escape is handed out in, and the one place it is written** (rules-refs/app-ui.md
-                        // 「Esc は窓に 1 本しか生きられない」). **The question keeps it**: it holds the keyboard (its pill
-                        // takes the focus as it opens) and stands until answered — a report is only read. The two can
-                        // stand at once: `startRowAsk` leaves a standing report up. Headless: `ask-over-notice`.
-                        yieldsEscape: graphPane.asking
-                        room: centreColumn.height - pageLayout.graphKeptHeight - graphPane.askHeight
-                                 - (recoverBand.visible ? recoverBand.leastHeight : 0)
+                        // Alone over the graph (`centreColumn`): reading what waits behind it would loop through
+                        // `graphPane.askHeld` and the band's `visible`.
+                        room: centreColumn.height - pageLayout.graphKeptHeight
+                        givesWay: graphPane.asking || page.recoverBandWanted
                         onAcknowledged: page.hideNotice()
                         // The place its line names, gone to as a tooltip's is.
                         onLinkAsked: href => page.tipLinkAsked(href)
                     }
-                    // Over the graph alone, which is what it describes (`RecoverBand`).
+                    // Over the graph alone, which is what it describes (`RecoverBand`), and only once the report and
+                    // the question are gone (`centreColumn`).
                     RecoverBand {
                         id: recoverBand
                         Layout.fillWidth: true
-                        visible: page.recoverPicked !== null && !page.planShown && !page.diffShown
+                        visible: page.recoverBandWanted && noticeBar.shut && !graphPane.asking && graphPane.askShut
                         entry: page.recoverPicked
                         when: page.recoverPicked === null
                               ? "" : recoverWords.whenWords(page.recoverPicked.at, page.recoverNow)
@@ -3987,7 +4036,7 @@ FocusScope {
                         canWalkFurther: graphModel.truncated && !graphModel.growing
                         step: graphModel.windowStep
                         busy: repoTab.busyCount > 0 || page.recoverAwaits
-                        room: centreColumn.height - noticeBar.height - graphPane.askHeight - pageLayout.graphKeptHeight
+                        room: centreColumn.height - pageLayout.graphKeptHeight
                         onRestoreAsked: part => page.restoreRecover(part)
                         onDismissed: page.pickRecover(page.recoverPick)
                         onFurtherAsked: graphModel.growWindow()
@@ -4006,8 +4055,9 @@ FocusScope {
                             id: graphPane
                             keepBuilt: page.keepBuilt
                             askRoom: centreColumn.height - pageLayout.graphKeptHeight
-                                        - (noticeBar.open ? noticeBar.leastHeight : 0)
-                                        - (recoverBand.visible ? recoverBand.leastHeight : 0)
+                            // Until the report is gone (`centreColumn`).
+                            askHeld: !noticeBar.shut
+                            askGivesWay: page.recoverBandWanted || page.noticeWaits
                             graphModel: graphModel
                             worktree: worktree
                             blank: page.blank
@@ -4051,6 +4101,8 @@ FocusScope {
                             onOpenRepositoryRequested: page.openRepositoryPicker()
                             onAskConfirmed: page.answerRowAsk()
                             onAskCancelled: page.stopRowAsk()
+                            onAskHandingOver: height => page.askHandsOver(height)
+                            onAskAnsweringChanged: if (!graphPane.askAnswering && page.noticeWaits) page.raiseNotice()
                         }
 
                         DiffPane {

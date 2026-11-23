@@ -84,9 +84,10 @@ QtObject {
     /// `centreColumn`).
     readonly property real graphKeptHeight: Theme.graphRowsKept * Theme.graphRowHeight
     /// The middle column at its least still shows those rows under the report, the discard log's band and a question
-    /// with a form all standing at once, each down to its least (デザイン規約 §窓の床). Read off the bars themselves,
-    /// so the face each platform sets them in decides it rather than a number taken in one face. The same whatever
-    /// stands, as the floor's height is: each bar answers the least of its tallest form (`NoticeBar.floorHeight`,
+    /// with a form all standing at once, each down to its least (デザイン規約 §窓の床) — the three take turns on screen
+    /// (`RepoPage.centreColumn`), and the floor still keeps room for all of them. Read off the bars themselves, so the
+    /// face each platform sets them in decides it rather than a number taken in one face. The same whatever stands, as
+    /// the floor's height is: each bar answers the least of its tallest form (`NoticeBar.floorHeight`,
     /// `RecoverBand.floorHeight`, `AskBar.floorHeight`). Whole pixels, as the window's floor is.
     readonly property int panesMinHeight: Math.ceil(layout.noticeBar.floorHeight + layout.recoverBand.floorHeight
                                                      + layout.graphPane.askFloorHeight + layout.graphKeptHeight)
@@ -111,13 +112,14 @@ QtObject {
     // least. Each pane takes what it is handed with the scroll it already has — the left menu's sections, the graph's
     // rows, the commit block. Above the floor all of these are the floors themselves.
     /// The least the panes give way to: the left menu whole (`SidebarPane.floorHeight` — the log never stands over its
-    /// last cell) and the bars standing over the graph — the report and the discard band each at its least, a
-    /// question at the least the floor keeps for any of its forms — so what gives way in the middle is the graph's
-    /// rows. Past it the split lays the log out under the window again.
+    /// last cell) and the one bar standing over the graph (`RepoPage.centreColumn`) — the report or the discard band at
+    /// its least, a question at the least the floor keeps for any of its forms, one waiting behind the report left out
+    /// — so what gives way in the middle is the graph's rows. Past it the split lays the log out under the window
+    /// again.
     readonly property real panesLeastHeight: Math.max(layout.sidebarPane.floorHeight,
         (layout.noticeBar.open ? layout.noticeBar.leastHeight : 0)
         + (layout.recoverBand.visible ? layout.recoverBand.leastHeight : 0)
-        + (layout.graphPane.asking ? layout.graphPane.askFloorHeight : 0))
+        + (layout.graphPane.asking && !layout.noticeBar.open ? layout.graphPane.askFloorHeight : 0))
     /// The log's minimum: its floor while the split holds it under the item over it at that item's floor, else what
     /// is left, down to its least.
     readonly property real commandsHeldHeight: Math.max(layout.commandsLeastHeight, Math.min(

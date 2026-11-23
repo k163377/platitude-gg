@@ -42,9 +42,10 @@ Item {
             page.switchToRef("remote", arg)
             moveAskTimer.start()
         } else if (act === "ask-over-notice") {
-            // Both bars standing at once, the one arrangement where Escape has to pick one
-            // (デザイン規約 §答えの要らない報せ). The report goes up first, the order a hand meets them in
-            // (`RepoPage.startRowAsk` leaves a standing report where it is); which report it is does not matter.
+            // A question asked while a report stands (デザイン規約 §答えの要らない報せ): it waits its turn behind the report, which
+            // keeps Escape, and takes its place once the report is gone (`AskBar.held`, `BarTravel`). The report goes
+            // up first, the order a hand meets them in (`RepoPage.startRowAsk` leaves a standing report where it is);
+            // which report it is does not matter.
             page.showReport("update-rule", "origin", "main", "")
             askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
             askOverNoticeTimer.start()
@@ -214,16 +215,19 @@ Item {
                             + " says=" + graphPane.askDetail })
     }
     /// Three beats, each on bars that have stopped moving: the report settled before the question is raised (a bar
-    /// on its way has no Escape shortcut yet — `open` enables it), the question settled, and both after the press.
-    /// The picture cannot tell one live Escape from two, so all four claims are in the line.
+    /// on its way has no Escape shortcut yet — `open` enables it), the question standing behind it all the way up,
+    /// and both after the press — the report gone and the question all the way down. The picture cannot tell one
+    /// live Escape from two, nor a question waiting from none, nor one standing in the report's place at its height
+    /// (`in_place`), so the claims are in the line.
     PageStage {
         id: askOverNoticeTimer
         name: "ask_over_notice"
         order: ["asked", "escaped"]
         /// The remote ref the question is raised on, as `move-ask` takes it.
         property string ref: ""
-        // What was read at the press is its witnesses — which bars stood (`askStood`, `noticeStood`) and which held
-        // Escape (`askEsc`, `noticeEsc`) — kept because the press is what takes one of the two away.
+        // What was read at the press is its witnesses — which bars were on screen (`askShown`, `noticeStood`), whether
+        // the question stood off screen (`askHeld`), and which held Escape (`askEsc`, `noticeEsc`) — kept because the
+        // press is what takes the report away.
         function naming(ask, notice) {
             return ask && notice ? "both" : ask ? "question" : notice ? "notice" : "none"
         }
@@ -234,12 +238,14 @@ Item {
         /// The bars as the press found them, and as they stand.
         function line() {
             const op = askOverNoticeTimer
-            const askStood = op.witnessed("askStood")
+            const askStood = op.witnessed("askShown") || op.witnessed("askHeld")
             const noticeStood = op.witnessed("noticeStood")
-            return "ask_over_notice stood=" + op.naming(askStood, noticeStood)
+            return "ask_over_notice shown=" + op.naming(op.witnessed("askShown"), noticeStood)
+                   + " waiting=" + op.naming(op.witnessed("askHeld"), false)
                    + " holds=" + op.naming(op.witnessed("askEsc"), op.witnessed("noticeEsc"))
                    + " went=" + op.naming(askStood && !graphPane.askCard.open, noticeStood && !page.noticeCard.open)
-                   + " left=" + op.naming(graphPane.askCard.open, page.noticeCard.open)
+                   + " then=" + op.naming(graphPane.askCard.settled, page.noticeCard.open)
+                   + " in_place=" + op.witnessed("inPlace")
         }
         onTriggered: {
             const op = askOverNoticeTimer
@@ -254,19 +260,27 @@ Item {
                 return
             }
             if (op.at("asked")) {
-                if (!Awaited.all("ask_over_notice_question", { "question": graphPane.askCard.settled }))
+                // Standing, and still all the way up: a build that let it down over the report is caught at the press.
+                if (!Awaited.all("ask_over_notice_question", { "question": graphPane.askCard.open
+                                                                           && !op.moving(graphPane.askCard) }))
                     return
                 op.input("escaped", () => {
-                    op.witness("askStood", graphPane.askCard.open)
+                    op.witness("askShown", graphPane.askCard.shown)
+                    op.witness("askHeld", graphPane.askCard.open && graphPane.askCard.held)
                     op.witness("noticeStood", page.noticeCard.open)
                     const askEsc = op.witness("askEsc", graphPane.askCard.escapes)
                     const noticeEsc = op.witness("noticeEsc", page.noticeCard.escapes)
+                    const noticeHeight = page.noticeCard.height
                     // What Escape itself runs, on whichever bar holds it: a build that handed it to the wrong bar is
                     // judged on what that bar did, and one that handed it to neither presses nothing.
                     if (askEsc)
                         graphPane.askCard.dismiss()
                     else if (noticeEsc)
                         page.noticeCard.dismiss()
+                    // Read in the press's own turn, as the frame it draws will stand: the question at the report's
+                    // height, and the graph's place kept through the swap (`RepoPage.hideNotice`, `PlaceKeep`).
+                    op.witness("inPlace", graphPane.askCard.implicitHeight === noticeHeight
+                                          && graphPane.view.placeKeep.keeping)
                 })
                 return
             }

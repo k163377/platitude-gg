@@ -40,10 +40,10 @@ Item {
     /// it twice, spaced as a rename's two clicks are, then a dim named row at once. `tip` is the entry's tip, `list` the
     /// same row from its chip's list (`dbl` only), `passed` the first row built that it leaves dim with a name on it.
     /// `floor` stands the window on its floor, both ways, with the log up once the entry is on the graph: the shortest
-    /// column there is, and the graph at its narrowest. `notice` and `askform` raise there what can stand with the
-    /// band, the push refused and the first push's question, about a 49-character name with `long`: the stack the floor
-    /// is built on (`PageLayout.panesMinHeight`), each bar giving way inside itself. `graphKept=` is whether the rows
-    /// are left under it.
+    /// column there is, and the graph at its narrowest. `notice` or `askform` raises there what comes over the band,
+    /// the push refused or the first push's question, about a 49-character name with `long`: one bar stands at a time,
+    /// the report, then the question, then the band (`RepoPage.centreColumn`), each giving way inside itself.
+    /// `graphKept=` is whether the rows are left under it.
     readonly property var looks: Harness.autoActArg === "" ? [] : Harness.autoActArg.split(",")
     readonly property var parts: acts.looks.filter(look => look.startsWith("part:"))
     readonly property var hand: {
@@ -198,17 +198,22 @@ Item {
                + " graphRows=" + Math.floor(view.height / Theme.graphRowHeight)
                + " graphKept=" + (view.height >= Theme.graphRowsKept * Theme.graphRowHeight)
                + " atFloor=" + acts.floorStood()["floor"]
+               // Whether the band stands, or waits behind a report or a question (`RepoPage.centreColumn`).
+               + " band=" + page.recoverBandStands
                + " width=" + Math.round(sidebarPane.width)
                + (acts.gesture === "" ? "" : acts.handLine())
     }
-    /// The window on its floor both ways with the log up, and what `floor` raised there all the way down.
+    /// The window on its floor both ways with the log up, and what `floor` raised there all the way down — a question
+    /// behind a report all the way up.
     function floorStood() {
         const window = page.Window.window
+        const noticed = acts.looks.indexOf("notice") >= 0
+        const ask = acts.driver.graphPane.askCard
         return { "floor": window.width === Math.ceil(window.floorWidth)
                           && window.height === Math.ceil(window.floorHeight),
                  "log": page.commandsOpen,
-                 "notice": acts.looks.indexOf("notice") < 0 || page.noticeCard.settled,
-                 "ask": acts.looks.indexOf("askform") < 0 || acts.driver.graphPane.askCard.settled }
+                 "notice": !noticed || page.noticeCard.settled,
+                 "ask": acts.looks.indexOf("askform") < 0 || (noticed ? ask.open && ask.shut : ask.settled) }
     }
 
     // Waits for the splitter to hand the pane the width the fold asked for and for the list's read, picks the entry

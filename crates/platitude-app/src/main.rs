@@ -117,6 +117,8 @@ fn main() {
     qrc::embed!("ui/still/Motion.qml");
     qrc::embed!("ui/nav/qmldir");
     qrc::embed!("ui/nav/NavFacts.qml");
+    qrc::embed!("ui/bars/qmldir");
+    qrc::embed!("ui/bars/BarTravel.qml");
     qrc::embed!("ui/ActionButton.qml");
     qrc::embed!("ui/ActionButtonLabel.qml");
     qrc::embed!("ui/ActionButtonSeat.qml");
@@ -282,6 +284,7 @@ fn main() {
     qrc::embed!("ui/PageLayout.qml");
     qrc::embed!("ui/PaneHeader.qml");
     qrc::embed!("ui/PaneScrollBar.qml");
+    qrc::embed!("ui/PlaceKeep.qml");
     qrc::embed!("ui/PlainTextLabel.qml");
     qrc::embed!("ui/ParentListCard.qml");
     qrc::embed!("ui/PublishFlow.qml");

@@ -4,16 +4,18 @@ import QtQuick
 import QtQuick.Controls.Fusion
 import QtQuick.Layouts
 import platitude.ui
+import platitude.ui.bars
 import platitude.ui.face
 import platitude.ui.words
 
 // The shape every standing question takes (デザイン規約 §可否・警告の出し場所): a bar that comes down from the top of
 // the list the question is about and pushes its rows down, so what is being judged stays in sight. Only one question
-// stands at a time (the page holds the run it guards), so the Escape below is never ambiguous.
+// stands at a time (the page holds the run it guards), and it waits its turn behind a report standing over the page
+// (`held`), so the Escape below is never ambiguous.
 Rectangle {
     id: bar
 
-    /// The question's words; they stay set while the bar goes back up (`open`).
+    /// The question's words; they stay set while the bar goes back up (`open`, `held`).
     property string label: ""
     /// A ref name inside the question's words, and the sentence with the name's seat left in it ("%1 where?"). The
     /// name keeps the colour it wears wherever it appears, `labelRefTint` (デザイン規約 §ref の種別). Both empty for a
@@ -109,6 +111,11 @@ Rectangle {
     /// typed into the first — and clearing it at the press takes the form out from under a bar still on screen, and
     /// the pill standing on its line (`askColumns`) with it.
     property Component form: null
+    /// The form is built as its question first comes on screen, and kept until the next question is dressed: every
+    /// form's box takes the keyboard as it completes (`PublishForm`), and one built behind a report (`held`) would take
+    /// it from that report's `OK`.
+    property bool formReached: false
+    onFormChanged: bar.formReached = bar.shown
     /// The loaded form, so the owner can read what was put into it.
     readonly property var formItem: askBody.item !== null ? askBody.item.formItem : null
     /// A form that says its answer is finished answers the question, as the pill does (デザイン規約
@@ -146,7 +153,7 @@ Rectangle {
         id: holdDrive
         holdPresses: bar.holdPresses
         // At the last press, while the question is still the one pressed for. The owner lowers the bar as it answers;
-        // the bar stays down for the floor regardless (`openHeight`).
+        // the bar stays down for the floor regardless (`onFloor`).
         onFinished: bar.confirmed()
     }
 
@@ -165,6 +172,27 @@ Rectangle {
     /// colour its owner's bindings fell back to. The next question replaces the words (`GraphPane.startAsking` dresses the bar,
     /// then raises it; `stopAsking` only lowers it).
     property bool open: false
+    /// The question waits its turn: a report stands over the middle of the page, and one bar comes down there at a
+    /// time, the upper first (`RepoPage`). It still stands — its words, its form and what was typed into it, its run —
+    /// but nothing of it is on screen, marks its row or takes a key until the report is gone; then it takes the
+    /// report's place (`enterFrom`).
+    property bool held: false
+    /// Something waits behind the question to take the middle once it is answered — the discard band, or a report
+    /// waiting for the answer under way (`RepoPage.centreColumn`, `answering`): it goes in one frame, as it does for a
+    /// report coming over it (`held`), and what comes takes its place at its height
+    /// (`BarTravel`, `handingOver`). Only a question with nothing before or after it comes down from the top or goes
+    /// back up.
+    property bool givesWay: false
+    /// The question leaves the middle in this frame for what comes after it (`held` / `givesWay`), standing at `height`
+    /// until now: the page stands that there and keeps the graph's rows where they are (`RepoPage.askHandsOver`).
+    /// Said wherever it was — standing, on the floor of a pill pressed through, or on its way back up.
+    signal handingOver(real height)
+    /// The height of the bar this question takes the place of, gone in the same frame (`givesWay`). Read once and put
+    /// down; 0 for a question coming down from nothing.
+    property real enterFrom: 0
+    /// Whether the question is on screen: standing, and its turn. What the bar draws, keys and measures by; `open` is
+    /// the owner's.
+    readonly property bool shown: bar.open && !bar.held
     readonly property color tone: bar.danger ? Theme.danger : bar.neutral ? Theme.accent : Theme.warning
     /// The heading in the plain ink instead of the bar's colour, for the question whose colour follows the answer
     /// being picked in it (`RenameCarryFlow`): the frame and the pill already turn with the chooser, and a heading
@@ -177,37 +205,92 @@ Rectangle {
     // is the one a short column always keeps (デザイン規約 §立っている質問は 1 か所で聞く).
     onLabelChanged: if (askBody.item !== null) askBody.item.toTop()
     onDetailChanged: if (askBody.item !== null) askBody.item.toTop()
-    // Closing blanks the hold: a fill left standing would carry on into whatever is asked next.
+    // The next question, raised on the last one's floor: that answer has gone, and its fill is not this pill's. Put
+    // down as it is raised, ahead of `shown`: a report waiting for that answer comes now (`answering`,
+    // `RepoPage.raiseNotice`), and this question waits behind it.
+    onOpenChanged: if (bar.open && holdDrive.done) holdDrive.settle()
+    // Going off screen blanks the hold: a fill left standing would carry on into whatever is asked next.
     //
-    // Opening hands the pill the focus a tick later: the gesture that raised it is still being delivered (a
-    // double-click has a release and a second click behind it), and the list takes the focus back if the pill claims
-    // it first. A question with a form leaves the focus to the form's own box.
-    onOpenChanged: {
-        // First, ahead of the height binding: the animation must be armed before the height moves (`travelling`).
-        bar.travelling = true
-        if (bar.open) {
-            // The first question builds the words (`askBody`), ahead of the height too.
+    // Coming on screen hands the pill the focus a tick later: the gesture that raised it is still being delivered (a
+    // double-click has a release and a second click behind it), and the list takes the focus back if the pill claims it
+    // first. A question with a form leaves the focus to the form's own box — which a form built before a report came
+    // over it is handed back, the report's `OK` having taken it (`held`).
+    onShownChanged: {
+        if (bar.shown) {
+            // First, ahead of the height: the animation must be armed before the height moves (`travelling`). A bar
+            // already standing — raised on the last one's floor — never went up, so nothing comes down either: words
+            // arriving later grow it unanimated.
+            bar.travelling = !bar.standing
+            const formBack = bar.formItem !== null
+            // The form and, for the first question, the words (`askBody`), ahead of the height too.
+            bar.formReached = true
             askBody.active = true
-            // The next question, raised on the last one's floor: that answer has gone, and its fill is not this pill's.
-            // The bar never went up, so nothing comes down either: words arriving later grow it unanimated.
-            if (holdDrive.done) {
-                holdDrive.settle()
-                bar.travelling = false
-            }
+            bar.standing = true
+            if (bar.travelling && bar.enterFrom > 0)
+                BarTravel.standThenTravel(bar, bar.enterFrom, () => bar.openHeight)
+            bar.enterFrom = 0
             // A bar built open hears this while it is still completing, its words not built yet: it takes the
             // opening as it completes, once its form is bound (`Component.onCompleted`).
-            if (bar.form === null && askBody.item !== null)
+            if ((bar.form === null || formBack) && askBody.item !== null)
                 askBody.item.takeOpening()
         } else {
             bar.blankHold()
+            // A pill pressed through keeps the bar down for its floor: it lets go as the floor passes (`onFloor`).
+            if (!bar.onFloor)
+                bar.leave()
+        }
+    }
+    /// The bar stands on screen at its words' height: from the moment it is shown until it lets go (`leave`) — through
+    /// the floor of a pill pressed through, after it is answered (デザイン規約 §回数押し).
+    property bool standing: false
+    /// The full fill is still on screen after the last press (`HoldDriver.settling`).
+    readonly property bool onFloor: holdDrive.settling
+    // Read off `open` and `held`, not `shown`: a floor put down by the next question being raised ends while `shown` is
+    // still the last one's (`onOpenChanged`).
+    onOnFloorChanged: if (!bar.onFloor && !(bar.open && !bar.held)) bar.leave()
+    /// An answer is under way on a pill that takes presses: being pressed through, or its full fill standing after the
+    /// last press (`HoldDriver.gesturing`) — which only a standing question's pill takes. It keeps the middle — a
+    /// report waits until it is over, then takes the question's place (`RepoPage.showNotice`; user decision — ask
+    /// before changing). A plain pill answers at once. Read off the gesture alone: what the page does as it ends moves
+    /// `standing`, and the count is the one the gesture began with (`armedPresses`) — a pill turned into a count under
+    /// a hand already down is still a plain press, and the next question's count, dressed on this one's floor, is not
+    /// this answer's.
+    readonly property bool answering: bar.armedPresses > 0 && holdDrive.gesturing
+    /// [`leave`] is under way.
+    property bool leaving: false
+    /// Lets go of the middle: back up, or — something coming after it (`held` / `givesWay`) — gone in this frame,
+    /// saying where it stood (`handingOver`). The animation is armed ahead of the height (`travelling`). Once: what the
+    /// page brings in as it hears where the bar stood (a report, `held`) finds it already going (`leaving`).
+    function leave() {
+        if (!bar.standing || bar.leaving)
+            return
+        bar.leaving = true
+        const atOnce = bar.held || bar.givesWay
+        if (atOnce && bar.implicitHeight > 0)
+            bar.handingOver(bar.implicitHeight)
+        bar.travelling = !atOnce
+        bar.standing = false
+        bar.leaving = false
+    }
+    // A report coming over whatever of the question is on screen takes the middle in this frame, at its height
+    // (`RepoPage.raiseNotice`): a question standing goes at once, and one answered and on its way back up goes from
+    // where it is. One on its floor stands until the floor passes (`answering`), then goes (`onOnFloorChanged`).
+    onHeldChanged: {
+        if (!bar.held || bar.shut || bar.onFloor)
+            return
+        if (bar.standing) {
+            bar.leave()
+        } else {
+            bar.handingOver(bar.implicitHeight)
+            BarTravel.cut(bar, () => bar.openHeight)
         }
     }
 
     clip: true
     color: Theme.bgElevated
-    /// The most the bar may stand at: what its column leaves it with the graph's rows kept and what else stands there
-    /// at its least (`RepoPage`, デザイン規約 §窓の床). Past it the heading and the line under it scroll, a line of them
-    /// at the least; the form, the pill and the ✕ stay where they are.
+    /// The most the bar may stand at: what its column leaves it with the graph's rows kept, the one bar standing there
+    /// (`RepoPage.centreColumn`, デザイン規約 §窓の床). Past it the heading and the line under it scroll, a line of them at the
+    /// least; the form, the pill and the ✕ stay where they are.
     property real room: Infinity
     /// The heading's one line with the code chip on it, the two on one baseline (`headingRow`), whatever the question
     /// says: a chip's height is its face's, and the line's is read off a line that sets a name (`lineRuler`).
@@ -230,20 +313,22 @@ Rectangle {
     /// have no height-for-width, but a `Text` / `CardText` answers a new `implicitHeight` once its width is set and the
     /// column polishes again (as `CommitHoverCard`'s `CardText`). The width decides it, so a run shoots the wrap in a
     /// window whose graph is squeezed to its least (`--config-dir` holding a large `[layout] details_width`).
-    readonly property real openHeight: (bar.open || holdDrive.settling) && askBody.item !== null
+    readonly property real openHeight: bar.standing && askBody.item !== null
                                        ? askBody.item.columnsHeight + 2 * Theme.spaceMd : 0
     readonly property bool settled: bar.openHeight > 0 && bar.implicitHeight === bar.openHeight
-    /// The other edge: answered and all the way back up (a shot taken on the answer shows the bar half-retracted).
-    readonly property bool shut: !bar.open && bar.implicitHeight === 0
+    /// The other edge: answered, or waiting its turn (`held`), and all the way back up or gone (a shot taken on the
+    /// answer shows the bar half-retracted).
+    readonly property bool shut: !bar.shown && bar.implicitHeight === 0
     implicitHeight: bar.openHeight
-    /// Whether the height on the move is the bar itself coming down or going back up. **Only those two animate**: a
-    /// standing bar grows when late words arrive (the remote's answer in the line under the heading), and an animated
-    /// height there lags the laid-out words, so the clip shears the bottom of the column off.
+    /// Whether the height on the move is the bar itself coming on or going off — down from nothing, from the height of
+    /// the bar it takes the place of (`enterFrom`), or back up. **Only those animate**: a standing bar grows when late
+    /// words arrive (the remote's answer in the line under the heading), and an animated height there lags the laid-out
+    /// words, so the clip shears the bottom of the column off.
     ///
-    /// **Raised from the handler, not read off `open`**: a condition on `open` reads the value it holds when the height
-    /// arrives, so a bar going out says "not travelling" and leaves the screen in one frame. The handler runs ahead of
-    /// the bindings that read the same property (rules-refs/app-ui.md の `onXChanged` の行), so the animation is armed
-    /// before the height it carries. Lowered on arrival (`settled` / `shut`).
+    /// **Raised ahead of the height, not read off `shown`**: a condition on `shown` would hold the value it has when
+    /// the height arrives, so a bar going out would say "not travelling" and leave the screen in one frame. The height
+    /// follows `standing`, which `onShownChanged` and `leave` write after setting this. Lowered on arrival (`settled` /
+    /// `shut`).
     property bool travelling: false
     onSettledChanged: if (bar.settled) bar.travelling = false
     onShutChanged: if (bar.shut) bar.travelling = false
@@ -276,11 +361,14 @@ Rectangle {
     }
     // The words, the form, the pill and the ✕, built by the first question and kept (rules-refs/app-ui.md — the
     // `WindowDialogSeat` line): most pages never ask one, and a question going back up keeps its words while the bar
-    // travels (`open`). What the column and the window's floor read stays out here (`floorHeight` off the rulers).
+    // travels (`shown`). What the column and the window's floor read stays out here (`floorHeight` off the rulers).
     Loader {
         id: askBody
         anchors.fill: parent
         active: false
+        // Shut — gone up, or waiting behind the report — it takes no key: a form built before a report came over it
+        // keeps its box, which Tab from the report's `OK` would otherwise walk into.
+        enabled: !bar.shut
         sourceComponent: Item {
             /// What the bar reads off its words (`pad` … `formItem`, `tipStanding`, `openHeight`).
             readonly property real columnsHeight: askColumns.implicitHeight
@@ -298,8 +386,13 @@ Rectangle {
             function toTop() {
                 askLines.toTop()
             }
-            /// The pill takes the focus a tick later: the gesture that raised the bar is still being delivered.
+            /// The pill takes the focus a tick later: the gesture that raised the bar is still being delivered. A form
+            /// already built takes it instead, back in the box it was in (the loader is a focus scope and keeps it).
             function takeOpening() {
+                if (formLoader.item !== null) {
+                    Qt.callLater(formLoader.forceActiveFocus)
+                    return
+                }
                 acceptPill.tookTheOpening = true
                 Qt.callLater(acceptPill.forceActiveFocus)
             }
@@ -487,6 +580,7 @@ Rectangle {
                     Loader {
                         id: formLoader
                         visible: bar.form !== null
+                        active: bar.formReached
                         sourceComponent: bar.form
                         // The column's width from the start, not from the column's first layout: until then a Loader of
                         // no width leaves the form at its own implicit width, which the form's boxes work out from that
@@ -526,7 +620,7 @@ Rectangle {
                     // refuses to clear `activeFocusOnTab` on the item holding the focus, and warns. Disabling takes the
                     // focus away first, and the pill draws its own colours, so it looks no different.
                     activeFocusOnTab: true
-                    enabled: bar.open && bar.answerable
+                    enabled: bar.shown && bar.answerable
                     /// The focus this pill holds arrived with a press. Cleared when the focus leaves (closing takes it
                     /// too).
                     property bool tookAPress: false
@@ -701,22 +795,23 @@ Rectangle {
         }
     }
     // Escape as a shortcut: the focus may be on the pill, the form's box or the graph list (which takes it on a row
-    // click and has no Escape of its own). **The condition is this bar's own standing only**: a question takes Escape
-    // ahead of the report bar, and that order lives where the two meet
-    // (`RepoPage`, デザイン規約 §立っている質問は 1 か所で聞く).
+    // click and has no Escape of its own). **The condition is this bar being on screen**: the report bar's Escape lives
+    // only while the report stands, and this question waits behind it (`held`), so the two never live at once
+    // (rules-refs/app-ui.md「Esc は窓に 1 本しか生きられない」).
     Shortcut {
         id: escapeKey
         // `sequences`: Cancel is more than one key on some platforms, and `sequence` takes only the first (Qt warns).
         sequences: [StandardKey.Cancel]
-        enabled: bar.open
+        enabled: bar.shown
         // The ✕'s own body (`dismiss`).
         onActivated: bar.dismiss()
     }
-    /// A bar built open heard `open` change before its words could be built: they stand once it completes, and it
+    /// A bar built open heard `shown` change before its words could be built: they stand once it completes, and it
     /// takes the opening then, with its form bound (`tests/qml/tst_askopening.qml`).
     Component.onCompleted: {
-        if (!bar.open)
+        if (!bar.shown)
             return
+        bar.formReached = true
         askBody.active = true
         if (bar.form === null)
             askBody.item.takeOpening()
