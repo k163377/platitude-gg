@@ -154,6 +154,8 @@ AppMenu {
         /// overwrite is leased to, and the upstream the first push's question opens on. `pushState` is empty where
         /// the row has no seat.
         property string pushState: ""
+        /// A plain press sends (`branchPush`'s `sendsPlain`, core's rule).
+        property bool pushSendsPlain: false
         /// Only the held overwrite reaches (`branchPush`'s `overwrites`, core's rule).
         property bool pushOverwrites: false
         property string pushTarget: ""
@@ -176,9 +178,9 @@ AppMenu {
     /// reading answers no `delete-remote`, which is what greys the rows that reach it), `open` whether the tab is,
     /// `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
     /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
-    /// on (`NavSectionModel.branchPush`: `state`, `overwrites`, `target`, `lease`, `upstream`). Every `facts` a branch
-    /// card stands on carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are written below as
-    /// they come, and the unset row stands on them.
+    /// on (`NavSectionModel.branchPush`: `state`, `sendsPlain`, `overwrites`, `target`, `lease`, `upstream`). Every
+    /// `facts` a branch card stands on carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are
+    /// written below as they come, and the unset row stands on them.
     ///
     /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
     /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
@@ -221,6 +223,7 @@ AppMenu {
             state.deleteMerged = true
             state.deleteAsked = false
             state.pushState = ""
+            state.pushSendsPlain = false
             state.pushOverwrites = false
             state.pushTarget = ""
             state.pushLease = ""
@@ -241,14 +244,14 @@ AppMenu {
                           : readingHeld && (state.remoteMoved || facts.remoteCounterpart !== state.remoteCounterpart
                                             || facts.remoteCounterpartOid !== state.remoteCounterpartOid)
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
-        // 「そこにしか入口が無いものだけ」) — and only where a push names somewhere: nothing to name is no row. Nothing to
-        // send stands out (`clean`), and so does a push that would stay in this repository (デザイン規約 §メニュー
+        // 「そこにしか入口が無いものだけ」) — and only where a press reaches, by core's rules, the toolbar's (`sendsPlain`
+        // / `overwrites`): nothing to name is no row. Nothing to send keeps its seat, out (`clean`; user decision —
+        // `BranchPushRow.blockedClean`), and so does a push that would stay in this repository (デザイン規約 §メニュー
         // 「「今できない」行は無効で残す」, §リモートへ送る). Its far side is where it goes and the commit over there an
         // overwrite is leased to (`branch_push`'s `lease`, counted against in every form).
         const push = facts.push
         const pushed = kind === "branch" && facts.open && !onCurrentBranch && push !== undefined
-        const pushSeated = pushed
-                           && ["publish", "elsewhere", "ready", "clean", "behind", "diverged"].includes(push.state)
+        const pushSeated = pushed && (push.sendsPlain || push.overwrites || push.state === "clean")
         const pushHeld = sameRef && kind === "branch" && (state.pushState !== "" || state.pushStaysHere)
         const farSide = pushSeated ? push.target + "\n" + push.lease : ""
         const farSideThen = state.pushState !== "" ? state.pushTarget + "\n" + state.pushLease : ""
@@ -279,6 +282,7 @@ AppMenu {
         state.pushMoved = pushMoved
         state.pushStaysHere = pushMoved ? state.pushStaysHere : pushed && push.state === "stays-here"
         state.pushState = pushMoved ? state.pushState : pushSeated ? push.state : ""
+        state.pushSendsPlain = pushMoved ? state.pushSendsPlain : pushSeated && push.sendsPlain
         state.pushOverwrites = pushMoved ? state.pushOverwrites : pushSeated && push.overwrites
         state.pushTarget = pushMoved ? state.pushTarget : pushSeated ? push.target : ""
         state.pushLease = pushMoved ? state.pushLease : pushSeated ? push.lease : ""

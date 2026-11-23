@@ -226,6 +226,9 @@ pub struct BranchPush {
     /// `PushStanding`'s word (`publish` / `ready` / `behind` /
     /// `stays-here` …); `closed` for a name this section does not hold.
     pub state: String,
+    /// A plain press sends (`PushStanding::sends_plain`), the toolbar's
+    /// rule.
+    pub sends_plain: bool,
     /// Only the held overwrite reaches (`PushStanding::overwrites`), the
     /// toolbar's rule.
     pub overwrites: bool,
@@ -242,6 +245,7 @@ impl Record for BranchPush {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
         Fields::new()
             .put("state", &self.state)
+            .put("sendsPlain", &self.sends_plain)
             .put("overwrites", &self.overwrites)
             .put("target", &self.target)
             .put("lease", &self.lease)
@@ -252,6 +256,7 @@ impl Record for BranchPush {
     fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
         Some(Self {
             state: field(map, "state")?,
+            sends_plain: field(map, "sendsPlain")?,
             overwrites: field(map, "overwrites")?,
             target: field(map, "target")?,
             lease: field(map, "lease")?,
@@ -264,6 +269,7 @@ impl From<platitude_core::session::BranchPushFacts> for BranchPush {
     fn from(facts: platitude_core::session::BranchPushFacts) -> Self {
         Self {
             state: facts.standing.as_str().to_string(),
+            sends_plain: facts.standing.sends_plain(),
             overwrites: facts.standing.overwrites(),
             target: facts.target,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),

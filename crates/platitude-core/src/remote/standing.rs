@@ -59,11 +59,10 @@ pub enum PushStanding {
 }
 
 impl PushStanding {
-    /// The toolbar's plain press sends the branch — for `Publish`, after
-    /// asking where it goes. `Elsewhere` too: nothing here counts against
-    /// the far side, so the press lets git answer. A branch's row does not
-    /// read this: it comes to the same answer off its own table of the
-    /// words (`RefBranchMenu`'s seats, `BranchPushRow`'s blocked `clean`).
+    /// A plain press sends the branch, on the toolbar and on a branch's
+    /// row alike — for `Publish`, after asking where it goes. `Elsewhere`
+    /// too: nothing here counts against the far side, so the press lets
+    /// git answer.
     pub fn sends_plain(self) -> bool {
         matches!(self, Self::Publish | Self::Elsewhere | Self::Ready)
     }

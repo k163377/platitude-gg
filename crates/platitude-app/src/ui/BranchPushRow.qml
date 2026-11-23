@@ -32,6 +32,10 @@ AppMenuItem {
     readonly property bool firstPushWords: pushRow.publishing || pushRow.facts.pushStaysHere
     /// Only the held overwrite reaches — the toolbar's rule (`remote::PushStanding::overwrites`).
     readonly property bool overwrites: pushRow.facts.pushOverwrites
+    /// A press reaches: the plain one sends, or only the held overwrite does — the toolbar's rules
+    /// (`remote::PushStanding::sends_plain` / `overwrites`). A seat where neither does is `clean`'s alone
+    /// (`RefBranchMenu.standOn`).
+    readonly property bool reaches: pushRow.facts.pushSendsPlain || pushRow.overwrites
     /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
     /// (`BandPushButton`).
     readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")
@@ -56,7 +60,7 @@ AppMenuItem {
     // (`RefBranchMenu.state.pushMoved`).
     offered: (pushRow.facts.pushState !== "" || pushRow.facts.pushStaysHere) && !pushRow.facts.pushMoved
     blockedReason: pushRow.facts.pushStaysHere ? pushRow.blockedStaysHere
-                 : pushRow.facts.pushState === "clean" ? pushRow.blockedClean : ""
+                 : pushRow.facts.pushState !== "" && !pushRow.reaches ? pushRow.blockedClean : ""
     holdPresses: pushRow.overwrites ? Metrics.holdPressesWarned : 0
     // Reaching past this machine is the warning tone (デザイン規約 §状態).
     holdTone: Theme.warning

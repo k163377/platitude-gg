@@ -93,15 +93,17 @@ Item {
         }, again === undefined ? "" : again)
     }
     /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts —
-    /// `overwrites` as core answers it for that state (`remote::PushStanding::overwrites`).
+    /// `sendsPlain` / `overwrites` as core answers them for that state (`remote::PushStanding::sends_plain` /
+    /// `overwrites`).
     function pushing(state) {
-        return { "state": state, "overwrites": state === "behind" || state === "diverged",
+        return { "state": state, "sendsPlain": ["publish", "elsewhere", "ready"].includes(state),
+                 "overwrites": state === "behind" || state === "diverged",
                  "target": "origin/feature/topic-a", "lease": "fed789", "upstream": "origin/feature/topic-a" }
     }
     /// …and where the push would stay in this repository (`stays-here` — measured against another branch here and
     /// marked to no remote, or marked to `.`): that alone, every other field empty.
-    readonly property var pushingHere:
-        ({ "state": "stays-here", "overwrites": false, "target": "", "lease": "", "upstream": "" })
+    readonly property var pushingHere: ({ "state": "stays-here", "sendsPlain": false, "overwrites": false,
+                                          "target": "", "lease": "", "upstream": "" })
     /// git turns the plain delete of `name` down, handed to the card as the carrying menu hands it: cleared as the
     /// delete is asked, then the name (`RepoTab.branchDeleteRefused`), so each refusal is an edge of its own.
     function refuse(name) {
@@ -319,6 +321,7 @@ Item {
         function test_the_push_row_takes_the_toolbars_form(data) {
             root.standOn({ push: root.pushing(data.state) })
             verify(pushRow.offered)
+            verify(!pushRow.blocked, "a press reaches in every one of them")
             compare(pushRow.code, data.code)
             compare(pushRow.holdPresses, data.presses)
             compare(pushRow.text, data.words)
@@ -371,6 +374,27 @@ Item {
             compare(pushRow.text, "to origin/feature/topic-a")
             compare(pushRow.holdPresses, 0)
             compare(pushRow.blockedReason, "Nothing to push — origin/feature/topic-a is up to date")
+        }
+
+        /// Whether a press reaches is core's answer, the toolbar's (`remote::PushStanding::sends_plain` /
+        /// `overwrites`), not a table of the words here: the word picks only what the row says. Off core's answer, a
+        /// word whose press reaches nowhere has no seat, and a `clean` one whose plain press sends stands in.
+        function test_the_push_row_presses_where_core_says_a_press_reaches_data() {
+            return [
+                { tag: "ready, core sending nothing", state: "ready", sendsPlain: false, offered: false },
+                { tag: "elsewhere, core sending nothing", state: "elsewhere", sendsPlain: false, offered: false },
+                { tag: "clean, core sending it", state: "clean", sendsPlain: true, offered: true },
+            ]
+        }
+
+        function test_the_push_row_presses_where_core_says_a_press_reaches(data) {
+            root.standOn({ push: Object.assign(root.pushing(data.state), { "sendsPlain": data.sendsPlain }) })
+            compare(pushRow.offered, data.offered)
+            compare(pushRow.blockedReason, "")
+            if (!data.offered)
+                return
+            pushRow.triggered()
+            compare(root.asked, "push feature/topic-a  ", "a plain push, nothing leased")
         }
 
         function test_the_push_row_asks_for_the_push_its_form_says() {

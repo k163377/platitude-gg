@@ -927,6 +927,35 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
     assert_eq!(card("tag", "reads"), BranchUpstream::default());
 }
 
+/// A branch row's push answer says what a press does in its standing —
+/// core's rules, the toolbar's (`PushStanding::sends_plain` /
+/// `overwrites`) —, and its record reads back whole. The keys QML reads
+/// are pinned on the QML side: `push-branch-menu`, whose report is the
+/// row standing on a record from here.
+#[test]
+fn a_branch_rows_push_carries_cores_press_rules() {
+    use platitude_core::remote::PushStanding::*;
+    use platitude_core::session::BranchPushFacts;
+    for standing in [
+        Closed, Unborn, Publish, StaysHere, Elsewhere, Ready, Clean, Behind, Diverged,
+    ] {
+        let row = BranchPush::from(BranchPushFacts {
+            standing,
+            ..BranchPushFacts::default()
+        });
+        assert_eq!(
+            (row.sends_plain, row.overwrites),
+            (standing.sends_plain(), standing.overwrites()),
+            "{standing:?}"
+        );
+        assert_eq!(
+            BranchPush::from_map(&row.to_map()),
+            Some(row),
+            "{standing:?}"
+        );
+    }
+}
+
 /// What `GitFacts.refMenuOffers` reads off the record a card hands it as it
 /// was read: its far side, whichever model's record it is.
 #[test]
