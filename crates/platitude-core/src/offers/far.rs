@@ -2,7 +2,7 @@
 //! the sides a tag's name stands on. One value per kind of row, built by
 //! the model that lists the row and handed to [`super::ref_menu`] whole.
 
-use super::{RefKind, TagSides};
+use super::RefKind;
 
 /// What the menu on one row reads over there.
 ///
@@ -77,6 +77,53 @@ pub struct TagFar {
     pub has_remote: bool,
     /// Why the rows that delete over there stand greyed, if they do.
     pub held_back: TagDeleteHeld,
+}
+
+/// Which sides of a tag exist ([`TagFar::sides`]).
+///
+/// The rows differ by side (`tag --delete` needs a local tag,
+/// `push --delete` a remote one, sending a local one), and the sidebar lists
+/// a name held on both sides once, so the row cannot tell on its own
+/// (`session::TagItem::sides`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TagSides {
+    /// Made here and no remote is known to carry the name.
+    Here,
+    /// A remote carries it and this repository does not.
+    Remote,
+    Both,
+}
+
+impl TagSides {
+    /// Decoded from the word a tag's record carries (`encode::far`); `None`
+    /// for a tag whose section has not been read yet.
+    pub fn from_word(word: &str) -> Option<Self> {
+        match word {
+            "here" => Some(Self::Here),
+            "remote" => Some(Self::Remote),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+
+    /// The word [`Self::from_word`] reads.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Here => "here",
+            Self::Remote => "remote",
+            Self::Both => "both",
+        }
+    }
+
+    /// Whether this repository holds the tag.
+    pub(super) fn here(self) -> bool {
+        matches!(self, Self::Here | Self::Both)
+    }
+
+    /// Whether a remote was last heard to carry the name.
+    pub(super) fn on_remote(self) -> bool {
+        matches!(self, Self::Remote | Self::Both)
+    }
 }
 
 /// Why a tag menu's rows that delete over there stand greyed.

@@ -25,7 +25,7 @@ mod moves;
 mod pull;
 mod tree;
 
-pub use far::{BranchFar, FarSide, Reading, TagDeleteHeld, TagFar};
+pub use far::{BranchFar, FarSide, Reading, TagDeleteHeld, TagFar, TagSides};
 pub use message::{MessageEdit, message_edit};
 pub use moves::{
     SwitchAction, SwitchTarget, leave_code, leaving_undoes, move_landed, moves_blocked,
@@ -88,53 +88,6 @@ impl<'a> RefTarget<'a> {
     /// name is empty.
     pub fn from_words(kind: &str, name: &'a str) -> Option<Self> {
         Self::new(RefKind::from_word(kind)?, name)
-    }
-}
-
-/// Which sides of a tag exist ([`TagFar::sides`]).
-///
-/// The rows differ by side (`tag --delete` needs a local tag,
-/// `push --delete` a remote one, sending a local one), and the sidebar lists
-/// a name held on both sides once, so the row cannot tell on its own
-/// (`session::TagItem::sides`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TagSides {
-    /// Made here and no remote is known to carry the name.
-    Here,
-    /// A remote carries it and this repository does not.
-    Remote,
-    Both,
-}
-
-impl TagSides {
-    /// Decoded from the word a tag's record carries (`encode::far`); `None`
-    /// for a tag whose section has not been read yet.
-    pub fn from_word(word: &str) -> Option<Self> {
-        match word {
-            "here" => Some(Self::Here),
-            "remote" => Some(Self::Remote),
-            "both" => Some(Self::Both),
-            _ => None,
-        }
-    }
-
-    /// The word [`Self::from_word`] reads.
-    pub fn word(self) -> &'static str {
-        match self {
-            Self::Here => "here",
-            Self::Remote => "remote",
-            Self::Both => "both",
-        }
-    }
-
-    /// Whether this repository holds the tag.
-    fn here(self) -> bool {
-        matches!(self, Self::Here | Self::Both)
-    }
-
-    /// Whether a remote was last heard to carry the name.
-    fn on_remote(self) -> bool {
-        matches!(self, Self::Remote | Self::Both)
     }
 }
 
