@@ -22,8 +22,8 @@ description: platitude-gg の動き(hover・カード・メニュー・ドラッ
 
 1. **台本を書く** —— `target/film/scenes/<名前>.film`(§台本)。座標を拾うには、`view 0 0 1440 900` と `tick 1000` の下見
    の台本を 1 本撮って、コマから読む
-2. **側ごとに撮る** —— 側は `before` / `main` / `after` / `now` / `opt2` / `opt3`(帯の名札は 直す前 / main / 直した後 /
-   今 / 案 2 / 案 3)。1 側ごとに:
+2. **側ごとに撮る** —— 側は `before` / `main` / `after` / `now` / `a` / `b` / `c`(帯の名札は 直す前 / main / 直した後 /
+   今 / 案 A / 案 B / 案 C。案の側は board の `--part A …` と同じ名で呼ぶ)。1 側ごとに:
    1. 木をその側に合わせる —— `main` は `git switch --detach main`、`before` は直す前の commit へ
       `git switch --detach <commit>`、`now` / `after` は席の枝のまま
    2. <!--cmd:film.in-->`cargo xtask film in` —— film 動詞をその木へ入れる(QML 部品 1 つと 8 ファイルの置換。commit しない)

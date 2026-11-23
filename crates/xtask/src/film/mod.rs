@@ -105,14 +105,20 @@ const SIDES: &[Side] = &[
         tag: "今",
         colour: "success",
     },
+    // A proposal's candidates, named as the board names them (`.claude/rules/proposals.md`: A, B, …).
     Side {
-        name: "opt2",
-        tag: "案 2",
+        name: "a",
+        tag: "案 A",
         colour: "textLink",
     },
     Side {
-        name: "opt3",
-        tag: "案 3",
+        name: "b",
+        tag: "案 B",
+        colour: "textLink",
+    },
+    Side {
+        name: "c",
+        tag: "案 C",
         colour: "textLink",
     },
 ];

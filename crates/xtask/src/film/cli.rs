@@ -11,8 +11,9 @@ cargo xtask film <command>   (the film skill has the scene syntax and the order 
   out       Take it out again, by the same substitutions backwards.
   shoot <scene>... [--side <side>] [--no-build] [--fresh-base]
             One side of each scene (`now` unless --side says before, main,
-            after, opt2 or opt3), headless, into target/film/<scene>/. The
-            first scene builds the release; --no-build skips that too.
+            after, or a proposal's a, b or c), headless, into
+            target/film/<scene>/. The first scene builds the release;
+            --no-build skips that too.
             --fresh-base builds the scene's repository again rather than
             copying the one standing.
   bake <scene> [--sides <side>,<side>]
