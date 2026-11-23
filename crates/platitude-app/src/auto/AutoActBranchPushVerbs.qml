@@ -62,6 +62,10 @@ Item {
         driver.menuLeaving(menu)
         menu.close()
     }
+    /// What the branch's row reads of its push now, off the listing (`NavSectionModel.branchPush`).
+    function landed() {
+        return branchesModel.branchPush(acts.branch, repoTab.defaultRemote, repoTab.state === "open", worktree.standing)
+    }
     /// The row as the menu stands. The free words last: a claim is one substring.
     function rowLine() {
         const row = acts.pushRow()
@@ -137,7 +141,7 @@ Item {
                 // Read before the press, which takes the menu down.
                 op.advance("read", () => acts.rowLine())
             }
-            const asks = acts.card.pushState === "publish"
+            const asks = acts.card.state.push !== undefined && acts.card.state.push.asks
             if (!op.input("pressed", () => acts.pressRow(row, asks)))
                 return
             op.stop()
@@ -207,10 +211,10 @@ Item {
             "name": "push_branch_landed_ready",
             "when": () => ({
                 "ready": !(repoTab.busyCount !== 0 || repoTab.writeSeq === driver.writeSeqBefore),
-                "level": branchesModel.branchPush(acts.branch, repoTab.defaultRemote).state === "clean"
+                "level": acts.landed().state === "clean"
                          || repoTab.writeRefused }),
             "report": () => {
-                const landed = branchesModel.branchPush(acts.branch, repoTab.defaultRemote)
+                const landed = acts.landed()
                 return "push_branch_landed refused=" + repoTab.writeRefused
                        + " state=" + landed.state
                        + " head=" + worktree.branch

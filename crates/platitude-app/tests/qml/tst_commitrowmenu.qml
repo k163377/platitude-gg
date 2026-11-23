@@ -499,9 +499,9 @@ Item {
         function test_the_delete_table_closes_the_rows_used_often_above_the_cards() {
             root.aimAt({ pullRuns: "aside" })
             const facts = root.stand()
-            facts.push = { "state": "ready", "sendsPlain": true, "overwrites": false,
+            facts.push = { "state": "ready", "sendsPlain": true, "asks": false, "overwrites": false, "offered": true,
                            "target": "origin/feature/topic-a", "lease": "fed789",
-                           "upstream": "origin/feature/topic-a" }
+                           "upstream": "origin/feature/topic-a", "ahead": 1, "behind": 0 }
             menu.offerCommit(facts)
             const shown = root.shownOrder()
             const at = word => shown.indexOf(word)

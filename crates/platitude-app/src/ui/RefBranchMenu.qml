@@ -102,8 +102,8 @@ AppMenu {
     /// The automation's handles into these rows, passed on by the carrying menu.
     readonly property alias upstreamItem: refUpstreamItem
     readonly property alias unsetUpstreamItem: refUnsetUpstreamItem
-    /// What the push row stands on (`NavSectionModel.branchPush`'s `state`), for the automation's report.
-    readonly property alias pushState: state.pushState
+    /// The push row's standing word (`state.push`), empty where the row has no seat — for the automation's report.
+    readonly property string pushState: state.push !== undefined ? state.push.state : ""
 
     /// Everything this card and the rows it lends the level above read (`BranchPushRow` / `BranchDeleteRow` /
     /// `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), set by `standOn` alone: as the menu opens, and as it stands
@@ -151,20 +151,10 @@ AppMenu {
         /// The name git's early check was asked under (`checkDeleteRequested`), which its answer comes back by
         /// (`checkedBranch`): a rename with the menu up leaves it, the commits being the same (`renamed`).
         property string askedAs: ""
-        /// The push row's standing — the toolbar's words (`PublishFlow.pushState`) —, where it goes, the commit an
-        /// overwrite is leased to, and the upstream the first push's question opens on. `pushState` is empty where
-        /// the row has no seat.
-        property string pushState: ""
-        /// A plain press sends (`branchPush`'s `sendsPlain`, core's rule).
-        property bool pushSendsPlain: false
-        /// Only the held overwrite reaches (`branchPush`'s `overwrites`, core's rule).
-        property bool pushOverwrites: false
-        property string pushTarget: ""
-        property string pushLease: ""
-        property string pushUpstream: ""
-        /// The push would stay in this repository (`stays-here` — measured against another branch here and marked to no
-        /// remote, or marked to `.` itself): the row stands out, and says why.
-        property bool pushStaysHere: false
+        /// What the push row stands on, whole (`NavSectionModel.branchPush` — the toolbar's record, `encode::PushRecord`:
+        /// its standing, where it goes, the commit an overwrite is leased to, the upstream the first push's question
+        /// opens on, and what a press does there); `undefined` where the row has no seat (core's `offered`).
+        property var push: undefined
         /// The menu stood again on a reading where the push's far side has moved from the commit the row is leased to
         /// or names another place: the row keeps what it showed and greys asking for the menu to be opened again
         /// (`standOn`'s `again`).
@@ -179,9 +169,9 @@ AppMenu {
     /// reading answers no `deleteRemote`, which is what greys the rows that reach it — and `upstreamWhere`, where that
     /// upstream stands); `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` /
     /// `no`, empty for a tip or a reference older than the window, whose answer only git has), and `push` what the push
-    /// row stands on (`NavSectionModel.branchPush`: `state`, `sendsPlain`, `overwrites`, `target`, `lease`,
-    /// `upstream`). Every `facts` a branch card stands on carries all of them, a QML test's hand-built ones too: they
-    /// are written below as they come, and the unset row stands on `upstream` / `upstreamWhere`.
+    /// row stands on (`NavSectionModel.branchPush`, the record `state.push` holds). Every `facts` a branch card stands
+    /// on carries all of them, a QML test's hand-built ones too: they are written below as they come, and the unset row
+    /// stands on `upstream` / `upstreamWhere`.
     ///
     /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
     /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
@@ -223,13 +213,7 @@ AppMenu {
             state.deleteAnswered = false
             state.deleteMerged = true
             state.deleteAsked = false
-            state.pushState = ""
-            state.pushSendsPlain = false
-            state.pushOverwrites = false
-            state.pushTarget = ""
-            state.pushLease = ""
-            state.pushUpstream = ""
-            state.pushStaysHere = false
+            state.push = undefined
             state.pushMoved = false
             return
         }
@@ -245,18 +229,16 @@ AppMenu {
         const remoteMoved = ownLease ? state.remoteMoved || oidHex !== state.refOid
                           : readingHeld && (state.remoteMoved || card.remoteCounterpart !== state.remoteCounterpart
                                             || card.remoteCounterpartOid !== state.remoteCounterpartOid)
-        // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
-        // 「そこにしか入口が無いものだけ」) — and only where a press reaches, by core's rules, the toolbar's (`sendsPlain`
-        // / `overwrites`): nothing to name is no row. Nothing to send keeps its seat, out (`clean`; user decision —
-        // `BranchPushRow.blockedClean`), and so does a push that would stay in this repository (デザイン規約 §メニュー
-        // 「「今できない」行は無効で残す」, §リモートへ送る). Its far side is where it goes and the commit over there an
-        // overwrite is leased to (`branch_push`'s `lease`, counted against in every form).
-        const push = facts.push
-        const pushed = kind === "branch" && facts.open && !onCurrentBranch && push !== undefined
-        const pushSeated = pushed && (push.sendsPlain || push.overwrites || push.state === "clean")
-        const pushHeld = sameRef && kind === "branch" && (state.pushState !== "" || state.pushStaysHere)
-        const farSide = pushSeated ? push.target + "\n" + push.lease : ""
-        const farSideThen = state.pushState !== "" ? state.pushTarget + "\n" + state.pushLease : ""
+        // Whether the row has a seat is core's (`offered`): a local branch the worktree is not on, on an open tab — the
+        // one it is on has the toolbar's own button (デザイン規約 §メニュー「そこにしか入口が無いものだけ」) —, where a
+        // press reaches or the row stands out saying why: nothing to send (`clean`; user decision —
+        // `BranchPushRow.blockedClean`) or a push that would stay in this repository (デザイン規約 §メニュー「「今できない」行は
+        // 無効で残す」, §リモートへ送る). Its far side is where it goes and the commit over there an overwrite is leased
+        // to (`lease`, counted against in every form).
+        const push = kind === "branch" && facts.push !== undefined && facts.push.offered ? facts.push : undefined
+        const pushHeld = sameRef && kind === "branch" && state.push !== undefined
+        const farSide = push !== undefined ? push.target + "\n" + push.lease : ""
+        const farSideThen = state.push !== undefined ? state.push.target + "\n" + state.push.lease : ""
         const pushMoved = pushHeld && (state.pushMoved || farSide !== farSideThen)
         // Whether the plain delete would be refused, answered at open so the row wears `-D` from the start: the drawn
         // rows answer first (規約 §行が読む答えはどこから来るか), git only where they cannot (→ `checkedMerged`).
@@ -282,13 +264,7 @@ AppMenu {
         state.canUnsetUpstream = menu.unsetUpstream
         state.onCurrentBranch = onCurrentBranch
         state.pushMoved = pushMoved
-        state.pushStaysHere = pushMoved ? state.pushStaysHere : pushed && push.state === "stays-here"
-        state.pushState = pushMoved ? state.pushState : pushSeated ? push.state : ""
-        state.pushSendsPlain = pushMoved ? state.pushSendsPlain : pushSeated && push.sendsPlain
-        state.pushOverwrites = pushMoved ? state.pushOverwrites : pushSeated && push.overwrites
-        state.pushTarget = pushMoved ? state.pushTarget : pushSeated ? push.target : ""
-        state.pushLease = pushMoved ? state.pushLease : pushSeated ? push.lease : ""
-        state.pushUpstream = pushMoved ? state.pushUpstream : pushSeated ? push.upstream : ""
+        state.push = pushMoved ? state.push : push
         state.deleteMerged = drawn ? facts.merged === "yes" : keeps ? state.deleteMerged : true
         state.deleteAnswered = drawn || (keeps && state.deleteAnswered)
         state.deleteAsked = asks

@@ -461,23 +461,23 @@ impl WorktreeModel {
     }
 
     /// The push of the branch HEAD is on: the last status's reading of it,
-    /// blank — the branch's own mark too — until that status is about this
-    /// branch (`counts_settled`).
+    /// none — the branch's own mark among it — until that status is about
+    /// this branch (`counts_settled`).
     fn head_push_now(&self) -> platitude_core::remote::HeadPush {
-        let settled = self.counts_settled;
-        platitude_core::remote::HeadPush {
-            branch: self.branch.clone(),
-            detached: self.detached,
-            unborn: self.unborn,
-            settled,
-            upstream: self.upstream.clone(),
-            upstream_counts: self.status_upstream_counts.filter(|_| settled),
-            status: if settled {
-                self.status_push.clone()
-            } else {
-                platitude_core::remote::StatusPush::default()
-            },
+        use platitude_core::remote::{HeadBranch, HeadPush};
+        if self.detached || self.branch.is_empty() {
+            return HeadPush::Detached;
         }
+        if !self.counts_settled {
+            return HeadPush::Moving(self.branch.clone());
+        }
+        HeadPush::Read(HeadBranch {
+            name: self.branch.clone(),
+            unborn: self.unborn,
+            upstream: Some(self.upstream.clone()).filter(|upstream| !upstream.is_empty()),
+            upstream_counts: self.status_upstream_counts,
+            status: self.status_push.clone(),
+        })
     }
 
     /// That, and what the menus' rows draw beside it.

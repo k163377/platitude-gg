@@ -26,23 +26,32 @@ AppMenuItem {
 
     required property RefBranchMenu card
     readonly property QtObject facts: pushRow.card.state
+    /// What the row stands on, whole (`RefBranchMenu.state.push`); `undefined` where it has no seat.
+    readonly property var push: pushRow.facts.push
+    readonly property bool seated: pushRow.push !== undefined
 
-    readonly property bool publishing: pushRow.facts.pushState === "publish"
+    /// A press asks where the branch goes first — the toolbar's rule (`remote::PushStanding::asks`).
+    readonly property bool publishing: pushRow.seated && pushRow.push.asks
+    /// The push would stay in this repository: out, in the first push's words, saying why.
+    readonly property bool staysHere: pushRow.seated && pushRow.push.state === "stays-here"
     /// The first push's words: where it goes is asked — or, out, there is nowhere to name.
-    readonly property bool firstPushWords: pushRow.publishing || pushRow.facts.pushStaysHere
+    readonly property bool firstPushWords: pushRow.publishing || pushRow.staysHere
     /// Only the held overwrite reaches — the toolbar's rule (`remote::PushStanding::overwrites`).
-    readonly property bool overwrites: pushRow.facts.pushOverwrites
+    readonly property bool overwrites: pushRow.seated && pushRow.push.overwrites
     /// A press reaches: the plain one sends, or only the held overwrite does — the toolbar's rules
-    /// (`remote::PushStanding::sends_plain` / `overwrites`). A seat where neither does is `clean`'s alone
-    /// (`RefBranchMenu.standOn`).
-    readonly property bool reaches: pushRow.facts.pushSendsPlain || pushRow.overwrites
+    /// (`remote::PushStanding::sends_plain` / `overwrites`). A seat where neither does stands out, saying why.
+    readonly property bool reaches: pushRow.seated && (pushRow.push.sendsPlain || pushRow.overwrites)
+    /// Where it goes, `<remote>/<branch>`; empty where nowhere.
+    readonly property string target: pushRow.seated ? pushRow.push.target : ""
+    /// The commit over there an overwrite is leased to; empty for git's own tracking ref.
+    readonly property string lease: pushRow.seated ? pushRow.push.lease : ""
     /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
     /// (`BandPushButton`).
     readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")
     /// …and where the far side already has every commit: the toolbar's words for `clean` (user decision — ask before
     /// changing).
     //: %1 is where the push goes, e.g. origin/feature/login.
-    readonly property string blockedClean: qsTr("Nothing to push — %1 is up to date").arg(pushRow.facts.pushTarget)
+    readonly property string blockedClean: qsTr("Nothing to push — %1 is up to date").arg(pushRow.target)
 
     // Off the running press's length, so the chip cannot change under a hand already on the row
     // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
@@ -51,29 +60,29 @@ AppMenuItem {
     // (デザイン規約 §はじめてリモートへ送る).
     //: Follows the `push` chip: "push to origin/feature".
     refSentence: pushRow.firstPushWords ? "" : qsTr("to %1")
-    refName: pushRow.facts.pushTarget
+    refName: pushRow.target
     refTint: Theme.textPrimary
     refMark: "remote"
     //: Follows the `push` chip: "push to…", where the branch goes being asked first.
     text: pushRow.firstPushWords ? qsTr("to…") : pushRow.refSentence.arg(pushRow.refName)
     // Leased to the far side the menu went up on: moved since, the row stops applying and greys where it stands
     // (`RefBranchMenu.state.pushMoved`).
-    offered: (pushRow.facts.pushState !== "" || pushRow.facts.pushStaysHere) && !pushRow.facts.pushMoved
-    blockedReason: pushRow.facts.pushStaysHere ? pushRow.blockedStaysHere
-                 : pushRow.facts.pushState !== "" && !pushRow.reaches ? pushRow.blockedClean : ""
+    offered: pushRow.seated && !pushRow.facts.pushMoved
+    blockedReason: pushRow.staysHere ? pushRow.blockedStaysHere
+                 : pushRow.seated && !pushRow.reaches ? pushRow.blockedClean : ""
     holdPresses: pushRow.overwrites ? Metrics.holdPressesWarned : 0
     // Reaching past this machine is the warning tone (デザイン規約 §状態).
     holdTone: Theme.warning
     // What goes, where to and the commit over there it is leased to: the branch here moved part way would send others.
-    premise: [pushRow.facts.refId, pushRow.facts.refOid, pushRow.facts.pushTarget, pushRow.facts.pushLease].join("\n")
+    premise: [pushRow.facts.refId, pushRow.facts.refOid, pushRow.target, pushRow.lease].join("\n")
     onTriggered: {
         if (pushRow.publishing)
-            pushRow.card.publishRequested(pushRow.facts.refId, pushRow.facts.pushUpstream)
+            pushRow.card.publishRequested(pushRow.facts.refId, pushRow.push.upstream)
         else
             pushRow.card.pushRequested(pushRow.facts.refId, "", "")
     }
     onHeld: {
         pushRow.closeMenu()
-        pushRow.card.pushRequested(pushRow.facts.refId, "lease", pushRow.facts.pushLease)
+        pushRow.card.pushRequested(pushRow.facts.refId, "lease", pushRow.lease)
     }
 }

@@ -39,12 +39,15 @@ Item {
     anchors.fill: parent
 
     // ---- push ------------------------------------------------------
-    /// The branch's push, read whole by core off one destination (`GitFacts.toolbarPush`, `remote::HeadPush::facts`)
-    /// — the one the send resolves: the standing, the label, the tip's counts, the overwrite's lease and the first
-    /// push's upstream below are all its fields, never re-derived here, or the label and the send part ways. The
-    /// branch's push is the model's record, handed on as read (`WorktreeModel.headPush`: whether the upstream is a
+    /// The branch's push, read whole by core off one destination (`NavSectionModel.headPush`,
+    /// `RefsSnapshot::head_push`) — the one the send resolves: the standing, where the label says it goes, the tip's
+    /// counts, the commit an overwrite leases to, the first push's upstream and what a press does there are all its
+    /// fields (`encode::PushRecord`, a branch's row's too), never re-derived here, or the label and the send part ways.
+    /// The branch's push is the model's record, handed on as read (`WorktreeModel.headPush`: whether the upstream is a
     /// branch here is the status's word, never read off its name, and both marks ride with the status — not the tab's
-    /// `pushDefault`, which lands before or after the counts read under it).
+    /// `pushDefault`, which lands before or after the counts read under it). Read against the remotes' listing — their
+    /// names, and the commit the lease pins, as the remote branches list it — so it follows that listing
+    /// (`refsRevision`): a fetch that moves the far side moves the lease with what is drawn.
     ///
     /// Where a mark sends the push to another remote than the upstream's — a branch here being on none — the counts
     /// that speak for it are the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
@@ -54,40 +57,17 @@ Item {
     /// destination: one of them reading the upstream would say the diverged counts and lease on origin's tip, refused
     /// as `stale info`. Headless: `push-target` / `push-hover` / `force-push` on `--preset forkdiverged`, and
     /// `push-target forkmark --preset forkmark` for no tracking ref.
-    readonly property var pushFacts:
-        GitFacts.toolbarPush(publishFlow.worktree.headPush, publishFlow.repoTab.state === "open",
-                             publishFlow.repoTab.remoteNames, publishFlow.repoTab.defaultRemote)
-    /// Where the button would send this branch: the branch's own mark, then the repository's, then the upstream
-    /// (デザイン規約 §リモートを書き留める). Headless: `push-target` — the label is in a tooltip, which no picture can judge:
-    /// read it plain and on `--preset forkmark` / `--preset forkdiverged`.
-    readonly property string pushTargetLabel: publishFlow.pushFacts.target
-    /// What the branch can do with its remote (デザイン規約 §リモートへ送る):
     ///
-    /// - `closed`        — no branch to send
-    /// - `publish`       — never sent: where it goes is a question (also with no remote — the question can make one)
-    /// - `stays-here`    — the push resolves to this repository (measured against a branch here and marked to no
-    ///                     remote, or marked to `.`): nowhere to send it
-    /// - `elsewhere`     — the push goes to a marked remote this branch does not track (`pushTargetLabel`), and
-    ///                     nothing here tracks the branch over there, so no counts speak
-    /// - `ready`         — commits to add, nothing in the way
-    /// - `clean`         — the remote has them all
-    /// - `behind`        — the remote moved on; nothing to add
-    /// - `diverged`      — both moved; only an overwrite can land
-    ///
-    /// The table is core's (`platitude_core::remote::push_standing`), `closed` too until the counts are about HEAD's
-    /// branch (`HeadPush::settled`). `elsewhere` is only for a destination with no tracking ref here (a fetch refspec
-    /// outside `refs/remotes/`, or a `remote.<name>.push` that renames). The counts are the last fetch's, so they prove
-    /// the negative only: a push may still be refused. A tab that is not open stands closed whatever its branch says.
-    /// Read for the words the button says; what a press does in it is core's too (below).
-    readonly property string pushState: publishFlow.pushFacts.state
-    /// Only the held overwrite reaches (`remote::PushStanding::overwrites`): the button's `push -f` shape.
-    readonly property bool pushOverwrites: publishFlow.pushFacts.overwrites
-    /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
-    /// are against, which an overwrite leases to — none where the push would stay here, as the branch row's
-    /// (`RefsSnapshot::branch_push`; both read `remote::push_reading`).
-    readonly property int pushAhead: publishFlow.pushFacts.ahead
-    readonly property int pushBehind: publishFlow.pushFacts.behind
-    readonly property string pushMeasured: publishFlow.pushFacts.measured
+    /// `state` is the standing's word, which only the words the button says branch on (`BandPushButton.sentenceTo`):
+    /// `closed` (no branch to send, a status still another branch's, or a tab not open), `unborn`, `publish`,
+    /// `stays-here`, `elsewhere`, `ready`, `clean`, `behind`, `diverged` — the table is core's
+    /// (`remote::PushStanding`). The counts are the last fetch's, so they prove the negative only: a push may still be
+    /// refused.
+    readonly property var pushFacts: {
+        publishFlow.remotesModel.refsRevision
+        return publishFlow.remotesModel.headPush(publishFlow.worktree.headPush, publishFlow.repoTab.state === "open",
+                                                 publishFlow.repoTab.defaultRemote)
+    }
     /// Nothing this window asked git for is out — from the press, not from when the queue starts it (`settling` rises
     /// at the ask, `busyCount` only once the write runs). A push is answered by its one owner (`RepoTab.pushAnswer`),
     /// so the doors that send one beside another — the toolbar's button, the question's pill — wait on this, and only
@@ -95,8 +75,8 @@ Item {
     readonly property bool pushDoorsOpen: publishFlow.repoTab.busyCount === 0 && !publishFlow.repoTab.settling
     /// A plain press sends (`remote::PushStanding::sends_plain`) and the doors are open.
     readonly property bool canPush: publishFlow.pushFacts.sendsPlain && publishFlow.pushDoorsOpen
-    /// The held overwrite reaches (`pushOverwrites`) and the doors are open.
-    readonly property bool canForcePush: publishFlow.pushOverwrites && publishFlow.pushDoorsOpen
+    /// The held overwrite reaches (`remote::PushStanding::overwrites`) and the doors are open.
+    readonly property bool canForcePush: publishFlow.pushFacts.overwrites && publishFlow.pushDoorsOpen
     /// What git said to the last refused push of each branch, by branch — a refusal is about that branch's standing, so
     /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands or the
     /// branch is gone (`forgetUnlisted`) (デザイン規約 §リモートへ送る). Most refusals (`fetch first`) are about that
@@ -110,28 +90,21 @@ Item {
     /// The branch travels with the press: the tab keeps it beside the push's id and hands it back with the answer
     /// (`RepoTab.pushAnswer` / `pushAnswerBranch`) — nothing here holds it across the round trip.
     function pushNow() {
-        if (publishFlow.pushState === "publish") {
+        if (publishFlow.pushFacts.asks) {
             // A gone branch here names no remote, whatever its name reads like (`startPublishAsk`).
             publishFlow.startPublishAsk(publishFlow.worktree.branch, publishFlow.pushFacts.upstream, "")
             return
         }
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "", "")
     }
-    /// Leased against the commit this window shows, not the tracking ref — a background fetch moves that and would
-    /// make it a plain force. A remote that moved since is refused, and core answers with a fetch. With no commit of
-    /// the far side on screen (`leaseOid` empty) the lease is git's own, to its tracking ref
-    /// (`remote::PushForce::WithTrackingLease`): the press is offered as what git would do, not held back for what
-    /// the list does not draw (user decision — ask before changing).
+    /// Leased against the commit this window shows (`pushFacts.lease`), not the tracking ref — a background fetch
+    /// moves that and would make it a plain force. A remote that moved since is refused, and core answers with a
+    /// fetch. With no commit of the far side on screen (`lease` empty: an upstream fetched outside `refs/remotes/` is
+    /// counted by git and never listed, and a count can land one read ahead of its row) the lease is git's own, to its
+    /// tracking ref (`remote::PushForce::WithTrackingLease`): the press is offered as what git would do, not held back
+    /// for what the list does not draw (user decision — ask before changing).
     function forcePush() {
-        publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "lease", publishFlow.leaseOid())
-    }
-    /// Commit the remote branch the counts are against (`pushMeasured`) points at, as shown here. Empty where the
-    /// remotes list holds no such row: an upstream fetched outside `refs/remotes/` is counted by git and never
-    /// listed, and a count can land one read ahead of its row.
-    function leaseOid() {
-        return publishFlow.pushMeasured !== ""
-               ? publishFlow.remotesModel.oidOfName(publishFlow.pushMeasured)
-               : ""
+        publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "lease", publishFlow.pushFacts.lease)
     }
     /// A branch's push has come back — the toolbar's or a branch row's —, found by its id (`RepoTab.pushAnswer`, -1
     /// when this notify carries none; the page calls this once per notify). Reads that answer's own words
@@ -382,8 +355,8 @@ Item {
     /// Asks where `branch` goes, opening on `upstream` — the remote branch it is configured for, fetched or not; "" for
     /// none, or for a branch here, which names no remote — and marking the row `oidHex` ("" for none: the toolbar's is
     /// the worktree's own). The toolbar hands `pushFacts`' `upstream`, a branch row `branchPush`'s — the same field off
-    /// the same reading (`remote::Upstream::remote_branch`). `pushState === "publish"` is both "no upstream" and "no
-    /// tracking ref"; the second has its destination written already, and the question opens on it (user decision —
+    /// the same reading (`remote::Upstream::remote_branch`). A press that asks (`publish`) is both "no upstream" and
+    /// "no tracking ref"; the second has its destination written already, and the question opens on it (user decision —
     /// ask before changing): opening on the default remote and the branch's own name would ask again for the answer
     /// just given, and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it. Otherwise the
     /// field defaults to the branch's own name. Net: `publish-upstream`.

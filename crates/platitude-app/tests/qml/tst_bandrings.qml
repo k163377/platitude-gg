@@ -28,11 +28,8 @@ Item {
         property QtObject pageWorktree: QtObject {
             property string branch: "main"
         }
-        property string pushState: "ready"
-        property bool pushOverwrites: false
-        property string pushTargetLabel: "origin/main"
-        property int pushAhead: 1
-        property int pushBehind: 0
+        property var pushFacts: ({ "state": "ready", "overwrites": false, "target": "origin/main", "ahead": 1,
+                                   "behind": 0 })
         property bool pushFailed: false
         property string pushFailReason: ""
         property bool planShown: false

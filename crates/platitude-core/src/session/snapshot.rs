@@ -2,8 +2,8 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
-use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides};
-use crate::remote::{PushRoute, RemoteTagRef, Upstream};
+use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides, TreeStanding};
+use crate::remote::{PushFacts, PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
 ///
@@ -72,25 +72,6 @@ pub struct RefsSnapshot {
     /// again is a branch of its own, and a new name gone takes its entry
     /// with it (`session::renames`).
     pub renamed: Vec<(crate::Name, crate::Name)>,
-}
-
-/// What a menu's `push` row on one local branch stands on
-/// ([`RefsSnapshot::branch_push`]).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct BranchPushFacts {
-    /// The toolbar's table, read for this branch (デザイン規約 §リモートへ送る).
-    pub standing: crate::remote::PushStanding,
-    /// Where the push goes, `<remote>/<branch>` as the toolbar names it.
-    pub target: String,
-    /// The commit the remote branch the counts are against stands on — the
-    /// upstream, or the tracking ref of where a mark sends the push —, which
-    /// an overwrite is leased to. `None` where nothing is counted against.
-    pub lease: Option<Oid>,
-    /// The remote branch the branch is configured for, fetched or not —
-    /// where a first push's question opens (デザイン規約 §はじめてリモートへ
-    /// 送る). Empty for a branch here, which names no remote whatever its
-    /// name looks like.
-    pub upstream: String,
 }
 
 /// What the BRANCH card of one local branch reads of its upstream
@@ -266,25 +247,57 @@ impl RefsSnapshot {
         }
     }
 
+    /// What the toolbar's push stands on: the push of the branch HEAD is
+    /// on, as the worktree holds it ([`crate::remote::HeadPush::facts`]),
+    /// read against this snapshot's remotes — their names, and the commit
+    /// an overwrite leases to as the remote branches list it, the one hand
+    /// a branch's row leases by too ([`Self::branch_push`]). Never this
+    /// snapshot's marks: both are the status's, read with the counts under
+    /// them (`remote::StatusPush::push_default`). `fallback` is where a
+    /// branch that tracks nothing, marked nowhere, goes; a tab that is not
+    /// `open` stands closed.
+    pub fn head_push(
+        &self,
+        head: &crate::remote::HeadPush,
+        fallback: &str,
+        open: bool,
+    ) -> PushFacts {
+        head.facts(
+            self.remote_names.iter().map(String::as_str),
+            fallback,
+            |measured| self.remote_named(measured).map(|remote| remote.oid),
+        )
+        .closed_unless(open)
+    }
+
     /// What a menu's `push` row on the local branch `short` stands on: the
-    /// toolbar's table and destination (`remote::push_reading` /
-    /// `PushRoute::target`, the one resolver), fed this branch's row, its own
-    /// mark and the counts of where that mark sends it. `fallback` is the
-    /// remote a branch that tracks nothing, marked nowhere, goes to.
+    /// toolbar's reading (`remote::PushFacts::read`, the one resolver), fed
+    /// this branch's row, its own mark and the counts of where that mark
+    /// sends it. `fallback` is the remote a branch that tracks nothing,
+    /// marked nowhere, goes to; a tab that is not `open` stands closed.
     ///
-    /// For a branch the worktree is not on: the one HEAD is on answers
-    /// nothing here — its push is the toolbar's, off the status tick, and
-    /// this snapshot keeps none of its marks or counts. A branch measured
-    /// against another branch here (`branch.<n>.remote = .`) that is listed
-    /// stands as the toolbar's would (`PushStanding::StaysHere`, or a
-    /// mark's destination and its counts); one whose upstream, of either
-    /// kind, is gone asks where it goes, as git's `[gone]` does anywhere.
-    pub fn branch_push(&self, short: &str, fallback: &str) -> BranchPushFacts {
+    /// For a branch the worktree is not on: the one HEAD is on — as the
+    /// tree has it, or as this listing does — answers nothing here (closed,
+    /// so the menu keeps no row for it): its push's one door is the toolbar
+    /// (デザイン規約 §メニュー「そこにしか入口が無いもの」), off the status
+    /// tick, and this snapshot keeps none of its marks or counts. A branch
+    /// measured against another branch here (`branch.<n>.remote = .`) that
+    /// is listed stands as the toolbar's would (`PushStanding::StaysHere`,
+    /// or a mark's destination and its counts); one whose upstream, of
+    /// either kind, is gone asks where it goes, as git's `[gone]` does
+    /// anywhere.
+    pub fn branch_push(
+        &self,
+        short: &str,
+        fallback: &str,
+        open: bool,
+        tree: &TreeStanding,
+    ) -> PushFacts {
         let Some(branch) = self.local_named(short) else {
-            return BranchPushFacts::default();
+            return PushFacts::default();
         };
-        if branch.is_head {
-            return BranchPushFacts::default();
+        if branch.is_head || tree.is_current(short) {
+            return PushFacts::default();
         }
         // With whether its ref is in the listing: a remote branch's reading
         // fills `upstream`, a branch here's commit `upstream_oid`
@@ -305,23 +318,20 @@ impl RefsSnapshot {
         } else {
             (Upstream::of(branch.upstream_gone.as_str(), false), None)
         };
-        let remotes = || self.remote_names.iter().map(String::as_str);
-        let route = PushRoute::new(upstream, self.marks.marked(short), remotes());
+        let route = PushRoute::new(
+            upstream,
+            self.marks.marked(short),
+            self.remote_names.iter().map(String::as_str),
+        );
         let track = self
             .push_tracks
             .binary_search_by(|(name, _)| name.as_str().cmp(short))
             .ok()
             .map(|at| &self.push_tracks[at].1);
-        let read = crate::remote::push_reading(route, upstream_counts, track);
-        BranchPushFacts {
-            standing: read.standing,
-            target: route.target(short, fallback).unwrap_or_default(),
-            lease: read
-                .measured
-                .and_then(|measured| self.remote_named(measured))
-                .map(|remote| remote.oid),
-            upstream: upstream.remote_branch().unwrap_or_default().to_string(),
-        }
+        PushFacts::read(route, short, fallback, upstream_counts, track, |measured| {
+            self.remote_named(measured).map(|remote| remote.oid)
+        })
+        .closed_unless(open)
     }
 
     /// What the card of local branch `short` reads of its upstream

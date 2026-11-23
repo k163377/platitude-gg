@@ -249,65 +249,6 @@ impl From<platitude_core::session::BranchUpstreamFacts> for BranchUpstream {
     }
 }
 
-/// What a menu's `push` row on one branch stands on, read as the menu opens
-/// and as it stands again (`RefsSnapshot::branch_push`).
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct BranchPush {
-    /// `PushStanding`'s word (`publish` / `ready` / `behind` /
-    /// `stays-here` …); `closed` for a name this section does not hold.
-    pub state: String,
-    /// A plain press sends (`PushStanding::sends_plain`), the toolbar's
-    /// rule.
-    pub sends_plain: bool,
-    /// Only the held overwrite reaches (`PushStanding::overwrites`), the
-    /// toolbar's rule.
-    pub overwrites: bool,
-    pub target: String,
-    /// The commit (hex) the remote branch the counts are against stands on
-    /// — an overwrite's lease. Empty where nothing is counted against.
-    pub lease: String,
-    /// The remote branch the branch is configured for, fetched or not;
-    /// empty for a branch here.
-    pub upstream: String,
-}
-
-impl Record for BranchPush {
-    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
-        Fields::new()
-            .put("state", &self.state)
-            .put("sendsPlain", &self.sends_plain)
-            .put("overwrites", &self.overwrites)
-            .put("target", &self.target)
-            .put("lease", &self.lease)
-            .put("upstream", &self.upstream)
-            .done()
-    }
-
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
-        Some(Self {
-            state: field(map, "state")?,
-            sends_plain: field(map, "sendsPlain")?,
-            overwrites: field(map, "overwrites")?,
-            target: field(map, "target")?,
-            lease: field(map, "lease")?,
-            upstream: field(map, "upstream")?,
-        })
-    }
-}
-
-impl From<platitude_core::session::BranchPushFacts> for BranchPush {
-    fn from(facts: platitude_core::session::BranchPushFacts) -> Self {
-        Self {
-            state: facts.standing.as_str().to_string(),
-            sends_plain: facts.standing.sends_plain(),
-            overwrites: facts.standing.overwrites(),
-            target: facts.target,
-            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
-            upstream: facts.upstream,
-        }
-    }
-}
-
 mod attach;
 mod card;
 mod drain;
@@ -472,6 +413,12 @@ pub struct NavSectionModel {
     /// that found nothing moved republishes the same `Arc`, so pointer
     /// equality is the whole check.
     last_refs: Option<Arc<platitude_core::session::RefsSnapshot>>,
+    /// Moves with every snapshot this section takes (`refsMoved`), rows
+    /// moved or not — what a binding that asks a slot about the snapshot
+    /// follows: a slot is followed by nothing, and `changed` is said only
+    /// for rows that moved, while what a slot reads can move with none of
+    /// them — the remotes' names (`PublishFlow.pushFacts`).
+    refs_revision: i32,
     refs_feed: Option<Arc<Feed<RefsMsg>>>,
     status_feed: Option<Arc<Feed<StatusMsg>>>,
     carried_feed: Option<Arc<Feed<CarriedStatusMsg>>>,

@@ -939,33 +939,69 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
     assert_eq!(card("tag", "reads"), BranchUpstream::default());
 }
 
-/// A branch row's push answer says what a press does in its standing —
-/// core's rules, the toolbar's (`PushStanding::sends_plain` /
-/// `overwrites`) —, and its record reads back whole. The keys QML reads
-/// are pinned on the QML side: `push-branch-menu`, whose report is the
-/// row standing on a record from here.
+/// Both doors' push answers off one snapshot, leased by one hand: the
+/// toolbar's (`headPush`, the branch HEAD is on as the worktree holds it)
+/// and a branch row's (`branchPush`) name as the overwrite's lease the
+/// commit the remote branches list where the counts are against. The row
+/// of the branch the tree is on has no seat: its door is the toolbar.
 #[test]
-fn a_branch_rows_push_carries_cores_press_rules() {
-    use platitude_core::remote::PushStanding::*;
-    use platitude_core::session::BranchPushFacts;
-    for standing in [
-        Closed, Unborn, Publish, StaysHere, Elsewhere, Ready, Clean, Behind, Diverged,
-    ] {
-        let row = BranchPush::from(BranchPushFacts {
-            standing,
-            ..BranchPushFacts::default()
-        });
-        assert_eq!(
-            (row.sends_plain, row.overwrites),
-            (standing.sends_plain(), standing.overwrites()),
-            "{standing:?}"
-        );
-        assert_eq!(
-            BranchPush::from_map(&row.to_map()),
-            Some(row),
-            "{standing:?}"
-        );
-    }
+fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
+    use platitude_core::offers::TreeStanding;
+    use platitude_core::remote::{HeadBranch, HeadPush};
+    let mut topic = local("topic", false);
+    topic.upstream = "origin/topic".into();
+    topic.counts = platitude_core::AheadBehind {
+        ahead: 1,
+        behind: 1,
+    };
+    let snap = Arc::new(platitude_core::session::RefsSnapshot {
+        locals: vec![local("main", true), topic],
+        remotes: vec![remote("origin/main"), remote("origin/topic")],
+        remote_names: vec!["origin".into()],
+        ..Default::default()
+    });
+    let branches = section("branches", Source::Locals(Arc::clone(&snap)));
+    let remotes = section("remotes", Source::Remotes(snap));
+    let on_main = || {
+        crate::encode::Standing::new(TreeStanding {
+            branch: "main".into(),
+            ..TreeStanding::default()
+        })
+    };
+    let tip = oid("b").to_hex();
+
+    let row = branches.branch_push("topic".into(), "origin".into(), true, on_main());
+    assert_eq!(
+        (
+            row.state.as_str(),
+            row.offered,
+            row.overwrites,
+            row.lease.as_str()
+        ),
+        ("diverged", true, true, tip.as_str())
+    );
+    let head = HeadPush::Read(HeadBranch {
+        name: "main".into(),
+        upstream: Some("origin/main".into()),
+        upstream_counts: Some(platitude_core::AheadBehind {
+            ahead: 0,
+            behind: 2,
+        }),
+        ..HeadBranch::default()
+    });
+    let toolbar = remotes.head_push(crate::encode::Push::new(head), true, "origin".into());
+    assert_eq!(
+        (
+            toolbar.state.as_str(),
+            toolbar.target.as_str(),
+            toolbar.lease.as_str()
+        ),
+        ("behind", "origin/main", tip.as_str())
+    );
+    let own = branches.branch_push("main".into(), "origin".into(), true, on_main());
+    assert!(!own.offered, "the branch the tree is on: the toolbar's");
+    let closed = branches.branch_push("topic".into(), "origin".into(), false, on_main());
+    assert!(!closed.offered, "a tab that is not open");
 }
 
 /// What `GitFacts.refMenu` reads off the record a card hands it as it was

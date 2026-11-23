@@ -300,6 +300,40 @@ fn a_republished_snapshot_moves_nothing() {
     ))));
 }
 
+/// Every snapshot the section takes moves `refsRevision`, its rows moved or
+/// not — what a binding that asks a slot about the snapshot follows
+/// (`PublishFlow.pushFacts`) —, and the same snapshot published again
+/// moves nothing.
+#[test]
+fn each_snapshot_taken_moves_the_refs_revision() {
+    let feed = Arc::new(Feed::<RefsMsg>::default());
+    let mut model = section("remotes", Source::default());
+    model.refs_feed = Some(Arc::clone(&feed));
+    let listed = Arc::new(platitude_core::session::RefsSnapshot {
+        remotes: vec![remote("origin/main")],
+        ..Default::default()
+    });
+    let take = |model: &mut NavSectionModel, at: &Arc<_>, looked| {
+        feed.push(RefsMsg::Snapshot {
+            snapshot: Arc::clone(at),
+            looked,
+        });
+        model.drain();
+        model.refs_revision
+    };
+    assert_eq!(take(&mut model, &listed, 1), 1);
+    assert_eq!(take(&mut model, &listed, 2), 1, "the same snapshot again");
+    let named = Arc::new(platitude_core::session::RefsSnapshot {
+        remote_names: vec!["origin".into()],
+        ..(*listed).clone()
+    });
+    assert_eq!(
+        take(&mut model, &named, 3),
+        2,
+        "no row moved, the remotes' names did"
+    );
+}
+
 /// A hidden row also takes the folder it was the last of
 /// (デザイン規約 §消す操作は先に画面から消す).
 #[test]

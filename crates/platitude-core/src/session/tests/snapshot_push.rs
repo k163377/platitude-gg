@@ -2,9 +2,10 @@
 //! (`RefsSnapshot::branch_push`): the toolbar's table, read off the row,
 //! the branch's own mark and the counts of where a mark sends it.
 
-use super::super::{BranchItem, BranchPushFacts, RefsSnapshot};
+use super::super::{BranchItem, RefsSnapshot};
+use crate::offers::TreeStanding;
 use crate::oid::Oid;
-use crate::remote::{BranchPushRemote, PushDefault, PushStanding, PushTrack};
+use crate::remote::{BranchPushRemote, PushDefault, PushFacts, PushStanding, PushTrack};
 
 fn oid(byte: u8) -> Oid {
     Oid::from_hex(&[byte; 40]).expect("an oid")
@@ -62,6 +63,12 @@ fn snapshot(mut locals: Vec<BranchItem>, remotes: &[(&str, u8)]) -> RefsSnapshot
     }
 }
 
+/// What a menu on an open tab reads of `short`'s `push` row, the worktree
+/// on `main`.
+fn row(at: &RefsSnapshot, short: &str) -> PushFacts {
+    at.branch_push(short, "origin", true, &TreeStanding::on("main"))
+}
+
 fn marked(branch: &str, remote: &str) -> BranchPushRemote {
     BranchPushRemote {
         branch: branch.to_string(),
@@ -86,27 +93,25 @@ fn a_tracked_branch_stands_against_its_upstream_as_the_toolbar_would() {
         ],
     );
     assert_eq!(
-        at.branch_push("ahead", "origin"),
-        BranchPushFacts {
+        row(&at, "ahead"),
+        PushFacts {
             standing: PushStanding::Ready,
-            target: "origin/ahead".to_string(),
+            target: Some("origin/ahead".to_string()),
+            counts: crate::AheadBehind {
+                ahead: 2,
+                behind: 0
+            },
             lease: Some(oid(b'a')),
-            upstream: "origin/ahead".to_string(),
+            upstream: Some("origin/ahead".to_string()),
         }
     );
-    assert_eq!(
-        at.branch_push("behind", "origin").standing,
-        PushStanding::Behind
-    );
-    assert_eq!(
-        at.branch_push("level", "origin").standing,
-        PushStanding::Clean
-    );
-    let split = at.branch_push("split", "origin");
+    assert_eq!(row(&at, "behind").standing, PushStanding::Behind);
+    assert_eq!(row(&at, "level").standing, PushStanding::Clean);
+    let split = row(&at, "split");
     assert_eq!(split.standing, PushStanding::Diverged);
     assert_eq!(
-        (split.target.as_str(), split.lease),
-        ("origin/trunk", Some(oid(b'd'))),
+        (split.target.as_deref(), split.lease),
+        (Some("origin/trunk"), Some(oid(b'd'))),
         "the upstream names the branch over there, and the overwrite is leased to its tip"
     );
 }
@@ -124,34 +129,59 @@ fn a_branch_with_nothing_to_count_against_asks_where_it_goes() {
         ],
         &[],
     );
-    let fresh = at.branch_push("fresh", "origin");
+    let fresh = row(&at, "fresh");
     assert_eq!(fresh.standing, PushStanding::Publish);
-    assert_eq!((fresh.upstream.as_str(), fresh.lease), ("", None));
-    let pruned = at.branch_push("pruned", "origin");
+    assert_eq!((fresh.upstream, fresh.lease), (None, None));
+    let pruned = row(&at, "pruned");
     assert_eq!(pruned.standing, PushStanding::Publish);
     assert_eq!(
-        pruned.upstream, "origin/gone",
+        pruned.upstream.as_deref(),
+        Some("origin/gone"),
         "the question opens where the branch already points"
     );
     assert_eq!(
-        at.branch_push("nowhere", "origin"),
-        BranchPushFacts::default(),
+        row(&at, "nowhere"),
+        PushFacts::default(),
         "no such branch, nothing to send"
     );
 }
 
 /// The branch HEAD is on is the toolbar's to push, off the status tick: the
-/// snapshot keeps none of its marks or counts, so it answers nothing.
+/// snapshot keeps none of its marks or counts, so it answers nothing — HEAD
+/// on it as this listing has it, or as the tree does, a listing behind a
+/// switch holding the old branch's place.
 #[test]
 fn the_branch_head_is_on_answers_nothing_here() {
     let at = snapshot(
-        vec![BranchItem {
-            is_head: true,
-            ..tracking("main", "origin/main", 2, 0)
-        }],
-        &[("origin/main", b'a')],
+        vec![
+            BranchItem {
+                is_head: true,
+                ..tracking("main", "origin/main", 2, 0)
+            },
+            tracking("topic", "origin/topic", 1, 0),
+        ],
+        &[("origin/main", b'a'), ("origin/topic", b'b')],
     );
-    assert_eq!(at.branch_push("main", "origin"), BranchPushFacts::default());
+    assert_eq!(row(&at, "main"), PushFacts::default());
+    assert_eq!(
+        at.branch_push("topic", "origin", true, &TreeStanding::on("topic")),
+        PushFacts::default(),
+        "the tree is on it, the listing not yet"
+    );
+    assert_eq!(row(&at, "topic").standing, PushStanding::Ready);
+}
+
+/// A tab that is not open sends nothing from a row either: the row has no
+/// seat ([`PushStanding::offered`]).
+#[test]
+fn a_row_on_a_tab_that_is_not_open_stands_closed() {
+    let at = snapshot(
+        vec![tracking("topic", "origin/topic", 1, 0)],
+        &[("origin/topic", b'b')],
+    );
+    let closed = at.branch_push("topic", "origin", false, &TreeStanding::on("main"));
+    assert_eq!(closed.standing, PushStanding::Closed);
+    assert!(!closed.standing.offered());
 }
 
 /// `short` measured against the branch here called `upstream`, `ahead` of
@@ -183,16 +213,20 @@ fn a_branch_measured_against_one_here_sends_only_once_that_one_is_gone() {
         &[("origin/deleted", b'd')],
     );
     assert_eq!(
-        at.branch_push("topic", "origin"),
-        BranchPushFacts {
+        row(&at, "topic"),
+        PushFacts {
             standing: PushStanding::StaysHere,
-            ..BranchPushFacts::default()
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 0
+            },
+            ..PushFacts::default()
         }
     );
-    let orphan = at.branch_push("orphan", "origin");
+    let orphan = row(&at, "orphan");
     assert_eq!(
-        (orphan.standing, orphan.upstream.as_str(), orphan.lease),
-        (PushStanding::Publish, "", None),
+        (orphan.standing, orphan.upstream, orphan.lease),
+        (PushStanding::Publish, None, None),
         "not origin's `deleted`, which only shares the name"
     );
 }
@@ -207,10 +241,10 @@ fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
         &[],
     );
     at.marks.branch_push_remotes = vec![marked("topic", "origin")];
-    let own = at.branch_push("topic", "origin");
+    let own = row(&at, "topic");
     assert_eq!(
-        (own.standing, own.target.as_str()),
-        (PushStanding::Elsewhere, "origin/topic"),
+        (own.standing, own.target.as_deref()),
+        (PushStanding::Elsewhere, Some("origin/topic")),
         "the branch's own mark"
     );
 
@@ -219,10 +253,10 @@ fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
         remote: "fork".to_string(),
         local: true,
     });
-    let repository = at.branch_push("topic", "origin");
+    let repository = row(&at, "topic");
     assert_eq!(
-        (repository.standing, repository.target.as_str()),
-        (PushStanding::Elsewhere, "fork/topic"),
+        (repository.standing, repository.target.as_deref()),
+        (PushStanding::Elsewhere, Some("fork/topic")),
         "the repository's mark"
     );
 }
@@ -250,19 +284,20 @@ fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
         },
     )];
     assert_eq!(
-        at.branch_push("topic", "origin"),
-        BranchPushFacts {
+        row(&at, "topic"),
+        PushFacts {
             standing: PushStanding::Clean,
-            target: "origin/topic".to_string(),
+            target: Some("origin/topic".to_string()),
+            counts: crate::AheadBehind::default(),
             lease: Some(oid(b'f')),
-            upstream: String::new(),
+            upstream: None,
         },
         "level with origin/topic: nothing to send, however far ahead of the branch here"
     );
 
     at.marks.branch_push_remotes.clear();
     assert_eq!(
-        at.branch_push("topic", "origin").standing,
+        row(&at, "topic").standing,
         PushStanding::StaysHere,
         "unmarked, it does not go to origin for its upstream's name"
     );
@@ -302,23 +337,27 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         },
     )];
     assert_eq!(
-        at.branch_push("counted", "origin"),
-        BranchPushFacts {
+        row(&at, "counted"),
+        PushFacts {
             standing: PushStanding::Diverged,
-            target: "fork/counted".to_string(),
+            target: Some("fork/counted".to_string()),
+            counts: crate::AheadBehind {
+                ahead: 1,
+                behind: 2
+            },
             lease: Some(oid(b'e')),
-            upstream: "origin/counted".to_string(),
+            upstream: Some("origin/counted".to_string()),
         },
         "ready against the upstream, diverged where the push goes, leased to the tip there"
     );
-    let unfetched = at.branch_push("unfetched", "origin");
+    let unfetched = row(&at, "unfetched");
     assert_eq!(unfetched.standing, PushStanding::Elsewhere);
     assert_eq!(
-        (unfetched.target.as_str(), unfetched.lease),
-        ("fork/unfetched", None)
+        (unfetched.target.as_deref(), unfetched.lease),
+        (Some("fork/unfetched"), None)
     );
     assert_eq!(
-        at.branch_push("home", "origin").standing,
+        row(&at, "home").standing,
         PushStanding::Ready,
         "a mark on the upstream's own remote leaves the upstream's counts speaking"
     );
@@ -329,7 +368,7 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         local: true,
     });
     assert_eq!(
-        at.branch_push("home", "origin").standing,
+        row(&at, "home").standing,
         PushStanding::Elsewhere,
         "the repository's mark sends every branch there"
     );
@@ -356,10 +395,10 @@ fn counts_ahead_of_their_row_stand_with_nothing_to_lease_to() {
             },
         },
     )];
-    let facts = at.branch_push("counted", "origin");
+    let facts = row(&at, "counted");
     assert_eq!(
-        (facts.standing, facts.target.as_str(), facts.lease),
-        (PushStanding::Diverged, "fork/counted", None)
+        (facts.standing, facts.target.as_deref(), facts.lease),
+        (PushStanding::Diverged, Some("fork/counted"), None)
     );
 }
 
@@ -385,12 +424,13 @@ fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
         },
     )];
     assert_eq!(
-        at.branch_push("counted", "origin"),
-        BranchPushFacts {
+        row(&at, "counted"),
+        PushFacts {
             standing: PushStanding::Elsewhere,
-            target: "mirror/counted".to_string(),
+            target: Some("mirror/counted".to_string()),
+            counts: crate::AheadBehind::default(),
             lease: None,
-            upstream: "origin/counted".to_string(),
+            upstream: Some("origin/counted".to_string()),
         },
         "not an overwrite of mirror leased to fork's tip"
     );

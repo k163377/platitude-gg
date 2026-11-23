@@ -97,18 +97,28 @@ Item {
             "push": all.push
         }, again === undefined ? "" : again)
     }
-    /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts —
-    /// `sendsPlain` / `overwrites` as core answers them for that state (`remote::PushStanding::sends_plain` /
-    /// `overwrites`).
+    /// What a press does in each standing and whether the row keeps a seat, as core answers them — data, the
+    /// answers `remote::standing::tests::each_standing_takes_a_plain_press_the_overwrite_or_none` pins.
+    readonly property var takes: ({
+        "closed": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": false },
+        "publish": { "sendsPlain": true, "asks": true, "overwrites": false, "offered": true },
+        "stays-here": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": true },
+        "elsewhere": { "sendsPlain": true, "asks": false, "overwrites": false, "offered": true },
+        "ready": { "sendsPlain": true, "asks": false, "overwrites": false, "offered": true },
+        "clean": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": true },
+        "behind": { "sendsPlain": false, "asks": false, "overwrites": true, "offered": true },
+        "diverged": { "sendsPlain": false, "asks": false, "overwrites": true, "offered": true }
+    })
+    /// A push row's answer in `state` (`encode::PushRecord`), going to `origin/feature/topic-a` and leased to
+    /// `fed789` where it counts.
     function pushing(state) {
-        return { "state": state, "sendsPlain": ["publish", "elsewhere", "ready"].includes(state),
-                 "overwrites": state === "behind" || state === "diverged",
-                 "target": "origin/feature/topic-a", "lease": "fed789", "upstream": "origin/feature/topic-a" }
+        return Object.assign({ "state": state, "target": "origin/feature/topic-a", "lease": "fed789",
+                               "upstream": "origin/feature/topic-a", "ahead": 0, "behind": 0 }, root.takes[state])
     }
     /// …and where the push would stay in this repository (`stays-here` — measured against another branch here and
-    /// marked to no remote, or marked to `.`): that alone, every other field empty.
-    readonly property var pushingHere: ({ "state": "stays-here", "sendsPlain": false, "overwrites": false,
-                                          "target": "", "lease": "", "upstream": "" })
+    /// marked to no remote, or marked to `.`): nowhere named, nothing leased.
+    readonly property var pushingHere: Object.assign(root.pushing("stays-here"),
+                                                     { "target": "", "lease": "", "upstream": "" })
     /// git turns the plain delete of `name` down, handed to the card as the carrying menu hands it: cleared as the
     /// delete is asked, then the name (`RepoTab.branchDeleteRefused`), so each refusal is an edge of its own.
     function refuse(name) {
@@ -119,7 +129,7 @@ Item {
     /// Every write of the push row's answer (`test_standing_again_writes_the_push_answer_once`).
     SignalSpy {
         id: pushSeen
-        target: branchCard.state
+        target: branchCard
         signalName: "pushStateChanged"
     }
 
@@ -333,15 +343,13 @@ Item {
             compare(pushRow.holdTone, Theme.warning, "an overwrite reaches past this machine")
         }
 
-        /// Nothing to name, or a door of its own: no seat (デザイン規約 §メニュー).
+        /// Nothing to name, or a door of its own: no seat (デザイン規約 §メニュー). Where is core's answer
+        /// (`remote::PushStanding::offered`): the branch the tree is on — the toolbar's button —, and a tab that is not
+        /// open, stand closed (`RefsSnapshot::branch_push`).
         function test_the_push_row_has_no_seat_where_it_could_do_nothing_here_data() {
             return [
                 { tag: "no answer read", fields: {} },
-                { tag: "the branch the tree is on: the toolbar's button",
-                  fields: { offers: root.current, push: root.pushing("ready") } },
-                { tag: "the branch the tree is on, against one here: still the toolbar's",
-                  fields: { offers: root.current, push: root.pushingHere } },
-                { tag: "a closed tab", fields: { open: false, push: root.pushing("ready") } },
+                { tag: "core gives it none", fields: { push: root.pushing("closed") } },
                 { tag: "a remote-tracking row sends nothing",
                   fields: { kind: "remote", name: "origin/main", full: "origin/main", remoteCounterpart: "",
                             offers: ["delete"], push: root.pushing("ready") } },
@@ -381,25 +389,27 @@ Item {
             compare(pushRow.blockedReason, "Nothing to push — origin/feature/topic-a is up to date")
         }
 
-        /// Whether a press reaches is core's answer, the toolbar's (`remote::PushStanding::sends_plain` /
-        /// `overwrites`), not a table of the words here: the word picks only what the row says. Off core's answer, a
-        /// word whose press reaches nowhere has no seat, and a `clean` one whose plain press sends stands in.
+        /// Whether the row has a seat and what a press does are core's answers, the toolbar's
+        /// (`remote::PushStanding::offered` / `sends_plain` / `asks`), not a table of the words here: the word picks
+        /// only what the row says.
         function test_the_push_row_presses_where_core_says_a_press_reaches_data() {
             return [
-                { tag: "ready, core sending nothing", state: "ready", sendsPlain: false, offered: false },
-                { tag: "elsewhere, core sending nothing", state: "elsewhere", sendsPlain: false, offered: false },
-                { tag: "clean, core sending it", state: "clean", sendsPlain: true, offered: true },
+                { tag: "ready, core giving it no seat", state: "ready", core: { "offered": false }, offered: false },
+                { tag: "clean, core sending it", state: "clean", core: { "sendsPlain": true }, offered: true,
+                  asked: "push feature/topic-a  " },
+                { tag: "publish, core sending it without asking", state: "publish", core: { "asks": false },
+                  offered: true, asked: "push feature/topic-a  " },
             ]
         }
 
         function test_the_push_row_presses_where_core_says_a_press_reaches(data) {
-            root.standOn({ push: Object.assign(root.pushing(data.state), { "sendsPlain": data.sendsPlain }) })
+            root.standOn({ push: Object.assign(root.pushing(data.state), data.core) })
             compare(pushRow.offered, data.offered)
             compare(pushRow.blockedReason, "")
             if (!data.offered)
                 return
             pushRow.triggered()
-            compare(root.asked, "push feature/topic-a  ", "a plain push, nothing leased")
+            compare(root.asked, data.asked, "a plain push, nothing leased")
         }
 
         function test_the_push_row_asks_for_the_push_its_form_says() {
@@ -519,7 +529,7 @@ Item {
             root.standOn({ push: root.pushing("diverged") })
             level.holdShape()
             root.standOn({ push: moved }, "follow")
-            compare(branchCard.state.pushLease, "fed789", "the lease stays the commit the menu showed")
+            compare(branchCard.state.push.lease, "fed789", "the lease stays the commit the menu showed")
             verify(pushRow.withdrawn, "the push greys where it stands")
             compare(pushRow.blockedWhy, pushRow.withdrawnWhy)
             root.standOn({ push: root.pushing("diverged") }, "follow")
@@ -530,19 +540,31 @@ Item {
             level.holdShape()
             root.standOn({ push: moved }, "follow")
             verify(pushRow.withdrawn, "a plain push that would now overwrite is the far side moving too")
-            compare(branchCard.state.pushState, "ready", "and the row keeps what it showed")
+            compare(branchCard.pushState, "ready", "and the row keeps what it showed")
 
             level.releaseShape()
             root.standOn({ push: root.pushing("clean") })
             level.holdShape()
             root.standOn({ push: root.pushing("ready") }, "follow", "abc999")
             verify(!pushRow.withdrawn, "a commit made here leaves the far side where it was")
-            compare(branchCard.state.pushState, "ready")
+            compare(branchCard.pushState, "ready")
 
             level.releaseShape()
             root.standOn({ push: moved })
-            compare(branchCard.state.pushLease, "fed999", "a menu raised afresh leases where it is now")
+            compare(branchCard.state.push.lease, "fed999", "a menu raised afresh leases where it is now")
             verify(pushRow.offered)
+        }
+
+        /// A push that would stay here keeps what it showed too: standing again where the row has no seat — the tab
+        /// closed, or the tree on that branch — under a hand on the menu, it greys in its own words rather than
+        /// blanking them (デザイン規約 §メニュー「表示も押下も開いた時」), as a row leased to a far side does.
+        function test_standing_again_keeps_a_push_that_would_stay_here_in_its_words() {
+            root.standOn({ push: root.pushingHere })
+            level.holdShape()
+            root.standOn({ push: root.pushing("closed") }, "follow")
+            verify(pushRow.withdrawn)
+            compare(pushRow.text, "to…")
+            compare(pushRow.blockedWhy, pushRow.withdrawnWhy)
         }
 
         /// The remote rows stay on the reading the menu went up with: the branch's upstream pointed elsewhere outside
@@ -638,7 +660,7 @@ Item {
             root.standOn({ remoteCounterpartOid: "999fed", push: moved }, "wait")
             compare(branchCard.state.remoteCounterpartOid, "def456", "the reading's lease holds")
             verify(remoteDeleteRow.withdrawn, "the remote delete greys")
-            compare(branchCard.state.pushLease, "fed789", "the push's lease holds")
+            compare(branchCard.state.push.lease, "fed789", "the push's lease holds")
             verify(pushRow.withdrawn, "the push greys")
 
             level.releaseShape()

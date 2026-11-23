@@ -36,6 +36,7 @@ impl NavSectionModel {
                             .is_some_and(|last| Arc::ptr_eq(last, &snapshot));
                         if fresh {
                             moved = true;
+                            self.refs_revision = self.refs_revision.wrapping_add(1);
                             self.last_refs = Some(Arc::clone(&snapshot));
                             arrived |= self.take(match self.section.as_str() {
                                 "branches" => Source::Locals(snapshot),

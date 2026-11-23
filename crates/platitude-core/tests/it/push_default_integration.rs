@@ -20,8 +20,9 @@ use std::path::Path;
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
 use crate::support::oid;
+use crate::support::push::{row_in, toolbar, toolbar_from};
 use crate::support::remote::far;
-use crate::support::session::{CaptureSink, opened, poll_landed, write_answer};
+use crate::support::session::{CaptureSink, opened, poll_landed, write_answer, write_settled};
 use platitude_core::GitError;
 use platitude_core::process::GitExecutor;
 use platitude_core::remote::{self, PushForce};
@@ -238,27 +239,6 @@ async fn track_of(
         .expect("an answer")
 }
 
-/// The standing the toolbar reads, off what the status tick reads.
-async fn standing_of(
-    repo: &Path,
-    exec: &GitExecutor,
-    cancel: &CancellationToken,
-) -> remote::PushStanding {
-    let status = platitude_core::status::load(exec, repo, cancel)
-        .await
-        .expect("status");
-    let marks = remote::push_marks(exec, repo, "main", cancel)
-        .await
-        .expect("marks");
-    let track = track_of(repo, exec, cancel).await;
-    let carried = marks.status_push();
-    let route = carried.route(
-        status.upstream.as_deref().unwrap_or_default(),
-        ["fork", "origin"],
-    );
-    remote::push_standing(route, status.upstream_counts, track.as_ref())
-}
-
 /// The toolbar's held overwrite, leased to `expect`.
 async fn push_leased(
     repo: &Path,
@@ -278,7 +258,7 @@ async fn push_leased(
 /// The push goes to the fork, and git refuses it by the fork's `main`, not
 /// by the upstream: counted against origin the branch is only ahead, so a
 /// plain push looks like it fits and is turned down.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
     let (_origin, fork, mut repo) = fork_diverged();
     let (exec, cancel) = env();
@@ -308,9 +288,17 @@ async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
             },
         })
     );
+    let (sink, session) = opened(&repo).await;
+    let toolbar = toolbar_from(&sink, 0, "main").await;
+    session.close_and_wait().await;
+    let destination_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
     assert_eq!(
-        standing_of(&repo.path, &exec, &cancel).await,
-        remote::PushStanding::Diverged
+        (toolbar.standing, toolbar.lease.map(|oid| oid.to_hex())),
+        (
+            remote::PushStanding::Diverged,
+            Some(destination_tip.trim().to_string())
+        ),
+        "the toolbar leases to the fork's own tip, as it shows it"
     );
 
     let plain = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
@@ -326,7 +314,6 @@ async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
     push_leased(&repo.path, &exec, &upstream_tip, &cancel)
         .await
         .expect_err("a lease on the upstream's tip is stale over there");
-    let destination_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
     push_leased(&repo.path, &exec, &destination_tip, &cancel)
         .await
         .expect("a lease on the fork's own tip lands");
@@ -445,29 +432,21 @@ async fn counts_fetched_under_another_name_still_speak_for_the_marked_remote() {
             .map(|track| (track.remote.as_str(), track.tracking.as_str())),
         Some(("fork", "copy/main"))
     );
-    let status = platitude_core::status::load(&exec, &repo.path, &cancel)
-        .await
-        .expect("status");
-    let head = remote::HeadPush {
-        branch: "main".to_string(),
-        settled: true,
-        upstream: status.upstream.clone().unwrap_or_default(),
-        upstream_counts: status.upstream_counts,
-        status: remote::StatusPush {
-            push_default: Some("fork".to_string()),
-            track,
-            ..remote::StatusPush::default()
-        },
-        ..remote::HeadPush::default()
-    };
-    let facts = head.facts(["fork", "origin"], "origin");
+    let copy_tip = repo.git(&["rev-parse", "refs/remotes/copy/main"]);
+    let (sink, session) = opened(&repo).await;
+    let facts = toolbar_from(&sink, 0, "main").await;
+    session.close_and_wait().await;
     assert_eq!(
         (
             facts.standing,
-            facts.target.as_str(),
-            facts.measured.as_str()
+            facts.target.as_deref(),
+            facts.lease.map(|oid| oid.to_hex())
         ),
-        (remote::PushStanding::Diverged, "fork/main", "copy/main")
+        (
+            remote::PushStanding::Diverged,
+            Some("fork/main"),
+            Some(copy_tip.trim().to_string())
+        )
     );
 
     repo.git(&["switch", "-c", "aside"]);
@@ -475,52 +454,74 @@ async fn counts_fetched_under_another_name_still_speak_for_the_marked_remote() {
     let row = sink
         .wait_for("main's row off the refs", |evs| {
             evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => {
-                    Some(snapshot.branch_push("main", "origin"))
-                }
+                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "main")),
                 _ => None,
             })
         })
         .await;
-    let copy_tip = repo.git(&["rev-parse", "refs/remotes/copy/main"]);
     assert_eq!(
         (
             row.standing,
-            row.target.as_str(),
+            row.target.as_deref(),
             row.lease.map(|oid| oid.to_hex())
         ),
         (
             remote::PushStanding::Diverged,
-            "fork/main",
+            Some("fork/main"),
             Some(copy_tip.trim().to_string())
         )
     );
     session.close_and_wait().await;
 }
 
-/// The toolbar's answer — standing and destination — held as the app holds
-/// it: the last status beside the last refs snapshot, which gives the
-/// remotes' names.
-fn toolbar(
-    status: &platitude_core::status::WorktreeStatus,
-    push: &remote::StatusPush,
-    snapshot: &platitude_core::session::RefsSnapshot,
-) -> (remote::PushStanding, String) {
-    let head = remote::HeadPush {
-        branch: status.branch_head.clone().unwrap_or_default(),
-        settled: true,
-        upstream: status.upstream.clone().unwrap_or_default(),
-        upstream_counts: status.upstream_counts,
-        status: push.clone(),
-        ..remote::HeadPush::default()
-    };
-    let facts = head.facts(snapshot.remote_names.iter().map(String::as_str), "origin");
-    (facts.standing, facts.target)
+/// The repository's mark as the toolbar weighs it: whole, as the status
+/// read it — `.` and a name no remote has alike —, the way the send reads
+/// it, never as if unmarked (`RepoTab.pushDefault` drops both, for the
+/// remote the repository calls origin). Marked to `.`, the push stays here
+/// and the send refuses; marked to a name no remote has, the push goes
+/// there under the branch's own name, and so does the send.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_toolbar_weighs_the_repositorys_mark_as_the_send_does() {
+    let (_origin, _fork, mut repo) = origin_fork_and_clone();
+    repo.commit_file("b.txt", "two\n", "ours");
+    repo.git(&["config", "remote.pushDefault", "."]);
+    let (exec, cancel) = env();
+    let (sink, session) = opened(&repo).await;
+    let here = toolbar_from(&sink, 0, "main").await;
+    assert_eq!(
+        (here.standing, here.target),
+        (remote::PushStanding::StaysHere, None)
+    );
+    let sent = session
+        .push_current("origin".into(), PushForce::None)
+        .expect("the write is accepted");
+    let refused = write_answer(&sink, sent).await;
+    assert!(
+        refused
+            .as_deref()
+            .is_some_and(|said| said.contains("this repository")),
+        "the send: {refused:?}"
+    );
+    write_settled(&sink, sent).await;
+
+    repo.git(&["config", "remote.pushDefault", "gone"]);
+    let from = sink.events.lock().unwrap().len();
+    poll_landed(&session).await;
+    let gone = toolbar_from(&sink, from, "main").await;
+    session.close_and_wait().await;
+    assert_eq!(
+        (gone.standing, gone.target.as_deref()),
+        (remote::PushStanding::Elsewhere, Some("gone/main"))
+    );
+    let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
+        .await
+        .expect("a plan");
+    assert_eq!(plan.target, far("gone", "main"), "where the send goes");
 }
 
 /// Every answer the toolbar passes through from event `from` on, the one
 /// it held there first, each once in a row.
-fn toolbar_passes(sink: &CaptureSink, from: usize) -> Vec<(remote::PushStanding, String)> {
+fn toolbar_passes(sink: &CaptureSink, from: usize) -> Vec<(remote::PushStanding, Option<String>)> {
     type Held<'a> = (
         Option<(
             &'a platitude_core::status::WorktreeStatus,
@@ -528,9 +529,10 @@ fn toolbar_passes(sink: &CaptureSink, from: usize) -> Vec<(remote::PushStanding,
         )>,
         Option<&'a platitude_core::session::RefsSnapshot>,
     );
-    fn note(held: Held<'_>, passes: &mut Vec<(remote::PushStanding, String)>) {
+    fn note(held: Held<'_>, passes: &mut Vec<(remote::PushStanding, Option<String>)>) {
         if let (Some((status, push)), Some(snapshot)) = held {
-            let answer = toolbar(status, push, snapshot);
+            let facts = toolbar(status, push, snapshot);
+            let answer = (facts.standing, facts.target);
             if passes.last() != Some(&answer) {
                 passes.push(answer);
             }
@@ -592,8 +594,11 @@ async fn a_mark_moved_outside_reaches_the_toolbar_whole() {
     let (sink, session) = opened(&repo).await;
     sink.opening_settled(&session).await;
     poll_landed(&session).await;
-    let diverged = (remote::PushStanding::Diverged, "fork/main".to_string());
-    let ready = (remote::PushStanding::Ready, "origin/main".to_string());
+    let diverged = (
+        remote::PushStanding::Diverged,
+        Some("fork/main".to_string()),
+    );
+    let ready = (remote::PushStanding::Ready, Some("origin/main".to_string()));
 
     let from = sink.events.lock().unwrap().len();
     repo.git(&["config", "--unset", "remote.pushDefault"]);
@@ -626,9 +631,7 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
     let facts = sink
         .wait_for("main's counts where its mark sends it", |evs| {
             evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => {
-                    Some(snapshot.branch_push("main", "origin"))
-                }
+                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "main")),
                 _ => None,
             })
         })
@@ -637,12 +640,12 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
     assert_eq!(
         (
             facts.standing,
-            facts.target.as_str(),
+            facts.target.as_deref(),
             facts.lease.map(|oid| oid.to_hex()),
         ),
         (
             remote::PushStanding::Diverged,
-            "fork/main",
+            Some("fork/main"),
             Some(fork_tip.trim().to_string()),
         ),
         "only ahead of the upstream, diverged from where the push goes, leased to its tip there"
@@ -695,9 +698,7 @@ async fn a_branch_measured_against_one_here_goes_where_its_mark_says() {
     let facts = sink
         .wait_for("stacked's counts where its mark sends it", |evs| {
             evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => {
-                    Some(snapshot.branch_push("stacked", "origin"))
-                }
+                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "stacked")),
                 _ => None,
             })
         })
@@ -706,12 +707,12 @@ async fn a_branch_measured_against_one_here_goes_where_its_mark_says() {
     assert_eq!(
         (
             facts.standing,
-            facts.target.as_str(),
+            facts.target.as_deref(),
             facts.lease.map(|oid| oid.to_hex()),
         ),
         (
             remote::PushStanding::Ready,
-            "fork/stacked",
+            Some("fork/stacked"),
             Some(fork_tip.trim().to_string()),
         ),
         "ahead of where the push goes, leased to its tip there"
@@ -777,7 +778,7 @@ async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
                 SessionEvent::RefsLoaded { snapshot, .. }
                     if snapshot.local_named(branch).is_some() =>
                 {
-                    Some(snapshot.branch_push("main", "origin"))
+                    Some(row_in(snapshot, "main"))
                 }
                 _ => None,
             })
@@ -916,7 +917,7 @@ async fn the_refs_read_counts_only_the_branches_a_mark_sends_elsewhere() {
                         .as_ref()
                         .is_some_and(|mark| mark.remote == marked) =>
                 {
-                    Some(snapshot.branch_push("main", "origin"))
+                    Some(row_in(snapshot, "main"))
                 }
                 _ => None,
             })
@@ -1002,7 +1003,7 @@ mod periodic {
 
     /// The branch's own mark sends it the same way, and git resolves the same
     /// destination for it.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore = "git's %(push) resolving branch.<name>.pushRemote: not worth the pre-merge run"]
     async fn a_branchs_own_mark_is_counted_against_the_same_ref() {
         let (_origin, _fork, mut repo) = fork_diverged();
@@ -1017,15 +1018,17 @@ mod periodic {
                 .as_deref(),
             Some("fork/main")
         );
+        let (sink, session) = opened(&repo).await;
         assert_eq!(
-            standing_of(&repo.path, &exec, &cancel).await,
+            toolbar_from(&sink, 0, "main").await.standing,
             remote::PushStanding::Diverged
         );
+        session.close_and_wait().await;
     }
 
     /// Where nothing here tracks the branch over there, no count speaks and
     /// the push stays plain.
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore = "what git's %(push) fields print for a ref nothing tracks: not worth the pre-merge run"]
     async fn a_destination_nothing_here_tracks_has_no_counts() {
         let (_origin, _fork, mut repo) = fork_diverged();
@@ -1051,9 +1054,11 @@ mod periodic {
         // No fetch refspec: `%(push)` has nothing to name.
         repo.git(&["config", "--unset-all", "remote.fork.fetch"]);
         assert_eq!(track_of(&repo.path, &exec, &cancel).await, None);
+        let (sink, session) = opened(&repo).await;
         assert_eq!(
-            standing_of(&repo.path, &exec, &cancel).await,
+            toolbar_from(&sink, 0, "main").await.standing,
             remote::PushStanding::Elsewhere
         );
+        session.close_and_wait().await;
     }
 }

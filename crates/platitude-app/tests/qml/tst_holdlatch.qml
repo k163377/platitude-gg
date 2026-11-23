@@ -51,16 +51,15 @@ Item {
     component Tab: QtObject {
         id: tab
         property int tab_id: 0
-        property string pushTargetLabel: ""
+        /// Where the push goes (`pushFacts.target`).
+        property string target: ""
         /// The branch the worktree is on — what a push actually sends.
         property string branch: ""
         property int sent: 0
         /// Which branch went, read back the way the page would send it.
         property string sentBranch: ""
-        property string pushState: "behind"
-        property bool pushOverwrites: true
-        property int pushBehind: 1
-        property int pushAhead: 0
+        property var pushFacts: ({ "state": "behind", "overwrites": true, "target": tab.target, "ahead": 0,
+                                   "behind": 1 })
         property bool pushFailed: false
         property bool planShown: false
         property bool canPush: false
@@ -73,8 +72,8 @@ Item {
         function forcePush() { tab.sent++; tab.sentBranch = tab.branch }
         function pushNow() { tab.sent++; tab.sentBranch = tab.branch }
     }
-    readonly property Tab here: Tab { tab_id: 1; branch: "main"; pushTargetLabel: "origin/main" }
-    readonly property Tab there: Tab { tab_id: 2; branch: "release"; pushTargetLabel: "origin/release" }
+    readonly property Tab here: Tab { tab_id: 1; branch: "main"; target: "origin/main" }
+    readonly property Tab there: Tab { tab_id: 2; branch: "release"; target: "origin/release" }
 
     BandPushButton {
         id: band

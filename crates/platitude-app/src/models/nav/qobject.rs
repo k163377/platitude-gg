@@ -22,6 +22,7 @@ impl NavSectionModel {
     qproperty!("headUnderRow", Member = head_under_row, Notify = changed);
     qproperty!("headDepth", Member = head_depth, Notify = changed);
     qproperty!("refsLoaded", Member = refs_loaded, Notify = changed);
+    qproperty!("refsRevision", Member = refs_revision, Notify = refs_moved);
     qproperty!("carriedAt", Member = carried_at, Notify = changed);
     qproperty!("carriedName", Member = carried_name, Notify = changed);
     qproperty!("homeBranch", Member = home_branch, Notify = changed);
@@ -640,14 +641,38 @@ impl NavSectionModel {
     }
 
     /// What a menu's `push` row on this branch stands on, read as the menu
-    /// opens (`RefsSnapshot::branch_push`): the toolbar's table for a
-    /// branch the worktree is not on, where the push goes and what an
-    /// overwrite is leased to. `fallback` is where a branch marked nowhere
+    /// opens and as it stands again (`RefsSnapshot::branch_push`): the
+    /// toolbar's reading for a branch the worktree is not on — `tree` is
+    /// where it stands, handed on as `GitFacts.refMenuOffers` takes it —
+    /// on a tab that is `open`. `fallback` is where a branch marked nowhere
     /// and tracking nothing goes (`RepoTab.defaultRemote`). Asked of the
     /// branches section.
     #[qslot]
-    pub(super) fn branch_push(&self, name: String, fallback: String) -> One<BranchPush> {
-        One::new(self.all.branch_push(&name, &fallback))
+    pub(super) fn branch_push(
+        &self,
+        name: String,
+        fallback: String,
+        open: bool,
+        tree: crate::encode::Standing,
+    ) -> One<crate::encode::PushRecord> {
+        One::new(self.all.branch_push(&name, &fallback, open, &tree))
+    }
+
+    /// What the toolbar's push stands on (`RefsSnapshot::head_push`): the
+    /// push of the branch HEAD is on — the model's own record handed on as
+    /// it was read (`WorktreeModel.headPush`; QML builds none) — read
+    /// against this section's snapshot, the remotes' names and the commit
+    /// an overwrite leases to as the remote branches list it: the hand a
+    /// branch's row leases by too (`branchPush`). A binding that asks
+    /// follows `refsRevision`. Asked of the remotes section.
+    #[qslot]
+    pub(super) fn head_push(
+        &self,
+        head: crate::encode::Push,
+        open: bool,
+        fallback: String,
+    ) -> One<crate::encode::PushRecord> {
+        One::new(self.all.head_push(&head, &fallback, open))
     }
 
     /// The one remote a chip of this tag at `oid` (hex) draws the reading

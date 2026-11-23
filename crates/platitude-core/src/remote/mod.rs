@@ -48,10 +48,7 @@ pub use self::push::{
     PushForce, PushSpec, plan_current_push, plan_push, publish_spec, push, push_track, push_tracks,
 };
 pub use self::route::{Marked, PushRoute, Upstream};
-pub use self::standing::{
-    HeadPush, HeadPushFacts, PushReading, PushStanding, PushTrack, StatusPush, push_reading,
-    push_standing,
-};
+pub use self::standing::{HeadBranch, HeadPush, PushFacts, PushStanding, PushTrack, StatusPush};
 pub use self::tags::{
     AdvertisedTag, HeldTag, RemoteTag, RemoteTagRef, delete_remote_tag, list_tags,
     parse_ls_remote_tags, push_tag, replace_remote_tag,

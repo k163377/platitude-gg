@@ -12,7 +12,10 @@ ActionButton {
     property var curPage: null
     /// The waiting visual, held up by the band past the push that raised it (`TopBar.holdPushBusy`).
     property bool busyLatched: false
-    readonly property string mode: pushButton.curPage !== null ? pushButton.curPage.pushState : "closed"
+    /// What the push stands on, whole (`RepoPage.pushFacts`); null while no tab is open.
+    readonly property var facts: pushButton.curPage !== null ? pushButton.curPage.pushFacts : null
+    /// The standing's word, which only the words below branch on.
+    readonly property string mode: pushButton.facts !== null ? pushButton.facts.state : "closed"
     /// The last push of this branch was refused (remembered per branch: `PublishFlow.pushFails`). Over any standing,
     /// a `warning` frame and a `!` past the word: the frame too, since nothing happens until someone presses again.
     /// The word stays — a refused push is still one click, and `push -f`'s warning colour would borrow the hold's look
@@ -20,11 +23,11 @@ ActionButton {
     /// `Resume`, nothing pushes by itself, so nothing stopped and there is no new move to offer.
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
     /// Where an overwrite is the only send there is — which standings those are is core's
-    /// (`remote::PushStanding::overwrites`, `RepoPage.pushOverwrites`). There the button takes the hold and a click does
+    /// (`remote::PushStanding::overwrites`, `pushFacts.overwrites`). There the button takes the hold and a click does
     /// nothing, and the hold is the confirmation (no dialog — the lease guards it, §相手の履歴を置き換える). What it costs
     /// is the far side's `behind` commits, said in one sentence for both standings (`sentenceTo`). Out of reach, the way
     /// back from a history sent and then regretted would leave the screen.
-    readonly property bool forceShape: pushButton.curPage !== null && pushButton.curPage.pushOverwrites
+    readonly property bool forceShape: pushButton.facts !== null && pushButton.facts.overwrites
     /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §回数押し): `mode`
     /// moves between presses with the fetch behind every press. Everything the shape decides reads this
     /// (`ActionButton.armedPresses`); a press whose shape went is dropped (`HoldDriver.stale`).
@@ -62,7 +65,7 @@ ActionButton {
     premise: pushButton.curPage === null
              ? ""
              : pushButton.curPage.tab_id + ":" + pushButton.curPage.pageWorktree.branch
-               + ":" + pushButton.curPage.pushTargetLabel
+               + ":" + pushButton.facts.target
     // Down while a rebase plan is composed: it rewrites the very commits a push would send.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
              && (pushButton.curPage.canPush || pushButton.curPage.canForcePush)
@@ -73,7 +76,7 @@ ActionButton {
         // Said though disabled: nothing else on screen says the plan is what holds it down.
         if (pushButton.curPage.planShown)
             return qsTr("A rebase plan is being composed — it rewrites the very commits a push would send")
-        const what = pushButton.sentenceTo(pushButton.curPage.pushTargetLabel)
+        const what = pushButton.sentenceTo(pushButton.facts.target)
         // What git said, under what the button would do next (`failed`).
         const why = pushButton.curPage.pushFailReason
         if (pushButton.failed && why !== "")
@@ -83,13 +86,13 @@ ActionButton {
     /// Where that sentence names the branch it goes to, behind the remote's cloud (デザイン規約 §ref の種別「名前の印」,
     /// `TipAsk.marksNow`).
     readonly property var tipMarks: pushButton.curPage === null || pushButton.curPage.planShown ? []
-        : Words.standSeats(pushButton.sentenceTo(Words.stand), pushButton.curPage.pushTargetLabel)
-              .map(at => [at, "remote", undefined, pushButton.curPage.pushTargetLabel.length])
+        : Words.standSeats(pushButton.sentenceTo(Words.stand), pushButton.facts.target)
+              .map(at => [at, "remote", undefined, pushButton.facts.target.length])
     /// What the button would do next, with `to` where it goes.
     function sentenceTo(to) {
         // The counts the standing read: the destination's own where the push goes elsewhere.
-        const ahead = pushButton.curPage.pushAhead
-        const behind = pushButton.curPage.pushBehind
+        const ahead = pushButton.facts.ahead
+        const behind = pushButton.facts.behind
         // A sentence for each count — `commit(s)` would reach the reader as written (デザイン規約 §タイポグラフィ).
         const what = pushButton.mode === "unborn"
                      ? qsTr("No commits yet — git has no branch to send")

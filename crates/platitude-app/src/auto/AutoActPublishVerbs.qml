@@ -104,7 +104,7 @@ Item {
             // headless. Read in the turn of the press — none of these verbs completes in it, and a later reading meets
             // the push state the question's answer moved on — and kept as the dispatch's witness, which whichever
             // operation completes the run says (`publishLines`).
-            driver.act.witness("publish", "publish state=" + page.pushState
+            driver.act.witness("publish", "publish state=" + page.pushFacts.state
                                           + " remote=" + publishFlow.publishRemote
                                           + " branch=" + publishFlow.publishBranch
                                           + " dialog=" + remoteDialog.visible
@@ -244,13 +244,13 @@ Item {
                 "when": () => ({ "bar": graphPane.askCard.settled }),
                 "report": () => "publish upstream=" + worktree.upstream
                                 + " tracked=" + worktree.headPush.tracked
-                                + " state=" + page.pushState
+                                + " state=" + page.pushFacts.state
                                 + " remote=" + publishFlow.publishRemote
                                 + " branch=" + publishFlow.publishBranch })
         }
     }
     /// _PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
-    /// (`RepoPage.pushTargetLabel` / `pushState`), with the marks that decided it — the label cannot say which one git
+    /// (`RepoPage.pushFacts`: `target` / `state`), with the marks that decided it — the label cannot say which one git
     /// followed. Both marks ride the status (`headPush`), so the barrier is a status about HEAD's branch
     /// (`worktree.countsSettled`): before one every mark reads unset and the push stands closed.
     PageStage {
@@ -263,8 +263,8 @@ Item {
                 "counts": worktree.countsSettled,
                 "open": repoTab.state === "open",
                 "idle": repoTab.busyCount === 0 }),
-            "report": () => "push_target label=" + page.pushTargetLabel
-                            + " state=" + page.pushState
+            "report": () => "push_target label=" + page.pushFacts.target
+                            + " state=" + page.pushFacts.state
                             + " branch_mark=" + worktree.headPush.pushRemote
                             + " repo_mark=" + worktree.headPush.pushDefault
                             + " tracks=" + worktree.upstream })
@@ -294,14 +294,14 @@ Item {
                 return
             }
             // The tip waits out `tipDelayMs` before it stands. The counts the tip says: the destination's own where the
-            // push goes elsewhere (`RepoPage.pushAhead`).
+            // push goes elsewhere (`RepoPage.pushFacts`).
             op.complete({
                 "name": "push_hover_tip",
                 "when": () => ({ "tip": page.pageBand.pushTipStanding }),
                 "report": () => "push_hover tip=" + page.pageBand.pushTipStanding
                                 + " mode=" + page.pageBand.pushMode
-                                + " ahead=" + page.pushAhead
-                                + " behind=" + page.pushBehind })
+                                + " ahead=" + page.pushFacts.ahead
+                                + " behind=" + page.pushFacts.behind })
         }
     }
     /// _PGG_AUTO_ACT=publish-remotes-marked: the first push's destination list with the mark in it. The mark's write is

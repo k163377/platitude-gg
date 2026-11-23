@@ -92,14 +92,14 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Ends("stacked"),
-                "offered=true state= code=push held=false blocked=true tip=true text=to… \
+                "offered=true state=stays-here code=push held=false blocked=true tip=true text=to… \
                  says=Cannot push — its upstream is not supported",
             ),
             // `main` beside the worktree's `topic`, marked to this repository
             // (`--preset localbase-dotmark`): out in the same words as `stacked`.
             (
                 Arg::WithPreset("localbase-dotmark"),
-                "offered=true state= code=push held=false blocked=true tip=true text=to… \
+                "offered=true state=stays-here code=push held=false blocked=true tip=true text=to… \
                  says=Cannot push — its upstream is not supported",
             ),
             // A branch its remote has all of (`--preset github`'s

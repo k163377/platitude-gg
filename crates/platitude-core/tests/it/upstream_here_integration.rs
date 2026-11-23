@@ -16,21 +16,16 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use std::path::Path;
-
 use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::push::{row, toolbar_from};
 use crate::support::remote::{far, origin_and_clone};
-use crate::support::session::{CaptureSink, opened, write_answer};
-use platitude_core::process::GitExecutor;
+use crate::support::session::{opened, poll_landed, write_answer};
 use platitude_core::remote::{self, PushForce, PushStanding, PushTrack};
-use platitude_core::session::{BranchPushFacts, SessionEvent};
-use tokio_util::sync::CancellationToken;
+use platitude_core::session::SessionEvent;
 
 /// A `file://` remote answers instantly; the budget just has to exist.
 const NET: std::time::Duration = remote::DEFAULT_NETWORK_TIMEOUT;
-
-const REMOTES: [&str; 1] = ["origin"];
 
 /// `topic` two commits ahead of the branch here called `origin/base`,
 /// which it tracks, beside origin's own `base`, fetched; origin has
@@ -54,54 +49,6 @@ fn topic_against_a_branch_here() -> (TestRepo, TestRepo) {
     (bare, work)
 }
 
-/// What the toolbar makes of the branch HEAD is on — where its push goes
-/// and how it stands — off what the status tick reads: the status, its
-/// upstream named from the marks as the tick names it, and the
-/// destination's counts where the push goes elsewhere.
-async fn toolbar(
-    repo: &Path,
-    exec: &GitExecutor,
-    cancel: &CancellationToken,
-) -> (String, PushStanding) {
-    let status = platitude_core::status::load(exec, repo, cancel)
-        .await
-        .expect("status");
-    let branch = status.branch_head.clone().expect("a branch");
-    let marks = remote::push_marks(exec, repo, &branch, cancel)
-        .await
-        .expect("marks");
-    let named = match (&status.upstream, marks.upstream_name()) {
-        (Some(_), Some(named)) => named,
-        (Some(git), None) => git.clone(),
-        (None, _) => String::new(),
-    };
-    let carried = marks.status_push();
-    let route = carried.route(&named, REMOTES);
-    let track = if route.goes_elsewhere() {
-        remote::push_track(exec, repo, &branch, cancel)
-            .await
-            .expect("the destination's counts")
-    } else {
-        None
-    };
-    let label = route.target(&branch, "origin").unwrap_or_default();
-    let standing = remote::push_standing(route, status.upstream_counts, track.as_ref());
-    (label, standing)
-}
-
-/// What the last refs snapshot says of `branch`'s row.
-async fn row_of(sink: &CaptureSink, branch: &'static str) -> BranchPushFacts {
-    sink.wait_for("a snapshot listing the branch", move |evs| {
-        evs.iter().rev().find_map(|e| match e {
-            SessionEvent::RefsLoaded { snapshot, .. } if snapshot.local_named(branch).is_some() => {
-                Some(snapshot.branch_push(branch, "origin"))
-            }
-            _ => None,
-        })
-    })
-    .await
-}
-
 /// The commits the far side holds under `topic`, and the branch here.
 fn tips(bare: &mut TestRepo, work: &mut TestRepo) -> (String, String) {
     let path = bare.path.clone();
@@ -114,7 +61,7 @@ fn tips(bare: &mut TestRepo, work: &mut TestRepo) -> (String, String) {
 /// Two ahead of the branch here, level with origin/topic: nothing to
 /// send. One more commit, and the send goes to origin/topic, the upstream
 /// left as it was.
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn the_mark_decides_where_the_branch_goes_and_what_it_is_counted_against() {
     let (mut bare, mut work) = topic_against_a_branch_here();
     let (exec, cancel) = env();
@@ -133,16 +80,22 @@ async fn the_mark_decides_where_the_branch_goes_and_what_it_is_counted_against()
         ),
         "git's short name for the branch here is a remote branch's"
     );
+    let (sink, session) = opened(&work).await;
+    let level = toolbar_from(&sink, 0, "topic").await;
     assert_eq!(
-        toolbar(&work.path, &exec, &cancel).await,
-        ("origin/topic".to_string(), PushStanding::Clean)
+        (level.target.as_deref(), level.standing),
+        (Some("origin/topic"), PushStanding::Clean)
     );
 
     work.commit_file("t.txt", "three\n", "still more topic work");
+    let from = sink.events.lock().unwrap().len();
+    poll_landed(&session).await;
+    let ahead = toolbar_from(&sink, from, "topic").await;
     assert_eq!(
-        toolbar(&work.path, &exec, &cancel).await,
-        ("origin/topic".to_string(), PushStanding::Ready)
+        (ahead.target.as_deref(), ahead.standing),
+        (Some("origin/topic"), PushStanding::Ready)
     );
+    session.close_and_wait().await;
     let plan = remote::plan_current_push(&exec, &work.path, "origin", PushForce::None, &cancel)
         .await
         .expect("a plan");
@@ -173,8 +126,8 @@ async fn the_mark_decides_where_the_branch_goes_and_what_it_is_counted_against()
 /// the name `origin/base`: `git status` shortens that upstream to
 /// `remotes/origin/base`. The tick names it from configuration, as the
 /// send names its destination, so with origin marked the label is the
-/// upstream, its counts are the ones that speak, and the lease's ref is
-/// in the listing.
+/// upstream, its counts are the ones that speak, and the overwrite leases
+/// to its tip as the remote branches list it.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_remote_upstream_is_named_as_the_send_names_it() {
     let (_bare, mut work) = topic_against_a_branch_here();
@@ -211,6 +164,7 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
             })
         })
         .await;
+    let facts = toolbar_from(&sink, 0, "beside").await;
     session.close_and_wait().await;
     let upstream = upstream.expect("an upstream");
     assert_eq!(
@@ -222,19 +176,14 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
         .await
         .expect("a plan");
     assert_eq!(
-        remote::PushRoute::new(
-            remote::Upstream::of(&upstream, false),
-            remote::Marked::Remote("origin"),
-            REMOTES
-        )
-        .target("beside", "origin"),
+        facts.target,
         Some(plan.target.to_string()),
         "the label and the send"
     );
-    assert!(
-        !work
-            .git(&["for-each-ref", "refs/remotes/origin/base"])
-            .is_empty(),
+    let tip = work.git(&["rev-parse", "refs/remotes/origin/base"]);
+    assert_eq!(
+        facts.lease.map(|oid| oid.to_hex()),
+        Some(tip.trim().to_string()),
         "the lease's ref, as the remote branches list it"
     );
 }
@@ -336,14 +285,11 @@ async fn neither_door_sends(
     standing: PushStanding,
     why: &str,
 ) {
-    let (exec, cancel) = env();
-    assert_eq!(
-        toolbar(&work.path, &exec, &cancel).await,
-        (String::new(), standing)
-    );
     let before = tips(bare, work);
 
     let (sink, session) = opened(work).await;
+    let toolbar = toolbar_from(&sink, 0, "topic").await;
+    assert_eq!((toolbar.target, toolbar.standing), (None, standing));
     let toolbar_push = session
         .push_current("origin".into(), PushForce::None)
         .expect("the write is accepted");
@@ -356,10 +302,10 @@ async fn neither_door_sends(
 
     work.git(&["switch", "main"]);
     let (sink, session) = opened(work).await;
-    let row = row_of(&sink, "topic").await;
+    let row = row(&sink, "topic").await;
     assert_eq!(
-        (row.standing, row.target.as_str(), row.lease),
-        (standing, "", None)
+        (row.standing, row.target, row.lease),
+        (standing, None, None)
     );
     let row_push = session
         .push_named("topic".into(), "origin".into(), PushForce::None)
@@ -400,18 +346,16 @@ async fn gone_it_asks_where_the_branch_goes() {
     let (_bare, mut work) = topic_against_a_branch_here();
     work.git(&["config", "--unset", "branch.topic.pushRemote"]);
     work.git(&["branch", "--delete", "--force", "origin/base"]);
-    let (exec, cancel) = env();
+    let (sink, session) = opened(&work).await;
     assert_eq!(
-        toolbar(&work.path, &exec, &cancel).await.1,
+        toolbar_from(&sink, 0, "topic").await.standing,
         PushStanding::Publish
     );
+    session.close_and_wait().await;
 
     work.git(&["switch", "main"]);
     let (sink, session) = opened(&work).await;
-    let row = row_of(&sink, "topic").await;
-    assert_eq!(
-        (row.standing, row.upstream.as_str()),
-        (PushStanding::Publish, "")
-    );
+    let row = row(&sink, "topic").await;
+    assert_eq!((row.standing, row.upstream), (PushStanding::Publish, None));
     session.close_and_wait().await;
 }

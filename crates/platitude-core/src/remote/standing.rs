@@ -11,6 +11,7 @@
 //! to origin's `base`, while the send goes to `origin/topic`.
 
 use super::route::{Marked, PushRoute, Upstream};
+use crate::oid::Oid;
 
 /// What a push of a branch can do, read off the last status (the branch
 /// the worktree is on) or refs listing (any other) and the marked remote.
@@ -22,7 +23,10 @@ use super::route::{Marked, PushRoute, Upstream};
 pub enum PushStanding {
     /// No branch here to send: detached, or nothing checked out — and,
     /// for the branch HEAD is on, nothing known of it yet: the last status
-    /// is still another branch's ([`HeadPush::settled`]).
+    /// is still another branch's ([`HeadPush::Moving`]). Nothing is sent
+    /// from a tab that is not open ([`PushFacts::closed_unless`]), and a
+    /// branch's row leaves the branch HEAD is on to the toolbar
+    /// (`session::RefsSnapshot::branch_push`).
     #[default]
     Closed,
     /// No commits yet: git refuses the send (`src refspec <branch> does
@@ -80,7 +84,23 @@ impl PushStanding {
         matches!(self, Self::Behind | Self::Diverged)
     }
 
-    /// The word the UI branches on (`PublishFlow.pushState`).
+    /// A plain press asks where the branch goes before anything is sent
+    /// (`Publish`; デザイン規約 §はじめてリモートへ送る), on the toolbar and
+    /// on a branch's row alike.
+    pub fn asks(self) -> bool {
+        self == Self::Publish
+    }
+
+    /// A branch's menu keeps its `push` row: a press reaches, or the row
+    /// stands out saying why — nothing to send (`Clean`; user decision —
+    /// ask before changing) or nowhere to send it (`StaysHere`)
+    /// (デザイン規約 §メニュー「「今できない」行は無効で残す」). None where
+    /// there is no branch to send, nothing it is a row for.
+    pub fn offered(self) -> bool {
+        !matches!(self, Self::Closed | Self::Unborn)
+    }
+
+    /// The word the UI says it by (`BandPushButton.mode`, `BranchPushRow`).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Closed => "closed",
@@ -159,7 +179,7 @@ impl StatusPush {
     /// and cut against the configured `remotes`. The one route of the
     /// branch HEAD is on: the tick weighs by it whether to read the
     /// destination's counts (`RepoSession::read_status_push`), and the
-    /// toolbar's answer is read along it ([`HeadPush::route`]).
+    /// toolbar's answer is read along it ([`HeadBranch::route`]).
     pub fn route<'a>(
         &'a self,
         upstream: &'a str,
@@ -178,116 +198,188 @@ impl StatusPush {
 /// toolbar asks about (`WorktreeModel.headPush`). A branch's row is
 /// answered off the refs instead (`session::RefsSnapshot::branch_push`).
 ///
-/// HEAD alone can be detached or on a branch with no commits, so those
-/// two are weighed here, ahead of any route ([`Self::facts`]); a listed
-/// branch always has both a name and commits.
+/// Only a status about the branch HEAD is on says anything of its push:
+/// between a move of HEAD and the status behind it, that status is the
+/// last branch's — its own mark among it —, so the push stands closed and
+/// names no destination.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HeadPush {
-    /// The branch HEAD is on; empty detached, and before HEAD is read.
-    pub branch: String,
-    pub detached: bool,
-    /// HEAD names a branch with no commits yet.
+pub enum HeadPush {
+    /// No branch to send: HEAD detached, or not read yet.
+    #[default]
+    Detached,
+    /// On this branch, the last status still another's.
+    Moving(String),
+    /// On a branch, as the last status read it.
+    Read(HeadBranch),
+}
+
+impl HeadPush {
+    /// The branch HEAD is on as the last status read it; none where HEAD
+    /// is on no branch, or the status is still another branch's.
+    pub fn read(&self) -> Option<&HeadBranch> {
+        match self {
+            Self::Read(branch) => Some(branch),
+            Self::Detached | Self::Moving(_) => None,
+        }
+    }
+
+    /// Whether the last status is about where HEAD is — what a reader of
+    /// the push after a move of HEAD waits for.
+    pub fn settled(&self) -> bool {
+        !matches!(self, Self::Moving(_))
+    }
+
+    /// The toolbar's whole answer ([`PushFacts::read`], along
+    /// [`HeadBranch::route`]): `remotes` are the configured ones,
+    /// `fallback_remote` is where a branch that tracks nothing, marked
+    /// nowhere, goes, and `listed` the commit the remote branches list
+    /// under a name. Nothing to say where no branch is read: the route
+    /// would be the last branch's keys read against this branch's name, or
+    /// a guess at the fallback.
+    pub fn facts<'a>(
+        &'a self,
+        remotes: impl IntoIterator<Item = &'a str>,
+        fallback_remote: &str,
+        listed: impl FnOnce(&str) -> Option<Oid>,
+    ) -> PushFacts {
+        let Some(branch) = self.read() else {
+            return PushFacts::default();
+        };
+        let facts = PushFacts::read(
+            branch.route(remotes),
+            &branch.name,
+            fallback_remote,
+            branch.upstream_counts,
+            branch.status.track.as_ref(),
+            listed,
+        );
+        // Before anything about remotes: with no commit to name, git refuses
+        // every send.
+        if branch.unborn {
+            PushFacts {
+                standing: PushStanding::Unborn,
+                ..facts
+            }
+        } else {
+            facts
+        }
+    }
+}
+
+/// The branch HEAD is on, as the last status read it ([`HeadPush::Read`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeadBranch {
+    pub name: String,
+    /// No commits yet. HEAD alone can stand on such a branch: a listed
+    /// branch always has commits.
     pub unborn: bool,
-    /// Whether the last status is about `branch`. Between a move of HEAD
-    /// and the status behind it, the upstream, its counts and all of
-    /// `status` are blank — they would be the last branch's, its own mark
-    /// among them —, the push stands closed and names no destination.
-    pub settled: bool,
     /// The upstream as the status names it — as the send names it
-    /// ([`super::PushMarks::upstream_name`]) —, empty where none.
-    pub upstream: String,
+    /// ([`super::PushMarks::upstream_name`]); none where none is
+    /// configured.
+    pub upstream: Option<String>,
     /// The branch's counts against it; none where its ref is not there to
     /// count against.
     pub upstream_counts: Option<crate::AheadBehind>,
     pub status: StatusPush,
 }
 
-impl HeadPush {
-    /// Its route under the two marks the status read, the upstream cut
-    /// against the configured `remotes`.
+impl HeadBranch {
+    /// Its route under the two marks the status read
+    /// ([`StatusPush::route`]), the upstream cut against the configured
+    /// `remotes`.
     pub fn route<'a>(&'a self, remotes: impl IntoIterator<Item = &'a str>) -> PushRoute<'a> {
-        self.status.route(&self.upstream, remotes)
-    }
-
-    /// The toolbar's whole answer, along [`Self::route`]; `fallback_remote`
-    /// is where a branch that tracks nothing, marked nowhere, goes.
-    /// Unsettled, it is closed and says nothing more: the route would be
-    /// the last branch's keys read against this branch's name, or a guess
-    /// at the fallback.
-    pub fn facts<'a>(
-        &'a self,
-        remotes: impl IntoIterator<Item = &'a str>,
-        fallback_remote: &str,
-    ) -> HeadPushFacts {
-        if !self.settled {
-            return HeadPushFacts::default();
-        }
-        let route = self.route(remotes);
-        let read = push_reading(route, self.upstream_counts, self.status.track.as_ref());
-        // Before anything about remotes: with no ref to name, git refuses
-        // every send.
-        let standing = if self.detached || self.branch.is_empty() {
-            PushStanding::Closed
-        } else if self.unborn {
-            PushStanding::Unborn
-        } else {
-            read.standing
-        };
-        HeadPushFacts {
-            standing,
-            target: route
-                .target(&self.branch, fallback_remote)
-                .unwrap_or_default(),
-            measured: read.measured.unwrap_or_default().to_string(),
-            counts: read.counts,
-            upstream: route
-                .upstream()
-                .remote_branch()
-                .unwrap_or_default()
-                .to_string(),
-        }
+        self.status
+            .route(self.upstream.as_deref().unwrap_or_default(), remotes)
     }
 }
 
-/// What the toolbar's push stands on ([`HeadPush::facts`]): what a menu's
-/// `push` row on another branch stands on (`session::BranchPushFacts`),
-/// with the remote branch an overwrite leases to by name — the commit is
-/// read off the remotes listing as the press goes out
-/// (`PublishFlow.leaseOid`) — and the counts the tip says.
+/// What the push of one branch stands on, read whole off one destination —
+/// the one the send resolves: the standing, where the label says it goes,
+/// the counts the tip says, the commit an overwrite leases to, and where a
+/// first push's question opens. The toolbar's (the branch HEAD is on,
+/// [`HeadPush::facts`]) and a branch's `push` row's (any other,
+/// `session::RefsSnapshot::branch_push`) are both read by [`Self::read`],
+/// so the two doors cannot part on any of it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HeadPushFacts {
+pub struct PushFacts {
     pub standing: PushStanding,
-    /// Where the push goes, `<remote>/<branch>`; empty where nowhere.
-    pub target: String,
-    /// [`PushReading::measured`], empty where none.
-    pub measured: String,
-    /// [`PushReading::counts`].
-    pub counts: crate::AheadBehind,
-    /// The remote branch the branch is configured for, fetched or not —
-    /// where a first push's question opens. Empty for a branch here, which
-    /// names no remote whatever its name looks like.
-    pub upstream: String,
-}
-
-/// One branch's push read along its route: the standing, and what it is
-/// read against. The one reading the toolbar ([`HeadPush::facts`]) and a
-/// branch's row (`session::RefsSnapshot::branch_push`) both answer from,
-/// so the counts a tip says and the commit an overwrite leases to come off
-/// the destination the standing weighed.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct PushReading<'a> {
-    pub standing: PushStanding,
-    /// The remote branch the counts are against: none where the push stays
-    /// here; where a mark sends it elsewhere, its tracking ref there; else
-    /// the upstream, when it is a remote's and fetched. What an overwrite
-    /// leases to. Read by the upstream where the push goes elsewhere, the
-    /// lease would pin origin's tip on a push to the fork, refused as
-    /// `stale info`.
-    pub measured: Option<&'a str>,
+    /// Where the push goes, `<remote>/<branch>` ([`PushRoute::target`]);
+    /// none where there is nowhere to send it.
+    pub target: Option<String>,
     /// The counts the standing reads: the destination's own where a mark
     /// sends the push elsewhere, else the upstream's — zero where none
     /// speak.
     pub counts: crate::AheadBehind,
+    /// The commit an overwrite leases to: the tip of the remote branch the
+    /// counts are against, as the remote branches list it. None where
+    /// nothing is counted against, and where the listing holds no such row
+    /// — an upstream fetched outside the remote branches is counted by git
+    /// and never listed, and a count can land one read ahead of its row:
+    /// the overwrite then leases to git's own tracking ref
+    /// (`PushForce::WithTrackingLease`).
+    pub lease: Option<Oid>,
+    /// The remote branch the branch is configured for, fetched or not —
+    /// where a first push's question opens (デザイン規約 §はじめてリモートへ
+    /// 送る). None where none is configured, and for a branch here, which
+    /// names no remote whatever its name looks like.
+    pub upstream: Option<String>,
+}
+
+impl PushFacts {
+    /// `branch`'s push along `route`, counted against the upstream
+    /// (`upstream_counts`, none where its ref is not there to count
+    /// against) or against where a mark sends it (`track`).
+    /// `fallback_remote` is where a branch that tracks nothing, marked
+    /// nowhere, goes, and `listed` the commit the remote branches list
+    /// under a name — asked for the remote branch the counts are against,
+    /// the one the standing weighed: leased by the upstream where the push
+    /// goes elsewhere, the overwrite would pin origin's tip on a push to the
+    /// fork, refused as `stale info`.
+    pub fn read<'a>(
+        route: PushRoute<'a>,
+        branch: &str,
+        fallback_remote: &str,
+        upstream_counts: Option<crate::AheadBehind>,
+        track: Option<&'a PushTrack>,
+        listed: impl FnOnce(&str) -> Option<Oid>,
+    ) -> Self {
+        let read = push_reading(route, upstream_counts, track);
+        Self {
+            standing: read.standing,
+            target: route.target(branch, fallback_remote),
+            counts: read.counts,
+            lease: read.measured.and_then(listed),
+            upstream: route.upstream().remote_branch().map(str::to_string),
+        }
+    }
+
+    /// As read, but closed where the tab is not open: nothing is sent from
+    /// it. The label still names where the branch would go.
+    #[must_use]
+    pub fn closed_unless(self, open: bool) -> Self {
+        if open {
+            self
+        } else {
+            Self {
+                standing: PushStanding::Closed,
+                ..self
+            }
+        }
+    }
+}
+
+/// One branch's push read along its route: the standing, and what it is
+/// read against ([`PushFacts::read`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct PushReading<'a> {
+    standing: PushStanding,
+    /// The remote branch the counts are against: none where the push stays
+    /// here; where a mark sends it elsewhere, its tracking ref there; else
+    /// the upstream, when it is a remote's and fetched. What an overwrite
+    /// leases to.
+    measured: Option<&'a str>,
+    /// [`PushFacts::counts`].
+    counts: crate::AheadBehind,
 }
 
 /// [`push_standing`], with what it was read against. `push_track` speaks
@@ -296,7 +388,7 @@ pub struct PushReading<'a> {
 /// of where an earlier mark sent the push — on the status tick
 /// (`session::Standing::push_of`) as on the refs read — and those leased
 /// to would be refused over there as `stale info`.
-pub fn push_reading<'a>(
+fn push_reading<'a>(
     route: PushRoute<'a>,
     upstream_counts: Option<crate::AheadBehind>,
     push_track: Option<&'a PushTrack>,
@@ -329,7 +421,7 @@ pub fn push_reading<'a>(
 /// ([`PushRoute::goes_elsewhere`]). `upstream_counts` is none where the
 /// upstream's ref is not there to count against — git's `[gone]`, which
 /// asks where the branch goes whichever kind the upstream was.
-pub fn push_standing(
+fn push_standing(
     route: PushRoute<'_>,
     upstream_counts: Option<crate::AheadBehind>,
     push_track: Option<&PushTrack>,
@@ -449,28 +541,57 @@ mod tests {
         )
     }
 
-    /// What a press does in each standing: a plain send, the held
-    /// overwrite, or nothing at all.
+    /// What a press does in each standing — a plain send, after asking
+    /// where it goes or not, the held overwrite, or nothing at all — and
+    /// whether a branch's menu keeps its row there.
     #[test]
     fn each_standing_takes_a_plain_press_the_overwrite_or_none() {
         use PushStanding::*;
-        let press = |standing: PushStanding| (standing.sends_plain(), standing.overwrites());
-        let plain = (true, false);
-        let overwrite = (false, true);
-        let none = (false, false);
+        let press = |standing: PushStanding| {
+            (
+                standing.sends_plain(),
+                standing.asks(),
+                standing.overwrites(),
+                standing.offered(),
+            )
+        };
+        let plain = (true, false, false, true);
+        let asked = (true, true, false, true);
+        let overwrite = (false, false, true, true);
+        let out = (false, false, false, true);
+        let none = (false, false, false, false);
         for (standing, takes) in [
             (Closed, none),
             (Unborn, none),
-            (Publish, plain),
-            (StaysHere, none),
+            (Publish, asked),
+            (StaysHere, out),
             (Elsewhere, plain),
             (Ready, plain),
-            (Clean, none),
+            (Clean, out),
             (Behind, overwrite),
             (Diverged, overwrite),
         ] {
             assert_eq!(press(standing), takes, "{standing:?}");
         }
+    }
+
+    /// A tab that is not open sends nothing, and still names where its
+    /// branch would go.
+    #[test]
+    fn a_tab_that_is_not_open_stands_closed() {
+        let ready = PushFacts {
+            standing: PushStanding::Ready,
+            target: Some("origin/main".to_string()),
+            ..PushFacts::default()
+        };
+        assert_eq!(ready.clone().closed_unless(true), ready);
+        assert_eq!(
+            ready.clone().closed_unless(false),
+            PushFacts {
+                standing: PushStanding::Closed,
+                ..ready
+            }
+        );
     }
 
     #[test]
@@ -812,11 +933,12 @@ mod tests {
         );
     }
 
-    fn head(branch: &str, settled: bool, push_remote: Option<&str>) -> HeadPush {
-        HeadPush {
-            branch: branch.to_string(),
-            settled,
-            upstream: "origin/main".to_string(),
+    /// `main` one commit ahead of `origin/main`, as the last status read
+    /// it, marked to `push_remote` of its own.
+    fn branch(push_remote: Option<&str>) -> HeadBranch {
+        HeadBranch {
+            name: "main".to_string(),
+            upstream: Some("origin/main".to_string()),
             upstream_counts: Some(crate::AheadBehind {
                 ahead: 1,
                 behind: 0,
@@ -825,53 +947,78 @@ mod tests {
                 push_remote: push_remote.map(str::to_string),
                 ..StatusPush::default()
             },
-            ..HeadPush::default()
+            ..HeadBranch::default()
         }
     }
 
-    /// HEAD alone can be on no branch or on one with no commits, and its
-    /// counts can be another branch's for a moment: each stands closed or
-    /// unborn ahead of the route — the moment naming no destination, the
-    /// mark it holds being the last branch's.
+    /// The commit a test's listing has under each remote branch.
+    fn tip(name: &str) -> Option<Oid> {
+        let hex = match name {
+            "origin/main" => "1111111111111111111111111111111111111111",
+            "my/main" => "2222222222222222222222222222222222222222",
+            "copy/main" => "3333333333333333333333333333333333333333",
+            _ => return None,
+        };
+        Oid::from_hex_str(hex).ok()
+    }
+
+    fn facts(head: &HeadPush) -> PushFacts {
+        head.facts(REMOTES, "origin", tip)
+    }
+
+    /// HEAD alone can be on no branch or on one with no commits, and the
+    /// last status can be another branch's for a moment: each stands closed
+    /// or unborn ahead of the route — the moment naming no destination, the
+    /// mark it would hold being the last branch's.
     #[test]
     fn the_head_stands_closed_or_unborn_ahead_of_any_route() {
-        let facts = |head: &HeadPush| head.facts(REMOTES, "origin");
-        let ready = facts(&head("main", true, None));
         assert_eq!(
-            ready,
-            HeadPushFacts {
+            facts(&HeadPush::Read(branch(None))),
+            PushFacts {
                 standing: PushStanding::Ready,
-                target: "origin/main".to_string(),
-                measured: "origin/main".to_string(),
+                target: Some("origin/main".to_string()),
                 counts: crate::AheadBehind {
                     ahead: 1,
                     behind: 0
                 },
-                upstream: "origin/main".to_string(),
+                lease: tip("origin/main"),
+                upstream: Some("origin/main".to_string()),
             }
         );
         assert_eq!(
-            facts(&head("main", false, Some("my"))),
-            HeadPushFacts::default(),
-            "nothing of main is known yet: `my` and the counts are the last branch's"
+            facts(&HeadPush::Moving("main".to_string())),
+            PushFacts::default(),
+            "nothing of main is known yet: the last status is another branch's"
         );
-        let detached = HeadPush {
-            detached: true,
-            ..head("", true, None)
-        };
-        assert_eq!(facts(&detached).standing, PushStanding::Closed);
-        assert_eq!(facts(&detached).target, "");
-        let unborn = HeadPush {
+        assert_eq!(facts(&HeadPush::Detached), PushFacts::default());
+        let unborn = HeadPush::Read(HeadBranch {
             unborn: true,
-            upstream: String::new(),
+            upstream: None,
             upstream_counts: None,
-            ..head("main", true, None)
-        };
+            ..branch(None)
+        });
         assert_eq!(
             (facts(&unborn).standing, facts(&unborn).target),
-            (PushStanding::Unborn, "origin/main".to_string())
+            (PushStanding::Unborn, Some("origin/main".to_string()))
         );
-        assert_eq!(facts(&HeadPush::default()).standing, PushStanding::Closed);
+        assert!(!HeadPush::Moving("main".to_string()).settled());
+        assert!(HeadPush::Read(branch(None)).settled());
+        assert!(HeadPush::Detached.settled(), "nothing is pending");
+    }
+
+    /// The lease is the listing's commit of the remote branch the counts
+    /// are against; none where the listing has no such row.
+    #[test]
+    fn the_lease_is_the_listed_tip_of_what_the_counts_are_against() {
+        let unlisted = HeadPush::Read(HeadBranch {
+            upstream: Some("origin/pr/12".to_string()),
+            ..branch(None)
+        });
+        assert_eq!(
+            (facts(&unlisted).standing, facts(&unlisted).lease),
+            (PushStanding::Ready, None),
+            "counted by git, never listed: the overwrite leases to git's tracking ref"
+        );
     }
 
     /// A read that could not tell repeats the branch's last counts
@@ -882,63 +1029,55 @@ mod tests {
     #[test]
     fn only_counts_on_the_marked_remote_speak_for_the_push() {
         let read = |remote: &str, tracking: &str| {
-            let head = HeadPush {
-                status: StatusPush {
-                    push_remote: Some("my".to_string()),
-                    track: Some(track(remote, tracking, 1, 1)),
-                    ..StatusPush::default()
-                },
-                ..head("main", true, None)
-            };
-            let facts = head.facts(REMOTES, "origin");
-            (facts.standing, facts.measured)
+            let mut read = branch(Some("my"));
+            read.status.track = Some(track(remote, tracking, 1, 1));
+            let facts = facts(&HeadPush::Read(read));
+            (facts.standing, facts.lease)
         };
         assert_eq!(
             read("origin", "origin/main"),
-            (PushStanding::Elsewhere, String::new()),
+            (PushStanding::Elsewhere, None),
             "the counts are another remote's"
         );
         assert_eq!(
             read("my/fork", "my/fork/main"),
-            (PushStanding::Elsewhere, String::new()),
+            (PushStanding::Elsewhere, None),
             "`my/fork` is another remote than `my`, whatever the prefix"
         );
         assert_eq!(
             read("my", "my/main"),
-            (PushStanding::Diverged, "my/main".to_string()),
+            (PushStanding::Diverged, tip("my/main")),
             "the marked remote's own counts speak"
         );
         assert_eq!(
             read("my", "copy/main"),
-            (PushStanding::Diverged, "copy/main".to_string()),
+            (PushStanding::Diverged, tip("copy/main")),
             "wherever its fetch refspec puts the branch"
         );
     }
 
     #[test]
     fn the_head_names_its_upstream_only_where_it_is_a_remotes() {
-        let here = HeadPush {
-            status: StatusPush {
-                upstream_here: true,
-                push_default: Some("my".to_string()),
-                ..StatusPush::default()
-            },
-            ..head("main", true, None)
-        };
-        let facts = here.facts(REMOTES, "origin");
-        assert_eq!(facts.upstream, "", "a branch here named like origin's");
-        assert_eq!(facts.target, "my/main");
+        let mut here = branch(None);
+        here.status.upstream_here = true;
+        here.status.push_default = Some("my".to_string());
+        let facts_here = facts(&HeadPush::Read(here));
         assert_eq!(
-            head("main", true, Some(".")).facts(REMOTES, "origin"),
-            HeadPushFacts {
+            facts_here.upstream, None,
+            "a branch here named like origin's"
+        );
+        assert_eq!(facts_here.target.as_deref(), Some("my/main"));
+        assert_eq!(
+            facts(&HeadPush::Read(branch(Some(".")))),
+            PushFacts {
                 standing: PushStanding::StaysHere,
-                target: String::new(),
-                measured: String::new(),
+                target: None,
                 counts: crate::AheadBehind {
                     ahead: 1,
                     behind: 0
                 },
-                upstream: "origin/main".to_string(),
+                lease: None,
+                upstream: Some("origin/main".to_string()),
             }
         );
     }

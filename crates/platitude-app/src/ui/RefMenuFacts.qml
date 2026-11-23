@@ -59,7 +59,8 @@ QtObject {
             "oid": oidHex,
             "open": open,
             "push": kind === "branch"
-                    ? refMenuFacts.branchesModel.branchPush(full, refMenuFacts.repoTab.defaultRemote) : undefined,
+                    ? refMenuFacts.branchesModel.branchPush(full, refMenuFacts.repoTab.defaultRemote, open, tree)
+                    : undefined,
             "merged": !open || kind !== "branch" ? ""
                       : refMenuFacts.graphModel.branchDeleteMerged(branchAt, card.upstreamOid, tree.headOid),
             "tagAt": kind === "tag" ? refMenuFacts.tagsModel.oidOfName(full) : "",

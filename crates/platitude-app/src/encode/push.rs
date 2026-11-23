@@ -1,60 +1,71 @@
 //! The push of the branch HEAD is on, as one value QML hands on and never
-//! builds (`WorktreeModel.headPush`), and the toolbar's answer to it
-//! (`GitFacts.toolbarPush`).
+//! builds (`WorktreeModel.headPush`), and what a branch's push stands on —
+//! the toolbar's and a branch's `push` row's alike — as one record
+//! (`NavSectionModel.headPush` / `branchPush`).
 
 use platitude_core::AheadBehind;
-use platitude_core::remote::{HeadPush, HeadPushFacts, PushTrack, StatusPush};
+use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, PushTrack, StatusPush};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, One, Record, field};
 
-/// What the toolbar's push slot takes (`GitFacts.toolbarPush`).
+/// What the toolbar's push slot takes (`NavSectionModel.headPush`).
 pub type Push = One<HeadPush>;
 
-/// What the toolbar's push stands on, read whole (`HeadPushFacts`): the
-/// fields a menu's `push` row reads of its branch (`nav::BranchPush`), the
-/// remote branch an overwrite leases to by name (`PublishFlow.leaseOid`
-/// reads its commit off the remotes as the press goes out), and the counts
-/// the tip says.
+/// What a branch's push stands on ([`PushFacts`]) as QML reads it, both
+/// doors' — the one place either answer is put in Qt's spellings of
+/// "nothing": an empty name and an empty commit, counts drawn as Qt's
+/// `int`s. With what a press does there, core's rules, so QML weighs only
+/// whether the doors are open.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ToolbarPush {
-    /// `PushStanding`'s word (`publish` / `ready` / `stays-here` …), for
-    /// the words the button says.
+pub struct PushRecord {
+    /// `PushStanding`'s word (`publish` / `ready` / `stays-here` …), for the
+    /// words the button and the row say.
     pub state: String,
     /// A plain press sends (`PushStanding::sends_plain`).
     pub sends_plain: bool,
+    /// …after asking where the branch goes (`PushStanding::asks`).
+    pub asks: bool,
     /// Only the held overwrite reaches (`PushStanding::overwrites`).
     pub overwrites: bool,
+    /// A branch's menu keeps its `push` row (`PushStanding::offered`).
+    pub offered: bool,
     pub target: String,
-    pub measured: String,
+    /// Hex; empty where the overwrite leases to git's own tracking ref.
+    pub lease: String,
     pub ahead: i32,
     pub behind: i32,
     pub upstream: String,
 }
 
-impl From<HeadPushFacts> for ToolbarPush {
-    fn from(facts: HeadPushFacts) -> Self {
+impl From<PushFacts> for PushRecord {
+    fn from(facts: PushFacts) -> Self {
+        let standing = facts.standing;
         Self {
-            state: facts.standing.as_str().to_string(),
-            sends_plain: facts.standing.sends_plain(),
-            overwrites: facts.standing.overwrites(),
-            target: facts.target,
-            measured: facts.measured,
+            state: standing.as_str().to_string(),
+            sends_plain: standing.sends_plain(),
+            asks: standing.asks(),
+            overwrites: standing.overwrites(),
+            offered: standing.offered(),
+            target: facts.target.unwrap_or_default(),
+            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
             ahead: shown(facts.counts.ahead),
             behind: shown(facts.counts.behind),
-            upstream: facts.upstream,
+            upstream: facts.upstream.unwrap_or_default(),
         }
     }
 }
 
-impl Record for ToolbarPush {
+impl Record for PushRecord {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
             .put("state", &self.state)
             .put("sendsPlain", &self.sends_plain)
+            .put("asks", &self.asks)
             .put("overwrites", &self.overwrites)
+            .put("offered", &self.offered)
             .put("target", &self.target)
-            .put("measured", &self.measured)
+            .put("lease", &self.lease)
             .put("ahead", &self.ahead)
             .put("behind", &self.behind)
             .put("upstream", &self.upstream)
@@ -65,9 +76,11 @@ impl Record for ToolbarPush {
         Some(Self {
             state: field(map, "state")?,
             sends_plain: field(map, "sendsPlain")?,
+            asks: field(map, "asks")?,
             overwrites: field(map, "overwrites")?,
+            offered: field(map, "offered")?,
             target: field(map, "target")?,
-            measured: field(map, "measured")?,
+            lease: field(map, "lease")?,
             ahead: field(map, "ahead")?,
             behind: field(map, "behind")?,
             upstream: field(map, "upstream")?,
@@ -75,34 +88,41 @@ impl Record for ToolbarPush {
     }
 }
 
-/// Flat, under `WorktreeModel`'s property names (`pushRemote`,
-/// `pushDefault`, `tracked` — what the harness reads off it), in Qt's
-/// spellings of "nothing": a flag down beside the upstream's counts, an
-/// empty name for each mark and the destination's tracking ref
-/// ([`named`]) — its remote riding beside it. The counts are Qt's `int`s,
-/// a count past one drawn as its largest.
+/// Flat, in Qt's spellings of "nothing": an empty `branch` for HEAD on no
+/// branch, `settled` down while the last status is another branch's,
+/// `tracked` down beside the upstream's counts where there is nothing to
+/// count against, an empty name for the upstream, each mark and the
+/// destination's tracking ref ([`named`]) — its remote riding beside it.
+/// The counts are Qt's `int`s, a count past one drawn as its largest. The
+/// harness reads `settled`, `tracked` and the two marks (`pushRemote`,
+/// `pushDefault`) off it.
 impl Record for HeadPush {
     fn to_map(&self) -> QVariantMap {
-        let counts = self.upstream_counts.unwrap_or_default();
-        let track = self.status.track.as_ref();
+        let blank = HeadBranch::default();
+        let (name, read) = match self {
+            Self::Detached => ("", &blank),
+            Self::Moving(name) => (name.as_str(), &blank),
+            Self::Read(branch) => (branch.name.as_str(), branch),
+        };
+        let counts = read.upstream_counts.unwrap_or_default();
+        let track = read.status.track.as_ref();
         let pushed = track.map(|track| track.counts).unwrap_or_default();
         Fields::new()
-            .put("branch", &self.branch)
-            .put("detached", &self.detached)
-            .put("unborn", &self.unborn)
-            .put("settled", &self.settled)
-            .put("upstream", &self.upstream)
-            .put("upstreamHere", &self.status.upstream_here)
-            .put("tracked", &self.upstream_counts.is_some())
+            .put("branch", &name.to_string())
+            .put("settled", &self.settled())
+            .put("unborn", &read.unborn)
+            .put("upstream", read.upstream.as_deref().unwrap_or_default())
+            .put("upstreamHere", &read.status.upstream_here)
+            .put("tracked", &read.upstream_counts.is_some())
             .put("ahead", &shown(counts.ahead))
             .put("behind", &shown(counts.behind))
             .put(
                 "pushRemote",
-                self.status.push_remote.as_deref().unwrap_or_default(),
+                read.status.push_remote.as_deref().unwrap_or_default(),
             )
             .put(
                 "pushDefault",
-                self.status.push_default.as_deref().unwrap_or_default(),
+                read.status.push_default.as_deref().unwrap_or_default(),
             )
             .put(
                 "pushTrackRemote",
@@ -118,16 +138,22 @@ impl Record for HeadPush {
     }
 
     fn from_map(map: &QVariantMap) -> Option<Self> {
+        let name: String = field(map, "branch")?;
+        let settled: bool = field(map, "settled")?;
+        if name.is_empty() {
+            return Some(Self::Detached);
+        }
+        if !settled {
+            return Some(Self::Moving(name));
+        }
         let tracked: bool = field(map, "tracked")?;
         let counts = counts_of(field(map, "ahead")?, field(map, "behind")?);
         let pushed = counts_of(field(map, "pushAhead")?, field(map, "pushBehind")?);
         let remote: String = field(map, "pushTrackRemote")?;
-        Some(Self {
-            branch: field(map, "branch")?,
-            detached: field(map, "detached")?,
+        Some(Self::Read(HeadBranch {
+            name,
             unborn: field(map, "unborn")?,
-            settled: field(map, "settled")?,
-            upstream: field(map, "upstream")?,
+            upstream: named(field::<String>(map, "upstream")?),
             upstream_counts: tracked.then_some(counts),
             status: StatusPush {
                 push_remote: named(field(map, "pushRemote")?),
@@ -139,13 +165,13 @@ impl Record for HeadPush {
                     counts: pushed,
                 }),
             },
-        })
+        }))
     }
 }
 
 /// Qt's word for no name — an empty string — read as none: the one place
-/// the toolbar's push reads it so, for the record's marks and tracking ref
-/// (`GitFacts.toolbarPush`).
+/// the push of the branch HEAD is on reads it so, for its upstream, its
+/// marks and the tracking ref over there.
 fn named<S: AsRef<str>>(name: S) -> Option<S> {
     Some(name).filter(|name| !name.as_ref().is_empty())
 }
@@ -166,15 +192,14 @@ fn counts_of(ahead: i32, behind: i32) -> AheadBehind {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platitude_core::remote::PushStanding;
     use qtbridge::QVariantConvertible;
 
     fn marked_elsewhere() -> HeadPush {
-        HeadPush {
-            branch: "feature/日本語".into(),
-            detached: false,
+        HeadPush::Read(HeadBranch {
+            name: "feature/日本語".into(),
             unborn: false,
-            settled: true,
-            upstream: "origin/feature/日本語".into(),
+            upstream: Some("origin/feature/日本語".into()),
             upstream_counts: Some(AheadBehind {
                 ahead: 2,
                 behind: 1,
@@ -192,7 +217,7 @@ mod tests {
                     },
                 }),
             },
-        }
+        })
     }
 
     fn round_trip(push: HeadPush) -> Option<HeadPush> {
@@ -205,10 +230,21 @@ mod tests {
     fn a_push_round_trips() {
         assert_eq!(round_trip(marked_elsewhere()), Some(marked_elsewhere()));
         assert_eq!(
-            round_trip(HeadPush::default()),
-            Some(HeadPush::default()),
+            round_trip(HeadPush::Read(HeadBranch {
+                name: "main".into(),
+                ..HeadBranch::default()
+            })),
+            Some(HeadPush::Read(HeadBranch {
+                name: "main".into(),
+                ..HeadBranch::default()
+            })),
             "nothing counted, nothing marked, nothing tracked over there"
         );
+        assert_eq!(
+            round_trip(HeadPush::Moving("main".into())),
+            Some(HeadPush::Moving("main".into()))
+        );
+        assert_eq!(round_trip(HeadPush::Detached), Some(HeadPush::Detached));
     }
 
     /// The bridge's spellings of "nothing" reach the rules as none,
@@ -218,10 +254,14 @@ mod tests {
         use qtbridge::qtbridge_type_lib::QString;
         let mut map = marked_elsewhere().to_map();
         map.insert(QString::from("tracked"), false.to_qvariant());
+        map.insert(QString::from("upstream"), String::new().to_qvariant());
         map.insert(QString::from("pushRemote"), String::new().to_qvariant());
         map.insert(QString::from("pushDefault"), String::new().to_qvariant());
         map.insert(QString::from("pushTracking"), String::new().to_qvariant());
-        let read = HeadPush::from_map(&map).expect("a record");
+        let Some(HeadPush::Read(read)) = HeadPush::from_map(&map) else {
+            panic!("a branch read");
+        };
+        assert_eq!(read.upstream, None);
         assert_eq!(read.upstream_counts, None);
         assert_eq!(read.status.push_remote, None);
         assert_eq!(read.status.push_default, None);
@@ -239,5 +279,48 @@ mod tests {
             "a count drawn at its largest stays a count"
         );
         assert_eq!(counts_of(-1, -7), pair(0, 0), "under zero counts for none");
+    }
+
+    /// Either door's answer carries core's press rules, the Qt spellings of
+    /// "nothing", and reads back whole.
+    #[test]
+    fn a_push_answer_carries_cores_rules_and_reads_back_whole() {
+        for standing in [
+            PushStanding::Closed,
+            PushStanding::Publish,
+            PushStanding::StaysHere,
+            PushStanding::Clean,
+            PushStanding::Diverged,
+        ] {
+            let record = PushRecord::from(PushFacts {
+                standing,
+                ..PushFacts::default()
+            });
+            assert_eq!(
+                (
+                    record.sends_plain,
+                    record.asks,
+                    record.overwrites,
+                    record.offered
+                ),
+                (
+                    standing.sends_plain(),
+                    standing.asks(),
+                    standing.overwrites(),
+                    standing.offered()
+                ),
+                "{standing:?}"
+            );
+            assert_eq!(
+                (
+                    record.target.as_str(),
+                    record.lease.as_str(),
+                    record.upstream.as_str()
+                ),
+                ("", "", ""),
+                "none of them is spelled empty"
+            );
+            assert_eq!(PushRecord::from_map(&record.to_map()), Some(record));
+        }
     }
 }

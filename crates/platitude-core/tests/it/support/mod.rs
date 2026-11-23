@@ -8,6 +8,7 @@ pub mod busy;
 pub mod exec;
 pub mod graph;
 pub mod integrate;
+pub mod push;
 pub mod remote;
 pub mod repo;
 pub mod session;

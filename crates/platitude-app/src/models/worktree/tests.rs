@@ -271,7 +271,11 @@ fn the_counts_are_the_branch_they_were_read_with() {
     model.absorb(vec![head_on("main", NEXT, 2)]);
     assert!(!model.counts_settled, "feature's counts are not main's");
     assert_eq!(model.upstream, "");
-    assert_eq!(model.head_push_now().upstream_counts, None);
+    assert_eq!(
+        model.head_push_now(),
+        platitude_core::remote::HeadPush::Moving("main".to_string()),
+        "nothing of main's push is known yet"
+    );
     assert_eq!(model.ahead, 0);
 
     model.absorb(vec![status_of(
@@ -298,7 +302,10 @@ fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
         }
         model.absorb(vec![head_on("feature", ROOT, 1), status]);
         (
-            model.head_push_now().upstream_counts.is_some(),
+            model
+                .head_push_now()
+                .read()
+                .is_some_and(|read| read.upstream_counts.is_some()),
             model.ahead,
             model.behind,
             model.pull_blocked,
@@ -355,17 +362,18 @@ fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
         };
     }
     model.absorb(vec![head_on("feature", ROOT, 1), read]);
-    let told = model.head_push_now().status;
+    let held = model.head_push_now();
+    let told = &held.read().expect("feature as the status read it").status;
     assert_eq!(told.track, Some(track));
     assert!(told.upstream_here);
     assert_eq!(told.push_remote.as_deref(), Some("fork"));
 
     model.absorb(vec![head_on("main", NEXT, 2)]);
-    let told = model.head_push_now().status;
-    assert_eq!(told.track, None, "feature's destination is not main's");
-    assert!(!told.upstream_here);
-    assert_eq!(told.push_remote, None, "nor is feature's mark");
-    assert_eq!(told.push_default, None, "nor the mark read beside it");
+    assert_eq!(
+        model.head_push_now(),
+        platitude_core::remote::HeadPush::Moving("main".to_string()),
+        "feature's destination, its mark and the mark read beside it are not main's"
+    );
 }
 
 #[test]

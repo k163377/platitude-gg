@@ -201,10 +201,35 @@ impl Source {
 
     /// What a menu's `push` row on local branch `name` stands on
     /// (`RefsSnapshot::branch_push`); `closed` in every other section.
-    pub(super) fn branch_push(&self, name: &str, fallback: &str) -> BranchPush {
+    pub(super) fn branch_push(
+        &self,
+        name: &str,
+        fallback: &str,
+        open: bool,
+        tree: &platitude_core::offers::TreeStanding,
+    ) -> crate::encode::PushRecord {
         match self {
-            Self::Locals(snapshot) => snapshot.branch_push(name, fallback).into(),
-            _ => platitude_core::session::BranchPushFacts::default().into(),
+            Self::Locals(snapshot) => snapshot.branch_push(name, fallback, open, tree).into(),
+            _ => platitude_core::remote::PushFacts::default().into(),
+        }
+    }
+
+    /// What the toolbar's push stands on, read against any refs section's
+    /// snapshot (`RefsSnapshot::head_push`) — and before the first one
+    /// lands, against none: no remote yet to cut a name by or lease to.
+    pub(super) fn head_push(
+        &self,
+        head: &platitude_core::remote::HeadPush,
+        fallback: &str,
+        open: bool,
+    ) -> crate::encode::PushRecord {
+        match self {
+            Self::Locals(snapshot) | Self::Remotes(snapshot) | Self::Tags(snapshot) => {
+                snapshot.head_push(head, fallback, open).into()
+            }
+            _ => platitude_core::session::RefsSnapshot::default()
+                .head_push(head, fallback, open)
+                .into(),
         }
     }
 

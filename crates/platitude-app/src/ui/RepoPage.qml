@@ -1065,12 +1065,9 @@ FocusScope {
             page.startRowAsk(oidHex, label, "", false, "", run, false, "", form, code, refName, refTint, "branch")
     }
     /// What the window's toolbar reads off the page it is showing: the button lives up there, and the state machine
-    /// behind it down here (`TopBar`).
-    readonly property alias pushTargetLabel: publishFlow.pushTargetLabel
-    readonly property alias pushState: publishFlow.pushState
-    readonly property alias pushOverwrites: publishFlow.pushOverwrites
-    readonly property alias pushAhead: publishFlow.pushAhead
-    readonly property alias pushBehind: publishFlow.pushBehind
+    /// behind it down here (`TopBar`). The push's answer goes up whole (`PublishFlow.pushFacts`); only what the page
+    /// adds to it — whether its doors are open, what git said last — goes beside.
+    readonly property alias pushFacts: publishFlow.pushFacts
     readonly property alias canPush: publishFlow.canPush
     readonly property alias canForcePush: publishFlow.canForcePush
     readonly property alias pushFailed: publishFlow.pushFailed
