@@ -294,7 +294,6 @@ impl WorktreeModel {
         Notify = changed
     );
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
-    qproperty!("countsSettled", Member = counts_settled, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);

@@ -229,7 +229,7 @@ Item {
             const op = publishUpstreamTimer
             if (op.at("start")) {
                 if (!Awaited.all("publish_upstream_ready", {
-                    "counts": worktree.countsSettled,
+                    "counts": worktree.headPush.settled,
                     "upstream": worktree.upstream === repoTab.defaultRemote + "/" + op.want,
                     "idle": repoTab.busyCount <= 0 }))
                     return
@@ -251,8 +251,9 @@ Item {
     }
     /// _PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
     /// (`RepoPage.pushFacts`: `target` / `state`), with the marks that decided it — the label cannot say which one git
-    /// followed. Both marks ride the status (`headPush`), so the barrier is a status about HEAD's branch
-    /// (`worktree.countsSettled`): before one every mark reads unset and the push stands closed.
+    /// followed. Both marks ride the status (`headPush`), so the barrier is a status about HEAD's branch — the first
+    /// one (`worktree.loaded`), and after a move of HEAD the one behind it (`worktree.headPush.settled`, which says
+    /// only the second): before it every mark reads unset and the push stands closed.
     PageStage {
         id: pushTargetTimer
         name: "push_target"
@@ -260,7 +261,7 @@ Item {
             "name": "push_target_ready",
             "when": () => ({
                 "loaded": worktree.loaded,
-                "counts": worktree.countsSettled,
+                "counts": worktree.headPush.settled,
                 "open": repoTab.state === "open",
                 "idle": repoTab.busyCount === 0 }),
             "report": () => "push_target label=" + page.pushFacts.target
