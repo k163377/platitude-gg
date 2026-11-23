@@ -54,9 +54,11 @@ const SMALL: usize = 1_000;
 const ROUNDS: usize = 30;
 const LARGE_ROUNDS: usize = 10;
 
-/// The product's git, kept off this machine's configuration as the suite's
-/// is — but with git's own fsync left as it ships (the suite's turns it
-/// off), so a round costs what it costs a reader.
+/// The git binary itself (`support::exec::body_git` — a launcher first on
+/// PATH would add a process of its own to every round), kept off this
+/// machine's configuration as the suite's is — but with git's own fsync
+/// left as it ships (the suite's turns it off), so a round costs what it
+/// costs a reader.
 fn product_like() -> GitExecutor {
     let nowhere = crate::support::temp::root().join(".no-config");
     let env: [(OsString, OsString); 7] = [
@@ -68,7 +70,9 @@ fn product_like() -> GitExecutor {
         ("GIT_CONFIG_KEY_0".into(), "gc.auto".into()),
         ("GIT_CONFIG_VALUE_0".into(), "0".into()),
     ];
-    GitExecutor::new().with_env(env).without_stock_timeouts()
+    GitExecutor::with_program(crate::support::exec::body_git())
+        .with_env(env)
+        .without_stock_timeouts()
 }
 
 #[tokio::test]

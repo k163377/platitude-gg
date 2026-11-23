@@ -170,8 +170,8 @@ impl GitChoice {
     }
 }
 
-/// The git spawned with no path named — `PATH`'s, or the one behind the
-/// launcher there (`process::default_program_path`). Asked even when the
+/// The git spawned with no path named — the first on `PATH`
+/// (`process::default_program_path`). Asked even when the
 /// settings name a binary: the settings screen compares an emptied box
 /// against it.
 fn path_program() -> String {
@@ -197,13 +197,8 @@ fn resolve_git(runtime: &tokio::runtime::Runtime, git_path: &str) -> GitChoice {
     let cancel = tokio_util::sync::CancellationToken::new();
     let probe = runtime.block_on(platitude_core::version::probe(git_path, &cancel));
     if probe.answered() {
-        // Recorded as what is actually spawned: a Git for Windows
-        // launcher resolves to the git behind it (`process::spawnable`),
-        // and that is what the screen shows.
-        let program = platitude_core::process::spawnable(std::path::Path::new(git_path));
-        let program = program.to_string_lossy().into_owned();
+        let program = git_path.to_owned();
         tracing::info!(
-            path = git_path,
             program = %program,
             version = probe.version(),
             "git from settings"

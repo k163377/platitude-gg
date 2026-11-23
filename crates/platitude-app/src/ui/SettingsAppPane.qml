@@ -413,11 +413,10 @@ ColumnLayout {
                 id: gitPathField
                 Layout.fillWidth: true
                 choosing: true
-                // What an empty box is read as (the git PATH resolves), given as the resolved path itself: "the git on
-                // PATH" is nowhere a reader can look, and this chapter exists because a machine has several, so it
-                // must name the one running. From `process::default_program_path` — one step past what the app
-                // spawns: behind Git for Windows' launcher on PATH, the git it launches. Spelled with `/` where it
-                // comes in (規約 §パスの区切り).
+                // The git this run spawns (`Hub::git_program`), given as the resolved path itself: "the git on PATH"
+                // is nowhere a reader can look, and this chapter exists because a machine has several, so it must
+                // name the one running. With no git named that is the first on PATH — Git for Windows' launcher on a
+                // stock install. Spelled with `/` where it comes in (規約 §パスの区切り).
                 placeholder: AppBackend.gitPathInUse
                 onPicking: pane.openGitPicker()
             }

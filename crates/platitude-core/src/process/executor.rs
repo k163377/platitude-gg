@@ -190,19 +190,15 @@ impl Default for GitExecutor {
 }
 
 impl GitExecutor {
-    /// Uses `git` resolved from `PATH` — or, where PATH names the launcher
-    /// Git for Windows installs there, the git behind it
+    /// Uses `git` as the spawn resolves it from `PATH`
     /// ([`super::program`]).
     pub fn new() -> Self {
-        Self::of(super::program::default_program())
+        Self::of(OsString::from("git"))
     }
 
-    /// Uses an explicit git binary. As for PATH, the Git for Windows
-    /// launcher is swapped for the git behind it
-    /// ([`super::program::spawnable`]); every other path is taken as given.
+    /// Uses an explicit git binary, as given.
     pub fn with_program(program: impl Into<OsString>) -> Self {
-        let named = program.into();
-        Self::of(super::program::spawnable(std::path::Path::new(&named)).into_os_string())
+        Self::of(program.into())
     }
 
     fn of(program: OsString) -> Self {

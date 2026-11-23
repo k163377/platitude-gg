@@ -54,6 +54,29 @@ pub fn isolated_env() -> Vec<(OsString, OsString)> {
     env
 }
 
+/// The git binary itself, for probes that measure its own process: PATH's
+/// git asked where its programs live (`git --exec-path` — git's install
+/// puts a copy of itself there), so a launcher first on PATH (Git for
+/// Windows' `cmd\git.exe`) is not what gets measured. PATH's git where
+/// that names no file.
+pub fn body_git() -> OsString {
+    static FOUND: std::sync::OnceLock<OsString> = std::sync::OnceLock::new();
+    FOUND
+        .get_or_init(|| {
+            let on_path = platitude_core::process::default_program_path();
+            let file = if cfg!(windows) { "git.exe" } else { "git" };
+            std::process::Command::new(&on_path)
+                .arg("--exec-path")
+                .output()
+                .ok()
+                .filter(|out| out.status.success())
+                .map(|out| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()).join(file))
+                .filter(|body| body.is_file())
+                .map_or(on_path, PathBuf::into_os_string)
+        })
+        .clone()
+}
+
 /// Git executor for integration tests. The raw `GitExecutor::new()` remains
 /// available for tests that intentionally exercise the host configuration.
 /// Without the isolation the host's config leaks in: a permission warning

@@ -147,8 +147,8 @@ struct Ground {
     git_dir: PathBuf,
     patch_file: PathBuf,
     patch: Vec<u8>,
-    /// The git the product spawns, found once: Git for Windows' launcher on
-    /// the PATH stands for another process, whose peaks these would not be.
+    /// The git binary itself (`support::exec::body_git`): a launcher first
+    /// on PATH stands for another process, whose peaks these would not be.
     git: PathBuf,
     cat: Option<PathBuf>,
 }
@@ -385,7 +385,7 @@ async fn ways_in() {
         repo: repo.path.clone(),
         patch_file,
         patch,
-        git: PathBuf::from(platitude_core::process::default_program_path()),
+        git: PathBuf::from(crate::support::exec::body_git()),
         cat: cat(),
     };
 

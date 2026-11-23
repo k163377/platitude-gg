@@ -409,8 +409,7 @@ fn control_characters_are_escaped_and_so_is_what_dollar_quotes_read() {
 
 #[test]
 fn the_full_form_spells_out_what_is_always_applied() {
-    // `new()` may spell the program as a path; this is about the shape
-    // around it.
+    // The program as a bare name: this is about the shape around it.
     let executor = GitExecutor::with_program("git");
     let full = executor.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));
     assert!(full.starts_with("LC_ALL=C "), "{full}");

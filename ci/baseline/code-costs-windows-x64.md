@@ -16,7 +16,7 @@
 
 | 場所 | 読み |
 |---|---|
-| `process::program`(Git for Windows の `cmd\git.exe` はランチャー) | `git --version` 22.7ms 対 本体直叩き 10.3ms / details の `git show` 19.0ms 対 10.7ms(ウォーム) |
+| `process::program`(PATH の先頭の git をそのまま起こす。Git for Windows の `cmd\git.exe` はランチャーで、本体を 2 本目のプロセスとして起こす) | `git --version` 1 本: ランチャー経由 15.4ms 対 本体直叩き 9.1ms(静かな時に交互 60 回の中央値)/ details の `git show` 19.0ms 対 10.7ms(ウォーム)/ core の統合テスト 1 本(`it`、並列。同じ exe で PATH の先頭だけを替えて交互に 4 組): ランチャー経由 52.1・61.3・56.0・59.7s 対 本体 45.1・61.8・48.8・52.6s(組ごとの差 +7.0・−0.5・+7.2・+7.1s)。Git Bash の PATH は本体が先頭なので、そこから撃つテストは払わない |
 | `process::family` の `CREATE_NO_WINDOW`(git 1 本ごとに `conhost.exe` を 1 本立てる) | `git rev-parse --show-toplevel` 200 本の直列で隠れ console 21ms/本 対 console 無し(`DETACHED_PROCESS`)12ms/本・親の console を継ぐ(フラグ無し)12ms/本 — 親が GUI(console 無し)でも console 付きでも同値。verify-ui の run の中(16 本同時)では git の spawn の中央値 139ms 対 32ms・所要の中央値 236ms 対 85ms。**console 無しは採れない**(`process::family` の `win32::CREATE_NO_WINDOW` のコメント) |
 | `details::commit_details` | git 自身の仕事は約 1ms、残りはプロセス |
 | `repo::is_bare`(`rev-parse` 1 本) | 33ms |

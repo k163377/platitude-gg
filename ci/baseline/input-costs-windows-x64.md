@@ -13,8 +13,9 @@ commit のメッセージ・部分ステージと部分破棄のパッチ・破�
 ## 条件
 
 - 前・後の木と §git だけの切り分け の木は Linux の記録と同じ(§条件)。計測のテスト
-  (`crates/platitude-core/tests/it/input_costs.rs`)は前後とも同じ物で、差は渡し方だけ。プローブは製品と同じ git の本
-  体(Git for Windows のランチャーではない)を最初に 1 度だけ探し、時計はコマンドを組み立てた後から始める
+  (`crates/platitude-core/tests/it/input_costs.rs`)は前後とも同じ物で、差は渡し方だけ。プローブは git の本体(PATH の git
+  に `--exec-path` で訊いた物。Git for Windows のランチャーではない)を最初に 1 度だけ探し、時計はコマンドを組み立てた後
+  から始める
 - 撃ち方: 前後それぞれの木で次を撃って exe を別の場所へ写し、**1 操作 1 プロセス**で前・後・後・前の ABBA を 5 ブロッ
   ク(1 変種 10 run)。release に debug_assertions だけを立てるのは、統合テストの mry のモックが debug_assertions でしか組
   まれないため(release のままでは `it` が組めない)
