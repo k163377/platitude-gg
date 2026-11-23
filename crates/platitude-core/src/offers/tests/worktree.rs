@@ -73,7 +73,7 @@ fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
         "abc123",
         true,
         &TreeStanding::on("main"),
-        "",
+        false,
         false,
         false,
     )
@@ -105,7 +105,7 @@ fn a_branch_already_out_greys_its_worktree_add() {
         "abc123",
         true,
         &TreeStanding::on("main"),
-        "C:/work/topic",
+        true,
         false,
         false,
     );
@@ -127,7 +127,7 @@ fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
         "abc123",
         true,
         &TreeStanding::detached().standing("REBASING"),
-        "",
+        false,
         true,
         false,
     );
@@ -145,7 +145,7 @@ fn a_detached_tree_holds_no_branch() {
         "abc123",
         true,
         &TreeStanding::detached(),
-        "",
+        false,
         false,
         false,
     );
@@ -165,7 +165,7 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         "abc123",
         true,
         &TreeStanding::on("main"),
-        "",
+        false,
         false,
         true,
     );
@@ -178,12 +178,12 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
     let main = TreeStanding::on("main");
     assert!(
-        worktree_rows(None, "abc123", false, &main, "", false, false)
+        worktree_rows(None, "abc123", false, &main, false, false, false)
             .words()
             .is_empty()
     );
     assert!(
-        worktree_rows(None, "", true, &main, "", false, false)
+        worktree_rows(None, "", true, &main, false, false, false)
             .words()
             .is_empty()
     );
@@ -193,7 +193,7 @@ fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
             "abc123",
             true,
             &main,
-            "",
+            false,
             false,
             false
         )

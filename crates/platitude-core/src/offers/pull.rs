@@ -99,7 +99,7 @@ impl PullOffer {
     }
 }
 
-/// The rule. `target`, `open`, `tree` and `held_by_worktree` read as
+/// The rule. `target`, `open`, `tree` and `held` read as
 /// in [`super::ref_menu`] — the tree's own comparison is
 /// [`TreeStanding::upstream`] and [`TreeStanding::diverged`];
 /// `row_upstream` and `row_ahead` are the row's own branch's upstream and
@@ -124,7 +124,7 @@ pub fn pull_row(
     target: RefTarget<'_>,
     open: bool,
     tree: &TreeStanding,
-    held_by_worktree: &str,
+    held: bool,
     row_upstream: &str,
     row_ahead: u32,
 ) -> Option<PullOffer> {
@@ -157,7 +157,7 @@ pub fn pull_row(
     // The holder first: nothing done here lifts it. The operation is
     // finished here, and own commits are taken in from the branch itself,
     // which the reader cannot switch to from here.
-    let out = if !held_by_worktree.is_empty() {
+    let out = if held {
         Some(PullOut::Held)
     } else if standing {
         Some(PullOut::Standing)
@@ -192,7 +192,7 @@ mod tests {
             target(kind, full),
             true,
             &tree(),
-            "",
+            false,
             if kind == RefKind::Branch {
                 "origin/feat"
             } else {
@@ -237,7 +237,14 @@ mod tests {
                 out: None
             })
         );
-        let untracked = pull_row(target(RefKind::Branch, "scratch"), true, &tree(), "", "", 0);
+        let untracked = pull_row(
+            target(RefKind::Branch, "scratch"),
+            true,
+            &tree(),
+            false,
+            "",
+            0,
+        );
         assert_eq!(untracked, None, "no upstream is nowhere to pull from");
     }
 
@@ -248,7 +255,7 @@ mod tests {
                 target(RefKind::Branch, full),
                 true,
                 &TreeStanding::on("main"),
-                "",
+                false,
                 row_upstream,
                 0,
             ))
@@ -274,7 +281,7 @@ mod tests {
                 target(kind, full),
                 true,
                 &TreeStanding::detached(),
-                "",
+                false,
                 row_upstream,
                 0,
             ))
@@ -294,7 +301,7 @@ mod tests {
             (RefKind::Remote, "origin/main"),
             (RefKind::Branch, "feat"),
         ] {
-            let offer = pull_row(target(kind, full), false, &tree(), "", "origin/feat", 0);
+            let offer = pull_row(target(kind, full), false, &tree(), false, "origin/feat", 0);
             assert_eq!(offer, None, "{full}");
         }
     }
@@ -314,7 +321,7 @@ mod tests {
                 target(kind, full),
                 true,
                 &tree,
-                "",
+                false,
                 &if kind == RefKind::Branch {
                     format!("origin/{full}")
                 } else {
@@ -367,7 +374,7 @@ mod tests {
             ..tree()
         };
         for (kind, full) in [(RefKind::Branch, "main"), (RefKind::Remote, "origin/main")] {
-            let offer = pull_row(target(kind, full), true, &diverged, "", "", 0);
+            let offer = pull_row(target(kind, full), true, &diverged, false, "", 0);
             assert_eq!(
                 offer,
                 Some(PullOffer {
@@ -381,7 +388,7 @@ mod tests {
             target(RefKind::Branch, "feat"),
             true,
             &diverged,
-            "",
+            false,
             "origin/feat",
             0,
         );
@@ -394,7 +401,7 @@ mod tests {
 
     #[test]
     fn a_branch_aside_greys_on_commits_of_its_own_and_on_another_worktree() {
-        let aside = |held: &str, ahead: u32| {
+        let aside = |held: bool, ahead: u32| {
             pull_row(
                 target(RefKind::Branch, "feat"),
                 true,
@@ -406,22 +413,22 @@ mod tests {
             .and_then(|offer| offer.out)
         };
         assert_eq!(
-            aside("", 0),
+            aside(false, 0),
             None,
             "behind or level: a fast-forward reaches it"
         );
         assert_eq!(
-            aside("", 2),
+            aside(false, 2),
             Some(PullOut::OwnCommits),
             "git turns the fetch down as a non-fast-forward (measured)"
         );
         assert_eq!(
-            aside("C:/work/other", 0),
+            aside(true, 0),
             Some(PullOut::Held),
             "git will not fetch into a branch checked out elsewhere"
         );
         assert_eq!(
-            aside("C:/work/other", 2),
+            aside(true, 2),
             Some(PullOut::Held),
             "the holder is named first: switching to it is not on offer from here"
         );
@@ -430,7 +437,7 @@ mod tests {
                 target(RefKind::Branch, "feat"),
                 true,
                 &tree().standing("MERGING"),
-                "C:/work/other",
+                true,
                 "origin/feat",
                 0,
             )
@@ -443,7 +450,7 @@ mod tests {
                 target(RefKind::Branch, "feat"),
                 true,
                 &tree(),
-                "C:/work/other",
+                true,
                 "origin/feat",
                 0,
             )

@@ -85,16 +85,16 @@ impl<'a> SwitchTarget<'a> {
 }
 
 /// The action itself. `target` is where the press lands, `None` where it
-/// lands nowhere; `tree` where the worktree stands; `held_by_worktree` the
-/// other worktree holding that local branch, empty when none does;
-/// `local_oid` that branch's commit, empty when no such branch exists.
+/// lands nowhere; `tree` where the worktree stands; `held` whether another
+/// worktree holds that local branch; `local_oid` that branch's commit,
+/// empty when no such branch exists.
 ///
 /// A remote row moves its local branch even where the tree is on it:
 /// landing the current branch on its remote ref is a move.
 pub fn switch_action(
     target: Option<SwitchTarget<'_>>,
     tree: &TreeStanding,
-    held_by_worktree: &str,
+    held: bool,
     local_oid: &str,
 ) -> SwitchAction {
     let Some(SwitchTarget { pressed, local }) = target else {
@@ -104,14 +104,14 @@ pub fn switch_action(
         Pressed::Branch => {
             if tree.is_current(local) {
                 SwitchAction::None
-            } else if !held_by_worktree.is_empty() {
+            } else if held {
                 SwitchAction::OpenHolder
             } else {
                 SwitchAction::Switch
             }
         }
         Pressed::Remote => {
-            if !held_by_worktree.is_empty() {
+            if held {
                 SwitchAction::OpenHolder
             } else if local_oid.is_empty() {
                 SwitchAction::Materialize

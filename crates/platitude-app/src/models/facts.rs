@@ -120,7 +120,8 @@ impl GitFacts {
     /// words: `here`, then `checkout-branch` / `checkout-track`, then
     /// `out-current` / `out-held` / `out-stopped`. `kind` and `full` are the
     /// row's two words, empty on a commit row that draws no name; `tree`
-    /// the menu's `WorktreeModel.reading` (as `refMenuOffers`);
+    /// the menu's `WorktreeModel.reading` and `held_by_worktree` the worktree
+    /// holding the row's branch (both as `refMenuOffers`);
     /// `local_exists` whether a remote row's local branch is there;
     /// `stopped_here` whether a rebase or bisect stopped in this tree holds
     /// the branch.
@@ -142,7 +143,7 @@ impl GitFacts {
             &oid_hex,
             open,
             &tree,
-            &held_by_worktree,
+            !held_by_worktree.is_empty(),
             stopped_here,
             local_exists,
         )
@@ -286,7 +287,7 @@ impl GitFacts {
             target,
             open,
             &tree,
-            &held_by_worktree,
+            !held_by_worktree.is_empty(),
             &row_upstream,
             u32::try_from(row_ahead).unwrap_or(0),
         )
@@ -355,7 +356,7 @@ impl GitFacts {
         platitude_core::offers::switch_action(
             platitude_core::offers::SwitchTarget::from_words(&kind, &local),
             &tree,
-            &held_by_worktree,
+            !held_by_worktree.is_empty(),
             &local_oid,
         )
         .as_str()

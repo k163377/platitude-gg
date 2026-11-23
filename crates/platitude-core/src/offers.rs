@@ -598,8 +598,8 @@ impl WorktreeOffers {
 /// The rule. `target` is the row (`None` on a commit row that draws no
 /// name, and for any row asked by none); `open` and `tree` read as in
 /// [`ref_menu`];
-/// `held_by_worktree` the worktree holding the row's branch, a remote
-/// row's through the local branch of its name, as in [`ref_menu`];
+/// `held` whether another worktree holds the row's branch, a remote row's
+/// through the local branch of its name, as in [`ref_menu`];
 /// `stopped_here` whether a rebase or bisect stopped in this tree holds the
 /// row's branch; `local_exists` whether a remote row's local branch is
 /// there already.
@@ -615,11 +615,10 @@ pub fn worktree_rows(
     oid_hex: &str,
     open: bool,
     tree: &TreeStanding,
-    held_by_worktree: &str,
+    held: bool,
     stopped_here: bool,
     local_exists: bool,
 ) -> WorktreeOffers {
-    let held = !held_by_worktree.is_empty();
     let kind = target.map(|target| target.kind);
     let checkout = match kind {
         Some(RefKind::Branch) => Some(WorktreeCheckout::Branch),
