@@ -14,6 +14,7 @@ defmodule Demo.Point do
   @spec new(integer()) :: %__MODULE__{}
   def new(x) when is_integer(x), do: %__MODULE__{x: x}
 
+  @doc false
   defp describe(%{x: x} = point) do
     text = "x = #{x}"
     atom = :ok

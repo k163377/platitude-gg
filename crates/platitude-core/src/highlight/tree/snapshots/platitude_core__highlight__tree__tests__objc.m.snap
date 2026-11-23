@@ -74,7 +74,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |         char c = 'c';
           tttt     nnn
 |         BOOL ok = YES && argv != NULL;
-          tttt
+          tttt                     nnnn
 |         if (ok) {
           kk
 |             NSLog(@"%@ %c %lu", text, c, (unsigned long)items.count);

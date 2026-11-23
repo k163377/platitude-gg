@@ -51,7 +51,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     point_t p = { .x = 1, .y = 2.0 };
       ttttttt            n       nnn
 |     if (argc > 1 && argv != NULL) {
-      kk         n
+      kk         n            nnnn
 |         printf("%s %d\n", name, square(p.x));
           ffffff sssssssss        ffffff
 |     } else {
@@ -83,5 +83,5 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     n = sizeof(point_t);
           kkkkkk
 |     return MAX(n, (long)f) ? true : false;
-      kkkkkk fff     tttt
+      kkkkkk fff     tttt      nnnn   nnnnn
 | }

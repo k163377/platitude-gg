@@ -209,9 +209,14 @@ fn configured(
 /// Where a crate's query names a node otherwise than デザイン規約
 /// §シンタックスハイライト would (C++'s casts as the template calls they
 /// parse as, SQL's NULL as a type word, every Haskell variable as a type),
-/// the crate's naming stands. A query of this repository's
-/// own laid last adds only what a crate's grammar reads and its query
-/// leaves out: `queries/c_sharp-highlights.scm`'s `extension`.
+/// the crate's naming stands. A query of this repository's own laid last
+/// adds only what a crate's query leaves out (C#'s `extension`, C's
+/// `true` and `false`) or names by the broad `constant` alone, which
+/// `CAPTURES` does not take for it also marks every all-caps name (C's
+/// `NULL`, Elixir's and OCaml's booleans). Laid last, such a pattern also
+/// takes the node where the crate names it otherwise in one context, so
+/// the query names those contexts again in the crate's own words
+/// (Elixir's `@doc false`).
 fn layered(queries: &[&str]) -> String {
     queries.join("\n")
 }
@@ -242,8 +247,8 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["tsx"], "tsx", || configured(tree_sitter_typescript::LANGUAGE_TSX.into(), "tsx", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY]), "")),
     entry!(&["py", "pyi"], "python", || configured(tree_sitter_python::LANGUAGE.into(), "python", tree_sitter_python::HIGHLIGHTS_QUERY, "")),
     entry!(&["java"], "java", || configured(tree_sitter_java::LANGUAGE.into(), "java", tree_sitter_java::HIGHLIGHTS_QUERY, "")),
-    entry!(&["c", "h"], "c", || configured(tree_sitter_c::LANGUAGE.into(), "c", tree_sitter_c::HIGHLIGHT_QUERY, "")),
-    entry!(&["cpp", "cc", "cxx", "hpp", "hh", "hxx"], "cpp", || configured(tree_sitter_cpp::LANGUAGE.into(), "cpp", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_cpp::HIGHLIGHT_QUERY]), "")),
+    entry!(&["c", "h"], "c", || configured(tree_sitter_c::LANGUAGE.into(), "c", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, include_str!("queries/c-highlights.scm")]), "")),
+    entry!(&["cpp", "cc", "cxx", "hpp", "hh", "hxx"], "cpp", || configured(tree_sitter_cpp::LANGUAGE.into(), "cpp", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_cpp::HIGHLIGHT_QUERY, include_str!("queries/c-highlights.scm")]), "")),
     entry!(&["cs"], "c_sharp", || configured(tree_sitter_c_sharp::LANGUAGE.into(), "c_sharp", &layered(&[tree_sitter_c_sharp::HIGHLIGHTS_QUERY, include_str!("queries/c_sharp-highlights.scm")]), "")),
     entry!(&["go"], "go", || configured(tree_sitter_go::LANGUAGE.into(), "go", tree_sitter_go::HIGHLIGHTS_QUERY, "")),
     entry!(&["rb"], "ruby", || configured(tree_sitter_ruby::LANGUAGE.into(), "ruby", tree_sitter_ruby::HIGHLIGHTS_QUERY, "")),
@@ -256,11 +261,11 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["hs"], "haskell", || configured(tree_sitter_haskell::LANGUAGE.into(), "haskell", tree_sitter_haskell::HIGHLIGHTS_QUERY, tree_sitter_haskell::INJECTIONS_QUERY)),
     entry!(&["lua"], "lua", || configured(tree_sitter_lua::LANGUAGE.into(), "lua", tree_sitter_lua::HIGHLIGHTS_QUERY, tree_sitter_lua::INJECTIONS_QUERY)),
     entry!(&["zig"], "zig", || configured(tree_sitter_zig::LANGUAGE.into(), "zig", tree_sitter_zig::HIGHLIGHTS_QUERY, tree_sitter_zig::INJECTIONS_QUERY)),
-    entry!(&["ex", "exs"], "elixir", || configured(tree_sitter_elixir::LANGUAGE.into(), "elixir", tree_sitter_elixir::HIGHLIGHTS_QUERY, tree_sitter_elixir::INJECTIONS_QUERY)),
+    entry!(&["ex", "exs"], "elixir", || configured(tree_sitter_elixir::LANGUAGE.into(), "elixir", &layered(&[tree_sitter_elixir::HIGHLIGHTS_QUERY, include_str!("queries/elixir-highlights.scm")]), tree_sitter_elixir::INJECTIONS_QUERY)),
     // `.mli` stays with the fallback lexer: the crate's one highlight
     // query names nodes the interface grammar does not have.
-    entry!(&["ml"], "ocaml", || configured(tree_sitter_ocaml::LANGUAGE_OCAML.into(), "ocaml", tree_sitter_ocaml::HIGHLIGHTS_QUERY, "")),
-    entry!(&["m", "mm"], "objc", || configured(tree_sitter_objc::LANGUAGE.into(), "objc", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_objc::HIGHLIGHTS_QUERY]), tree_sitter_objc::INJECTIONS_QUERY)),
+    entry!(&["ml"], "ocaml", || configured(tree_sitter_ocaml::LANGUAGE_OCAML.into(), "ocaml", &layered(&[tree_sitter_ocaml::HIGHLIGHTS_QUERY, include_str!("queries/ocaml-highlights.scm")]), "")),
+    entry!(&["m", "mm"], "objc", || configured(tree_sitter_objc::LANGUAGE.into(), "objc", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_objc::HIGHLIGHTS_QUERY, include_str!("queries/c-highlights.scm")]), tree_sitter_objc::INJECTIONS_QUERY)),
     entry!(&["nix"], "nix", || configured(tree_sitter_nix::LANGUAGE.into(), "nix", tree_sitter_nix::HIGHLIGHTS_QUERY, tree_sitter_nix::INJECTIONS_QUERY)),
     entry!(&["sql"], "sql", || configured(tree_sitter_sequel::LANGUAGE.into(), "sql", tree_sitter_sequel::HIGHLIGHTS_QUERY, "")),
     entry!(&["diff", "patch"], "diff", || configured(tree_sitter_diff::LANGUAGE.into(), "diff", tree_sitter_diff::HIGHLIGHTS_QUERY, "")),

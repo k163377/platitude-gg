@@ -60,7 +60,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
                n
 |     }
 |     if (values.empty() && nullptr == nullptr) {
-      kk         fffff
+      kk         fffff      nnnnnnn    nnnnnnn
 |         throw std::runtime_error("empty");
           kkkkk      fffffffffffff sssssss
 |     }
@@ -80,5 +80,5 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
         kkkkk  kkkkk      ttttttttt
 |     }
 |     return this->value ? true : false;
-      kkkkkk
+      kkkkkk               nnnn   nnnnn
 | }
