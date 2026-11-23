@@ -8,8 +8,8 @@ import platitude.ui.input
 // (デザイン規約 §hover のツールチップ): every target waits its own rest and the neighbour's box goes first; the hand stepping
 // into the box keeps it; a refusal of what is typed stands until the typing changes; where the box stands for a row
 // among rows and beside its target; a dismissed box is not put back under the same still hand; a target that takes
-// its ask back is heard again when it asks afresh. Only a real pointer can answer this: hover cannot be injected into
-// the app (verify-ui スキル).
+// its ask back is heard again when it asks afresh; a menu row's box does not come back with its menu. Only a real
+// pointer can answer this: hover cannot be injected into the app (verify-ui スキル).
 Item {
     id: root
     width: 1000
@@ -30,6 +30,18 @@ Item {
         y: 10
         AppMenuItem {
             text: "Act"
+        }
+    }
+    /// A menu with a row that has a reason to tell (the delete table's `Differs from …`), clear of the rows: the box
+    /// that row puts out stands on a row that leaves the window with its menu.
+    AppMenu {
+        id: reasonMenu
+        x: 620
+        y: 90
+        AppMenuItem {
+            id: reasonRow
+            text: "Delete"
+            blockedReason: "Differs from origin/main"
         }
     }
 
@@ -180,6 +192,9 @@ Item {
         function init() {
             if (menu.visible)
                 menu.dismiss()
+            if (reasonMenu.visible)
+                reasonMenu.dismiss()
+            reasonRow.tipForced = false
             // A corner nothing reaches, and the beat the box leaves on.
             mouseMove(root, root.width - 1, root.height - 1)
             typedBox.refused = false
@@ -446,6 +461,29 @@ Item {
             compare(shows.count, 0, "the box the menu took down stays down")
             mouseMove(root, 152, middleOf(rowA))
             tryVerify(() => box.visible && box.parent === rowA, undefined, "the hand's own move brings it back")
+        }
+
+        // A menu row's box, the menu going under it: the row leaves the window, where Qt reads the box as not visible
+        // though it still means to show it, and opens it again the moment the row is back in a window
+        // (`QQuickPopupPrivate::setWindow`). The box let go meanwhile is closed for good: the menu opening again shows
+        // no box at the row's corner with nothing to say.
+        // The row asks as its hover does (`AppMenuItem.tipForced`), and lets go once the menu has gone, as the hand
+        // leaving the row would.
+        function test_m_a_menu_rows_box_does_not_come_back_with_the_menu() {
+            const box = root.box
+            verify(reasonMenu.offerHere(), "the menu opens")
+            tryVerify(() => reasonMenu.opened)
+            reasonRow.tipForced = true
+            tryVerify(() => box.visible && box.parent === reasonRow, undefined, "the row's reason is out")
+            reasonMenu.dismiss()
+            tryVerify(() => !reasonMenu.visible, undefined, "the menu went, the row with it")
+            reasonRow.tipForced = false
+            tryVerify(() => seat.current === null, undefined, "the seat let the box go")
+            shows.clear()
+            verify(reasonMenu.offerHere(), "the menu opens again")
+            tryVerify(() => reasonMenu.opened)
+            verify(!box.visible, "no box came back with the row")
+            compare(shows.count, 0)
         }
 
         // A target taking its ask back for a reason of its own (a tab taken up): the box goes now, not a beat

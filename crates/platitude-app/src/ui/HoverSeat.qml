@@ -340,9 +340,16 @@ QtObject {
         seat.stateNow = "idle"
         seat.target = null
         seat.pointed = false
-        if (seat.card !== null && seat.card.visible) {
+        // Closed whatever `visible` reads: a card whose parent item has left the window (a menu row's tip, the menu
+        // gone) reads false though Qt still means to show it, and opens it again the moment that item is back in a
+        // window (`QQuickPopupPrivate::setWindow`) — with no target, a box with nothing to say at the item's corner
+        // (`tst_tipseat.qml`). A card already closed takes the close as nothing and tells nothing, so `closingKey`
+        // outlives the call only for a close still under way (an exit transition), which `closed` ends.
+        if (seat.card !== null) {
             seat.closingKey = target.key
             seat.card.close()
+            if (!seat.card.visible)
+                seat.closingKey = ""
         }
         seat.closeAsked(target, why)
     }

@@ -536,6 +536,21 @@ Item {
             compare(carded.state, "waiting", "asked for again, it comes back")
         }
 
+        // A target let go while it rests, its card not out: the seat closes a card already closed, which tells nothing,
+        // so the card's own closing after a later opening is still heard as a dismissal.
+        function test_a_rest_let_go_leaves_the_cards_own_closing_a_dismissal() {
+            carded.point(root.a())
+            compare(carded.state, "waiting")
+            carded.takeDown("list", false)
+            compare(carded.state, "idle")
+            carded.point(root.a(), true)
+            tryCompare(card, "opened", true)
+            card.close()
+            tryCompare(carded, "state", "idle")
+            carded.point(root.a())
+            compare(carded.state, "idle", "not put back under the same still hand")
+        }
+
         function test_a_bar_held_outside_takes_the_card_down_and_drops_the_ask() {
             carded.point(root.a(), true)
             tryCompare(card, "opened", true)
