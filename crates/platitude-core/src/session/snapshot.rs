@@ -2,7 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
-use crate::offers::TagDeleteHeld;
+use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides};
 use crate::remote::{Marked, PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
@@ -176,10 +176,8 @@ impl RefsSnapshot {
     /// remote can be named, or where the one reached has the name on
     /// another commit than here (the reading is deleted from its own line).
     pub fn tag_menu(&self, short: &str, against: &str, aim: &str) -> TagMenuFacts {
-        let here = self
-            .tag_named(short)
-            .filter(|tag| tag.here)
-            .map(|tag| tag.oid);
+        let tag = self.tag_named(short);
+        let here = tag.filter(|tag| tag.here).map(|tag| tag.oid);
         let carriers: Vec<&str> = self
             .remote_tags
             .carriers_against(short, against)
@@ -219,6 +217,7 @@ impl RefsSnapshot {
             row_goes: here.is_none() && carriers.as_slice() == [reach],
             reach: reach.to_string(),
             held_back,
+            sides: tag.map(TagItem::sides),
             carriers: carriers
                 .iter()
                 .map(|remote| (*remote).to_string())
@@ -305,6 +304,20 @@ impl RefsSnapshot {
                 .and_then(|measured| self.remote_named(measured))
                 .map(|remote| remote.oid),
             upstream: upstream.remote_branch().unwrap_or_default().to_string(),
+        }
+    }
+
+    /// What the card of local branch `short` reads of its upstream
+    /// (`offers::ref_menu`): where the reading it speaks for stands,
+    /// whether it has an upstream at all, and whether this repository has a
+    /// remote to name one on. A name this snapshot does not list reads with
+    /// no upstream; the remotes are there all the same.
+    pub fn branch_far(&self, short: &str) -> BranchFar {
+        let branch = self.local_named(short);
+        BranchFar {
+            reading: branch.map_or(Reading::None, BranchItem::reading),
+            tracked: branch.is_some_and(|branch| !branch.upstream_named().is_empty()),
+            has_remote: !self.remote_names.is_empty(),
         }
     }
 
@@ -542,6 +555,30 @@ pub struct BranchItem {
     pub counts: crate::AheadBehind,
 }
 
+impl BranchItem {
+    /// The upstream this branch is configured with, wherever it stands —
+    /// the remote reading, a branch here, or one gone ([`Self::upstream`] /
+    /// [`Self::upstream_local`] / [`Self::upstream_gone`], at most one of
+    /// them filled); empty where it has none. What the menu takes off.
+    pub fn upstream_named(&self) -> &str {
+        [&self.upstream, &self.upstream_local, &self.upstream_gone]
+            .into_iter()
+            .find(|named| !named.is_empty())
+            .map_or("", |named| named.as_str())
+    }
+
+    /// Where the remote reading this branch speaks for stands.
+    pub fn reading(&self) -> Reading {
+        if self.upstream.is_empty() {
+            Reading::None
+        } else if self.upstream_drifted {
+            Reading::Drifted
+        } else {
+            Reading::Together
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagItem {
     pub short: crate::Name,
@@ -559,6 +596,18 @@ pub struct TagItem {
     pub here: bool,
 }
 
+impl TagItem {
+    /// Which sides the name stands on: one row carries both, a tag having
+    /// no namespace.
+    pub fn sides(&self) -> TagSides {
+        match (self.here, self.has_remote) {
+            (false, _) => TagSides::Remote,
+            (true, true) => TagSides::Both,
+            (true, false) => TagSides::Here,
+        }
+    }
+}
+
 /// What a menu on one tag stands on ([`RefsSnapshot::tag_menu`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenuFacts {
@@ -572,12 +621,28 @@ pub struct TagMenuFacts {
     pub reach: String,
     /// Why those rows stand greyed, if they do.
     pub held_back: TagDeleteHeld,
+    /// Which sides the name stands on; `None` where this snapshot lists no
+    /// tag of the name.
+    pub sides: Option<TagSides>,
     /// Every remote carrying the name, in name order — what the greyed
     /// rows name when no one of them can be reached.
     pub carriers: Vec<String>,
     /// Deleting from `reach` leaves no holder of the name, so its row goes
     /// with it.
     pub row_goes: bool,
+}
+
+impl TagMenuFacts {
+    /// What the card's rows read over there (`offers::ref_menu`): the
+    /// sides, whether the push names a remote, and why the deletes are held
+    /// back.
+    pub fn far(&self) -> TagFar {
+        TagFar {
+            sides: self.sides,
+            has_remote: !self.push_remote.is_empty(),
+            held_back: self.held_back,
+        }
+    }
 }
 
 /// One remote holding one tag on a commit this repository does not have

@@ -8,7 +8,7 @@
 
 use super::super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::super::*;
-use crate::offers::TagDeleteHeld;
+use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides};
 use crate::remote::AdvertisedTag;
 
 /// One worktree: no branch is held anywhere else.
@@ -98,6 +98,62 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
         "the reading it speaks for is the same one wherever it stands"
     );
     assert!(snapshot.locals[0].upstream_drifted);
+}
+
+/// What a branch's card reads of its upstream (`RefsSnapshot::branch_far`):
+/// where the reading stands, an upstream of any kind, and a remote to name
+/// one on.
+#[test]
+fn a_branchs_card_reads_where_its_upstream_stands() {
+    let tracking = |short: &str, commit: Oid| RefEntry {
+        name: crate::Name::from(format!("refs/remotes/{short}")),
+        short: crate::Name::from(short),
+        kind: RefKind::RemoteBranch,
+        target: commit,
+        peeled: None,
+        upstream: None,
+        is_head: false,
+        created_unix: 0,
+        counts: crate::AheadBehind::default(),
+    };
+    let tracks = |name: &str, upstream: &str| RefEntry {
+        upstream: Some(crate::Name::from(format!("refs/remotes/{upstream}"))),
+        ..branch(name, oid(1))
+    };
+    let refs = vec![
+        tracks("main", "origin/main"),
+        tracks("side", "origin/side"),
+        tracks("gone", "origin/gone"),
+        branch("plain", oid(1)),
+        tracking("origin/main", oid(2)),
+        tracking("origin/side", oid(1)),
+    ];
+    let held = held_by_nobody();
+    let joins = RefJoins::new(&refs, &held);
+    let remote_tags = index_of("origin", Vec::new());
+    let mut snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
+    snapshot.remote_names = vec!["origin".to_string()];
+    let far = |reading, tracked| BranchFar {
+        reading,
+        tracked,
+        has_remote: true,
+    };
+
+    assert_eq!(snapshot.branch_far("main"), far(Reading::Drifted, true));
+    assert_eq!(snapshot.branch_far("side"), far(Reading::Together, true));
+    assert_eq!(
+        snapshot.branch_far("gone"),
+        far(Reading::None, true),
+        "a gone upstream names no reading and is there to take off"
+    );
+    assert_eq!(snapshot.branch_far("plain"), far(Reading::None, false));
+    assert_eq!(
+        snapshot.branch_far("never"),
+        far(Reading::None, false),
+        "the remotes are the repository's, whichever name is asked"
+    );
+    snapshot.remote_names.clear();
+    assert!(!snapshot.branch_far("main").has_remote);
 }
 
 /// The upstream setting read from the other end: a remote-tracking row
@@ -876,6 +932,45 @@ fn a_tag_menu_reaches_the_remote_it_can_name() {
     assert_eq!(pair.held_back, TagDeleteHeld::Unnamed);
     assert_eq!(pair.carriers, ["fork", "mirror"]);
     assert!(!pair.row_goes);
+}
+
+/// What the card's rows read over there comes with the menu
+/// (`TagMenuFacts::far`): the sides the name stands on, whether the push
+/// names a remote, and why the deletes are held back.
+#[test]
+fn a_tag_menu_hands_its_card_what_the_rows_read_over_there() {
+    let refs = [
+        branch("main", oid(1)),
+        tag("moved", oid(3), false),
+        tag("mine", oid(3), false),
+    ];
+    let snapshot = read_with(&refs, &[("moved", 2, "origin"), ("theirs", 5, "fork")]);
+
+    assert_eq!(
+        snapshot.tag_menu("moved", "origin", "").far(),
+        TagFar {
+            sides: Some(TagSides::Both),
+            has_remote: true,
+            held_back: TagDeleteHeld::Drifted,
+        }
+    );
+    assert_eq!(
+        snapshot.tag_menu("mine", "origin", "").far().sides,
+        Some(TagSides::Here)
+    );
+    assert_eq!(
+        snapshot.tag_menu("theirs", "origin", "").far().sides,
+        Some(TagSides::Remote)
+    );
+    assert_eq!(
+        snapshot.tag_menu("never", "origin", "").far().sides,
+        None,
+        "no tag of the name is listed"
+    );
+    assert!(
+        !snapshot.tag_menu("mine", "", "").far().has_remote,
+        "no remote for the push to go to"
+    );
 }
 
 /// Times one `publish_refs` join — what every poll tick does on top of

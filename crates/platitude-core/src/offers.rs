@@ -96,7 +96,7 @@ impl<'a> RefTarget<'a> {
 /// The rows differ by side (`tag --delete` needs a local tag,
 /// `push --delete` a remote one, sending a local one), and the sidebar lists
 /// a name held on both sides once, so the row cannot tell on its own
-/// (`NavSectionModel.tagSides`).
+/// (`session::TagItem::sides`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TagSides {
     /// Made here and no remote is known to carry the name.
@@ -115,6 +115,15 @@ impl TagSides {
             "remote" => Some(Self::Remote),
             "both" => Some(Self::Both),
             _ => None,
+        }
+    }
+
+    /// The word [`Self::from_word`] reads.
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Here => "here",
+            Self::Remote => "remote",
+            Self::Both => "both",
         }
     }
 
