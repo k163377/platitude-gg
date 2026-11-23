@@ -9,9 +9,14 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
      kkkkkkkkkkk
 | 
 | A paragraph with `inline code`, **strong**, *emphasis* and a [link](https://example.com).
+                   sssssssssssss                                kkkk  kkkkkkkkkkkkkkkkkkk
+| 
+| Inline <b>html</b> tags.
+          k       k
 | 
 | - A list item
 | - Another item with an ![image](pic.png)
+                           kkkkk  kkkkkkk
 | 
 | 1. Numbered
 | 
@@ -20,7 +25,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | ```rust
   sssssss
 | fn main() { let s = "hi"; }
-  kksssssssssssssssssssssssss
+  kksffffssssskkkssssssssssss
 | ```
   sss
 | 
@@ -34,7 +39,17 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | | cell  | cell |
 | 
 | <div>html block</div>
-   kkkkkkkk aaaaaaaaaa
+   kkk             kkk
+| 
+| <details>
+   kkkkkkk
+| <summary>More</summary>
+   kkkkkkk       kkkkkkk
+| 
+| Hidden text.
+| 
+| </details>
+    kkkkkkk
 | 
 | [ref]: https://example.com "Title"
   kkkkk  kkkkkkkkkkkkkkkkkkk sssssss
