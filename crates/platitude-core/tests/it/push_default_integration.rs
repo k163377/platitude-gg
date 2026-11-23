@@ -251,12 +251,8 @@ async fn standing_of(
         .await
         .expect("marks");
     let track = track_of(repo, exec, cancel).await;
-    let route = remote::PushRoute::new(
-        remote::Upstream::of(
-            status.upstream.as_deref().unwrap_or_default(),
-            marks.upstream_is_here(),
-        ),
-        marks.marked(),
+    let route = marks.route(
+        status.upstream.as_deref().unwrap_or_default(),
         ["fork", "origin"],
     );
     remote::push_standing(route, status.upstream_counts, track.as_ref())

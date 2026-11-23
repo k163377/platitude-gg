@@ -230,14 +230,10 @@ impl RepoSession {
         else {
             return false;
         };
-        let upstream = remote::Upstream::of(upstream, marks.upstream_is_here());
         let elsewhere = |names: &[remote::Remote]| {
-            remote::PushRoute::new(
-                upstream,
-                marks.marked(),
-                names.iter().map(|remote| remote.name.as_str()),
-            )
-            .goes_elsewhere()
+            marks
+                .route(upstream, names.iter().map(|remote| remote.name.as_str()))
+                .goes_elsewhere()
         };
         self.remotes
             .peek(|remotes| elsewhere(&remotes.list))

@@ -228,10 +228,12 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 ///
 /// The one reader of one branch's keys, shared by [`super::plan_push`] and
 /// the status tick: a second spelling, in another layer, lets a fork
-/// workflow's label name a remote the push never goes to. The destination
-/// is likewise resolved once, by the pure [`super::PushRoute`] in
-/// `plan_push`'s order, off [`Self::marked`]. Every branch's own mark at once is
-/// [`kept_marks`]'s. Net: `push_default_integration`.
+/// workflow's label name a remote the push never goes to. The marks'
+/// order is read once ([`Self::marked`]), which the send matches on and
+/// the label's route ([`Self::route`]) weighs; how the two then name the
+/// destination is held together by a test (the route's module doc). Every
+/// branch's own mark at once is [`kept_marks`]'s. Net:
+/// `push_default_integration`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
     /// The branch's own mark, which beats every other (order:
@@ -259,6 +261,21 @@ impl PushMarks {
             self.push_default
                 .as_ref()
                 .map(|marked| marked.remote.as_str()),
+        )
+    }
+
+    /// The push's route off these keys, measured against `upstream` — as
+    /// the status names it, empty where none —, which configuration alone
+    /// says is a branch here ([`Self::upstream_is_here`]).
+    pub fn route<'a>(
+        &'a self,
+        upstream: &'a str,
+        remotes: impl IntoIterator<Item = &'a str>,
+    ) -> super::PushRoute<'a> {
+        super::PushRoute::new(
+            super::Upstream::of(upstream, self.upstream_is_here()),
+            self.marked(),
+            remotes,
         )
     }
 
