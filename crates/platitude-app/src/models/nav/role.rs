@@ -115,7 +115,7 @@ impl Role {
     /// Every role the view is handed, in number order.
     ///
     /// No upstream role: no delegate asks for it, and the menus that do
-    /// read it by name (`upstream_of` / `upstream_drifted`).
+    /// read it by name (`upstream_of` / `branch_upstream`).
     pub(super) const ALL: [Self; 17] = [
         Self::Name,
         Self::Full,

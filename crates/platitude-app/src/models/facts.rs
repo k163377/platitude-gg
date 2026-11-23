@@ -9,7 +9,7 @@
 
 use std::ops::RangeInclusive;
 
-use platitude_core::offers::TreeStanding;
+use platitude_core::offers::{FarSide, TreeStanding};
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -229,6 +229,12 @@ impl GitFacts {
     /// none: a map short of a field reads as the default tree (no HEAD,
     /// nothing standing) with only a warning in the log (`encode::One`).
     /// Every slot here that takes a `tree` takes it so.
+    ///
+    /// `held_by_worktree` is the worktree the row leads to, empty for none
+    /// (`RefRowMenu.standOn`'s `held`). `far` is the record the row's card
+    /// stood on, handed on as it was read — `NavSectionModel.branchUpstream`
+    /// on a BRANCH card, `tagMenu` on a TAG card — and `undefined` for the
+    /// row's own menu, which reads nothing over there (`offers::FarSide`).
     #[qslot]
     #[expect(clippy::too_many_arguments)]
     fn ref_menu_offers(
@@ -239,44 +245,10 @@ impl GitFacts {
         open: bool,
         tree: One<TreeStanding>,
         held_by_worktree: String,
-        remote_counterpart: String,
-        remote_drifted: bool,
-        tracked: bool,
-        default_remote: String,
-        tag_sides: String,
+        far: Optional<FarSide>,
     ) -> Vec<String> {
-        use platitude_core::offers::{
-            BranchFar, FarSide, Reading, TagDeleteHeld, TagFar, TagSides,
-        };
         let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
             return Vec::new();
-        };
-        // The far side the row's kind has, read off the words each entrance
-        // hands: `remote_drifted` is a branch's drifted reading, and on a tag
-        // its rows that delete over there held back.
-        let has_remote = !default_remote.is_empty();
-        let far = match kind.as_str() {
-            "branch" => FarSide::Branch(BranchFar {
-                reading: if remote_counterpart.is_empty() {
-                    Reading::None
-                } else if remote_drifted {
-                    Reading::Drifted
-                } else {
-                    Reading::Together
-                },
-                tracked,
-                has_remote,
-            }),
-            "tag" => FarSide::Tag(TagFar {
-                sides: TagSides::from_word(&tag_sides),
-                has_remote,
-                held_back: if remote_drifted {
-                    TagDeleteHeld::Drifted
-                } else {
-                    TagDeleteHeld::No
-                },
-            }),
-            _ => FarSide::Unread,
         };
         platitude_core::offers::ref_menu(
             target,
@@ -284,7 +256,7 @@ impl GitFacts {
             open,
             &tree,
             !held_by_worktree.is_empty(),
-            far,
+            far.unwrap_or_default(),
         )
         .words()
         .into_iter()

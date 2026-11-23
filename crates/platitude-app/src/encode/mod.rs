@@ -4,6 +4,7 @@
 
 mod columns;
 mod discards;
+mod far;
 mod graph;
 mod labels;
 mod landing;
@@ -23,6 +24,7 @@ mod tests;
 
 pub use columns::{Candidates, widest_lines};
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};
+pub(crate) use far::{put_far, read_far};
 pub use graph::{Lanes, avatar_code, conflict_side_colors, lanes_of, spell_lanes, tail_lanes};
 pub(crate) use labels::pr_set;
 pub use labels::{Chips, chips_of, chips_shown, gone_keys, named_kind_word, ref_kind_word};

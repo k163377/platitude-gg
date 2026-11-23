@@ -502,29 +502,34 @@ impl NavSectionModel {
     }
 
     /// The upstream this branch is configured with, wherever it stands —
-    /// a remote reading, a branch here, or gone (`BranchItem::upstream` /
-    /// `upstream_local` / `upstream_gone`). What the menu offers to take
-    /// off (`offers::ref_menu`'s `tracked`); empty where it has none, and
-    /// for every section but the branches.
+    /// a remote reading, a branch here, or gone
+    /// (`BranchItem::upstream_named`). What the menu offers to take off;
+    /// empty where it has none, and for every section but the branches.
     ///
-    /// The menu's entrances read this, not `upstream_of`: that one answers
-    /// remote readings only and is empty for a branch here (`remote = .`)
-    /// and for a gone upstream, which can be taken off all the same.
+    /// Not `upstream_of`: that one answers remote readings only and is
+    /// empty for a branch here (`remote = .`) and for a gone upstream, which
+    /// can be taken off all the same. The menu's entrances read the same
+    /// off `branch_upstream`.
     #[qslot]
     pub(super) fn upstream_named(&self, name: String) -> String {
         self.all
             .branch_named(&name)
-            .map(|branch| {
-                [
-                    &branch.upstream,
-                    &branch.upstream_local,
-                    &branch.upstream_gone,
-                ]
-                .into_iter()
-                .find(|named| !named.is_empty())
-                .map_or_else(String::new, |named| named.as_str().to_string())
-            })
-            .unwrap_or_default()
+            .map_or("", platitude_core::session::BranchItem::upstream_named)
+            .to_string()
+    }
+
+    /// What a branch's card reads of its upstream (`BranchUpstream`), read
+    /// as the menu opens and as it stands again, and handed on whole to
+    /// `GitFacts.refMenuOffers`. A row of any `kind` but `branch` reads
+    /// nothing over there: a remote branch is a reading, with no upstream
+    /// of its own — and its name may be a local branch's as well. Asked of
+    /// the branches section.
+    #[qslot]
+    pub(super) fn branch_upstream(&self, kind: String, name: String) -> One<BranchUpstream> {
+        if kind != "branch" {
+            return One::new(BranchUpstream::default());
+        }
+        One::new(self.all.branch_upstream(&name))
     }
 
     /// Where that upstream stands, which is the colour its name wears
@@ -594,20 +599,6 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// Whether that reading stands on another commit
-    /// (`session::BranchItem::upstream_drifted`). False where there is no
-    /// pair, and for every section but the branches.
-    ///
-    /// Takes the remote delete rows out of the table (デザイン規約
-    /// §左メニューの所作 の削除の表): a drifted reading is deleted from its
-    /// own row.
-    #[qslot]
-    fn upstream_drifted(&self, name: String) -> bool {
-        self.all
-            .branch_named(&name)
-            .is_some_and(|branch| branch.upstream_drifted)
-    }
-
     /// Which sides the tag with this name stands on — `here` / `remote` /
     /// `both`, empty when this section holds no such row
     /// (`platitude_core::offers::TagSides`). A tag has no namespace, so
@@ -618,14 +609,10 @@ impl NavSectionModel {
         if name.is_empty() || self.section != "tags" {
             return String::new();
         }
-        let Some(tag) = self.all.tag_named(&name) else {
-            return String::new();
-        };
-        match (!tag.here, tag.has_remote) {
-            (true, _) => "remote".to_string(),
-            (false, true) => "both".to_string(),
-            (false, false) => "here".to_string(),
-        }
+        self.all
+            .tag_named(&name)
+            .map_or("", |tag| tag.sides().word())
+            .to_string()
     }
 
     /// Where `remote` carries this tag when that is not where this
@@ -685,16 +672,21 @@ impl NavSectionModel {
     /// What a menu on this tag stands on, read as it opens (`RefTagMenu`):
     /// where the push goes and what it is leased to, which remote the
     /// deletes reach and why they stand greyed, and whether the row goes
-    /// with them (`RefsSnapshot::tag_menu`). `aim` is a remote the reader
-    /// named on its own — a carrier's line, a chip drawing that remote's
-    /// reading (`tag_aim_at`) — or empty. Asked of the tags section.
+    /// with them (`RefsSnapshot::tag_menu`), and the sides the name stands
+    /// on — the record `GitFacts.refMenuOffers` reads the card's rows off.
+    /// `aim` is a remote the reader named on its own — a carrier's line, a
+    /// chip drawing that remote's reading (`tag_aim_at`) — or empty. Asked
+    /// of the tags section.
     #[qslot]
     pub(super) fn tag_menu(&self, name: String, against: String, aim: String) -> One<TagMenu> {
         if name.is_empty() || self.section != "tags" {
-            return One::new(TagMenu {
-                push_remote: against,
-                ..TagMenu::default()
-            });
+            return One::new(
+                platitude_core::session::TagMenuFacts {
+                    push_remote: against,
+                    ..Default::default()
+                }
+                .into(),
+            );
         }
         One::new(self.all.tag_menu(&name, &against, &aim))
     }

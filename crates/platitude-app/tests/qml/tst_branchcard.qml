@@ -74,7 +74,7 @@ Item {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                       "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
-                      "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "yes",
+                      "remoteCounterpartOid": "def456", "open": true, "merged": "yes",
                       "offers": root.free, "push": undefined }
         for (const key in fields)
             all[key] = fields[key]
@@ -86,7 +86,6 @@ Item {
             "upstream": all.upstream,
             "upstreamWhere": all.upstreamWhere,
             "remoteCounterpartOid": all.remoteCounterpartOid,
-            "remoteDrifted": all.remoteDrifted,
             "open": all.open,
             "merged": all.merged,
             "offers": all.offers,
@@ -159,7 +158,7 @@ Item {
         }
 
         function test_a_drifted_reading_is_out_while_the_local_delete_is_not() {
-            root.standOn({ offers: root.drifted, remoteDrifted: true })
+            root.standOn({ offers: root.drifted })
             compare(deleteRow.blockedReason, "", "the branch here goes")
             compare(remoteDeleteRow.blockedReason, "Differs from origin/feature/topic-a")
             compare(bothDeleteRow.blockedReason, "Differs from origin/feature/topic-a")
@@ -173,7 +172,7 @@ Item {
         /// A tag is one of the row's words: on the row out of reach it greys with them, and stays the warning on the
         /// one that can still be pressed (デザイン規約 §無効).
         function test_a_row_out_of_reach_greys_its_tag() {
-            root.standOn({ offers: root.drifted, remoteDrifted: true, merged: "no" })
+            root.standOn({ offers: root.drifted, merged: "no" })
             verify(bothDeleteRow.blocked)
             compare(bothDeleteRow.note, "not merged")
             compare(tagInk(bothDeleteRow), Theme.textMuted)

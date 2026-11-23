@@ -151,11 +151,11 @@ pub(super) const TABLE: &[Verb] = &[
     // they come off, so a wrong row and a wrong reading fail apart. Which
     // rows a side offers is core's
     // (`offers::each_delete_row_needs_the_side_it_names`) and the card's
-    // use of it `tests/qml/tst_tagcard.qml`'s; these claim the two lookups
-    // the menu makes (`RefRowMenu.tagFacts`): `:remote` that `tagSides`
-    // arrived (unread answers `here`, one row instead of three), `:drift`
-    // that `remoteTagDrift` did. No run for a name on one side only: core
-    // and the card test already decide those.
+    // use of it `tests/qml/tst_tagcard.qml`'s; these claim the two parts of
+    // the record the menu reads (`RefRowMenu.tagFacts` — `tagMenu`):
+    // `:remote` that the sides arrived (unread answers `here`, one row
+    // instead of three), `:drift` that the lease did. No run for a name on
+    // one side only: core and the card test already decide those.
     Verb {
         name: "tag-menu",
         when: &[

@@ -45,7 +45,7 @@ Item {
         branchCard.standOn("branch", name, name, "abc123", {
             "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/" + name, "upstream": "origin/" + name,
             "upstreamWhere": "remote",
-            "remoteCounterpartOid": "def456", "remoteDrifted": false, "open": true, "merged": "",
+            "remoteCounterpartOid": "def456", "open": true, "merged": "",
             "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
         })
     }

@@ -115,61 +115,107 @@ impl Record for HeldMark {
 }
 
 /// What a tag's menu stands on (`NavSectionModel::tag_menu`,
-/// `platitude_core::session::TagMenuFacts`), in the words the card reads.
+/// `platitude_core::session::TagMenuFacts`), in the words the card reads,
+/// with what its rows read over there flat beside them (`encode::put_far`:
+/// `sides`, `hasRemote` and the `heldBack` the card words its greyed rows
+/// by) — the record QML hands `GitFacts.refMenuOffers` as it is.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenu {
     pub push_remote: String,
     /// Hex; empty for the plain push.
     pub lease: String,
     pub reach: String,
-    /// `drift` / `unnamed`, empty where the rows reaching over there are
-    /// not held back.
-    pub held_back: String,
     /// The remotes carrying the name, as a sentence lists them.
     pub carriers: String,
     pub row_goes: bool,
+    pub far: platitude_core::offers::TagFar,
 }
 
 impl Record for TagMenu {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
-        Fields::new()
+        let far = platitude_core::offers::FarSide::Tag(self.far);
+        crate::encode::put_far(Fields::new(), &far)
             .put("pushRemote", &self.push_remote)
             .put("lease", &self.lease)
             .put("reach", &self.reach)
-            .put("heldBack", &self.held_back)
             .put("carriers", &self.carriers)
             .put("rowGoes", &self.row_goes)
             .done()
     }
 
     fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        let platitude_core::offers::FarSide::Tag(far) = crate::encode::read_far(map)? else {
+            return None;
+        };
         Some(Self {
             push_remote: field(map, "pushRemote")?,
             lease: field(map, "lease")?,
             reach: field(map, "reach")?,
-            held_back: field(map, "heldBack")?,
             carriers: field(map, "carriers")?,
             row_goes: field(map, "rowGoes")?,
+            far,
         })
     }
 }
 
 impl From<platitude_core::session::TagMenuFacts> for TagMenu {
     fn from(facts: platitude_core::session::TagMenuFacts) -> Self {
-        use platitude_core::offers::TagDeleteHeld;
         Self {
+            far: facts.far(),
             push_remote: facts.push_remote,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
             reach: facts.reach,
-            held_back: match facts.held_back {
-                TagDeleteHeld::No => "",
-                TagDeleteHeld::Drifted => "drift",
-                TagDeleteHeld::Unnamed => "unnamed",
-            }
-            .to_string(),
             carriers: facts.carriers.join(", "),
             row_goes: facts.row_goes,
         }
+    }
+}
+
+/// What a branch's card reads of its upstream, read as the menu opens and
+/// as it stands again (`NavSectionModel::branch_upstream`): the remote
+/// reading it speaks for and that reading's commit — what the card's
+/// remote deletes name and are leased to —, the upstream it is configured
+/// with, and core's part flat beside them (`encode::put_far`), off the same
+/// row (`RefsSnapshot::branch_far`). QML hands the record to
+/// `GitFacts.refMenuOffers` as it is.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BranchUpstream {
+    /// `None` on a row that is no local branch's: it reads nothing over
+    /// there.
+    pub far: Option<platitude_core::offers::BranchFar>,
+    /// Empty where no reading is listed.
+    pub counterpart: String,
+    /// Hex; empty with no reading.
+    pub counterpart_oid: String,
+    /// Listed or gone, a branch here too (`BranchItem::upstream_named`);
+    /// empty where it has none.
+    pub upstream: String,
+}
+
+impl Record for BranchUpstream {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        use platitude_core::offers::FarSide;
+        let far = self.far.map_or(FarSide::Unread, FarSide::Branch);
+        crate::encode::put_far(Fields::new(), &far)
+            .put("remoteCounterpart", &self.counterpart)
+            .put("remoteCounterpartOid", &self.counterpart_oid)
+            .put("upstream", &self.upstream)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        use platitude_core::offers::FarSide;
+        let far = match crate::encode::read_far(map)? {
+            FarSide::Unread => None,
+            FarSide::Branch(far) => Some(far),
+            FarSide::Tag(_) => return None,
+        };
+        Some(Self {
+            far,
+            counterpart: field(map, "remoteCounterpart")?,
+            counterpart_oid: field(map, "remoteCounterpartOid")?,
+            upstream: field(map, "upstream")?,
+        })
     }
 }
 

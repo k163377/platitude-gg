@@ -140,12 +140,9 @@ QtObject {
         if (kind !== "branch" && kind !== "remote" && kind !== "worktree")
             return
         const held = menuState.worktreeLeadingFrom(kind, name)
+        // Nothing over there: the rows that reach it are the cards'.
         const offers = GitFacts.refMenuOffers(
-            kind, name, oidHex,
-            menuState.repoTab.state === "open",
-            menuState.tree,
-            // No drift: the rows that reach a remote are the delete table's, on the BRANCH card's answers.
-            held, "", false, false, menuState.repoTab.defaultRemote, "")
+            kind, name, oidHex, menuState.repoTab.state === "open", menuState.tree, held, undefined)
         menuState.menuCanSwitch = offers.includes("switch")
         menuState.menuSwitchAsks = offers.includes("asks")
         // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
@@ -196,34 +193,27 @@ QtObject {
     function branchFacts(kind, full, oidHex) {
         if (kind !== "branch" && kind !== "remote")
             return { "heldByWorktree": "", "holderLeaf": "", "holderHome": false,
-                     "remoteCounterpart": "", "remoteCounterpartOid": "",
-                     "remoteDrifted": false, "offers": [], "open": false, "merged": "" }
+                     "remoteCounterpart": "", "remoteCounterpartOid": "", "offers": [], "open": false, "merged": "" }
         const held = kind === "branch"
             ? menuState.worktreesModel.worktreeHolding(full)
             : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
-        const counterpart = kind === "branch" ? menuState.branchesModel.upstreamOf(full) : ""
-        const drifted = kind === "branch" && menuState.branchesModel.upstreamDrifted(full)
-        // The one it is configured with, a gone one too, which names no reading.
-        const upstream = kind === "branch" ? menuState.branchesModel.upstreamNamed(full) : ""
+        const reading = menuState.branchesModel.branchUpstream(kind, full)
         const open = menuState.repoTab.state === "open"
         return {
             "heldByWorktree": held,
             "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
             "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
-            "remoteCounterpart": counterpart,
-            "upstream": upstream,
-            "upstreamWhere": upstream === "" ? "" : menuState.branchesModel.upstreamWhere(full, menuState.tree.branch),
-            "remoteCounterpartOid": counterpart === "" ? "" : menuState.branchesModel.upstreamOidOf(full),
-            "remoteDrifted": drifted,
+            "remoteCounterpart": reading.remoteCounterpart,
+            "upstream": reading.upstream,
+            "upstreamWhere": reading.upstream === ""
+                             ? "" : menuState.branchesModel.upstreamWhere(full, menuState.tree.branch),
+            "remoteCounterpartOid": reading.remoteCounterpartOid,
             "open": open,
             "push": kind === "branch"
                     ? menuState.branchesModel.branchPush(full, menuState.repoTab.defaultRemote) : undefined,
             "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
                 oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.tree.headOid),
-            "offers": GitFacts.refMenuOffers(
-                kind, full, oidHex, open,
-                menuState.tree,
-                held, counterpart, drifted, upstream !== "", menuState.repoTab.defaultRemote, "")
+            "offers": GitFacts.refMenuOffers(kind, full, oidHex, open, menuState.tree, held, reading)
         }
     }
 
@@ -236,7 +226,6 @@ QtObject {
             return { "pushRemote": menuState.repoTab.defaultRemote, "offers": [] }
         const menu = menuState.tagsModel.tagMenu(full, menuState.repoTab.defaultRemote,
                                                  menuState.tagsModel.tagAimAt(full, oidHex))
-        const sides = menuState.tagsModel.tagSides(full)
         return {
             "pushRemote": menu.pushRemote,
             "tagDriftOid": menu.lease,
@@ -244,13 +233,10 @@ QtObject {
             "tagHeldBack": menu.heldBack,
             "tagCarriers": menu.carriers,
             "tagOnlyThere": menu.rowGoes,
-            "tagHere": sides === "here" || sides === "both",
+            "tagHere": menu.sides === "here" || menu.sides === "both",
             "tagAt": menuState.tagsModel.oidOfName(full),
             "offers": GitFacts.refMenuOffers(
-                kind, full, oidHex,
-                menuState.repoTab.state === "open",
-                menuState.tree,
-                "", "", menu.heldBack !== "", false, menu.pushRemote, sides)
+                kind, full, oidHex, menuState.repoTab.state === "open", menuState.tree, "", menu)
         }
     }
 

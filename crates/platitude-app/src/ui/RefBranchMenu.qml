@@ -124,8 +124,6 @@ AppMenu {
         /// the press on the tip the reader saw — or greys it, `remoteMoved`). Headless: `delete-both-go side` /
         /// `delete-upstream-go next`, `--preset stack` — a lease that misses fails the write.
         property string remoteCounterpartOid: ""
-        /// That reading stands on another commit, so the two rows that reach it say why.
-        property bool remoteDrifted: false
         /// The reading as the tree has it now, which `Set upstream…` starts from: the delete rows keep the one the menu
         /// went up with (`remoteCounterpart`), the upstream rows read the tree as it is.
         property string readingNow: ""
@@ -170,11 +168,11 @@ AppMenu {
 
     /// Stands the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
     /// worktree holding this row's local branch, `holderLeaf` the name it goes by and `holderHome` whether it is the
-    /// repository's own, `remoteCounterpart` the reading a
-    /// local branch speaks for, `remoteCounterpartOid` its commit and `remoteDrifted` whether that stands on another
-    /// commit, `upstream` the one it is configured with (a gone one too) and `upstreamWhere` where that name stands,
-    /// `offers` core's words,
-    /// `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
+    /// repository's own, `remoteCounterpart` the reading a local branch speaks for and `remoteCounterpartOid` its
+    /// commit, `upstream` the one it is configured with (a gone one too) — the three off one
+    /// `NavSectionModel.branchUpstream` — and `upstreamWhere` where that name stands, `offers` core's words (a drifted
+    /// reading answers no `delete-remote`, which is what greys the rows that reach it), `open` whether the tab is,
+    /// `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
     /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
     /// on (`NavSectionModel.branchPush`: `state`, `target`, `lease`, `upstream`). Every `facts` a branch card stands on
     /// carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are written below as they come, and
@@ -207,7 +205,6 @@ AppMenu {
             state.upstream = ""
             state.upstreamWhere = ""
             state.remoteCounterpartOid = ""
-            state.remoteDrifted = false
             state.readingNow = ""
             state.remoteMoved = false
             state.heldByWorktree = ""
@@ -270,7 +267,6 @@ AppMenu {
         state.remoteMoved = remoteMoved
         state.remoteCounterpart = readingHeld ? state.remoteCounterpart : facts.remoteCounterpart
         state.remoteCounterpartOid = readingHeld ? state.remoteCounterpartOid : facts.remoteCounterpartOid
-        state.remoteDrifted = readingHeld ? state.remoteDrifted : facts.remoteDrifted
         state.readingNow = facts.remoteCounterpart
         state.canDelete = canDelete
         state.canDeleteRemote = offers.includes("delete-remote")

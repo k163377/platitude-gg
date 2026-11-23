@@ -2,6 +2,7 @@
 
 use super::super::testkit::*;
 use super::super::*;
+use platitude_core::offers::TagDeleteHeld;
 
 #[test]
 fn a_tag_row_reads_out_of_the_snapshot() {
@@ -240,12 +241,12 @@ fn a_tags_menu_and_note_come_off_the_readings() {
     let pair = model.tag_menu("v-pair".into(), "origin".into(), String::new());
     assert_eq!(pair.push_remote, "origin");
     assert_eq!(pair.reach, "");
-    assert_eq!(pair.held_back, "unnamed");
+    assert_eq!(pair.far.held_back, TagDeleteHeld::Unnamed);
     assert_eq!(pair.carriers, "fork, mirror");
     let aimed = model.tag_menu("v-pair".into(), "origin".into(), "mirror".into());
     assert_eq!(aimed.push_remote, "mirror");
     assert_eq!(aimed.reach, "mirror");
-    assert_eq!(aimed.held_back, "");
+    assert_eq!(aimed.far.held_back, TagDeleteHeld::No);
     assert_eq!(
         aimed.lease,
         oid("b").to_hex(),
@@ -865,6 +866,104 @@ fn an_upstream_is_named_wherever_it_stands() {
         pair("", ""),
         "a name this section does not carry"
     );
+}
+
+/// What the BRANCH card reads of its upstream comes in one record
+/// (`branch_upstream`): the reading and its commit, the upstream it is
+/// configured with, and the far side core reads off the same row. A row
+/// that is no local branch's reads nothing over there, even where a local
+/// branch carries its name.
+#[test]
+fn a_branch_card_reads_its_upstream_off_one_record() {
+    use platitude_core::offers::{BranchFar, Reading};
+    let mut reads = local("reads", false);
+    reads.upstream = "origin/reads".into();
+    reads.upstream_oid = Some(oid("b"));
+    reads.upstream_drifted = true;
+    let mut lost = local("lost", false);
+    lost.upstream_gone = "origin/lost".into();
+    let mut list = vec![reads, lost, local("origin/reads", false)];
+    list.sort_by(|a, b| a.short.cmp(&b.short));
+    let snapshot = platitude_core::session::RefsSnapshot {
+        locals: list,
+        remote_names: vec!["origin".to_string()],
+        ..Default::default()
+    };
+    let mut model = section("branches", Source::Locals(Arc::new(snapshot)));
+    model.arrange();
+    let card = |kind: &str, name: &str| (*model.branch_upstream(kind.into(), name.into())).clone();
+
+    assert_eq!(
+        card("branch", "reads"),
+        BranchUpstream {
+            far: Some(BranchFar {
+                reading: Reading::Drifted,
+                tracked: true,
+                has_remote: true,
+            }),
+            counterpart: "origin/reads".to_string(),
+            counterpart_oid: oid("b").to_hex(),
+            upstream: "origin/reads".to_string(),
+        }
+    );
+    assert_eq!(
+        card("branch", "lost"),
+        BranchUpstream {
+            far: Some(BranchFar {
+                reading: Reading::None,
+                tracked: true,
+                has_remote: true,
+            }),
+            upstream: "origin/lost".to_string(),
+            ..BranchUpstream::default()
+        },
+        "gone: no reading to name or lease to, an upstream to take off"
+    );
+    assert_eq!(
+        card("remote", "origin/reads"),
+        BranchUpstream::default(),
+        "a remote branch's row, whatever local branch carries its name"
+    );
+    assert_eq!(card("tag", "reads"), BranchUpstream::default());
+}
+
+/// What `GitFacts.refMenuOffers` reads off the record a card hands it as it
+/// was read: its far side, whichever model's record it is.
+#[test]
+fn a_cards_record_is_read_as_its_far_side() {
+    use platitude_core::offers::{BranchFar, FarSide, Reading, TagFar, TagSides};
+    let far = BranchFar {
+        reading: Reading::Together,
+        tracked: true,
+        has_remote: true,
+    };
+    let upstream = BranchUpstream {
+        far: Some(far),
+        counterpart: "origin/main".to_string(),
+        counterpart_oid: oid("b").to_hex(),
+        upstream: "origin/main".to_string(),
+    };
+    assert_eq!(
+        FarSide::from_map(&upstream.to_map()),
+        Some(FarSide::Branch(far))
+    );
+    assert_eq!(
+        FarSide::from_map(&BranchUpstream::default().to_map()),
+        Some(FarSide::Unread),
+        "a row that is no local branch's"
+    );
+    let tag = TagFar {
+        sides: Some(TagSides::Both),
+        has_remote: true,
+        held_back: TagDeleteHeld::Drifted,
+    };
+    let menu = TagMenu {
+        push_remote: "origin".to_string(),
+        reach: "origin".to_string(),
+        far: tag,
+        ..TagMenu::default()
+    };
+    assert_eq!(FarSide::from_map(&menu.to_map()), Some(FarSide::Tag(tag)));
 }
 
 /// What a rename asks about: the remote branch the renamed one is measured
