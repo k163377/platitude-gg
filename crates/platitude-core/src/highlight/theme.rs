@@ -44,7 +44,17 @@ pub(super) const ANNOTATION: u32 = 0xFDA4AF;
 ///
 /// syntect takes the best-scoring selector, so `keyword` and
 /// `keyword.operator` sit side by side and the narrower one wins.
-const PALETTE: [(&str, u32); 19] = [
+///
+/// A row naming one language's scope (`.cs`) answers where that syntax
+/// gives a type word a keyword's scope, as C#'s does: `int` is the bare
+/// `storage.type.cs` while `class`, `enum` and `var` take a narrower
+/// name, and `=>` is a `storage.type.function` (`.lambda` in a lambda).
+/// Only the `class`, `struct` and `interface` of a `where` constraint
+/// share `int`'s scope, under the same outer scopes as a parameter's
+/// type, and take the type colour. Where one scope carries both (C's `int` and
+/// `struct`, Rust's `i32` and `let`), no row tells them apart, and the
+/// type word stays in the keyword colour.
+const PALETTE: [(&str, u32); 22] = [
     ("comment", COMMENT),
     ("punctuation.definition.comment", COMMENT),
     ("keyword", KEYWORD),
@@ -66,6 +76,9 @@ const PALETTE: [(&str, u32); 19] = [
     ("constant.language", CONSTANT),
     ("meta.annotation", ANNOTATION),
     ("variable.annotation", ANNOTATION),
+    ("storage.type.cs", TYPE),
+    ("storage.type.function.cs", PLAIN),
+    ("storage.type.function.lambda.cs", PLAIN),
 ];
 
 /// Whether the fallback set has a language for this path (the public
@@ -163,6 +176,64 @@ diff --git a/A.kt b/A.kt
         assert!(
             colors.line(at(0, 0, 0)).spans.len() > 1,
             "Kotlin is one of the languages two-face adds to Sublime's own set"
+        );
+    }
+
+    /// A C# file its grammar cannot read reads through the lexer, which
+    /// paints type words and `=>` as the grammar would (`PALETTE`'s `.cs`
+    /// rows), and declaration words still as keywords.
+    #[test]
+    fn csharp_through_the_lexer_paints_types_as_its_grammar_does() {
+        use super::super::{Rgb, grammar, tree};
+        let source = "\
+class Counter
+{
+    int Count(string s) => s.Length;
+    Func<int, int> twice = x => x * 2;
+    void Run() { int x = ; }
+}
+";
+        let lang = grammar::for_path("A.cs").expect("C# has a grammar");
+        assert!(
+            !tree::reads(lang, source),
+            "the source must send the file to the lexer"
+        );
+        let patch = "\
+diff --git a/A.cs b/A.cs
+--- a/A.cs
++++ b/A.cs
+@@ -1,6 +1,6 @@
+ class Counter
+ {
+-    int Count(string s) => s.Size;
++    int Count(string s) => s.Length;
+     Func<int, int> twice = x => x * 2;
+     void Run() { int x = ; }
+ }
+";
+        let colors = colors(&patches(patch), Some(source));
+        let colour_of = |line: usize, text: &str, needle: &str| {
+            let start = text.find(needle).expect("the needle is on the line");
+            let mut end = 0;
+            colors
+                .line(at(0, 0, line))
+                .spans
+                .iter()
+                .find(|span| {
+                    end += span.len;
+                    start < end
+                })
+                .map(|span| span.color)
+        };
+        let added = "    int Count(string s) => s.Length;";
+        assert_eq!(colour_of(3, added, "int"), Some(Rgb::of(super::TYPE)));
+        assert_eq!(colour_of(3, added, "string"), Some(Rgb::of(super::TYPE)));
+        assert_eq!(colour_of(3, added, "=>"), Some(Rgb::of(super::PLAIN)));
+        let lambda = "    Func<int, int> twice = x => x * 2;";
+        assert_eq!(colour_of(4, lambda, "=>"), Some(Rgb::of(super::PLAIN)));
+        assert_eq!(
+            colour_of(0, "class Counter", "class"),
+            Some(Rgb::of(super::KEYWORD))
         );
     }
 
