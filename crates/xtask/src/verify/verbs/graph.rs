@@ -92,12 +92,19 @@ pub(super) const TABLE: &[Verb] = &[
     // stays live; its three rows grey inside it (`reset-menu` on the same
     // preset). Which rows grey is held by `tests/qml/tst_commitrowmenu.qml`
     // and `offers::commit_menu`'s unit tests; these two runs are pictures.
+    // On `--preset tags` the row under HEAD is published and HEAD is not:
+    // `rebase` onto it replays only HEAD, so it wears no note
+    // (`rebase_note=`, read off the row as drawn — the page's wiring
+    // included), while squash and drop on the row itself say it is pushed.
     Verb {
         name: "commit-menu",
-        when: &[(
-            Arg::WithPreset("others-merging"),
-            "can_move=true standing=true greyed=8",
-        )],
+        when: &[
+            (
+                Arg::WithPreset("others-merging"),
+                "can_move=true standing=true greyed=8",
+            ),
+            (Arg::WithPreset("tags"), "rebase_note=false"),
+        ],
         plain: "overlay saved=true popups=1 yield=true",
     },
     Verb {

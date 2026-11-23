@@ -35,6 +35,7 @@ Item {
         oid: "abc123"
         stashRef: ""
         published: false
+        rebasePublished: false
         canCherryPick: true
         canRevert: true
         canIntegrate: true
@@ -131,7 +132,8 @@ Item {
     function aimAt(fields) {
         const all = { "targetKind": "branch", "targetName": "feature/topic-a", "canSwitch": true,
                       "switchAsks": false, "heldLeaf": "", "pullRuns": "here", "pullOut": "",
-                      "pullUpstream": "origin/feature/topic-a", "published": false, "canIntegrate": true,
+                      "pullUpstream": "origin/feature/topic-a", "published": false, "rebasePublished": false,
+                      "canIntegrate": true,
                       "canCherryPick": true, "canRevert": true, "opStanding": false, "hardResetTakes": 0,
                       "hardResetNotCopied": false }
         for (const key in fields)
@@ -250,7 +252,7 @@ Item {
         /// first (offers::commit_menu `standing`) — the reset card's through the card, whose title stays live to show
         /// them — and a warning goes with the press it warned of. The move stays live: it asks first.
         function test_a_standing_operation_greys_every_row_that_starts_or_rewrites_history() {
-            root.aimAt({ opStanding: true, published: true, hardResetTakes: 2 })
+            root.aimAt({ opStanding: true, published: true, rebasePublished: true, hardResetTakes: 2 })
             menu.offerCommit(root.branchFacts())
             verify(menu.menu.openSub(menu.resetSubmenu))
             for (const item of [menu.branchHereItem, root.row("cherry-pick"), root.row("revert"), root.row("squash"),
@@ -262,7 +264,7 @@ Item {
             }
             compare(menu.switchItem.blockedWhy, "")
 
-            root.aimAt({ opStanding: false, published: true, hardResetTakes: 2 })
+            root.aimAt({ opStanding: false, published: true, rebasePublished: true, hardResetTakes: 2 })
             compare(root.row("merge").blockedWhy, "")
             compare(menu.hardResetRow.blockedWhy, "")
             compare(root.row("rebase").note, Words.rewritesPushed)
@@ -287,13 +289,21 @@ Item {
             compare(root.asked, "merge abc123")
         }
 
-        /// The rewrite rows wear the tag and stay a plain click (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
+        /// The rewrite rows wear the tag and stay a plain click (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」),
+        /// each on the commits it rewrites: from here up, the pressed commit and those above it; onto it, the ones the
+        /// rebase replays (`<row>..HEAD`), which the pressed commit is not among.
         function test_a_pushed_commit_is_told_about_and_not_held() {
             root.aimAt({})
             compare(root.row("rebase").note, "")
+            compare(root.row("rebase --interactive").note, "")
 
             root.aimAt({ published: true })
-            compare(root.row("rebase").note, Words.rewritesPushed)
+            compare(root.row("rebase --interactive").note, Words.rewritesPushed)
+            compare(root.row("rebase").note, "", "a pushed commit to land on rewrites nothing pushed")
+
+            root.aimAt({ rebasePublished: true })
+            compare(root.row("rebase").note, Words.rewritesPushed, "what it replays is pushed")
+            compare(root.row("rebase --interactive").note, "", "the pressed commit is not")
             verify(root.row("rebase").offered, "the row goes on being a row")
             compare(root.row("rebase").blockedReason, "")
         }

@@ -1764,6 +1764,7 @@ FocusScope {
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
             published: commitMenuState.menuPublished
+            rebasePublished: commitMenuState.menuRebasePublished
             canSwitch: commitMenuState.menuCanSwitch
             switchAsks: commitMenuState.menuSwitchAsks
             heldLeaf: commitMenuState.menuHeldLeaf

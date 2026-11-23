@@ -49,9 +49,13 @@ Item {
     /// The commit the menu was opened on, and the stash it is ("" on an ordinary commit).
     required property string oid
     required property string stashRef
-    /// Whether a remote already has that commit: the rewrite rows carry a tag and do not ask
+    /// Whether a remote already has that commit: the rows that rewrite it from here up carry a tag and do not ask
     /// (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」).
     required property bool published
+    /// Whether a rebase onto that commit would rewrite one a remote has — `<row>..HEAD`, what the rebase replays, as
+    /// the left menu's `rebase` row reads it (`RefRowMenu.rebasePublished`). Not `published`: the commit pressed is the
+    /// one the rebase lands on, not one it rewrites.
+    required property bool rebasePublished
     /// What these menus offer. `canCherryPick` and `canRevert` only add a commit and so ask less; a commit the discard
     /// log's entry draws takes only the first (`offers::CommitMenuOffers::on_provisional`).
     required property bool canCherryPick
@@ -65,8 +69,10 @@ Item {
     required property bool opStanding
     /// What those rows say while it does — empty while they are live.
     readonly property string startWhy: rowMenu.opStanding ? Words.finishStoppedFirst : ""
-    /// `published` as the rewrite rows wear it: a greyed row warns of nothing, the press it warned of being out.
+    /// `published` and `rebasePublished` as the rewrite rows wear them: a greyed row warns of nothing, the press it
+    /// warned of being out.
     readonly property bool publishedLive: rowMenu.published && !rowMenu.opStanding
+    readonly property bool rebasePublishedLive: rowMenu.rebasePublished && !rowMenu.opStanding
     required property bool stashCanWrite
     /// Whether anything besides this branch still reaches the tip — what decides whether the drop row is held
     /// (`CommitMenuState.menuTipHeldElsewhere`, the same answer `RebasePlanRunBar` is handed).
@@ -464,7 +470,7 @@ Item {
             refSentence: qsTr("%1 onto it")
             refName: rowMenu.branch
             refMark: "branch"
-            note: rowMenu.publishedLive ? Words.rewritesPushed : ""
+            note: rowMenu.rebasePublishedLive ? Words.rewritesPushed : ""
             offered: rowMenu.canIntegrate
             blockedReason: rowMenu.startWhy
             onTriggered: rowMenu.rebaseRequested(rowMenu.integrateRef)

@@ -138,18 +138,24 @@ Item {
             else if (act === "tag-card")
                 commitMenu.openSub(commitTagCard)
             // `greyed=` the first level's rows out for a reason of their own — a stopped operation's, all of them.
+            // `rebase_note=` whether the `rebase` row wears its note, read off the row as drawn — the page's wiring
+            // from `CommitMenuState.menuRebasePublished` to the menu included.
             driver.reportAtCompletion(() => {
                 let greyed = 0
+                let rebaseNote = false
                 for (let i = 0; i < commitMenu.count; i++) {
                     const row = commitMenu.itemAt(i)
                     if (row && row.codeColSeat !== undefined && row.offered && !row.subMenu
                             && row.blockedReason !== "")
                         greyed++
+                    if (row && row.code === "rebase" && row.offered)
+                        rebaseNote = row.note !== ""
                 }
                 return "commit_menu rows=" + commitMenu.offeredRows
                        + " can_move=" + commitMenuState.menuCanMoveBranch
                        + " standing=" + commitMenuState.menuOpStanding
                        + " greyed=" + greyed
+                       + " rebase_note=" + rebaseNote
             })
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {

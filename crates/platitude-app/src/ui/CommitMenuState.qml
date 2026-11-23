@@ -52,6 +52,9 @@ QtObject {
     // (デザイン規約 §回数押し「ローカルの履歴書き換えはクリック」). Read off the row (`GraphModel.publishedAt`), so it is
     // in hand as the menu opens (デザイン規約 §行が読む答えはどこから来るか).
     property bool menuPublished: false
+    /// Whether a rebase onto the menu's commit would rewrite a commit a remote has (`<ref>..HEAD`), off the same rows
+    /// (`GraphModel.rebaseRewritesPublished`) — the `rebase` row's note, as `RefRowMenu.rebasePublished`.
+    property bool menuRebasePublished: false
     /// What these menus offer on the reading they stand on (`standRow`). The rules are core's (`offers::commit_menu`).
     property bool menuCanCherryPick: false
     property bool menuCanRevert: false
@@ -369,6 +372,7 @@ QtObject {
             return null
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
+        menuState.menuRebasePublished = menuState.graphModel.rebaseRewritesPublished(oidHex, menuState.tree.headOid)
         menuState.menuHardResetTakes = menuState.tree.hardResetTakes
         menuState.menuHardResetNotCopied = menuState.tree.hardResetNotCopied
         menuState.menuTipHeldElsewhere = menuState.tree.headReachedElsewhere
