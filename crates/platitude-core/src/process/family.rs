@@ -9,10 +9,15 @@
 //! leaves running on purpose (the fsmonitor daemon) runs on.
 //!
 //! A run paced by something outside (`Pace::Elsewhere`: a remote, a
-//! credential prompt) is stopped at git alone (user decision — ask before
-//! changing): what it starts can be the person's own — the browser a
-//! credential helper opened is theirs from then on. So is every run off
-//! Windows.
+//! credential prompt) is stopped at its git alone (user decision — ask
+//! before changing): what it starts can be the person's own — the browser a
+//! credential helper opened is theirs from then on. Its git on Windows is
+//! the program spawned and, where that is a launcher (Git for Windows'
+//! `cmd\git.exe`), the git it started in its place — its child given the
+//! same arguments — which a stop of the launcher alone would leave running
+//! ([`Family::end`]). What either of them started runs on, a git started
+//! for another command (`pull`'s merge, auto-maintenance) too. Off Windows
+//! every run is stopped at the program spawned.
 //!
 //! Only a native process holds a folder against a rename: MSYS's `sh`
 //! reopens its working directory shared, and the fsmonitor daemon moves to
@@ -20,8 +25,10 @@
 //! witness in the tests is a native git held on its hook
 //! (`exec::HeldOnItsHook`).
 //!
-//! A whole run has a job object of its own. git is created suspended and
-//! let go once it is in the job, so every process it starts is born in it.
+//! Every run on Windows has a job object of its own — ended whole for a
+//! whole run; for one stopped at its git, where a launcher's git is found,
+//! and one a process may break away from. git is created suspended and let
+//! go once it is in the job, so every process it starts is born in it.
 //! Until it is let go, the job ends git when this process ends: a git whose
 //! parent went (a crash, a kill) before letting it go would sit suspended
 //! for good, holding its folder and every handle it was handed. Once let
@@ -40,9 +47,12 @@ use super::live::Running;
 /// One run's processes, and the count ([`super::Live`]) it holds until
 /// they are known gone.
 pub(super) struct Family {
-    /// The job a whole run is ended through.
+    /// The job the run is in: ended whole, or read for a launcher's git.
     #[cfg(windows)]
-    job: Option<std::sync::Arc<std::os::windows::io::OwnedHandle>>,
+    job: std::sync::Arc<std::os::windows::io::OwnedHandle>,
+    /// What a stop of the run ends.
+    #[cfg(windows)]
+    stop: win32::Stop,
     running: Option<Running>,
     /// Ended by itself, or ended: nothing of it is ended on drop.
     settled: bool,
@@ -58,23 +68,20 @@ pub(super) fn spawn(
 ) -> std::io::Result<(Child, Family)> {
     #[cfg(windows)]
     {
-        if whole {
-            return win32::spawn(command, running);
-        }
-        command.creation_flags(win32::CREATE_NO_WINDOW);
+        win32::spawn(command, whole, running)
     }
     #[cfg(not(windows))]
-    let _ = whole;
-    let child = command.spawn()?;
-    Ok((
-        child,
-        Family {
-            #[cfg(windows)]
-            job: None,
-            running,
-            settled: false,
-        },
-    ))
+    {
+        let _ = whole;
+        let child = command.spawn()?;
+        Ok((
+            child,
+            Family {
+                running,
+                settled: false,
+            },
+        ))
+    }
 }
 
 impl Family {
@@ -83,30 +90,40 @@ impl Family {
         self.settled = true;
     }
 
-    /// Ends the run — whole where it has a job, git alone otherwise — and
-    /// answers once that is gone. A whole run's end that cannot be told is
-    /// an error; git alone's failed reap is logged and the stop stands as the
-    /// run's end. Either way the count goes saying the end was not told
+    /// Ends the run — whole, or its git alone — and answers once that is
+    /// gone. A whole run's end that cannot be told is an error; git alone's
+    /// that cannot is logged and the stop stands as the run's end. Either
+    /// way the count goes saying the end was not told
     /// ([`super::Live::idle`]).
     pub(super) async fn end(&mut self, child: &mut Child) -> std::io::Result<()> {
         #[cfg(windows)]
-        if let Some(job) = &self.job {
-            let ended = win32::end(job, child).await;
-            if ended.is_err() {
+        let ended =
+            match &self.stop {
+                win32::Stop::Whole => win32::end(&self.job, child).await,
+                win32::Stop::Git(spawned) => win32::end_git(&self.job, spawned, child)
+                    .await
+                    .or_else(|e| {
+                        tracing::debug!(error = %e, "a stopped git could not be told gone");
+                        self.untold();
+                        Ok(())
+                    }),
+            };
+        #[cfg(not(windows))]
+        let ended = {
+            if let Err(e) = child.start_kill() {
+                tracing::debug!(error = %e, "kill failed (process already exited?)");
+            }
+            if let Err(e) = child.wait().await {
+                tracing::debug!(error = %e, "failed to reap killed process");
                 self.untold();
             }
-            self.settled = true;
-            return ended;
-        }
-        if let Err(e) = child.start_kill() {
-            tracing::debug!(error = %e, "kill failed (process already exited?)");
-        }
-        if let Err(e) = child.wait().await {
-            tracing::debug!(error = %e, "failed to reap killed process");
+            Ok(())
+        };
+        if ended.is_err() {
             self.untold();
         }
         self.settled = true;
-        Ok(())
+        ended
     }
 
     /// The count goes with the end not told.
@@ -118,19 +135,29 @@ impl Family {
 }
 
 impl Drop for Family {
-    /// Dropped mid-run (a runtime going down with the command in it): a
-    /// whole run is ended whole, and counted until it is gone. git alone is
-    /// ended by `kill_on_drop`, which waits for nothing, so its count goes
-    /// untold.
+    /// Dropped mid-run (a runtime going down with the command in it): on
+    /// Windows the run is ended whole or at its git, and counted until that
+    /// is gone. Off Windows git alone is ended by `kill_on_drop`, which waits
+    /// for nothing, so its count goes untold.
     fn drop(&mut self) {
         if self.settled {
             return;
         }
         #[cfg(windows)]
-        if let Some(job) = &self.job {
-            win32::end_detached(std::sync::Arc::clone(job), self.running.take());
-            return;
+        {
+            let job = std::sync::Arc::clone(&self.job);
+            match &self.stop {
+                win32::Stop::Whole => win32::end_detached(job, self.running.take()),
+                win32::Stop::Git(spawned) => {
+                    win32::end_git_detached(
+                        job,
+                        std::sync::Arc::clone(spawned),
+                        self.running.take(),
+                    );
+                }
+            }
         }
+        #[cfg(not(windows))]
         self.untold();
     }
 }
@@ -144,14 +171,17 @@ impl Drop for Family {
 mod win32 {
     use std::ffi::c_void;
     use std::io;
-    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle};
+    use std::os::windows::io::{
+        AsRawHandle, BorrowedHandle, FromRawHandle, OwnedHandle, RawHandle,
+    };
     use std::sync::Arc;
 
     use tokio::process::{Child, Command};
 
     use super::{Family, Running};
 
-    // The id list is read one word per id.
+    // The id list, a process's basic information, and a command line's
+    // header are read one word per id, field, or address.
     const _: () = assert!(usize::BITS == 64);
 
     /// Every git runs with a console of its own that shows no window. Not
@@ -162,9 +192,10 @@ mod win32 {
     /// terminal is Windows Terminal opens a visible window that stays. The
     /// price is one `conhost.exe` per git; a shape that avoids paying it is
     /// an open question in internal-docs/ハング調査.md.
-    pub(super) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     const CREATE_SUSPENDED: u32 = 0x0000_0004;
     const SYNCHRONIZE: u32 = 0x0010_0000;
+    const PROCESS_TERMINATE: u32 = 0x0001;
     const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
     const INFINITE: u32 = 0xFFFF_FFFF;
     const WAIT_OBJECT_0: u32 = 0;
@@ -175,6 +206,15 @@ mod win32 {
     /// `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
     const EXTENDED_LIMIT_INFORMATION: i32 = 9;
     const KILL_ON_JOB_CLOSE: u32 = 0x2000;
+    /// `JOB_OBJECT_LIMIT_BREAKAWAY_OK`: a process of the job may start one
+    /// outside it (`CREATE_BREAKAWAY_FROM_JOB`).
+    const BREAKAWAY_OK: u32 = 0x0800;
+    /// `ProcessBasicInformation`: six words, the parent's id the last.
+    const BASIC_INFORMATION: i32 = 0;
+    /// `ProcessCommandLineInformation`: a `UNICODE_STRING` — its length in
+    /// bytes in the first half-word, its characters' address in the second
+    /// word — and the characters after it.
+    const COMMAND_LINE_INFORMATION: i32 = 60;
 
     /// `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`. Only `flags` is set: a limit
     /// whose flag is clear is not read.
@@ -226,18 +266,68 @@ mod win32 {
         fn WaitForSingleObject(handle: RawHandle, millis: u32) -> u32;
     }
 
-    // SAFETY: transcribed from the native API (ntpsapi.h, which ships no
-    // documented equivalent): one process handle in, a status out.
+    // SAFETY: transcribed from the native API (ntpsapi.h, winternl.h; the
+    // resume ships no documented equivalent): a process handle in, a status
+    // out, and for a query a buffer with its length.
     #[link(name = "ntdll")]
     unsafe extern "system" {
         fn NtResumeProcess(process: RawHandle) -> i32;
+        fn NtQueryInformationProcess(
+            process: RawHandle,
+            class: i32,
+            info: *mut c_void,
+            length: u32,
+            returned: *mut u32,
+        ) -> i32;
+    }
+
+    /// What a stop of a run ends.
+    pub(super) enum Stop {
+        /// Everything the job holds.
+        Whole,
+        /// The run's git: the program spawned, and the process it started in
+        /// its place where it is a launcher ([`stand_ins`]).
+        Git(Arc<Spawned>),
+    }
+
+    /// The program a run stopped at its git spawned — held, so its id names
+    /// it until the stop is done — and the arguments it was given.
+    pub(super) struct Spawned {
+        process: OwnedHandle,
+        id: u32,
+        /// Unread, a stop ends the program spawned alone.
+        arguments: Option<Vec<u16>>,
+    }
+
+    impl Spawned {
+        /// `process`, held on a handle of its own. Its arguments are read
+        /// while it has run nothing yet.
+        fn hold(process: RawHandle, id: u32) -> io::Result<Self> {
+            // SAFETY: the caller's handle is live: the child is not reaped
+            // until it has run.
+            let process = unsafe { BorrowedHandle::borrow_raw(process) }.try_clone_to_owned()?;
+            let arguments = match command_line(&process) {
+                Ok(line) => Some(arguments(&line).to_vec()),
+                Err(e) => {
+                    tracing::debug!(error = %e, "a git's arguments could not be read; its stop ends it alone");
+                    None
+                }
+            };
+            Ok(Self {
+                process,
+                id,
+                arguments,
+            })
+        }
     }
 
     /// git, created suspended, put in a job of its own and let go: nothing
-    /// it starts is born outside the job.
+    /// it starts is born outside the job but by asking to break away, which
+    /// a run stopped at its git lets it. `whole` is what a stop ends.
     pub(super) fn spawn(
         command: &mut Command,
-        running: Option<Running>,
+        whole: bool,
+        mut running: Option<Running>,
     ) -> io::Result<(Child, Family)> {
         // SAFETY: no attributes and no name — a job nobody else can open.
         let raw = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
@@ -246,69 +336,92 @@ mod win32 {
         }
         // SAFETY: a handle just created, owned by nothing else.
         let job = Arc::new(unsafe { OwnedHandle::from_raw_handle(raw) });
+        // What the job keeps once git runs. What a run stopped at its git
+        // starts is left to run on, as it would in no job: free to leave it.
+        let kept = if whole { 0 } else { BREAKAWAY_OK };
         // Every handle to the job is this process's, so the job closes when
         // it ends, however it ends.
-        kill_on_close(&job, true)?;
+        limit(&job, KILL_ON_JOB_CLOSE | kept)?;
         command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
         let child = command.spawn()?;
-        let mut family = Family {
-            job: Some(Arc::clone(&job)),
-            running,
-            settled: false,
-        };
-        let Some(process) = child.raw_handle() else {
+        let Some((process, id)) = child.raw_handle().zip(child.id()) else {
             // Not reaped yet, so never here; `kill_on_drop` ends git, and
             // waits for nothing.
-            family.settled = true;
-            family.untold();
+            if let Some(running) = running.as_mut() {
+                running.untold();
+            }
             return Err(io::Error::other("the spawned git has no handle"));
         };
-        // SAFETY: both handles are live — the job is held above, and the
-        // child is not reaped until it has run.
-        let put = unsafe { AssignProcessToJobObject(job.as_raw_handle(), process) } != 0;
-        let refused = if put {
-            let_go(&job, process).err()
-        } else {
-            Some(io::Error::last_os_error())
-        };
-        if let Some(error) = refused {
-            // Ended where it stands — before its first instruction, or at its
-            // start when the job would not let go of it — and gone before the
-            // error is told. Whatever it could have started is the job's,
-            // which still ends what it holds as it closes here.
-            // SAFETY: as above.
-            let gone = unsafe {
-                TerminateProcess(process, 1) != 0
-                    && WaitForSingleObject(process, INFINITE) == WAIT_OBJECT_0
-            };
-            family.settled = true;
-            if !gone {
-                family.untold();
+        match joined(&job, process, id, whole, kept) {
+            Ok(stop) => Ok((
+                child,
+                Family {
+                    job,
+                    stop,
+                    running,
+                    settled: false,
+                },
+            )),
+            Err(error) => {
+                // Ended where it stands — before its first instruction, or at
+                // its start when the job would not let go of it — and gone
+                // before the error is told. Whatever it could have started is
+                // the job's, which still ends what it holds as it closes here.
+                // SAFETY: the child's handle is live, as above.
+                let gone = unsafe {
+                    TerminateProcess(process, 1) != 0
+                        && WaitForSingleObject(process, INFINITE) == WAIT_OBJECT_0
+                };
+                if !gone && let Some(running) = running.as_mut() {
+                    running.untold();
+                }
+                Err(error)
             }
-            return Err(error);
         }
-        Ok((child, family))
+    }
+
+    /// The suspended git `process` put in `job` and let go, and what a stop
+    /// of its run ends.
+    fn joined(
+        job: &OwnedHandle,
+        process: RawHandle,
+        id: u32,
+        whole: bool,
+        kept: u32,
+    ) -> io::Result<Stop> {
+        // SAFETY: both handles are live — the job is the caller's, and the
+        // child is not reaped until it has run.
+        if unsafe { AssignProcessToJobObject(job.as_raw_handle(), process) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        let stop = if whole {
+            Stop::Whole
+        } else {
+            Stop::Git(Arc::new(Spawned::hold(process, id)?))
+        };
+        let_go(job, process, kept)?;
+        Ok(stop)
     }
 
     /// Lets git run, and from then on leaves it running should this process
-    /// end first. A test leaves git where it stands instead, to end its
-    /// process on a git never let go (mry).
+    /// end first: of the job's limits, `kept` stays. A test leaves git where
+    /// it stands instead, to end its process on a git never let go (mry).
     #[mry::mry(skip_args(OwnedHandle, RawHandle))]
-    fn let_go(job: &OwnedHandle, process: RawHandle) -> io::Result<()> {
+    fn let_go(job: &OwnedHandle, process: RawHandle, kept: u32) -> io::Result<()> {
         // SAFETY: the caller's process handle is live: the child is not
         // reaped until it has run.
         let status = unsafe { NtResumeProcess(process) };
         if status < 0 {
             return Err(io::Error::other(format!("NtResumeProcess: {status:#010x}")));
         }
-        kill_on_close(job, false)
+        limit(job, kept)
     }
 
-    /// Whether the job ends what it holds once its last handle closes. The
-    /// job has no other limit, so the flag is the whole of what is set.
-    fn kill_on_close(job: &OwnedHandle, on: bool) -> io::Result<()> {
+    /// Sets the job's limits to `flags`: the job has no limit with a value,
+    /// so the flags are the whole of what is set.
+    fn limit(job: &OwnedHandle, flags: u32) -> io::Result<()> {
         let limits = ExtendedLimits {
-            flags: if on { KILL_ON_JOB_CLOSE } else { 0 },
+            flags,
             ..ExtendedLimits::default()
         };
         // SAFETY: the job handle is live, borrowed from the caller; the
@@ -383,6 +496,182 @@ mod win32 {
         }
     }
 
+    /// Stops the run's git ([`git_gone`]) and answers once it is gone; the
+    /// rest of the job runs on. git is reaped whatever the stop answered.
+    pub(super) async fn end_git(
+        job: &Arc<OwnedHandle>,
+        spawned: &Arc<Spawned>,
+        child: &mut Child,
+    ) -> io::Result<()> {
+        let job = Arc::clone(job);
+        let spawned = Arc::clone(spawned);
+        let gone = tokio::task::spawn_blocking(move || git_gone(&job, &spawned))
+            .await
+            .unwrap_or_else(|e| Err(io::Error::other(e)));
+        if gone.is_err()
+            && let Err(e) = child.start_kill()
+        {
+            tracing::debug!(error = %e, "kill failed (process already exited?)");
+        }
+        child.wait().await?;
+        gone
+    }
+
+    /// [`end_git`] for a run dropped mid-way: a thread ends the git and
+    /// holds the count until it is gone — untold until then. The program
+    /// spawned is ended by `kill_on_drop` too, whichever comes first.
+    pub(super) fn end_git_detached(
+        job: Arc<OwnedHandle>,
+        spawned: Arc<Spawned>,
+        mut running: Option<Running>,
+    ) {
+        if let Some(running) = running.as_mut() {
+            running.untold();
+        }
+        let waiting = std::thread::Builder::new()
+            .name("git-run-end".into())
+            .spawn(move || match git_gone(&job, &spawned) {
+                Ok(()) => {
+                    if let Some(running) = running.as_mut() {
+                        running.told();
+                    }
+                }
+                Err(e) => tracing::debug!(error = %e, "a dropped git run could not be told gone"),
+            });
+        if let Err(e) = waiting {
+            tracing::debug!(error = %e, "no thread to wait out a dropped git run");
+        }
+    }
+
+    /// Ends the program spawned and then, gone — and so starting nothing
+    /// more — what it started in its place ([`stand_ins`]); answers once
+    /// each is gone.
+    fn git_gone(job: &OwnedHandle, spawned: &Spawned) -> io::Result<()> {
+        ended(&spawned.process)?;
+        let Some(given) = spawned.arguments.as_deref() else {
+            return Ok(());
+        };
+        for stand_in in stand_ins(job, spawned.id, given)? {
+            ended(&stand_in)?;
+        }
+        Ok(())
+    }
+
+    /// Each process in the job that `parent` started in its place, opened to
+    /// be ended and waited on: its child given the same arguments, `given`,
+    /// as a launcher passes them on (Git for Windows' `cmd\git.exe` copies
+    /// them as they are). A child given others — a helper, a git for
+    /// another command — is not one.
+    fn stand_ins(job: &OwnedHandle, parent: u32, given: &[u16]) -> io::Result<Vec<OwnedHandle>> {
+        let (_, ids) = ids(job)?;
+        let access = SYNCHRONIZE | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION;
+        Ok(ids
+            .into_iter()
+            .filter_map(|pid| opened(job, pid, access))
+            .filter(|process| parent_of(process).is_ok_and(|id| id == parent))
+            .filter(|process| command_line(process).is_ok_and(|line| arguments(&line) == given))
+            .collect())
+    }
+
+    /// Ends `process` and waits until it is gone. One already ending refuses
+    /// the stop, which is the end wanted.
+    fn ended(process: &OwnedHandle) -> io::Result<()> {
+        // SAFETY: a live handle that can end the process and be waited on.
+        let waited = unsafe {
+            TerminateProcess(process.as_raw_handle(), 1);
+            WaitForSingleObject(process.as_raw_handle(), INFINITE)
+        };
+        if waited == WAIT_OBJECT_0 {
+            Ok(())
+        } else {
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    /// The id of the process that started `process`.
+    fn parent_of(process: &OwnedHandle) -> io::Result<u32> {
+        let mut words = [0usize; 6];
+        // SAFETY: a live handle opened with PROCESS_QUERY_LIMITED_INFORMATION;
+        // the buffer is as long as the length says.
+        let status = unsafe {
+            NtQueryInformationProcess(
+                process.as_raw_handle(),
+                BASIC_INFORMATION,
+                words.as_mut_ptr().cast(),
+                size_of_val(&words) as u32,
+                std::ptr::null_mut(),
+            )
+        };
+        if status < 0 {
+            return Err(io::Error::other(format!(
+                "NtQueryInformationProcess: {status:#010x}"
+            )));
+        }
+        u32::try_from(words[5]).map_err(io::Error::other)
+    }
+
+    /// The command line `process` was started with.
+    fn command_line(process: &OwnedHandle) -> io::Result<Vec<u16>> {
+        let mut wanted = 0u32;
+        // SAFETY: a live handle opened with PROCESS_QUERY_LIMITED_INFORMATION;
+        // an empty buffer asks for the length wanted, and is not written.
+        unsafe {
+            NtQueryInformationProcess(
+                process.as_raw_handle(),
+                COMMAND_LINE_INFORMATION,
+                std::ptr::null_mut(),
+                0,
+                &mut wanted,
+            )
+        };
+        let mut buf = vec![0u64; (wanted as usize).div_ceil(8).max(2)];
+        let bytes = u32::try_from(buf.len() * 8).map_err(io::Error::other)?;
+        // SAFETY: as above; the buffer is as long as `bytes` says, and
+        // aligned for the string's header.
+        let status = unsafe {
+            NtQueryInformationProcess(
+                process.as_raw_handle(),
+                COMMAND_LINE_INFORMATION,
+                buf.as_mut_ptr().cast(),
+                bytes,
+                &mut wanted,
+            )
+        };
+        if status < 0 {
+            return Err(io::Error::other(format!(
+                "NtQueryInformationProcess: {status:#010x}"
+            )));
+        }
+        let length = usize::from(buf[0] as u16) / 2;
+        // SAFETY: the words are read as the half-words they hold.
+        let halves =
+            unsafe { std::slice::from_raw_parts(buf.as_ptr().cast::<u16>(), buf.len() * 4) };
+        // The characters follow the header in the buffer itself.
+        (buf[1] as usize)
+            .checked_sub(buf.as_ptr() as usize)
+            .map(|at| at / 2)
+            .and_then(|at| halves.get(at..at + length))
+            .map(<[u16]>::to_vec)
+            .ok_or_else(|| io::Error::other("a command line outside its buffer"))
+    }
+
+    /// What follows the program's name on a command `line`, blanks before
+    /// it skipped: the name read as Windows reads it — to its closing quote
+    /// where it opens with one, else to the first blank.
+    fn arguments(line: &[u16]) -> &[u16] {
+        let quote = u16::from(b'"');
+        let blank = |c: &u16| *c == u16::from(b' ') || *c == u16::from(b'\t');
+        let name = match line.split_first() {
+            Some((first, rest)) if *first == quote => rest
+                .iter()
+                .position(|c| *c == quote)
+                .map_or(line.len(), |at| at + 2),
+            _ => line.iter().position(blank).unwrap_or(line.len()),
+        };
+        let rest = &line[name..];
+        &rest[rest.iter().position(|c| !blank(c)).unwrap_or(rest.len())..]
+    }
+
     /// Waits until each of `held` and every process still in the job is
     /// gone. One born between the stop and its listing is stopped too: the
     /// stop is asked again for every listing that finds the job not empty.
@@ -421,9 +710,37 @@ mod win32 {
     }
 
     /// How many processes the job holds, and a handle to each one that can
-    /// still be opened and is still in it — a pid is reused once its process
-    /// is gone, and the reuser is not this run's.
+    /// still be opened and is still in it.
     fn members(job: &OwnedHandle) -> io::Result<(u32, Vec<OwnedHandle>)> {
+        let (assigned, ids) = ids(job)?;
+        let access = SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION;
+        let held = ids
+            .into_iter()
+            .filter_map(|pid| opened(job, pid, access))
+            .collect();
+        Ok((assigned, held))
+    }
+
+    /// `pid` opened with `access`, where it still can be and is still in
+    /// the job — a pid is reused once its process is gone, and the reuser
+    /// is not this run's.
+    fn opened(job: &OwnedHandle, pid: u32, access: u32) -> Option<OwnedHandle> {
+        // SAFETY: integer arguments; a null answer is checked.
+        let raw = unsafe { OpenProcess(access, 0, pid) };
+        if raw.is_null() {
+            return None;
+        }
+        // SAFETY: a handle just opened, owned by nothing else.
+        let process = unsafe { OwnedHandle::from_raw_handle(raw) };
+        let mut inside = 0;
+        // SAFETY: both handles are live; the answer goes to a local.
+        let asked =
+            unsafe { IsProcessInJob(process.as_raw_handle(), job.as_raw_handle(), &mut inside) };
+        (asked != 0 && inside != 0).then_some(process)
+    }
+
+    /// How many processes the job holds, and the id of each.
+    fn ids(job: &OwnedHandle) -> io::Result<(u32, Vec<u32>)> {
         let mut capacity: u32 = 16;
         loop {
             // `JOBOBJECT_BASIC_PROCESS_ID_LIST`: the assigned and listed
@@ -454,29 +771,11 @@ mod win32 {
                 capacity = assigned + 8;
                 continue;
             }
-            let mut held = Vec::new();
-            for word in &buf[1..=listed as usize] {
-                let Ok(pid) = u32::try_from(*word) else {
-                    continue;
-                };
-                // SAFETY: integer arguments; a null answer is checked.
-                let raw =
-                    unsafe { OpenProcess(SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
-                if raw.is_null() {
-                    continue;
-                }
-                // SAFETY: a handle just opened, owned by nothing else.
-                let process = unsafe { OwnedHandle::from_raw_handle(raw) };
-                let mut inside = 0;
-                // SAFETY: both handles are live; the answer goes to a local.
-                let asked = unsafe {
-                    IsProcessInJob(process.as_raw_handle(), job.as_raw_handle(), &mut inside)
-                };
-                if asked != 0 && inside != 0 {
-                    held.push(process);
-                }
-            }
-            return Ok((assigned, held));
+            let ids = buf[1..=listed as usize]
+                .iter()
+                .filter_map(|word| u32::try_from(*word).ok())
+                .collect();
+            return Ok((assigned, ids));
         }
     }
 
