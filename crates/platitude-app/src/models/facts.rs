@@ -218,11 +218,14 @@ impl GitFacts {
             unborn,
             detached,
             &branch,
-            platitude_core::remote::Upstream::of(&upstream, upstream_here),
+            route(
+                &upstream,
+                upstream_here,
+                &push_remote,
+                &push_default,
+                &remote_names,
+            ),
             upstream_tracked.then(|| counts_of(ahead, behind)),
-            &push_remote,
-            &push_default,
-            names(&remote_names),
             // An empty name is the model's word for no destination counted
             // against (`WorktreeModel.pushTracking`).
             (!push_tracking.is_empty())
@@ -250,12 +253,14 @@ impl GitFacts {
         push_default: String,
         remote_names: Vec<String>,
     ) -> bool {
-        platitude_core::remote::pushes_elsewhere(
-            platitude_core::remote::Upstream::of(&upstream, upstream_here),
+        route(
+            &upstream,
+            upstream_here,
             &push_remote,
             &push_default,
-            names(&remote_names),
+            &remote_names,
         )
+        .goes_elsewhere()
     }
 
     /// Where the toolbar's push button would send this branch, spelled as
@@ -275,14 +280,15 @@ impl GitFacts {
         default_remote: String,
         remote_names: Vec<String>,
     ) -> String {
-        platitude_core::remote::push_target(
-            &branch,
-            platitude_core::remote::Upstream::of(&upstream, upstream_here),
+        route(
+            &upstream,
+            upstream_here,
             &push_remote,
             &push_default,
-            &default_remote,
-            names(&remote_names),
+            &remote_names,
         )
+        .target(&branch, &default_remote)
+        .unwrap_or_default()
     }
 
     /// What the right-click menu on a ref may offer, as the words
@@ -696,6 +702,23 @@ impl GitFacts {
 
 fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
+}
+
+/// The toolbar's push route, off the model's properties: an empty mark is
+/// their word for none.
+fn route<'a>(
+    upstream: &'a str,
+    upstream_here: bool,
+    push_remote: &'a str,
+    push_default: &'a str,
+    remote_names: &'a [String],
+) -> platitude_core::remote::PushRoute<'a> {
+    let set = |mark: &'a str| Some(mark).filter(|mark| !mark.is_empty());
+    platitude_core::remote::PushRoute::new(
+        platitude_core::remote::Upstream::of(upstream, upstream_here),
+        platitude_core::remote::Marked::of(set(push_remote), set(push_default)),
+        names(remote_names),
+    )
 }
 
 /// A pair of counts as QML hands it back: the two `int` properties a model

@@ -214,9 +214,9 @@ impl RepoSession {
         (marks.push_remote.unwrap_or_default(), here, track)
     }
 
-    /// [`remote::pushes_elsewhere`] for a status whose upstream git can
-    /// compare against — with none the push asks where it goes, and no
-    /// count is read. Whether that upstream is a branch here is the
+    /// [`remote::PushRoute::goes_elsewhere`] for a status whose upstream
+    /// git can compare against — with none the push asks where it goes,
+    /// and no count is read. Whether that upstream is a branch here is the
     /// configuration's to say, not the status's short name for it. The
     /// remote names are the kept ones, not read for this; before the first
     /// listing the cut falls back to the mark's exact prefix.
@@ -229,18 +229,13 @@ impl RepoSession {
             return false;
         };
         let upstream = remote::Upstream::of(upstream, marks.upstream_is_here());
-        let push_remote = marks.push_remote.as_deref().unwrap_or_default();
-        let push_default = marks
-            .push_default
-            .as_ref()
-            .map_or("", |marked| marked.remote.as_str());
         let elsewhere = |names: &[remote::Remote]| {
-            remote::pushes_elsewhere(
+            remote::PushRoute::new(
                 upstream,
-                push_remote,
-                push_default,
+                marks.marked(),
                 names.iter().map(|remote| remote.name.as_str()),
             )
+            .goes_elsewhere()
         };
         self.remotes
             .peek(|remotes| elsewhere(&remotes.list))

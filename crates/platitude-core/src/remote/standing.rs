@@ -10,6 +10,8 @@
 //! would be shown going to `origin/base`, counted against it and leased
 //! to origin's `base`, while the send goes to `origin/topic`.
 
+use super::route::PushRoute;
+
 /// What a push of a branch can do, read off the last status (the branch
 /// the worktree is on) or refs listing (any other) and the marked remote.
 /// The counts come from the last fetch, so a push they say fits may still
@@ -107,7 +109,7 @@ impl<'a> Upstream<'a> {
 }
 
 /// Where a mark sends the push to another remote than the upstream's
-/// ([`pushes_elsewhere`]): the tracking ref of the branch over there, and
+/// ([`PushRoute::goes_elsewhere`]): the tracking ref of the branch over there, and
 /// the branch's counts against it ([`super::push_track`] on the status
 /// tick, [`super::push_tracks`] on the refs read for the other branches).
 /// The upstream's counts are about the other remote.
@@ -126,110 +128,18 @@ pub struct PushTrack {
     pub counts: crate::AheadBehind,
 }
 
-/// Which remote the marks send this branch to, empty where neither is
-/// set. The branch's own mark beats the repository's (git's order, as in
-/// [`super::plan_push`]).
-fn marked_remote<'a>(push_remote: &'a str, push_default: &'a str) -> &'a str {
-    if push_remote.is_empty() {
-        push_default
-    } else {
-        push_remote
-    }
-}
-
-/// Whether `upstream` is a branch on `remote` — never so for a branch
-/// here, which is on no remote.
-///
-/// Cut against the configured `remotes` ([`crate::refs::split_remote_ref`]);
-/// an upstream on a remote the list does not know falls back to the
-/// mark's exact prefix.
-fn upstream_is_on<'a>(
-    upstream: Upstream<'a>,
-    remote: &str,
-    remotes: impl IntoIterator<Item = &'a str>,
-) -> bool {
-    let Upstream::Remote(upstream) = upstream else {
-        return false;
-    };
-    if remote.is_empty() {
-        return false;
-    }
-    match crate::refs::split_remote_ref(upstream, remotes) {
-        Some((on, _)) => on == remote,
-        None => upstream
-            .strip_prefix(remote)
-            .is_some_and(|rest| rest.starts_with('/')),
-    }
-}
-
-/// Where a push would send this branch, spelled `<remote>/<branch>` as
-/// the toolbar and the branch's row show it. Empty where there is no
-/// branch to send, or nowhere at all to send it — a branch measured
-/// against one here and marked to no remote, and a mark naming this
-/// repository, among them.
-///
-/// The pure half of [`super::plan_push`]'s destination, off configuration
-/// the snapshot already carries — same order, same naming rule.
-pub fn push_target<'a>(
-    branch: &str,
-    upstream: Upstream<'a>,
-    push_remote: &str,
-    push_default: &str,
-    fallback_remote: &str,
-    remotes: impl IntoIterator<Item = &'a str>,
-) -> String {
-    if branch.is_empty() {
-        return String::new();
-    }
-    let marked = marked_remote(push_remote, push_default);
-    if marked == THIS_REPOSITORY {
-        return String::new();
-    }
-    if marked.is_empty() {
-        return match upstream {
-            Upstream::Remote(upstream) => upstream.to_string(),
-            Upstream::Here => String::new(),
-            Upstream::None if fallback_remote.is_empty() => String::new(),
-            Upstream::None => format!("{fallback_remote}/{branch}"),
-        };
-    }
-    match upstream {
-        Upstream::Remote(name) if upstream_is_on(upstream, marked, remotes) => name.to_string(),
-        _ => format!("{marked}/{branch}"),
-    }
-}
-
-/// Whether a mark sends the push to another remote than the one
-/// `upstream` is on — a branch here being on none: then the upstream's
-/// counts are about somewhere the push does not go, and the destination's
-/// own ([`PushTrack`]) speak for it. `push_remote` is the branch's own
-/// mark and `push_default` the repository's ([`marked_remote`]). A mark
-/// naming this repository sends it to no remote, so to none with counts.
-pub fn pushes_elsewhere<'a>(
-    upstream: Upstream<'a>,
-    push_remote: &str,
-    push_default: &str,
-    remotes: impl IntoIterator<Item = &'a str>,
-) -> bool {
-    let marked = marked_remote(push_remote, push_default);
-    !marked.is_empty() && marked != THIS_REPOSITORY && !upstream_is_on(upstream, marked, remotes)
-}
-
 /// The standing itself: the table of counts, read against the upstream
 /// (`upstream_counts`), or against `push_track` where the push goes
-/// elsewhere ([`pushes_elsewhere`]). `upstream_counts` is none where the
-/// upstream's ref is not there to count against — git's `[gone]`, which
-/// asks where the branch goes whichever kind the upstream was.
-#[expect(clippy::too_many_arguments)]
-pub fn push_standing<'a>(
+/// elsewhere ([`PushRoute::goes_elsewhere`]). `upstream_counts` is none
+/// where the upstream's ref is not there to count against — git's
+/// `[gone]`, which asks where the branch goes whichever kind the upstream
+/// was.
+pub fn push_standing(
     unborn: bool,
     detached: bool,
     branch: &str,
-    upstream: Upstream<'a>,
+    route: PushRoute<'_>,
     upstream_counts: Option<crate::AheadBehind>,
-    push_remote: &str,
-    push_default: &str,
-    remotes: impl IntoIterator<Item = &'a str>,
     push_track: Option<&PushTrack>,
 ) -> PushStanding {
     if detached || branch.is_empty() {
@@ -241,16 +151,13 @@ pub fn push_standing<'a>(
         return PushStanding::Unborn;
     }
     // Before the `.` mark: the question's answer names the destination.
-    let Some(counts) = upstream_counts.filter(|_| upstream != Upstream::None) else {
+    let Some(counts) = upstream_counts.filter(|_| route.upstream() != Upstream::None) else {
         return PushStanding::Publish;
     };
-    // Resolved to this repository: marked to `.` itself, or to nothing with
-    // the upstream here.
-    let marked = marked_remote(push_remote, push_default);
-    if marked == THIS_REPOSITORY || (marked.is_empty() && upstream == Upstream::Here) {
+    if route.stays_here() {
         return PushStanding::StaysHere;
     }
-    if pushes_elsewhere(upstream, push_remote, push_default, remotes) {
+    if route.goes_elsewhere() {
         return marked_standing(push_track);
     }
     counted(counts)
@@ -287,7 +194,24 @@ fn counted(counts: crate::AheadBehind) -> PushStanding {
 mod tests {
     use super::*;
 
+    use crate::remote::Marked;
+
     const REMOTES: [&str; 3] = ["origin", "my", "my/fork"];
+
+    /// The route the branch's own mark and the repository's give, empty
+    /// standing for a key that is not set.
+    fn route<'a>(
+        upstream: Upstream<'a>,
+        push_remote: &'a str,
+        push_default: &'a str,
+    ) -> PushRoute<'a> {
+        let set = |mark: &'a str| Some(mark).filter(|mark| !mark.is_empty());
+        PushRoute::new(
+            upstream,
+            Marked::of(set(push_remote), set(push_default)),
+            REMOTES,
+        )
+    }
 
     fn standing_of(
         upstream: &str,
@@ -300,11 +224,8 @@ mod tests {
             false,
             false,
             "main",
-            Upstream::of(upstream, false),
+            route(Upstream::of(upstream, false), "", marked),
             tracked.then_some(crate::AheadBehind { ahead, behind }),
-            "",
-            marked,
-            REMOTES,
             None,
         )
     }
@@ -322,11 +243,8 @@ mod tests {
             false,
             false,
             "main",
-            Upstream::Remote(upstream),
+            route(Upstream::Remote(upstream), "", marked),
             Some(crate::AheadBehind { ahead, behind }),
-            "",
-            marked,
-            REMOTES,
             push_track,
         )
     }
@@ -345,11 +263,8 @@ mod tests {
                 true,
                 false,
                 "main",
-                Upstream::None,
+                route(Upstream::None, "", ""),
                 None,
-                "",
-                "",
-                REMOTES,
                 None
             ),
             PushStanding::Unborn
@@ -363,33 +278,26 @@ mod tests {
             false,
             false,
             "main",
-            Upstream::Remote(upstream),
+            route(Upstream::Remote(upstream), push_remote, ""),
             Some(crate::AheadBehind {
                 ahead: 2,
                 behind: 0,
             }),
-            push_remote,
-            "",
-            REMOTES,
             None,
-        )
-    }
-
-    fn target_of(upstream: &str, push_remote: &str, push_default: &str) -> String {
-        push_target(
-            "main",
-            Upstream::of(upstream, false),
-            push_remote,
-            push_default,
-            "origin",
-            REMOTES,
         )
     }
 
     #[test]
     fn a_push_standing_is_read_without_sending_anything() {
         assert_eq!(
-            push_standing(false, true, "", Upstream::None, None, "", "", [], None),
+            push_standing(
+                false,
+                true,
+                "",
+                PushRoute::new(Upstream::None, Marked::Unmarked, []),
+                None,
+                None
+            ),
             PushStanding::Closed
         );
         assert_eq!(standing_of("", false, 0, 0, ""), PushStanding::Publish);
@@ -483,11 +391,8 @@ mod tests {
                 false,
                 false,
                 "main",
-                Upstream::Remote("origin/main"),
+                route(Upstream::Remote("origin/main"), "", "my"),
                 None,
-                "",
-                "my",
-                REMOTES,
                 Some(&track("my/main", 1, 0))
             ),
             PushStanding::Publish,
@@ -512,14 +417,11 @@ mod tests {
                 false,
                 false,
                 "main",
-                Upstream::Remote("origin/main"),
+                route(Upstream::Remote("origin/main"), "origin", "my"),
                 Some(crate::AheadBehind {
                     ahead: 2,
                     behind: 0
                 }),
-                "origin",
-                "my",
-                REMOTES,
                 None
             ),
             PushStanding::Ready,
@@ -530,14 +432,11 @@ mod tests {
                 false,
                 false,
                 "main",
-                Upstream::Remote("origin/main"),
+                route(Upstream::Remote("origin/main"), "my", "origin"),
                 Some(crate::AheadBehind {
                     ahead: 2,
                     behind: 0
                 }),
-                "my",
-                "origin",
-                REMOTES,
                 None
             ),
             PushStanding::Elsewhere,
@@ -551,35 +450,28 @@ mod tests {
     /// counts are the destination's.
     #[test]
     fn a_branch_here_is_on_no_remote_whatever_its_name_says() {
-        let here = |push_remote: &str, push_default: &str, push_track: Option<&PushTrack>| {
+        let here = |push_remote: &'static str,
+                    push_default: &'static str,
+                    push_track: Option<&PushTrack>| {
             push_standing(
                 false,
                 false,
                 "topic",
-                Upstream::Here,
+                route(Upstream::Here, push_remote, push_default),
                 Some(crate::AheadBehind {
                     ahead: 2,
                     behind: 0,
                 }),
-                push_remote,
-                push_default,
-                REMOTES,
                 push_track,
             )
         };
-        let target = |push_remote: &str, push_default: &str| {
-            push_target(
-                "topic",
-                Upstream::of("origin/base", true),
-                push_remote,
-                push_default,
-                "origin",
-                REMOTES,
-            )
+        let target = |push_remote: &'static str, push_default: &'static str| {
+            route(Upstream::of("origin/base", true), push_remote, push_default)
+                .target("topic", "origin")
         };
         assert_eq!(
             (here("", "", None), target("", "")),
-            (PushStanding::StaysHere, String::new()),
+            (PushStanding::StaysHere, None),
             "marked to no remote: nowhere to send it, not even the fallback"
         );
         assert_eq!(
@@ -587,7 +479,7 @@ mod tests {
                 here("origin", "", Some(&track("origin/topic", 0, 0))),
                 target("origin", "")
             ),
-            (PushStanding::Clean, "origin/topic".to_string()),
+            (PushStanding::Clean, Some("origin/topic".to_string())),
             "level with origin/topic, however far ahead of the branch here"
         );
         assert_eq!(
@@ -595,7 +487,7 @@ mod tests {
             PushStanding::Behind,
             "the repository's mark sends it just as well"
         );
-        assert_eq!(target("", "my"), "my/topic");
+        assert_eq!(target("", "my").as_deref(), Some("my/topic"));
         assert_eq!(
             here("origin", "", None),
             PushStanding::Elsewhere,
@@ -606,18 +498,15 @@ mod tests {
                 false,
                 false,
                 "topic",
-                Upstream::Here,
+                route(Upstream::Here, "", ""),
                 None,
-                "",
-                "",
-                REMOTES,
                 None
             ),
             PushStanding::Publish,
             "gone, it asks where the branch goes, as any gone upstream does"
         );
-        assert!(pushes_elsewhere(Upstream::Here, "", "origin", REMOTES));
-        assert!(!pushes_elsewhere(Upstream::Here, "", "", REMOTES));
+        assert!(route(Upstream::Here, "", "origin").goes_elsewhere());
+        assert!(!route(Upstream::Here, "", "").goes_elsewhere());
     }
 
     /// `.` is git's name for this repository: a mark set to it sends the
@@ -626,19 +515,19 @@ mod tests {
     /// naming the remote itself.
     #[test]
     fn a_mark_naming_this_repository_sends_nowhere() {
-        let with = |upstream: Upstream<'static>, tracked: bool, push_remote: &str, push_default| {
+        let with = |upstream: Upstream<'static>,
+                    tracked: bool,
+                    push_remote: &'static str,
+                    push_default: &'static str| {
             push_standing(
                 false,
                 false,
                 "topic",
-                upstream,
+                route(upstream, push_remote, push_default),
                 tracked.then_some(crate::AheadBehind {
                     ahead: 1,
                     behind: 0,
                 }),
-                push_remote,
-                push_default,
-                REMOTES,
                 Some(&track("origin/topic", 1, 0)),
             )
         };
@@ -667,109 +556,30 @@ mod tests {
         );
         for (push_remote, push_default) in [(".", ""), ("", ".")] {
             assert_eq!(
-                push_target(
-                    "topic",
-                    Upstream::Here,
-                    push_remote,
-                    push_default,
-                    "origin",
-                    REMOTES
-                ),
-                ""
+                route(Upstream::Here, push_remote, push_default).target("topic", "origin"),
+                None
             );
-            assert!(!pushes_elsewhere(
-                Upstream::Remote("origin/topic"),
-                push_remote,
-                push_default,
-                REMOTES
-            ));
+            assert!(
+                !route(Upstream::Remote("origin/topic"), push_remote, push_default)
+                    .goes_elsewhere()
+            );
         }
     }
 
-    /// Every arm of `plan_push`'s destination.
+    /// The branch's own mark against the repository's, through the target
+    /// as through the standing (the arms themselves: `route`'s tests).
     #[test]
-    fn a_push_target_follows_gits_own_order() {
-        assert_eq!(target_of("origin/main", "", ""), "origin/main");
+    fn a_push_target_weighs_the_branchs_own_mark_first() {
+        let target = |push_remote, push_default| {
+            route(Upstream::Remote("origin/trunk"), push_remote, push_default)
+                .target("main", "origin")
+        };
+        assert_eq!(target("my", "").as_deref(), Some("my/main"));
         assert_eq!(
-            target_of("", "", ""),
-            "origin/main",
-            "nothing tracked and nothing marked falls back to the caller's remote"
-        );
-        assert_eq!(
-            target_of("origin/trunk", "", ""),
-            "origin/trunk",
-            "the upstream names the branch on its own remote"
-        );
-        assert_eq!(
-            target_of("origin/trunk", "", "my"),
-            "my/main",
-            "anywhere else the branch goes under its own name"
-        );
-        assert_eq!(
-            target_of("origin/trunk", "my", ""),
-            "my/main",
-            "the branch's own mark says so just as well"
-        );
-        assert_eq!(
-            target_of("origin/trunk", "origin", "my"),
-            "origin/trunk",
+            target("origin", "my").as_deref(),
+            Some("origin/trunk"),
             "the branch's mark beats the repository's, and points back home"
         );
-        assert_eq!(
-            target_of("", "my", ""),
-            "my/main",
-            "a branch that tracks nothing goes to the mark, not the fallback"
-        );
-    }
-
-    #[test]
-    fn a_push_target_cuts_the_remote_by_name() {
-        assert_eq!(
-            push_target(
-                "main",
-                Upstream::Remote("my/fork/main"),
-                "",
-                "my/fork",
-                "origin",
-                REMOTES
-            ),
-            "my/fork/main"
-        );
-        assert_eq!(
-            push_target(
-                "main",
-                Upstream::Remote("my/fork/main"),
-                "",
-                "my",
-                "origin",
-                REMOTES
-            ),
-            "my/main"
-        );
-        assert_eq!(
-            push_target(
-                "main",
-                Upstream::Remote("gone/main"),
-                "",
-                "gone",
-                "origin",
-                REMOTES
-            ),
-            "gone/main",
-            "an upstream on a remote the list has lost still matches its own mark"
-        );
-    }
-
-    #[test]
-    fn a_push_target_says_nothing_where_there_is_nothing_to_say() {
-        assert_eq!(
-            push_target("", Upstream::None, "", "", "origin", REMOTES),
-            ""
-        );
-        assert_eq!(
-            push_target("main", Upstream::None, "", "", "", REMOTES),
-            "",
-            "a repository with no remote at all has no destination to name"
-        );
+        assert_eq!(target("", "my").as_deref(), Some("my/main"));
     }
 }

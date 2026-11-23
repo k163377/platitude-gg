@@ -219,7 +219,7 @@ pub enum SessionEvent {
         upstream_here: bool,
         /// The branch's counts against the tracking ref where a mark sends
         /// its push, when that is not the upstream's remote
-        /// ([`crate::remote::pushes_elsewhere`]); none everywhere else, and
+        /// ([`crate::remote::PushRoute::goes_elsewhere`]); none everywhere else, and
         /// where nothing here tracks the branch over there.
         /// Rides the status for the reason `push_remote` does.
         push_track: Option<crate::remote::PushTrack>,

@@ -297,12 +297,13 @@ impl RepoSession {
         let push_default = remotes
             .push_default
             .as_ref()
-            .map_or("", |marked| marked.remote.as_str());
+            .map(|marked| marked.remote.as_str());
         let mark_of = |branch: &str| {
             remotes
                 .branch_push_remotes
                 .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
-                .map_or("", |at| remotes.branch_push_remotes[at].remote.as_str())
+                .ok()
+                .map(|at| remotes.branch_push_remotes[at].remote.as_str())
         };
         let index = refs::RemoteBranches::index(refs);
         // A branch with an upstream: with none, the push asks where it goes
@@ -318,12 +319,12 @@ impl RepoSession {
                     None if local.upstream_is_here() => remote::Upstream::Here,
                     None => return false,
                 };
-                remote::pushes_elsewhere(
+                remote::PushRoute::new(
                     upstream,
-                    mark_of(local.short.as_str()),
-                    push_default,
+                    remote::Marked::of(mark_of(local.short.as_str()), push_default),
                     remotes.list.iter().map(|r| r.name.as_str()),
                 )
+                .goes_elsewhere()
             })
             .map(|local| local.short.as_str())
             .collect();

@@ -75,36 +75,25 @@ async fn toolbar(
         (Some(git), None) => git.clone(),
         (None, _) => String::new(),
     };
-    let upstream = remote::Upstream::of(&named, marks.upstream_is_here());
-    let push_remote = marks.push_remote.as_deref().unwrap_or_default();
-    let push_default = marks
-        .push_default
-        .as_ref()
-        .map_or("", |marked| marked.remote.as_str());
-    let track = if remote::pushes_elsewhere(upstream, push_remote, push_default, REMOTES) {
+    let route = remote::PushRoute::new(
+        remote::Upstream::of(&named, marks.upstream_is_here()),
+        marks.marked(),
+        REMOTES,
+    );
+    let track = if route.goes_elsewhere() {
         remote::push_track(exec, repo, &branch, cancel)
             .await
             .expect("the destination's counts")
     } else {
         None
     };
-    let label = remote::push_target(
-        &branch,
-        upstream,
-        push_remote,
-        push_default,
-        "origin",
-        REMOTES,
-    );
+    let label = route.target(&branch, "origin").unwrap_or_default();
     let standing = remote::push_standing(
         false,
         false,
         &branch,
-        upstream,
+        route,
         status.upstream_counts,
-        push_remote,
-        push_default,
-        REMOTES,
         track.as_ref(),
     );
     (label, standing)
@@ -243,15 +232,13 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
         .await
         .expect("a plan");
     assert_eq!(
-        remote::push_target(
-            "beside",
+        remote::PushRoute::new(
             remote::Upstream::of(&upstream, false),
-            "",
-            "origin",
-            "origin",
+            remote::Marked::Remote("origin"),
             REMOTES
-        ),
-        plan.target.to_string(),
+        )
+        .target("beside", "origin"),
+        Some(plan.target.to_string()),
         "the label and the send"
     );
     assert!(

@@ -212,8 +212,8 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 /// The one reader of one branch's keys, shared by [`super::plan_push`] and
 /// the status tick: a second spelling, in another layer, lets a fork
 /// workflow's label name a remote the push never goes to. The destination
-/// is likewise resolved once, by the pure `super::push_target` in
-/// `plan_push`'s order. Every branch's own mark at once is
+/// is likewise resolved once, by the pure [`super::PushRoute`] in
+/// `plan_push`'s order, off [`Self::marked`]. Every branch's own mark at once is
 /// [`kept_marks`]'s. Net: `push_default_integration`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PushMarks {
@@ -235,6 +235,16 @@ pub struct PushMarks {
 }
 
 impl PushMarks {
+    /// Which way the two marks point the push, the branch's own first.
+    pub fn marked(&self) -> super::Marked<'_> {
+        super::Marked::of(
+            self.push_remote.as_deref(),
+            self.push_default
+                .as_ref()
+                .map(|marked| marked.remote.as_str()),
+        )
+    }
+
     /// Whether the branch is measured against a branch here
     /// (`branch.<branch>.remote = .`, git's local repository) — which no
     /// name tells: `git status` shortens a branch here called

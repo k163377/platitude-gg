@@ -262,7 +262,7 @@ pub async fn push(
 }
 
 /// How `branch` stands against the tracking ref of where a mark sends
-/// its push ([`super::pushes_elsewhere`]): one `for-each-ref`, git naming
+/// its push ([`super::PushRoute::goes_elsewhere`]): one `for-each-ref`, git naming
 /// the ref through that remote's fetch refspecs (`%(push)`) and counting
 /// against it (`%(push:track)`).
 ///
@@ -369,7 +369,8 @@ fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
 mod tests {
     use super::*;
     use crate::remote::marks::PushDefault;
-    use crate::remote::standing::{Upstream, push_target};
+    use crate::remote::route::{Marked, PushRoute};
+    use crate::remote::standing::Upstream;
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 
@@ -645,7 +646,7 @@ mod tests {
         }
     }
 
-    /// The toolbar label ([`push_target`], from the snapshot) and the send
+    /// The toolbar label ([`PushRoute::target`], from the snapshot) and the send
     /// ([`decide_push`], from git's keys) spell one order twice, so this
     /// walks every arrangement of the three keys against both. Where the
     /// send has nowhere to go, the label names nothing.
@@ -685,15 +686,14 @@ mod tests {
                 "." => "main".to_string(),
                 remote => format!("{remote}/main"),
             };
+            let set = |mark: &'static str| Some(mark).filter(|mark| !mark.is_empty());
+            let route = PushRoute::new(
+                Upstream::of(&upstream, tracks == "."),
+                Marked::of(set(push_remote), set(push_default)),
+                REMOTES,
+            );
             assert_eq!(
-                push_target(
-                    "main",
-                    Upstream::of(&upstream, tracks == "."),
-                    push_remote,
-                    push_default,
-                    "origin",
-                    REMOTES
-                ),
+                route.target("main", "origin").unwrap_or_default(),
                 sent,
                 "pushRemote={push_remote:?} pushDefault={push_default:?} tracks={tracks:?}: \
                  the label and the send disagree"

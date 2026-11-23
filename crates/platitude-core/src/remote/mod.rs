@@ -18,6 +18,7 @@ mod pull;
 mod push;
 mod refspec;
 mod refusal;
+mod route;
 mod standing;
 mod tags;
 mod tracked;
@@ -42,9 +43,8 @@ pub use self::push::mock_push_tracks;
 pub use self::push::{
     PushForce, PushSpec, plan_current_push, plan_push, publish_spec, push, push_track, push_tracks,
 };
-pub use self::standing::{
-    PushStanding, PushTrack, Upstream, push_standing, push_target, pushes_elsewhere,
-};
+pub use self::route::{Marked, PushRoute};
+pub use self::standing::{PushStanding, PushTrack, Upstream, push_standing};
 pub use self::tags::{
     AdvertisedTag, HeldTag, RemoteTag, RemoteTagRef, delete_remote_tag, list_tags,
     parse_ls_remote_tags, push_tag, replace_remote_tag,

@@ -180,17 +180,15 @@ async fn a_global_mark_is_read_and_sent_alike() {
     let plan = remote::plan_current_push(&exec, &repo.path, "origin", PushForce::None, &cancel)
         .await
         .expect("a plan");
-    let label = remote::push_target(
-        "main",
+    let label = remote::PushRoute::new(
         remote::Upstream::Remote("origin/main"),
-        marks.push_remote.as_deref().unwrap_or(""),
-        &marked.remote,
-        "origin",
+        marks.marked(),
         remotes,
-    );
+    )
+    .target("main", "origin");
     assert_eq!(
         label,
-        plan.target.to_string(),
+        Some(plan.target.to_string()),
         "the label and the send disagree at global scope"
     );
 
@@ -253,21 +251,20 @@ async fn standing_of(
         .await
         .expect("marks");
     let track = track_of(repo, exec, cancel).await;
-    remote::push_standing(
-        false,
-        false,
-        "main",
+    let route = remote::PushRoute::new(
         remote::Upstream::of(
             status.upstream.as_deref().unwrap_or_default(),
             marks.upstream_is_here(),
         ),
-        status.upstream_counts,
-        marks.push_remote.as_deref().unwrap_or_default(),
-        marks
-            .push_default
-            .as_ref()
-            .map_or("", |marked| marked.remote.as_str()),
+        marks.marked(),
         ["fork", "origin"],
+    );
+    remote::push_standing(
+        false,
+        false,
+        "main",
+        route,
+        status.upstream_counts,
         track.as_ref(),
     )
 }
