@@ -205,6 +205,13 @@ fn configured(
 /// javascript layers its own JSX delta too, which no such sample misses
 /// (the base alone paints): there the tell is the crate's second
 /// highlight constant (`JSX_HIGHLIGHT_QUERY`).
+///
+/// Where a crate's query names a node otherwise than デザイン規約
+/// §シンタックスハイライト would (C++'s casts as the template calls they
+/// parse as, SQL's NULL as a type word, every Haskell variable as a type),
+/// the crate's naming stands. A query of this repository's
+/// own laid last adds only what a crate's grammar reads and its query
+/// leaves out: `queries/c_sharp-highlights.scm`'s `extension`.
 fn layered(queries: &[&str]) -> String {
     queries.join("\n")
 }
@@ -237,7 +244,7 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["java"], "java", || configured(tree_sitter_java::LANGUAGE.into(), "java", tree_sitter_java::HIGHLIGHTS_QUERY, "")),
     entry!(&["c", "h"], "c", || configured(tree_sitter_c::LANGUAGE.into(), "c", tree_sitter_c::HIGHLIGHT_QUERY, "")),
     entry!(&["cpp", "cc", "cxx", "hpp", "hh", "hxx"], "cpp", || configured(tree_sitter_cpp::LANGUAGE.into(), "cpp", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_cpp::HIGHLIGHT_QUERY]), "")),
-    entry!(&["cs"], "c_sharp", || configured(tree_sitter_c_sharp::LANGUAGE.into(), "c_sharp", tree_sitter_c_sharp::HIGHLIGHTS_QUERY, "")),
+    entry!(&["cs"], "c_sharp", || configured(tree_sitter_c_sharp::LANGUAGE.into(), "c_sharp", &layered(&[tree_sitter_c_sharp::HIGHLIGHTS_QUERY, include_str!("queries/c_sharp-highlights.scm")]), "")),
     entry!(&["go"], "go", || configured(tree_sitter_go::LANGUAGE.into(), "go", tree_sitter_go::HIGHLIGHTS_QUERY, "")),
     entry!(&["rb"], "ruby", || configured(tree_sitter_ruby::LANGUAGE.into(), "ruby", tree_sitter_ruby::HIGHLIGHTS_QUERY, "")),
     entry!(&["php"], "php", || configured(tree_sitter_php::LANGUAGE_PHP.into(), "php", tree_sitter_php::HIGHLIGHTS_QUERY, tree_sitter_php::INJECTIONS_QUERY)),
@@ -491,6 +498,14 @@ mod tests {
             ("cmake", "# note\nset(VAR 1)", "note", COMMENT),
             ("zig", "// note\nconst s = 1;", "note", COMMENT),
         ]);
+    }
+
+    /// What a crate's grammar reads and its query leaves out takes its
+    /// colour from the query of this repository's own laid over it, last.
+    #[test]
+    fn this_repository_s_query_adds_what_a_crate_s_leaves_out() {
+        let cs = "static class T\n{\n    extension(string s)\n    {\n        public int N => 1;\n    }\n}";
+        assert_colours(&[("c_sharp", cs, "extension", KEYWORD)]);
     }
 
     /// A crate in the older capture vocabulary paints as one in the
