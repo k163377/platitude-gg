@@ -198,16 +198,25 @@ AppListView {
         graphFullWidth: graphList.graphFullWidth
         findOn: graphList.findOn
     }
-    /// Topmost row with any of itself on screen; 0 while the view is in its own top margin.
+    /// Topmost row with any of itself on screen; 0 while the view is in its own top margin. A move in flight answers
+    /// for where it lands (`landingY`), off the rows' fixed height: the rows there may not be built yet.
     function firstVisibleRow() {
+        if (send.sending)
+            return Math.max(0, graphList.rowAt(graphList.landingY + 1))
         const row = graphList.indexAt(0, graphList.contentY + 1)
         return row >= 0 ? row : 0
     }
-    /// Whether all of `row` is on screen. No index at the bottom means a list shorter than its viewport, where nothing
-    /// is out of sight.
+    /// Whether `row` is on screen: any of it under the top edge (`firstVisibleRow`), all of it over the bottom one —
+    /// where a move in flight lands, as `firstVisibleRow`. No index at the bottom means a list shorter than its
+    /// viewport, where nothing is out of sight.
     function rowOnScreen(row) {
-        const bottom = graphList.indexAt(0, graphList.contentY + graphList.height - Theme.graphRowHeight)
+        const low = graphList.landingY + graphList.height - Theme.graphRowHeight
+        const bottom = send.sending ? graphList.rowAt(low) : graphList.indexAt(0, low)
         return row >= graphList.firstVisibleRow() && (bottom < 0 || row <= bottom)
+    }
+    /// The row standing at `y` in content, off the rows' fixed height.
+    function rowAt(y) {
+        return Math.floor((y - graphList.originY) / Theme.graphRowHeight)
     }
     /// The one clamp (`AppListView.clampY`), kept to the span of the discard log's entry while one is on the graph:
     /// the rows it would bring back, first to last, are all the view goes over. A span shorter than
@@ -237,7 +246,7 @@ AppListView {
             return
         const kept = graphList.clampY(graphList.contentY)
         if (Math.abs(kept - graphList.contentY) > 0.5) {
-            wheelGlide.halt()
+            graphList.haltSend()
             graphList.contentY = kept
         }
     }
@@ -256,23 +265,42 @@ AppListView {
         if (graphList.graphModel.provisionalOn)
             Qt.callLater(graphList.keepToSpan)
     }
-    /// One notch, sent — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
+    /// One notch, glided — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {
-        wheelGlide.sendTo(graphList.clampY(wheelGlide.at - pixels))
+        send.glideTo(graphList.clampY(send.at - pixels))
     }
-    /// Something else is moving the view: the notch in flight stops (`WheelGlide.halt`), or it drags the view back.
-    function haltGlide() {
-        wheelGlide.halt()
+    /// Something else is moving the view: the move in flight stops (`ScrollSend.halt`), or it drags the view back.
+    function haltSend() {
+        send.halt()
     }
-    readonly property WheelGlide wheelGlide: WheelGlide {
-        id: wheelGlide
+    /// Something is about to write the view from a row's place: the move in flight lands first (`ScrollSend.land`),
+    /// so the write measures from where the rows are read (`landingY`).
+    function landSend() {
+        send.land()
+    }
+    /// Dashes the view until `row` stands in its middle, as `positionViewAtIndex(row, ListView.Center)` puts it: where
+    /// a search, a jump or a pick lands (`GraphFind.goToMatch`, `GraphRowWalk`).
+    function dashToRow(row) {
+        const to = graphList.clampY(graphList.originY + row * Theme.graphRowHeight
+                                    - (graphList.height - Theme.graphRowHeight) / 2)
+        if (Math.abs(to - send.at) >= 1)
+            send.dashTo(to)
+    }
+    /// A jump is in flight: a move the view is owed (`GraphPane.placing`).
+    readonly property bool dashing: send.dashing
+    /// Where the view stands once the move in flight lands (`ScrollSend.at`) — `contentY` at rest: what a row's place
+    /// is measured against (`firstVisibleRow`, `rowOnScreen`, `GraphRowWalk`).
+    readonly property real landingY: send.at
+    readonly property ScrollSend send: ScrollSend {
+        id: send
         view: graphList
+        dashMs: Metrics.jumpDashMs
     }
-    // The bar's arrows and track glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+    // The bar's arrows and track glide their steps on this same send (`AutoScrollBar.stepSend`).
     Binding {
         target: graphList.ScrollBar.vertical
-        property: "stepGlide"
-        value: wheelGlide
+        property: "stepSend"
+        value: send
     }
     // Mouse wheels scroll a fixed number of rows per notch; touchpads keep native Flickable panning.
     WheelHandler {

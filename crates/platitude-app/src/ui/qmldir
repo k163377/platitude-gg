@@ -203,6 +203,7 @@ RowKeep 1.0 RowKeep.qml
 RowHoverHost 1.0 RowHoverHost.qml
 SampleTimer 1.0 SampleTimer.qml
 ScrollArrow 1.0 ScrollArrow.qml
+ScrollSend 1.0 ScrollSend.qml
 SectionPeekPopup 1.0 SectionPeekPopup.qml
 SettingsAppPane 1.0 SettingsAppPane.qml
 SettingsDialog 1.0 SettingsDialog.qml
@@ -250,7 +251,6 @@ WindowChrome 1.0 WindowChrome.qml
 WindowDialogSeat 1.0 WindowDialogSeat.qml
 WindowButton 1.0 WindowButton.qml
 WindowShape 1.0 WindowShape.qml
-WheelGlide 1.0 WheelGlide.qml
 WindowWaitRing 1.0 WindowWaitRing.qml
 WipBucketHeader 1.0 WipBucketHeader.qml
 WipCommitBlock 1.0 WipCommitBlock.qml

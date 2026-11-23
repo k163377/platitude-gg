@@ -32,8 +32,8 @@ Item {
             return false
         const was = walk.view.contentY
         walk.view.cancelFlick()
-        // A wheel notch still in flight was aimed at rows this step is walking away from (`WheelGlide.halt`).
-        walk.view.haltGlide()
+        // A wheel notch still in flight was aimed at rows this step is walking away from (`ScrollSend.halt`).
+        walk.view.haltSend()
         walk.view.contentY = walk.view.clampY(was + delta * Theme.rowHeight)
         return walk.view.contentY !== was
     }

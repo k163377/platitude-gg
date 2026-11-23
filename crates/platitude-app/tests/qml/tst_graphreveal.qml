@@ -26,7 +26,13 @@ Item {
             height: Theme.graphRowHeight
         }
         readonly property HandWatch hand: HandWatch {}
-        function haltGlide() {}
+        readonly property real landingY: list.contentY
+        function haltSend() {}
+        function landSend() {}
+        // The dash is `GraphList`'s; what the walk decides is where it lands, so here it lands at once.
+        function dashToRow(row) {
+            list.positionViewAtIndex(row, ListView.Center)
+        }
         function clampY(y) {
             return y
         }

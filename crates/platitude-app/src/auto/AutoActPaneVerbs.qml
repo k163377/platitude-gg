@@ -518,7 +518,7 @@ Item {
         }
     }
     // _PGG_AUTO_ACT=graph-node-reveal [lanes|keys|right|menukey|jump|chosen|find]: a commit clicked, stepped onto or
-    // jumped to whose node lies past the lane column's edge glides the lanes to it (`GraphColumnMetrics.revealLane`)
+    // jumped to whose node lies past the lane column's edge dashes the lanes to it (`GraphColumnMetrics.revealLane`)
     // — the row's own press (`GraphRowDelegate.leftClick`); with `lanes` the lane strip's click, a press and a release
     // that did not travel (`GraphLanePan.clickAt`); with `keys` an arrow press onto the row from the one above it, or
     // below for the first (`GraphPane.stepRow`, the step the arrows' handlers take — the row it steps from is put down
@@ -530,8 +530,8 @@ Item {
     // go to the far end first, so the first lands on a lane-0 row past the left edge (back to rest) and the second on
     // a row of the farthest lane past the right edge (out to the end again): both edges, and the picture is the lanes
     // panned with that row's node whole. `--preset stashes` has three lanes, one past the two the column is pulled in
-    // to. `*_was` is witnessed before each, `*_glides` in its press (on its way, not there yet), `*_shown` / `*_x` once
-    // the glide is over (`GraphPane.placing`).
+    // to. `*_was` is witnessed before each, `*_dashes` in its press (on its way, not there yet), `*_shown` / `*_x` once
+    // the dash is over (`GraphPane.placing`).
     PageStage {
         id: nodeRevealTimer
         name: "node_reveal"
@@ -612,7 +612,7 @@ Item {
                 op.input("near", () => {
                     if (!op.click(near))
                         return false
-                    op.witness("near_glides", graphPane.metrics.lanesGliding)
+                    op.witness("near_dashes", graphPane.metrics.lanesDashing)
                     return true
                 })
                 return
@@ -620,12 +620,12 @@ Item {
             if (op.at("near")) {
                 // Inside the double-click window a second click would be half a double-click; inside the arrows'
                 // settle a second step would be read only once the settle ran out (`GraphRowWalk.noteStep`); the
-                // near node is read once its glide is over.
+                // near node is read once its dash is over.
                 if (!Awaited.all("node_reveal_far", {
                     "row": !!far,
                     "window": !graphPane.view.clickGuarded,
                     "settle": !graphPane.stepSettling,
-                    "glided": !graphPane.placing }))
+                    "dashed": !graphPane.placing }))
                     return
                 if (!op.kept("near_shown")) {
                     op.witness("near_shown", op.nodeWhole(0))
@@ -635,22 +635,22 @@ Item {
                 op.input("far", () => {
                     if (!op.click(far))
                         return false
-                    op.witness("far_glides", graphPane.metrics.lanesGliding)
+                    op.witness("far_dashes", graphPane.metrics.lanesDashing)
                     return true
                 })
                 return
             }
-            // `page` holds the glide too (`GraphPane.placing`): `far_shown` is read where it landed.
+            // `page` holds the dash too (`GraphPane.placing`): `far_shown` is read where it landed.
             op.complete({
                 "name": "node_reveal_landed",
                 "when": () => ({ "page": PageSettled.settled(page), "settle": !graphPane.stepSettling }),
                 "report": () => "graph_node_reveal via=" + op.via
                                 + " near_was=" + op.witnessed("near_was")
-                                + " near_glides=" + op.witnessed("near_glides")
+                                + " near_dashes=" + op.witnessed("near_dashes")
                                 + " near_shown=" + op.witnessed("near_shown")
                                 + " near_x=" + op.witnessed("near_x")
                                 + " far_was=" + op.witnessed("far_was")
-                                + " far_glides=" + op.witnessed("far_glides")
+                                + " far_dashes=" + op.witnessed("far_dashes")
                                 + " far_shown=" + op.nodeWhole(op.farLane())
                                 + " at_end=" + (Math.round(graphPane.graphX) === Math.round(graphPane.graphXMax))
                                 + " lane=" + op.farLane()

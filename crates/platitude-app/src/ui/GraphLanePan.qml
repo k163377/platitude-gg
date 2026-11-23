@@ -46,7 +46,7 @@ MouseArea {
     // never cancels, and the release would pick the row the hand drifted onto.
     onPressed: mouse => {
         pan.pressX = mouse.x
-        // The hand takes the lanes where they stand: a node's glide in flight stops under it.
+        // The hand takes the lanes where they stand: a node's dash in flight stops under it.
         pan.columns.panTo(pan.columns.graphX)
         pan.startGX = pan.columns.graphX
         pan.panning = false

@@ -155,7 +155,9 @@ Item {
             property bool keepingRows: false
             property bool rereading: false
             function shieldAt(scenePoint) { return false }
-            function haltGlide() {}
+            readonly property real landingY: list.contentY
+            function haltSend() {}
+            function landSend() {}
             function clampY(y) {
                 const minY = list.originY - list.topMargin
                 return Math.max(minY, Math.min(y, Math.max(minY, list.originY + list.contentHeight - list.height

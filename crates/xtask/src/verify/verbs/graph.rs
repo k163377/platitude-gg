@@ -652,15 +652,18 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "takes=false kept=3 dropped=true hand=true chosen=2 lit=2",
     },
     // A plain click on a held commit finds it on the graph: from out of
-    // sight (`away=true`) it lands in the middle (`first=center`), and a
-    // second click with it on screen moves nothing (`second=in`). What is
-    // held, the row the arrows step from and the commit being read stay.
-    // `hands=true`: the run enters the hands' functions, so a pad that
-    // stopped tapping or an area gone would still pass.
+    // sight (`away=true`) it dashes there (`dashed=true`, the rows answering
+    // for where it lands while it flies: `aimed=true`) and lands in the
+    // middle (`first=center`), and a second click with it on screen moves
+    // nothing (`second=in`). What is held, the row the arrows step from and
+    // the commit being read stay. `hands=true`: the run enters the hands'
+    // functions, so a pad that stopped tapping or an area gone would still
+    // pass.
     Verb {
         name: "graph-choose-show",
         when: &[],
-        plain: "away=true first=center second=in chosen=3 current=true read=true hands=true",
+        plain: "away=true dashed=true aimed=true first=center second=in chosen=3 current=true read=true \
+                hands=true",
     },
     // The same click with the stacked diff over the graph: the diff that
     // stood (`open=true`) closes and the graph comes back with the row on
@@ -871,16 +874,16 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "graph_bar shown=false",
     },
     // A commit clicked, stepped onto or jumped to whose node lies past the
-    // lane column's edge glides the lanes to it: lane 0 back to rest, the
+    // lane column's edge dashes the lanes to it: lane 0 back to rest, the
     // farthest lane out to the end. `*_was=false` says each one had a node
-    // to bring on, `*_glides=true` that it went by a glide, not a jump; the
+    // to bring on, `*_dashes=true` that its landing was drawn, not jumped; the
     // argument (`lanes`, `keys`, `right`, `menukey`, `jump`, `chosen`,
     // `find`) only changes which input lands on the row.
     Verb {
         name: "graph-node-reveal",
         when: &[],
-        plain: "near_was=false near_glides=true near_shown=true near_x=0 \
-                far_was=false far_glides=true far_shown=true at_end=true",
+        plain: "near_was=false near_dashes=true near_shown=true near_x=0 \
+                far_was=false far_dashes=true far_shown=true at_end=true",
     },
     // Which column the middle click landed in: lanes carried sideways,
     // or (`message`) left where they were. The argument picks the half.

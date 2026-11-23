@@ -136,7 +136,7 @@ Item {
             navBar.releaseTrack()
             // A step still gliding would carry on into the next test's reset.
             for (const bar of [floatBar, paneBar, desc.bar, navBar])
-                bar.stepGlide.halt()
+                bar.stepSend.halt()
         }
 
         /// Each end is the arrow's ink with the thumb's side air above and below it: the see-through arrow is 6 across
@@ -392,13 +392,13 @@ Item {
         }
 
         /// And a page from the left menu's track stops with the list's glide: every hand that halts it (a row brought
-        /// into view, an opening shown or given back, the middle button's drift — `NavList.haltGlide`) halts the page,
+        /// into view, an opening shown or given back, the middle button's drift — `NavList.haltSend`) halts the page,
         /// or the page drags the list on to where it was going.
         function test_halting_the_left_menus_glide_halts_a_page_from_its_track() {
             verify(navBar.pressTrack(navBar.height - navBar.arrowEnd - 2))
             navBar.releaseTrack()
             verify(navBar.stepping, "the page is gliding")
-            navList.haltGlide()
+            navList.haltSend()
             verify(!navBar.stepping, "and stopped with the list's glide")
         }
 

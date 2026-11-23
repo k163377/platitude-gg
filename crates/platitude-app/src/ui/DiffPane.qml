@@ -152,8 +152,8 @@ Rectangle {
     function goToHit(row) {
         if (row < 0 || diffList.rowOnScreen(row))
             return
-        // A wheel notch still in flight was aimed elsewhere (`WheelGlide.halt`).
-        diffList.haltGlide()
+        // A wheel notch still in flight was aimed elsewhere (`ScrollSend.halt`).
+        diffList.haltSend()
         diffList.positionViewAtIndex(row, ListView.Center)
     }
     // The rows were laid out again under a standing query (another file, one column or two): the model searched
@@ -601,14 +601,15 @@ Rectangle {
             }
             /// One notch, sent — and the way in for a run, since a wheel cannot be injected (verify-ui スキル).
             function sendRows(pixels) {
-                wheelGlide.sendTo(diffList.clampY(wheelGlide.at - pixels))
+                send.glideTo(diffList.clampY(send.at - pixels))
             }
-            /// Something else is moving the view: the notch in flight loses it (`WheelGlide.halt`).
-            function haltGlide() {
-                wheelGlide.halt()
+            /// Something else is moving the view: the notch in flight loses it (`ScrollSend.halt`).
+            function haltSend() {
+                send.halt()
             }
-            /// The row at the top of the view, and whether all of `row` is on screen (as `GraphList`'s): where a
-            /// search starts, and the one test of whether a hit needs the view moved.
+            /// The row at the top of the view, and whether `row` is on screen (as `GraphList`'s at rest — a notch in
+            /// flight is read where it stands): where a search starts, and the one test of whether a hit needs the
+            /// view moved.
             function firstVisibleRow() {
                 const row = diffList.indexAt(0, diffList.contentY + 1)
                 return row >= 0 ? row : 0
@@ -617,15 +618,15 @@ Rectangle {
                 const bottom = diffList.indexAt(0, diffList.contentY + diffList.height - Theme.rowHeight)
                 return row >= diffList.firstVisibleRow() && (bottom < 0 || row <= bottom)
             }
-            readonly property WheelGlide wheelGlide: WheelGlide {
-                id: wheelGlide
+            readonly property ScrollSend send: ScrollSend {
+                id: send
                 view: diffList
             }
-            // The bar's arrows and track glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+            // The bar's arrows and track glide their steps on this same send (`AutoScrollBar.stepSend`).
             Binding {
                 target: diffList.ScrollBar.vertical
-                property: "stepGlide"
-                value: wheelGlide
+                property: "stepSend"
+                value: send
             }
             // The arrows are answered below (`DiffRowWalk`): Qt's own key navigation would scroll to a
             // `currentIndex` nothing here follows.

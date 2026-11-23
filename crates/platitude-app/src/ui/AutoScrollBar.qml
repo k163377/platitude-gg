@@ -71,12 +71,12 @@ ScrollBar {
     readonly property bool trackWaiting: trackWait.running
     /// The page a press on the track sends (`Metrics.trackPageShare` of the view, whole pixels as Chromium's).
     readonly property real trackPage: bar.view ? Math.floor(bar.view.height * Metrics.trackPageShare) : 0
-    /// The glide a press's step rides. A surface that glides its wheel notches hands its own in (`WheelGlide`), so a
-    /// notch after a step adds to it and every hand that halts the surface's glide halts the step as well
+    /// The send a press's step glides on. A surface that glides its wheel notches hands its own in (`ScrollSend`), so
+    /// a notch after a step adds to it and every hand that halts the surface's send halts the step as well
     /// (rules-refs/app-ui.md「ホイールの 1 ノッチは送られる、跳ばない」); any other bar rides one of its own.
-    property var stepGlide: ownGlide
+    property var stepSend: ownSend
     /// Whether a press's step is still gliding.
-    readonly property bool stepping: bar.stepGlide.sending
+    readonly property bool stepping: bar.stepSend.gliding
 
     /// Where the view may stand: its own `clampY` where it keeps one (margins, a room of its own), its extent otherwise.
     function limitY(y) {
@@ -91,7 +91,7 @@ ScrollBar {
     function pressArrow(dir) {
         bar.arrowHeld = dir
         bar.arrowRunning = false
-        bar.stepGlide.sendTo(bar.limitY(bar.stepGlide.at + dir * Metrics.arrowStep))
+        bar.stepSend.glideTo(bar.limitY(bar.stepSend.at + dir * Metrics.arrowStep))
         runWait.restart()
     }
     /// The hand let go: the run stops where it is. A step still gliding lands.
@@ -144,7 +144,7 @@ ScrollBar {
         bar.trackHeld = y < bar.thumbTop() ? -1 : 1
         bar.trackAt = y
         bar.trackRunning = false
-        bar.stepGlide.sendTo(bar.limitY(bar.stepGlide.at + bar.trackHeld * bar.trackPage))
+        bar.stepSend.glideTo(bar.limitY(bar.stepSend.at + bar.trackHeld * bar.trackPage))
         trackWait.restart()
         return true
     }
@@ -185,8 +185,8 @@ ScrollBar {
         bar.trackRunning = false
     }
 
-    readonly property WheelGlide ownGlide: WheelGlide {
-        id: ownGlide
+    readonly property ScrollSend ownSend: ScrollSend {
+        id: ownSend
         view: bar.view
     }
     Timer {

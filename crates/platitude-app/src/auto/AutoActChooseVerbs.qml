@@ -290,13 +290,30 @@ Item {
                            + " lit=" + chooseTimer.litRows()
                 } })
         }
+        /// The rows about `row` the graph says are on screen, first to last, after its first visible row
+        /// (`GraphList.firstVisibleRow` / `rowOnScreen`).
+        function screenSpan(row) {
+            const view = graphPane.view
+            let first = -1
+            let last = -1
+            for (let r = Math.max(0, row - 60); r < Math.min(view.count, row + 60); r++) {
+                if (!view.rowOnScreen(r))
+                    continue
+                if (first < 0)
+                    first = r
+                last = r
+            }
+            return view.firstVisibleRow() + ":" + first + "-" + last
+        }
         /// The graph scrolled a hundred rows past the choice, as a reader's wheel would take it, then two plain clicks
         /// on the list's first row — the newest held commit, the graph's highest row of the choice — each entered where
         /// its hand's handlers enter: the first in the row's air (`SweepPad`), with the row out of the graph's sight,
         /// the second on the words (`RowHand`), with it on screen. Witnessed at the presses: whether the row was out
-        /// of sight (`showAway`), where the view stood before each (`showFromY` / `showOnY`), how the first left the
-        /// row (`showFirst`, `GraphRowWalk.stepLanding`), and the row the arrows step from and the commit being read
-        /// (`showCurrent` / `showRead`), which neither may move.
+        /// of sight (`showAway`), where the view stood before each (`showFromY` / `showOnY`), whether the first set a
+        /// dash going (`showDashed`) and the rows answered for where it lands while it flew (`showAimed`, `screenSpan`
+        /// in flight against the same once it landed), how the first left the row once its dash landed (`showFirst`,
+        /// `GraphRowWalk.stepLanding`), and the row the arrows step from and the commit being read (`showCurrent` /
+        /// `showRead`), which neither may move.
         function shown(row) {
             const op = chosenRowTimer
             const target = Math.min(...chooseTimer.rows)
@@ -315,11 +332,17 @@ Item {
                     const air = row.sweep.airPoints(3)[0]
                     row.sweep.pressAt(air)
                     row.sweep.releaseNow()
+                    op.witness("showDashed", graphPane.view.dashing)
+                    op.witness("showAimSpan", op.screenSpan(target))
                 })
                 return
             }
             if (op.at("air_click")) {
+                // The first click dashes the row in (`GraphList.dashToRow`): how it landed is read once it has.
+                if (!Awaited.all("chosen_show_first_landed", { "placed": !graphPane.placing }))
+                    return
                 op.input("words_click", () => {
+                    op.witness("showAimed", op.screenSpan(target) === op.witnessed("showAimSpan"))
                     op.witness("showFirst", graphPane.stepLanding(target, op.witnessed("showFromY")))
                     op.witness("showOnY", graphPane.view.contentY)
                     row.wordsHand.takeAt(Qt.point(row.wordsHand.width / 2, row.wordsHand.height / 2))
@@ -334,6 +357,8 @@ Item {
                     const at = Math.min(...chooseTimer.rows)
                     const now = detailsPane.chosenRowAt(0)
                     return "chosen_show away=" + op.witnessed("showAway")
+                           + " dashed=" + op.witnessed("showDashed")
+                           + " aimed=" + op.witnessed("showAimed")
                            + " first=" + op.witnessed("showFirst")
                            + " second=" + graphPane.stepLanding(at, op.witnessed("showOnY"))
                            + " chosen=" + page.chosenCount

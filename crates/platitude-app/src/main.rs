@@ -319,6 +319,7 @@ fn main() {
     qrc::embed!("ui/RowHoverHost.qml");
     qrc::embed!("ui/SampleTimer.qml");
     qrc::embed!("ui/ScrollArrow.qml");
+    qrc::embed!("ui/ScrollSend.qml");
     qrc::embed!("ui/SectionPeekPopup.qml");
     qrc::embed!("ui/SettingsAppPane.qml");
     qrc::embed!("ui/SettingsDialog.qml");
@@ -368,7 +369,6 @@ fn main() {
     qrc::embed!("ui/WindowShape.qml");
     qrc::embed!("ui/WindowWaitRing.qml");
     qrc::embed!("ui/WipBucketPane.qml");
-    qrc::embed!("ui/WheelGlide.qml");
     qrc::embed!("ui/WipBucketHeader.qml");
     qrc::embed!("ui/WipCommitBlock.qml");
     qrc::embed!("ui/WipPane.qml");

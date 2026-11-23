@@ -182,16 +182,16 @@ ColumnLayout {
         const pixels = dy / 120 * (Metrics.wheelRows * Theme.fontMdLine)
         const max = Math.max(0, flick.contentHeight - flick.height)
         // Measured from where the notch in flight is aiming (`DescriptionBox.rollBy`, same reason).
-        const from = summaryGlide.at
+        const from = summarySend.at
         const next = Math.max(0, Math.min(max, from - pixels))
         if (Math.abs(next - from) > 0.5) {
-            summaryGlide.sendTo(next)
+            summarySend.glideTo(next)
             return
         }
         editor.wheelPastEnd(pixels)
     }
-    readonly property WheelGlide summaryGlide: WheelGlide {
-        id: summaryGlide
+    readonly property ScrollSend summarySend: ScrollSend {
+        id: summarySend
         view: summaryView.contentItem
     }
     /// Automation only: the boxes' middle-button hands, driven without a pointer.
@@ -202,7 +202,7 @@ ColumnLayout {
     /// The middle button's drift over the summary: the words only (`DescriptionBox.driftText`).
     function driftSummary(dy) {
         editor.unpinSummary()
-        summaryGlide.halt()
+        summarySend.halt()
         const flick = summaryView.contentItem
         flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + dy))
     }
@@ -251,7 +251,7 @@ ColumnLayout {
                 x: summaryView.width - width
                 y: summaryView.topPadding
                 height: summaryView.availableHeight
-                stepGlide: summaryGlide
+                stepSend: summarySend
                 onHeldChanged: if (summaryBar.held) editor.unpinSummary()
             }
             // ScrollView keeps its Flickable private -- reach it once it exists. Not interactive: answering the same

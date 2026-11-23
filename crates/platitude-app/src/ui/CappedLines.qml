@@ -27,7 +27,7 @@ Item {
     /// Back to the first line, the bar's step in flight dropped with the lines it was sending (rules-refs/app-ui.md
     /// 「ホイールの 1 ノッチは送られる、跳ばない」) — for an owner whose lines are about something else now.
     function toTop() {
-        bar.stepGlide.halt()
+        bar.stepSend.halt()
         view.contentY = 0
     }
 

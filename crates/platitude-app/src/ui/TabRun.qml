@@ -13,7 +13,7 @@ QtObject {
 
     required property ListView view
 
-    readonly property bool travelling: tabRun.travel.running
+    readonly property bool travelling: tabRun.travel.dashing
 
     /// An offset held inside the run: `contentX` is written by hand, and one outside the run draws blank band past the
     /// last tab. The run starts at `originX`, not 0 — when tabs before the visible ones change width the list moves its
@@ -36,7 +36,7 @@ QtObject {
     /// Calls off a travel in flight: anything else about to move the strip outranks it (two writers on `contentX` draw
     /// over each other).
     function halt() {
-        tabRun.travel.stop()
+        tabRun.travel.halt()
     }
 
     /// Where the strip has to stand for `tab` to be whole in the run: the least move (as `ListView.Contain`). Not
@@ -52,22 +52,19 @@ QtObject {
         return tabRun.clamp(to)
     }
 
-    /// Travels the strip until `tab` is whole in the run — the least move (`wholeAt`) — animated rather than jumped,
-    /// and quick: the app's standard animation length, `animStandardMs` (user decision; 規約 §QML 実装ルール). A
-    /// jump hides which way and how far the strip went, which is what the hand that pressed was asking. The wheel and
-    /// a press outrank it (`halt`): a strip being sent goes where the sending hand sends it.
+    /// Travels the strip until `tab` is whole in the run — the least move (`wholeAt`) — dashed rather than jumped
+    /// (`ScrollSend.dashTo`), and quick: the app's standard animation length, `animStandardMs` (user decision; 規約
+    /// §QML 実装ルール). A jump hides which way the strip went, which is what the hand that pressed was asking. The
+    /// wheel and a press outrank it (`halt`): a strip being sent goes where the sending hand sends it.
     /// Answers false when there is nowhere to go, or a travel is already headed there — restarting mid-flight would
     /// begin the travel over.
     function showTab(tab) {
         if (!tab)
             return false
         const to = tabRun.wholeAt(tab)
-        if (to === tabRun.view.contentX || (tabRun.travel.running && tabRun.travel.to === to))
+        if (to === tabRun.view.contentX || (tabRun.travel.dashing && tabRun.travel.aim === to))
             return false
-        tabRun.travel.stop()
-        tabRun.travel.from = tabRun.view.contentX
-        tabRun.travel.to = to
-        tabRun.travel.start()
+        tabRun.travel.dashTo(to)
         return true
     }
 
@@ -79,7 +76,7 @@ QtObject {
         const to = tabRun.wholeAt(tab)
         if (to === tabRun.view.contentX)
             return false
-        tabRun.travel.stop()
+        tabRun.travel.halt()
         tabRun.view.contentX = to
         return true
     }
@@ -90,7 +87,7 @@ QtObject {
         const room = Math.max(0, tabRun.view.contentWidth - tabRun.view.width)
         if (room <= 0 || !tab)
             return false
-        tabRun.travel.stop()
+        tabRun.travel.halt()
         const origin = tabRun.view.originX
         tabRun.view.contentX = tab.x - origin < tabRun.view.contentWidth / 2 ? origin + room : origin
         return true
@@ -98,10 +95,10 @@ QtObject {
 
     // Clamped again when it stops: the run can move under a travel (a window resized mid-flight) and leave the
     // destination outside it. Every other writer of `contentX` clamps as it writes.
-    readonly property NumberAnimation travel: NumberAnimation {
-        target: tabRun.view
-        property: "contentX"
-        duration: Metrics.animStandardMs
+    readonly property ScrollSend travel: ScrollSend {
+        view: tabRun.view
+        axis: "contentX"
+        dashMs: Metrics.animStandardMs
         onStopped: tabRun.view.contentX = tabRun.clamp(tabRun.view.contentX)
     }
 }

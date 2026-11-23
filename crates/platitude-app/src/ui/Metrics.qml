@@ -21,8 +21,8 @@ QtObject {
     // their middle, as every head is.
     readonly property real markHead: 1.25
     // The three lengths an animation takes (デザイン規約 §QML 実装ルール): short, standard, and the long one, kept to
-    // what falls back and to the blink. The ring's turn and the glide of a wheel notch or a bar's arrow keep lengths
-    // of their own.
+    // what falls back and to the blink. The ring's turn and the scroll sends (`ScrollSend`: a notch's or a bar's
+    // glide, the lanes' and the rows' dashes) keep lengths of their own.
     readonly property int animShortMs: 120
     readonly property int animStandardMs: 200
     readonly property int animLongMs: 400
@@ -90,13 +90,22 @@ QtObject {
     // Pixels per millisecond per pixel past the belt's line: Chromium sends a selection that whole distance every
     // frame (`LayoutBox::Autoscroll`), sixty frames a second.
     readonly property real selectScrollGain: 0.06
-    // How long a wheel notch takes to land, so the eye can follow the rows across. Chromium's own
-    // (`scroll_offset_animation_curve.cc`: 9 frames / 60); `WheelGlide` draws its ease-in-out.
+    // How long a wheel notch takes to land, so the eye can follow the rows across; `ScrollSend` glides it on
+    // Chromium's ease-in-out. The length is Chromium's keyboard scroll (`scroll_offset_animation_curve.cc`,
+    // `kConstantDuration`: 9 frames / 60), not its wheel's, which takes 12 frames for a notch under 120 px and 6 from
+    // 480 px (`kInverseDelta*`).
     readonly property int wheelGlideMs: 150
-    // How long the lanes take to glide sideways to a node a press, a step or a jump lands on, on the wheel's curve
-    // (`GraphColumnMetrics.laneGlide`). Shorter than a notch (user decision — ask before changing): the lanes answer a
+    // How long the lanes take to dash sideways to a node a press, a step or a jump lands on
+    // (`GraphColumnMetrics.laneSend`). Shorter than a notch (user decision — ask before changing): the lanes answer a
     // press rather than pace a reading, and at a notch's length they trail the hand that sent them.
-    readonly property int laneGlideMs: 50
+    readonly property int laneDashMs: 50
+    // How long the rows take to dash to a row a search, a jump or a pick lands on (`GraphList.dashToRow`): a notch's
+    // length on the jump's curve (`ScrollSend.dashTo`), so a jump reads as quicker than the wheel at the same length.
+    readonly property int jumpDashMs: 150
+    // The most of a view a dash is seen going over (`ScrollSend.dashTo`): one farther starts that far short of its
+    // aim (user decision — ask before changing). A quarter keeps a row brought to the middle of the view inside it
+    // from the first frame.
+    readonly property real dashLandShare: 0.25
     // A scroll bar's arrow: a press sends one step, glided like a notch (`wheelGlideMs`); held, a run starts after a
     // pause and goes at one speed until the hand lets go or leaves the arrow. All three are Chromium's Fluent bar,
     // measured: the same whatever the view's height, and whether it is the page or a box inside it.

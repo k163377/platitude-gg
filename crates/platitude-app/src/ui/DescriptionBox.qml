@@ -164,25 +164,25 @@ Rectangle {
         const flick = textView.contentItem
         const pixels = dy / 120 * box.wheelStep
         const max = Math.max(0, flick.contentHeight - flick.height)
-        // From where the notch in flight is aiming, or two quick notches land as one (`WheelGlide.at`).
-        const from = glide.at
+        // From where the notch in flight is aiming, or two quick notches land as one (`ScrollSend.at`).
+        const from = send.at
         const next = Math.max(0, Math.min(max, from - pixels))
         if (Math.abs(next - from) > 0.5) {
-            glide.sendTo(next)
+            send.glideTo(next)
             return
         }
         box.wheelPastEnd(pixels)
     }
-    readonly property WheelGlide glide: WheelGlide {
-        id: glide
+    readonly property ScrollSend send: ScrollSend {
+        id: send
         view: textView.contentItem
     }
     /// The middle button's drift — the words and nothing else. Unlike the wheel it hands nothing to the surface under
     /// the box: the box travels with that surface and would carry the ring away from the pointer that set it.
     function driftText(dy) {
         box.unpin()
-        // A notch still in flight would pull against the drift for its last beat (`WheelGlide.halt`).
-        glide.halt()
+        // A notch still in flight would pull against the drift for its last beat (`ScrollSend.halt`).
+        send.halt()
         const flick = textView.contentItem
         flick.contentY = Math.max(0, Math.min(flick.contentHeight - flick.height, flick.contentY + dy))
     }
@@ -247,7 +247,7 @@ Rectangle {
             // Short of the grip's ink while it is offered (`gripYield`).
             height: textView.availableHeight - (box.grips ? box.gripYield : 0)
             lengthAlong: textBar.height
-            stepGlide: glide
+            stepSend: send
             // Taking the bar — thumb, arrow or track (`held`) — is the reader taking the box over, as the wheel is;
             // left out, a thumb drag is pulled back to the top (`tst_scrollarrow`'s
             // `test_dragging_the_thumb_takes_a_pinned_box_over`; `MessageEditor.unpinSummary` alike).

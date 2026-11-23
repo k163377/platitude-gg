@@ -2,8 +2,8 @@ import QtQuick
 import QtTest
 import platitude.ui
 
-// A commit clicked, stepped onto or jumped to whose node lies past the lane column's edge glides the lanes sideways
-// to it (`GraphColumnMetrics.revealLane`, the wheel's send — `WheelGlide`), and a hand on the lanes stops a glide in
+// A commit clicked, stepped onto or jumped to whose node lies past the lane column's edge dashes the lanes sideways
+// to it (`GraphColumnMetrics.revealLane`, the lanes' `ScrollSend.dashTo`), and a hand on the lanes stops a dash in
 // flight (`panTo`). The lane strip brings the node on only at a release that did not travel
 // (`GraphLanePan.releaseLanded`): at the press, a pan's grab would see the lanes slide out from under the hand.
 //
@@ -92,7 +92,13 @@ Item {
         // The walk listens to the hand over the rows (`GraphRowWalk.handWatch`); none comes here.
         readonly property HandWatch hand: HandWatch {}
         property string namingOid: ""
-        function haltGlide() {}
+        readonly property real landingY: walkList.contentY
+        function haltSend() {}
+        function landSend() {}
+        // The rows' dash is `GraphList`'s; here only the lanes are watched, so the rows land at once.
+        function dashToRow(row) {
+            walkList.positionViewAtIndex(row, ListView.Center)
+        }
         function clampY(y) {
             return y
         }
@@ -138,40 +144,40 @@ Item {
             floor.panTo(0)
         }
 
-        /// A reveal that moves the lanes glides them, and lands on `x`.
-        function glidesTo(metrics, x, what) {
-            verify(metrics.lanesGliding, what + ": the lanes glide rather than jump")
+        /// A reveal that moves the lanes dashes them, and lands on `x`.
+        function dashesTo(metrics, x, what) {
+            verify(metrics.lanesDashing, what + ": the lanes dash rather than jump")
             tryCompare(metrics, "graphX", x, undefined, what)
-            tryVerify(() => !metrics.lanesGliding, undefined, what + ": and the glide ends there")
+            tryVerify(() => !metrics.lanesDashing, undefined, what + ": and the dash ends there")
         }
 
         function test_a_node_already_whole_leaves_the_lanes_where_they_are() {
             columns.revealLane(1)
-            verify(!columns.lanesGliding, "lane 1 is whole unpanned")
+            verify(!columns.lanesDashing, "lane 1 is whole unpanned")
             compare(columns.graphX, 0)
             columns.panTo(columns.graphXMax)
             columns.revealLane(5)
-            verify(!columns.lanesGliding, "lane 5 is whole panned to the end")
+            verify(!columns.lanesDashing, "lane 5 is whole panned to the end")
             compare(columns.graphX, columns.graphXMax)
         }
 
         function test_a_node_past_the_right_edge_comes_to_where_the_last_lane_ends() {
             columns.revealLane(5)
-            glidesTo(columns, columns.graphXMax, "the last lane lands where panning to the end puts it")
+            dashesTo(columns, columns.graphXMax, "the last lane lands where panning to the end puts it")
             columns.panTo(0)
             columns.revealLane(2)
             const atEnd = Metrics.laneInset + 3 * Metrics.laneW + Theme.spaceSm - columns.graphColW
-            glidesTo(columns, atEnd, "lane 2 lands with the gap the last lane keeps at the far end")
+            dashesTo(columns, atEnd, "lane 2 lands with the gap the last lane keeps at the far end")
             verify(root.nodeWhole(columns, 2), "whole")
         }
 
         function test_a_node_past_the_left_edge_comes_to_where_lane_0_stands_unpanned() {
             columns.panTo(columns.graphXMax)
             columns.revealLane(0)
-            glidesTo(columns, 0, "lane 0 goes back to rest")
+            dashesTo(columns, 0, "lane 0 goes back to rest")
             columns.panTo(columns.graphXMax)
             columns.revealLane(2)
-            glidesTo(columns, 2 * Metrics.laneW, "lane 2 stands where lane 0 does at rest")
+            dashesTo(columns, 2 * Metrics.laneW, "lane 2 stands where lane 0 does at rest")
             verify(root.nodeWhole(columns, 2), "whole")
         }
 
@@ -179,7 +185,7 @@ Item {
             columns.panTo(Metrics.laneW / 2)
             verify(!root.nodeWhole(columns, 0), "the setup cuts lane 0 at the left edge")
             columns.revealLane(0)
-            glidesTo(columns, 0, "lane 0 comes back whole")
+            dashesTo(columns, 0, "lane 0 comes back whole")
         }
 
         function test_a_column_too_narrow_for_both_gaps_takes_the_left_place_and_stays() {
@@ -187,19 +193,19 @@ Item {
                    "the floor holds neither gap beside a node")
             floor.panTo(floor.graphXMax)
             floor.revealLane(3)
-            glidesTo(floor, 3 * Metrics.laneW, "lane 3 stands where lane 0 does at rest")
+            dashesTo(floor, 3 * Metrics.laneW, "lane 3 stands where lane 0 does at rest")
             floor.revealLane(3)
-            verify(!floor.lanesGliding, "a second click on the same row moves nothing")
+            verify(!floor.lanesDashing, "a second click on the same row moves nothing")
             compare(floor.graphX, 3 * Metrics.laneW)
         }
 
-        function test_a_hand_on_the_lanes_stops_a_glide_in_flight() {
+        function test_a_hand_on_the_lanes_stops_a_dash_in_flight() {
             columns.revealLane(5)
-            verify(columns.lanesGliding)
+            verify(columns.lanesDashing)
             columns.panTo(10)
-            verify(!columns.lanesGliding, "the glide stops for the hand")
-            // waits(paced): the glide's length twice over; a glide left running would have dragged the lanes on.
-            wait(columns.laneGlide.duration * 2)
+            verify(!columns.lanesDashing, "the dash stops for the hand")
+            // waits(paced): the dash's length twice over; a dash left running would have dragged the lanes on.
+            wait(columns.laneSend.dashMs * 2)
             compare(columns.graphX, 10, "and the lanes stay where the hand put them")
         }
     }
@@ -220,10 +226,10 @@ Item {
         function test_a_click_picks_at_the_press_and_brings_the_node_on_at_the_release() {
             mousePress(strip, 20, farY, Qt.LeftButton)
             compare(root.farRow.picks, 1, "the row is picked at the press")
-            verify(!columns.lanesGliding, "the lanes stay put while the button is down")
+            verify(!columns.lanesDashing, "the lanes stay put while the button is down")
             compare(columns.graphX, 0)
             mouseRelease(strip, 20, farY, Qt.LeftButton)
-            verify(columns.lanesGliding, "the release sets lane 5 on its way")
+            verify(columns.lanesDashing, "the release sets lane 5 on its way")
             tryCompare(columns, "graphX", columns.graphXMax)
         }
 
@@ -233,19 +239,19 @@ Item {
                 mouseMove(strip, 30 - i * 5, farY)
             compare(columns.graphX, 20, "the lanes follow the hand from where they were")
             mouseRelease(strip, 10, farY, Qt.LeftButton)
-            verify(!columns.lanesGliding, "a pan's release sets nothing on its way")
+            verify(!columns.lanesDashing, "a pan's release sets nothing on its way")
             compare(columns.graphX, 20, "and leaves the lanes where the hand let go")
             compare(root.farRow.picks, 1, "the press still picked the row")
         }
 
-        function test_a_press_takes_the_lanes_from_a_glide_in_flight() {
+        function test_a_press_takes_the_lanes_from_a_dash_in_flight() {
             columns.revealLane(5)
-            verify(columns.lanesGliding)
+            verify(columns.lanesDashing)
             mousePress(strip, 20, nearY, Qt.LeftButton)
-            verify(!columns.lanesGliding, "the hand on the lanes stops the glide")
+            verify(!columns.lanesDashing, "the hand on the lanes stops the dash")
             const held = columns.graphX
-            // waits(paced): the glide's length twice over; a glide left running would have moved the lanes on.
-            wait(columns.laneGlide.duration * 2)
+            // waits(paced): the dash's length twice over; a dash left running would have moved the lanes on.
+            wait(columns.laneSend.dashMs * 2)
             compare(columns.graphX, held, "and the lanes stand still under the hand")
             mouseRelease(strip, 20, nearY, Qt.LeftButton)
         }
@@ -282,19 +288,19 @@ Item {
 
         function test_a_step_brings_on_the_node_of_the_row_it_lands_on() {
             verify(walk.stepRow(1, false))
-            verify(walkColumns.lanesGliding, "lane 5 is on its way at once")
+            verify(walkColumns.lanesDashing, "lane 5 is on its way at once")
             tryCompare(walkColumns, "graphX", walkColumns.graphXMax)
         }
 
         function test_a_held_run_moves_the_lanes_once_where_it_stops() {
             verify(walk.stepRow(1, false))
             tryCompare(walkColumns, "graphX", walkColumns.graphXMax, undefined, "the press brings lane 5 on")
-            tryVerify(() => !walkColumns.lanesGliding)
+            tryVerify(() => !walkColumns.lanesDashing)
             verify(walk.stepRow(1, true))
-            verify(!walkColumns.lanesGliding, "a held step onto lane 0 leaves the lanes")
+            verify(!walkColumns.lanesDashing, "a held step onto lane 0 leaves the lanes")
             verify(walk.stepRow(1, true))
             verify(walk.stepRow(1, true))
-            verify(!walkColumns.lanesGliding, "and so does the rest of the run")
+            verify(!walkColumns.lanesDashing, "and so does the rest of the run")
             compare(walkColumns.graphX, walkColumns.graphXMax)
             walk.keyUp()
             tryCompare(walkColumns, "graphX", 0, undefined, "where the run stops, its row's lane 0 comes on")
@@ -304,7 +310,7 @@ Item {
             walkList.forceActiveFocus()
             verify(walk.stepRow(1, false))
             tryCompare(walkColumns, "graphX", walkColumns.graphXMax, undefined, "the press brings lane 5 on")
-            tryVerify(() => !walkColumns.lanesGliding)
+            tryVerify(() => !walkColumns.lanesDashing)
             verify(walk.stepRow(1, true))
             walkElsewhere.forceActiveFocus()
             verify(!walk.keyHeld, "a key that comes up somewhere else still ends the run")

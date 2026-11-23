@@ -69,7 +69,19 @@ Item {
         readonly property HandWatch hand: hand
         property bool keepingRows: false
         property bool rereading: false
-        function haltGlide() {}
+        // The send is `GraphList`'s own: what the walk does to a move in flight is what is weighed.
+        readonly property ScrollSend send: ScrollSend {
+            id: send
+            view: list
+            dashMs: 200
+        }
+        readonly property real landingY: send.at
+        function haltSend() {
+            send.halt()
+        }
+        function landSend() {
+            send.land()
+        }
         function clampY(y) {
             const minY = list.originY - list.topMargin
             const maxY = Math.max(minY, list.originY + list.contentHeight - list.height + list.bottomMargin)
@@ -120,10 +132,13 @@ Item {
         when: windowShown
 
         function init() {
+            send.halt()
             hand.at = Qt.point(-1, -1)
             hand.covered = 0
-            fill(40)
+            // To the top before the rows go in again: refilled far down, the list keeps the place it stood at and
+            // moves its origin, and the cases count rows from 0.
             list.contentY = 0
+            fill(40)
             list.forceLayout()
             hand.stillHeld = false
             walk.handOid = ""
@@ -159,6 +174,14 @@ Item {
             walk.shiftRows(1)
             compare(list.contentY, 6 * Theme.graphRowHeight)
             compare(root.shifted, [])
+        }
+
+        function test_rows_that_come_in_under_a_dash_are_kept_where_it_was_going() {
+            list.contentY = 5 * Theme.graphRowHeight
+            send.dashTo(20 * Theme.graphRowHeight)
+            walk.shiftRows(1)
+            compare(list.contentY, 21 * Theme.graphRowHeight, "it landed where it was going, a row on")
+            verify(!send.sending, "and nothing is left in flight")
         }
 
         function test_what_the_view_cannot_take_back_moves_under_the_hand_as_the_rereads() {

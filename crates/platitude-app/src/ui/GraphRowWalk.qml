@@ -52,9 +52,10 @@ Item {
         return true
     }
     /// Brings a stepped-onto row into view: `near` moves as little as will do, anything else centers. Row positions
-    /// are computed, since `itemAtIndex` answers null for rows the view has not built.
+    /// are computed, since `itemAtIndex` answers null for rows the view has not built. A move in flight lands first
+    /// (`GraphList.landSend`): `near` was weighed where it lands.
     function revealStep(row, near) {
-        walk.view.haltGlide()
+        walk.view.landSend()
         if (!near) {
             walk.view.positionViewAtIndex(row, ListView.Center)
             return
@@ -68,10 +69,11 @@ Item {
         else if (bottom > walk.view.contentY + walk.view.height)
             walk.view.contentY = walk.view.clampY(bottom - walk.view.height)
     }
-    /// Whether any of `row` is on screen.
+    /// Whether any of `row` is on screen, where a move in flight lands (`GraphList.landingY`).
     function rowShows(row) {
         const top = walk.view.originY + row * Theme.graphRowHeight
-        return top + Theme.graphRowHeight > walk.view.contentY && top < walk.view.contentY + walk.view.height
+        const y = walk.view.landingY
+        return top + Theme.graphRowHeight > y && top < y + walk.view.height
     }
     /// The menu key on the history (デザイン規約 §メニュー のキーボード): the current row's own right-click
     /// (`GraphRowDelegate.askMenu` — inside a choice of two the pair's menu, elsewhere the choice drawn in to that row
@@ -155,7 +157,7 @@ Item {
     /// is read, and a held key's highlight runs ahead of that (規約 §矢印で履歴を辿る).
     property bool stepPending: false
     /// The row is read, and its node comes into the lane column (`revealNode`) with the read, not with each step: the
-    /// highlight runs, the lanes do not swing at the repeat rate under it, and where the run stops they glide once.
+    /// highlight runs, the lanes do not swing at the repeat rate under it, and where the run stops they dash once.
     function landStep() {
         // Read the row as it stands now: a background rebuild during the settle rewrites rows in place.
         const row = walk.view.currentIndex
@@ -188,11 +190,10 @@ Item {
             walk.stepPending = false
         }
     }
-    /// A jump: the row selected, centred, and its node brought on (`revealNode`).
+    /// A jump: the row selected, dashed to the middle (`GraphList.dashToRow`), and its node brought on (`revealNode`).
     function jumpToRow(row) {
-        walk.view.haltGlide()
         walk.view.currentIndex = row
-        walk.view.positionViewAtIndex(row, ListView.Center)
+        walk.view.dashToRow(row)
         walk.revealNode(row)
     }
     /// Re-centers on the current row once the next polish has run: a model reset zeroes contentY in the polish after
@@ -208,12 +209,13 @@ Item {
     /// (`HandWatch.rowsMoved`). The rebuild's layout is forced here, kept or not: clamped against the content height
     /// before it, the correction would be swallowed, and the rows it moves — a row built at the end lands too — are
     /// weighed in this turn, taken back with the view (`keepingRows`) or moved as the reread's (`rereading`), not at
-    /// the next frame as a reader's move.
+    /// the next frame as a reader's move. The rows came in under a move in flight too, so it lands first
+    /// (`GraphList.landSend`) and the rows are kept from where it was going.
     function shiftRows(rows) {
         const hand = walk.view.hand
+        if (rows !== 0)
+            walk.view.landSend()
         const keep = rows !== 0 && (walk.view.contentY > walk.view.originY - walk.view.topMargin || hand.present)
-        if (keep)
-            walk.view.haltGlide()
         walk.view.keepingRows = keep
         walk.view.rereading = !keep
         walk.view.forceLayout()
@@ -310,8 +312,7 @@ Item {
             showWait.showRow = -1
             if (row < 0 || walk.view.rowOnScreen(row))
                 return
-            walk.view.haltGlide()
-            walk.view.positionViewAtIndex(row, ListView.Center)
+            walk.view.dashToRow(row)
         }
     }
     /// Brings `row` into the open and touches nothing else — not the selection, not `currentIndex`: a row standing
@@ -325,23 +326,22 @@ Item {
         walk.revealNode(row)
         if (walk.rowInTheOpen(row))
             return
-        walk.view.haltGlide()
-        walk.view.positionViewAtIndex(row, ListView.Center)
+        walk.view.dashToRow(row)
     }
     /// Whether all of `row` stands in the view, none of it under the band the stand-in covers at the top edge
-    /// (`GraphHeadPin.topBand`, as `keptRows` weighs it). Weighed off the rows' places, not `rowOnScreen`, which counts
-    /// a row the top edge cuts as on screen.
+    /// (`GraphHeadPin.topBand`, as `keptRows` weighs it), where a move in flight lands (`GraphList.landingY`). Weighed
+    /// off the rows' places, not `rowOnScreen`, which counts a row the top edge cuts as on screen.
     function rowInTheOpen(row) {
         const top = walk.view.originY + row * Theme.graphRowHeight
+        const y = walk.view.landingY
         const pin = walk.standIn
-        const covered = pin !== null && pin.aboveAt(walk.view.contentY) ? pin.topBand : 0
-        return top >= walk.view.contentY + covered
-            && top + Theme.graphRowHeight <= walk.view.contentY + walk.view.height
+        const covered = pin !== null && pin.aboveAt(y) ? pin.topBand : 0
+        return top >= y + covered && top + Theme.graphRowHeight <= y + walk.view.height
     }
     FrameLater {
         id: anchorWait
         onTriggered: {
-            walk.view.haltGlide()
+            walk.view.haltSend()
             if (walk.view.currentIndex >= 0)
                 walk.view.positionViewAtIndex(walk.view.currentIndex, ListView.Center)
         }

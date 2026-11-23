@@ -396,9 +396,9 @@ Rectangle {
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
     /// Automation only: whether a step is still waiting to be read (`GraphRowWalk.settling`).
     readonly property alias stepSettling: rowWalk.settling
-    /// Automation only: whether the view still has a move owed to it — the walk's (`GraphRowWalk.placing`) or the
-    /// lanes' glide to a node (`GraphColumnMetrics.lanesGliding`).
-    readonly property bool placing: rowWalk.placing || metrics.lanesGliding
+    /// Automation only: whether the view still has a move owed to it — the walk's (`GraphRowWalk.placing`), the rows'
+    /// jump to a row (`GraphList.dashing`) or the lanes' to a node (`GraphColumnMetrics.lanesDashing`).
+    readonly property bool placing: rowWalk.placing || graphList.dashing || metrics.lanesDashing
     function jumpToRow(row) { rowWalk.jumpToRow(row) }
     function revealRow(row) { rowWalk.revealRow(row) }
     function anchorSoon() { rowWalk.anchorSoon() }
@@ -421,7 +421,7 @@ Rectangle {
     readonly property alias graphColWMin: metrics.graphColWMin
     readonly property alias graphColWMax: metrics.graphColWMax
     readonly property alias graphColW: metrics.graphColW
-    /// Read-only: the lanes move through `metrics.panTo`, which stops a node's glide in flight.
+    /// Read-only: the lanes move through `metrics.panTo`, which stops a node's dash in flight.
     readonly property alias graphX: metrics.graphX
     readonly property alias graphXMax: metrics.graphXMax
     readonly property alias subjectTextX: metrics.subjectTextX
@@ -570,8 +570,8 @@ Rectangle {
     /// Starts autoscroll from a point in this pane's frame, and moves the pointer of one already under way — for the
     /// presses and the automation hook alike.
     function startAutoScroll(position) {
-        // A wheel notch still in flight would pull against the drift for its last beat (`WheelGlide.halt`).
-        graphList.haltGlide()
+        // A wheel notch still in flight would pull against the drift for its last beat (`ScrollSend.halt`).
+        graphList.haltSend()
         autoScroll.start(position)
     }
     function driftPointer(position) {

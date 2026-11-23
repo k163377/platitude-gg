@@ -121,29 +121,30 @@ QtObject {
     /// (tilt, touchpad), anywhere on the graph — the input says it means sideways (`GraphList.wheelPanned`); and the
     /// middle-click drift, only when pressed in the lane column (`GraphPane`'s `MiddleAutoScroll`). Plus the bar
     /// (`GraphLaneBar`). Every hand writes it through `panTo`. Besides the hands, a commit clicked, stepped onto or
-    /// jumped to whose node lies past the column's edge glides it (`revealLane`).
+    /// jumped to whose node lies past the column's edge dashes it (`revealLane`).
     property real graphX: 0
     readonly property real graphXMax: Math.max(0, graphFullW - graphColW)
-    // A narrower reach (the window, the divider, a reread's lanes) takes the lanes back inside it, and a glide aiming
+    // A narrower reach (the window, the divider, a reread's lanes) takes the lanes back inside it, and a dash aiming
     // past the new end stops where it stands.
     onGraphXMaxChanged: metrics.panTo(metrics.graphX)
     /// The lanes sent at once and clamped — by a hand, or held inside a changed reach (`onGraphXMaxChanged`). A node's
-    /// glide still in flight stops (`WheelGlide.halt`): the lanes are the hand's now, and the glide would drag them
-    /// back to its aim.
+    /// dash still in flight stops (`ScrollSend.halt`): the lanes are the hand's now, and the dash would drag them back
+    /// to its aim.
     function panTo(x) {
-        metrics.laneGlide.halt()
+        metrics.laneSend.halt()
         metrics.graphX = Math.max(0, Math.min(x, metrics.graphXMax))
     }
-    /// The glide a node is brought on with — the wheel's curve (`WheelGlide`), at the lanes' own length
-    /// (`Metrics.laneGlideMs`).
-    readonly property WheelGlide laneGlide: WheelGlide {
+    /// The lanes' send: a node is dashed on (`ScrollSend.dashTo`), at the lanes' own length (`Metrics.laneDashMs`),
+    /// its landing measured in the column.
+    readonly property ScrollSend laneSend: ScrollSend {
         view: metrics
         axis: "graphX"
-        duration: Metrics.laneGlideMs
+        dashMs: Metrics.laneDashMs
+        span: metrics.graphColW
     }
-    /// A node's glide is in flight: a move the view is owed (`GraphPane.placing`).
-    readonly property bool lanesGliding: laneGlide.sending
-    /// Glides the lanes sideways to the node on `lane` when it is not whole in the column: what a commit clicked,
+    /// A node's dash is in flight: a move the view is owed (`GraphPane.placing`).
+    readonly property bool lanesDashing: laneSend.dashing
+    /// Dashes the lanes sideways to the node on `lane` when it is not whole in the column: what a commit clicked,
     /// stepped onto or jumped to asks for when its node is not there to see (`GraphRowDelegate.revealNode`,
     /// `GraphLanePan.releaseLanded`, `GraphRowWalk.revealNode`, `GraphFind.goToMatch`). A lane below 0 is no node
     /// (`GraphModel.laneAt` past the rows) and moves nothing. A node already whole stays where it is. One past the
@@ -151,12 +152,12 @@ QtObject {
     /// end — the two places the column's ends already show a lane at, so the lanes move no further than that. A column
     /// too narrow for both places' gaps (near its floor, `graphColWMin`) takes the left one, where the node shows as
     /// lane 0 does unpanned at that width, and a second click on the same row moves nothing. Weighed against where a
-    /// glide in flight is going (`WheelGlide.at`), so a second reveal mid-flight measures from the first one's aim.
+    /// dash in flight is going (`ScrollSend.at`), so a second reveal mid-flight measures from the first one's aim.
     /// Mirrors GraphLaneCell's node geometry — move one, move both.
     function revealLane(lane) {
         if (lane < 0)
             return
-        const from = metrics.laneGlide.at
+        const from = metrics.laneSend.at
         const mid = Metrics.laneInset + lane * Metrics.laneW + Metrics.laneW / 2
         if (mid - Metrics.nodeIcon / 2 >= from && mid + Metrics.nodeIcon / 2 <= from + metrics.graphColW)
             return
@@ -164,7 +165,7 @@ QtObject {
         const atEnd = mid - (metrics.graphColW - Theme.spaceSm - Metrics.laneW / 2)
         const to = Math.max(0, Math.min(metrics.graphXMax, Math.min(atRest, Math.max(atEnd, from))))
         if (to !== from)
-            metrics.laneGlide.sendTo(to)
+            metrics.laneSend.dashTo(to)
     }
     /// The lane bar's height, written by the bar (`GraphLaneBar`). The list adds it to its run-out while the lanes
     /// overflow, or the bar covers the oldest row for good (`GraphList.bottomMargin`).

@@ -106,7 +106,7 @@ AppListView {
         const row = navList.sectionModel.rowOfName(key.substring(head.length))
         if (row < 0)
             return false
-        navList.haltGlide()
+        navList.haltSend()
         navList.positionViewAtIndex(row, ListView.Contain)
         // A row the move brought on is built at the next polish; the menu needs it now.
         navList.forceLayout()
@@ -135,7 +135,7 @@ AppListView {
             // Rows on show only: one behind a filter or a closed folder answers -1.
             const row = navList.sectionModel.rowOfName(key.substring(head.length))
             if (row >= 0) {
-                navList.haltGlide()
+                navList.haltSend()
                 navList.positionViewAtIndex(row, ListView.Contain)
             }
         }
@@ -152,21 +152,21 @@ AppListView {
     /// `fixupPosition` as it lays its rows (before the paint), so it stops at the end anyway; while shrinking,
     /// `contentHeight` and `originY` move separately, and an aim taken at that passing end stops short (measured).
     function sendRows(pixels) {
-        wheelGlide.sendTo(navList.clampY(wheelGlide.at - pixels))
+        send.glideTo(navList.clampY(send.at - pixels))
     }
-    /// Something else is moving the view: the notch in flight stops (`WheelGlide.halt`), or it drags the view back.
-    function haltGlide() {
-        wheelGlide.halt()
+    /// Something else is moving the view: the notch in flight stops (`ScrollSend.halt`), or it drags the view back.
+    function haltSend() {
+        send.halt()
     }
-    readonly property WheelGlide wheelGlide: WheelGlide {
-        id: wheelGlide
+    readonly property ScrollSend send: ScrollSend {
+        id: send
         view: navList
     }
-    // The bar's arrows and track glide their steps on this same glide (`AutoScrollBar.stepGlide`).
+    // The bar's arrows and track glide their steps on this same send (`AutoScrollBar.stepSend`).
     Binding {
         target: navList.ScrollBar.vertical
-        property: "stepGlide"
-        value: wheelGlide
+        property: "stepSend"
+        value: send
     }
     // Mouse wheels send a fixed number of rows per notch; touchpads keep native Flickable panning.
     WheelHandler {
@@ -179,7 +179,7 @@ AppListView {
     Connections {
         target: navList.hand
         function onDrifted() {
-            navList.haltGlide()
+            navList.haltSend()
         }
     }
 
@@ -215,7 +215,7 @@ AppListView {
     onContentYChanged: {
         if (navList.openHeld && Math.abs(navList.contentY - navList.openShownY) >= 1)
             navList.openHeld = false
-        if (navList.paneHand !== null && (wheelGlide.sending || navList.moving || navList.hand.scrolling))
+        if (navList.paneHand !== null && (send.gliding || navList.moving || navList.hand.scrolling))
             navList.paneHand.rowsMoved()
     }
     // The section's rows changed (`NavSectionModel.changed` — a read, or the reader's filter, fold or delete, which takes
@@ -236,7 +236,7 @@ AppListView {
         // Give back first: the key can move straight from one row to the next.
         if (navList.openHeld) {
             navList.openHeld = false
-            navList.haltGlide()
+            navList.haltSend()
             navList.contentY = navList.openRestY
         }
         if (navList.gestures.openKey === "")
@@ -259,7 +259,7 @@ AppListView {
         // written, so the write is known for the opening's own.
         navList.openShownY = Math.max(navList.openRestY, row.y + row.height - navList.height)
         if (navList.contentY !== navList.openShownY) {
-            navList.haltGlide()
+            navList.haltSend()
             navList.contentY = navList.openShownY
         }
     }
