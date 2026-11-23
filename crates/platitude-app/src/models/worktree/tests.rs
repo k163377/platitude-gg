@@ -58,9 +58,7 @@ fn status_of(
         sides: platitude_core::conflict::Sides::default(),
         op_message: String::new(),
         merge_tool: String::new(),
-        push_remote: String::new(),
-        upstream_here: false,
-        push_track: None,
+        push: platitude_core::remote::StatusPush::default(),
         eol_marks: Arc::new(Vec::new()),
         lfs_needed: 0,
         not_copied: Arc::new(Vec::new()),
@@ -340,7 +338,7 @@ fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     let mut model = WorktreeModel::default();
     let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
     if let StateMsg::Status(status) = &mut read {
-        status.push_track = Some(platitude_core::remote::PushTrack {
+        status.push.track = Some(platitude_core::remote::PushTrack {
             tracking: "fork/feature".to_string(),
             counts: platitude_core::AheadBehind {
                 ahead: 1,

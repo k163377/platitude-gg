@@ -204,25 +204,11 @@ pub enum SessionEvent {
         /// or when nothing is conflicted. Display only: the launch reads
         /// the config again.
         merge_tool: String,
-        /// `branch.<branch>.pushRemote` for the status's branch, empty
-        /// where unset. Rides the status so it is never read against
-        /// another branch (the repository-wide mark rides the refs
-        /// snapshot, `RepoSession::note_push_default`). Display and
-        /// standing only — [`crate::remote::plan_current_push`] re-reads
-        /// the keys to send.
-        push_remote: String,
-        /// The status's upstream is a branch here
-        /// (`branch.<branch>.remote = .` —
-        /// [`crate::remote::PushMarks::upstream_is_here`]): the short name
-        /// git gives it can read like a remote branch's. Rides the status
-        /// for the reason `push_remote` does.
-        upstream_here: bool,
-        /// The branch's counts against the tracking ref where a mark sends
-        /// its push, when that is not the upstream's remote
-        /// ([`crate::remote::PushRoute::goes_elsewhere`]); none everywhere else, and
-        /// where nothing here tracks the branch over there.
-        /// Rides the status for the reason `push_remote` does.
-        push_track: Option<crate::remote::PushTrack>,
+        /// What the tick read of the push of the status's branch. Rides the
+        /// status so it is never read against another branch (the
+        /// repository-wide mark rides the refs snapshot,
+        /// `RepoSession::note_push_default`).
+        push: crate::remote::StatusPush,
         /// Pending paths whose change has something to say about line
         /// endings. Shared: most status reads repeat the previous answer.
         eol_marks: Arc<Vec<EolMark>>,

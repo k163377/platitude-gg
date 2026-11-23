@@ -294,17 +294,6 @@ impl RepoSession {
         if remotes.push_default.is_none() && remotes.branch_push_remotes.is_empty() {
             return Some(Vec::new());
         }
-        let push_default = remotes
-            .push_default
-            .as_ref()
-            .map(|marked| marked.remote.as_str());
-        let mark_of = |branch: &str| {
-            remotes
-                .branch_push_remotes
-                .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
-                .ok()
-                .map(|at| remotes.branch_push_remotes[at].remote.as_str())
-        };
         let index = refs::RemoteBranches::index(refs);
         // A branch with an upstream: with none, the push asks where it goes
         // and nothing is counted. One measured against a branch here goes
@@ -321,7 +310,7 @@ impl RepoSession {
                 };
                 remote::PushRoute::new(
                     upstream,
-                    remote::Marked::of(mark_of(local.short.as_str()), push_default),
+                    remotes.marked(local.short.as_str()),
                     remotes.list.iter().map(|r| r.name.as_str()),
                 )
                 .goes_elsewhere()

@@ -363,7 +363,7 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
             .unwrap()
             .iter()
             .filter_map(|e| match e {
-                SessionEvent::StatusLoaded { push_track, .. } => Some(push_track.clone()),
+                SessionEvent::StatusLoaded { push, .. } => Some(push.track.clone()),
                 _ => None,
             })
             .collect()
@@ -406,9 +406,12 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
         .wait_for("a status with the fork's counts", |evs| {
             evs.iter().find_map(|e| match e {
                 SessionEvent::StatusLoaded {
-                    push_track: Some(push_track),
+                    push:
+                        remote::StatusPush {
+                            track: Some(track), ..
+                        },
                     ..
-                } => Some(push_track.clone()),
+                } => Some(track.clone()),
                 _ => None,
             })
         })

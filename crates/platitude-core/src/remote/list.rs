@@ -33,6 +33,18 @@ pub struct Remotes {
     pub branch_push_remotes: Vec<BranchPushRemote>,
 }
 
+impl Remotes {
+    /// Which way the push of `branch` is marked
+    /// ([`super::kept_marked`]).
+    pub fn marked(&self, branch: &str) -> super::Marked<'_> {
+        super::kept_marked(
+            self.push_default.as_ref(),
+            &self.branch_push_remotes,
+            branch,
+        )
+    }
+}
+
 /// Both reads at once — what the session keeps.
 pub async fn read(
     executor: &GitExecutor,

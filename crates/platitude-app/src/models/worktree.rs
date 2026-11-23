@@ -636,14 +636,17 @@ impl WorktreeModel {
             sides,
             op_message,
             merge_tool,
-            push_remote,
-            upstream_here,
-            push_track,
+            push,
             eol_marks,
             lfs_needed,
             not_copied,
             stop,
         } = msg;
+        let platitude_core::remote::StatusPush {
+            push_remote,
+            upstream_here,
+            track: push_track,
+        } = push;
         self.side_ours = sides.ours;
         self.loaded = true;
         self.side_theirs = sides.theirs;
@@ -658,7 +661,7 @@ impl WorktreeModel {
         self.status_upstream = status.upstream.clone().unwrap_or_default();
         self.status_upstream_here = upstream_here;
         self.status_upstream_counts = status.upstream_counts;
-        self.push_remote = push_remote;
+        self.push_remote = push_remote.unwrap_or_default();
         self.status_push_track = push_track;
         self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
         self.op_state = op_state;

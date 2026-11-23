@@ -268,15 +268,6 @@ impl RefsSnapshot {
         if branch.is_head {
             return BranchPushFacts::default();
         }
-        let push_remote = self
-            .branch_push_remotes
-            .binary_search_by(|mark| mark.branch.as_str().cmp(short))
-            .ok()
-            .map(|at| self.branch_push_remotes[at].remote.as_str());
-        let push_default = self
-            .push_default
-            .as_ref()
-            .map(|marked| marked.remote.as_str());
         // With whether its ref is in the listing: a remote branch's reading
         // fills `upstream`, a branch here's commit `upstream_oid`
         // (`RefJoins::upstream_commit`). An upstream fetched outside the
@@ -297,7 +288,7 @@ impl RefsSnapshot {
             (Upstream::of(branch.upstream_gone.as_str(), false), None)
         };
         let remotes = || self.remote_names.iter().map(String::as_str);
-        let route = PushRoute::new(upstream, Marked::of(push_remote, push_default), remotes());
+        let route = PushRoute::new(upstream, self.marked(short), remotes());
         // Only counts against where the marks send the branch now: a read
         // that could not tell repeats counts taken before a mark moved.
         let track = self
@@ -331,6 +322,12 @@ impl RefsSnapshot {
                 Upstream::Here | Upstream::None => String::new(),
             },
         }
+    }
+
+    /// Which way the push of `short`, a branch the worktree is not on, is
+    /// marked: its own mark, then the repository's.
+    pub fn marked(&self, short: &str) -> Marked<'_> {
+        crate::remote::kept_marked(self.push_default.as_ref(), &self.branch_push_remotes, short)
     }
 
     fn branch_named<'a>(sorted: &'a [BranchItem], short: &str) -> Option<&'a BranchItem> {

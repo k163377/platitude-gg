@@ -301,6 +301,12 @@ impl Footprint for crate::remote::PushTrack {
     }
 }
 
+impl Footprint for crate::remote::StatusPush {
+    fn heap_bytes(&self) -> usize {
+        self.push_remote.heap_bytes() + self.track.heap_bytes()
+    }
+}
+
 impl Footprint for crate::session::EolMark {
     fn heap_bytes(&self) -> usize {
         self.path.heap_bytes() + self.notice.heap_bytes()

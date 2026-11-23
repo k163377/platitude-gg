@@ -178,10 +178,9 @@ impl RepoSession {
         }
     }
 
-    /// What a status carries about the push of its branch: the branch's own
-    /// mark, whether its upstream is a branch here
-    /// ([`remote::PushMarks::upstream_is_here`]), and the counts against
-    /// where a mark sends it ([`Self::read_push_track`]) — and the
+    /// What a status carries about the push of its branch
+    /// ([`remote::StatusPush`]), the counts against where a mark sends it
+    /// read by [`Self::read_push_track`] — and the
     /// upstream's name in `status`, put as the send names it
     /// ([`remote::PushMarks::upstream_name`]) in place of git's shortening,
     /// before anything weighs it. Read every tick so a mark moved from a
@@ -194,12 +193,12 @@ impl RepoSession {
         workdir: &std::path::Path,
         status: &mut WorktreeStatus,
         cancel: &CancellationToken,
-    ) -> (String, bool, Option<remote::PushTrack>) {
+    ) -> remote::StatusPush {
         let Some(branch) = status.branch_head.clone() else {
-            return Default::default();
+            return remote::StatusPush::default();
         };
         let Ok(marks) = remote::push_marks(&self.executor, workdir, &branch, cancel).await else {
-            return Default::default();
+            return remote::StatusPush::default();
         };
         self.note_push_default(&marks.push_default);
         if status.upstream.is_some()
@@ -210,8 +209,11 @@ impl RepoSession {
         let track = self
             .read_push_track(workdir, &branch, status, &marks, cancel)
             .await;
-        let here = marks.upstream_is_here();
-        (marks.push_remote.unwrap_or_default(), here, track)
+        remote::StatusPush {
+            upstream_here: marks.upstream_is_here(),
+            push_remote: marks.push_remote,
+            track,
+        }
     }
 
     /// [`remote::PushRoute::goes_elsewhere`] for a status whose upstream
@@ -302,8 +304,7 @@ impl RepoSession {
                     // open would watch its value vanish on the next tick.
                     self.standing.merge_tool()
                 };
-                let (push_remote, upstream_here, push_track) =
-                    self.read_status_push(&workdir, &mut status, &cancel).await;
+                let push = self.read_status_push(&workdir, &mut status, &cancel).await;
                 // Into the HEAD record before anything below is sent, so the
                 // counts never arrive ahead of their branch; `head_seq`
                 // names the report they belong beside. A read a write has
@@ -345,9 +346,7 @@ impl RepoSession {
                     sides,
                     op_message,
                     merge_tool,
-                    push_remote,
-                    upstream_here,
-                    push_track,
+                    push,
                     eol_marks,
                     lfs_needed: lfs.needed,
                     not_copied: lfs.not_copied,

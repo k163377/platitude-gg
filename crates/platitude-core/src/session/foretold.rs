@@ -64,9 +64,7 @@ pub(super) struct Told {
     pub(super) sides: conflict::Sides,
     pub(super) op_message: String,
     pub(super) merge_tool: String,
-    pub(super) push_remote: String,
-    pub(super) upstream_here: bool,
-    pub(super) push_track: Option<remote::PushTrack>,
+    pub(super) push: remote::StatusPush,
     pub(super) eol_marks: Arc<Vec<EolMark>>,
     pub(super) lfs_needed: usize,
     pub(super) not_copied: Arc<Vec<String>>,
@@ -84,9 +82,7 @@ impl Told {
             sides,
             op_message,
             merge_tool,
-            push_remote,
-            upstream_here,
-            push_track,
+            push,
             eol_marks,
             lfs_needed,
             not_copied,
@@ -101,9 +97,7 @@ impl Told {
             sides,
             op_message,
             merge_tool,
-            push_remote,
-            upstream_here,
-            push_track,
+            push,
             eol_marks,
             lfs_needed,
             not_copied,
@@ -227,8 +221,7 @@ impl StatusTold {
                 told.status.heap_bytes()
                     + told.op_message.heap_bytes()
                     + told.merge_tool.heap_bytes()
-                    + told.push_remote.heap_bytes()
-                    + told.push_track.heap_bytes(),
+                    + told.push.heap_bytes(),
                 told.status.items.len(),
             )
         })
@@ -367,9 +360,11 @@ mod tests {
             sides: conflict::Sides::default(),
             op_message: String::new(),
             merge_tool: "meld".to_string(),
-            push_remote: "fork".to_string(),
-            upstream_here: true,
-            push_track: None,
+            push: remote::StatusPush {
+                push_remote: Some("fork".to_string()),
+                upstream_here: true,
+                track: None,
+            },
             eol_marks: Arc::new(vec![mark("both.txt", true), mark("both.txt", false)]),
             lfs_needed: 4,
             not_copied: Arc::new(vec!["big.bin".to_string()]),
@@ -405,12 +400,18 @@ mod tests {
         assert_eq!(
             (
                 left.merge_tool.as_str(),
-                left.push_remote.as_str(),
-                left.upstream_here,
+                left.push.push_remote.as_deref(),
+                left.push.upstream_here,
                 left.lfs_needed,
                 left.not_copied.as_slice()
             ),
-            ("meld", "fork", true, 4, ["big.bin".to_string()].as_slice())
+            (
+                "meld",
+                Some("fork"),
+                true,
+                4,
+                ["big.bin".to_string()].as_slice()
+            )
         );
     }
 

@@ -16,6 +16,7 @@ use super::RemoteBranch;
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
+use super::route::Marked;
 use super::standing::{PushTrack, THIS_REPOSITORY};
 use crate::oid::Oid;
 
@@ -108,7 +109,7 @@ pub async fn plan_push(
     // the status tick, so the two cannot drift apart.
     let marks = push_marks(executor, workdir, branch, cancel).await?;
 
-    decide_push(branch, marks, fallback_remote, force)
+    decide_push(branch, &marks, fallback_remote, force)
 }
 
 /// What the keys read above come to: the destination, the name the
@@ -118,45 +119,40 @@ pub async fn plan_push(
 /// through git each would cost a clone and two bare repositories.
 fn decide_push(
     branch: &str,
-    marks: PushMarks,
+    marks: &PushMarks,
     fallback_remote: &str,
     force: PushForce,
 ) -> Result<PushSpec, GitError> {
-    let PushMarks {
-        push_remote,
-        push_default,
-        tracks,
-        merge,
-        ..
-    } = marks;
-    let pushes_to = push_remote.or_else(|| push_default.map(|marked| marked.remote));
-    let marked = pushes_to.is_some();
-
-    let remote = match pushes_to.or_else(|| tracks.clone()) {
-        Some(remote) => remote,
-        None if fallback_remote.is_empty() => {
-            return Err(GitError::UnexpectedOutput {
-                command: "git push".to_string(),
-                message: "this repository has no remote to push to".to_string(),
-            });
-        }
-        None => fallback_remote.to_string(),
+    let refused = |message: String| GitError::UnexpectedOutput {
+        command: "git push".to_string(),
+        message,
     };
-    if remote == THIS_REPOSITORY {
-        return Err(GitError::UnexpectedOutput {
-            command: "git push".to_string(),
-            message: if marked {
-                format!("{branch} is set to push to this repository (.), not a remote")
-            } else {
-                format!(
+    let (tracks, merge) = (marks.tracks.as_deref(), marks.merge.as_deref());
+    let remote = match marks.marked() {
+        Marked::Here => {
+            return Err(refused(format!(
+                "{branch} is set to push to this repository (.), not a remote"
+            )));
+        }
+        Marked::Remote(remote) => remote,
+        Marked::Unmarked => match tracks {
+            Some(THIS_REPOSITORY) => {
+                return Err(refused(format!(
                     "the upstream of {branch} is a local branch, and no remote is set to push it to"
-                )
-            },
-        });
-    }
+                )));
+            }
+            Some(tracks) => tracks,
+            None if fallback_remote.is_empty() => {
+                return Err(refused(
+                    "this repository has no remote to push to".to_string(),
+                ));
+            }
+            None => fallback_remote,
+        },
+    };
 
-    let remote_branch = match (&tracks, &merge) {
-        (Some(tracks), Some(merge)) if *tracks == remote => {
+    let remote_branch = match (tracks, merge) {
+        (Some(tracks), Some(merge)) if tracks == remote => {
             merge.trim_prefix("refs/heads/").to_string()
         }
         _ => branch.to_string(),
@@ -169,7 +165,7 @@ fn decide_push(
 
     Ok(PushSpec {
         target: RemoteBranch {
-            remote,
+            remote: remote.to_string(),
             branch: remote_branch,
         },
         local: format!("refs/heads/{branch}"),
@@ -403,7 +399,7 @@ mod tests {
         let some = |value: &str| (!value.is_empty()).then(|| value.to_string());
         decide_push(
             branch,
-            PushMarks {
+            &PushMarks {
                 push_remote: some(push_remote),
                 push_default: some(push_default).map(|remote| PushDefault {
                     remote,

@@ -90,6 +90,23 @@ pub struct BranchPushRemote {
     pub remote: String,
 }
 
+/// Which way `branch`'s push is marked, off marks kept for every branch
+/// ([`KeptMarks`]): its own among `branch_push_remotes` (in branch name
+/// order), then the repository's. The one lookup for both holders of them
+/// (`super::Remotes::marked`, `session::RefsSnapshot::marked`).
+pub(crate) fn kept_marked<'a>(
+    push_default: Option<&'a PushDefault>,
+    branch_push_remotes: &'a [BranchPushRemote],
+    branch: &str,
+) -> super::Marked<'a> {
+    let own = branch_push_remotes
+        .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
+        .ok()
+        .and_then(|at| branch_push_remotes.get(at))
+        .map(|mark| mark.remote.as_str());
+    super::Marked::of(own, push_default.map(|marked| marked.remote.as_str()))
+}
+
 /// The marks the remotes read keeps (`super::Remotes`): the
 /// [`OriginMarks`], and every branch's own push mark, in branch name order
 /// — what a menu on a branch the worktree is not on weighs where its push

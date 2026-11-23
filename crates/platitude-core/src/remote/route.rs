@@ -1,8 +1,13 @@
 //! Where git's order sends a push: the branch's own mark, then the
 //! repository's, then what the branch tracks (git-config(5);
-//! [`super::plan_push`]). Read once here into a route, which the standing,
-//! the label and the send all take — spelled in each, a fork workflow's
-//! label names a remote the push never goes to.
+//! [`super::plan_push`]). The marks are read in that order once, into
+//! [`Marked`], which the send matches on as well; the route weighs them
+//! against the upstream as the toolbar and a branch's row name it, for the
+//! standing and the label. The send works its destination out of the keys
+//! themselves (`branch.<n>.remote` / `.merge`), so the label and the send
+//! still spell the upstream's half twice — held together only by
+//! `push::tests::the_label_names_the_remote_the_send_uses`, which walks
+//! every arrangement of the keys through both.
 
 use super::standing::{THIS_REPOSITORY, Upstream};
 

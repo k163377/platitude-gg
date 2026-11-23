@@ -128,6 +128,27 @@ pub struct PushTrack {
     pub counts: crate::AheadBehind,
 }
 
+/// What a status tick reads of the push of its branch, beside the status
+/// itself (`RepoSession::read_status_push`): read for the branch the status
+/// names, so it never pairs with another. Display and standing only — a
+/// send reads the keys again ([`super::plan_current_push`]). Default for a
+/// detached HEAD, and where the keys could not be read.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StatusPush {
+    /// The branch's own mark, `branch.<branch>.pushRemote`; `None` where
+    /// unset. The repository's mark rides the refs snapshot instead.
+    pub push_remote: Option<String>,
+    /// The upstream is a branch here (`branch.<branch>.remote = .` —
+    /// [`super::PushMarks::upstream_is_here`]): the short name git gives
+    /// it can read like a remote branch's.
+    pub upstream_here: bool,
+    /// The counts against where a mark sends the push, when that is not
+    /// the upstream's remote ([`PushRoute::goes_elsewhere`]); none
+    /// everywhere else, and where nothing here tracks the branch over
+    /// there.
+    pub track: Option<PushTrack>,
+}
+
 /// The standing itself: the table of counts, read against the upstream
 /// (`upstream_counts`), or against `push_track` where the push goes
 /// elsewhere ([`PushRoute::goes_elsewhere`]). `upstream_counts` is none

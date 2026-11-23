@@ -212,10 +212,10 @@ async fn a_remote_upstream_is_named_as_the_send_names_it() {
     let (upstream, push_track) = sink
         .wait_for("a status of beside", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::StatusLoaded {
-                    status, push_track, ..
-                } if status.branch_head.as_deref() == Some("beside") => {
-                    Some((status.upstream.clone(), push_track.clone()))
+                SessionEvent::StatusLoaded { status, push, .. }
+                    if status.branch_head.as_deref() == Some("beside") =>
+                {
+                    Some((status.upstream.clone(), push.track.clone()))
                 }
                 _ => None,
             })
@@ -313,13 +313,10 @@ async fn the_status_says_the_upstream_is_here() {
     let told = sink
         .wait_for("a status of topic", |evs| {
             evs.iter().find_map(|e| match e {
-                SessionEvent::StatusLoaded {
-                    status,
-                    upstream_here,
-                    push_track,
-                    ..
-                } if status.branch_head.as_deref() == Some("topic") => {
-                    Some((*upstream_here, push_track.clone()))
+                SessionEvent::StatusLoaded { status, push, .. }
+                    if status.branch_head.as_deref() == Some("topic") =>
+                {
+                    Some((push.upstream_here, push.track.clone()))
                 }
                 _ => None,
             })

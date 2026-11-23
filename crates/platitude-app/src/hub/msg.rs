@@ -505,19 +505,9 @@ pub struct StatusMsg {
     /// while nothing is conflicted. Names the menu row; the launch reads
     /// the config again.
     pub merge_tool: String,
-    /// Where this branch's own mark sends a push
-    /// (`branch.<branch>.pushRemote`), empty where it marks none. Rides the
+    /// What the tick read of the push of the status's branch. Rides the
     /// status because it is per-branch: read for the branch in `status`.
-    pub push_remote: String,
-    /// The status's upstream is a branch here (`branch.<branch>.remote =
-    /// .`), whatever its short name looks like. Per-branch like
-    /// `push_remote`.
-    pub upstream_here: bool,
-    /// The branch's counts against where a mark sends its push, when that
-    /// is not the upstream's remote; none everywhere else, and where
-    /// nothing here tracks the branch over there. Per-branch like
-    /// `push_remote`.
-    pub push_track: Option<platitude_core::remote::PushTrack>,
+    pub push: platitude_core::remote::StatusPush,
     /// Pending files whose change has something to say about line endings.
     pub eol_marks: Arc<Vec<platitude_core::session::EolMark>>,
     /// Pending files that need Git LFS where git cannot run it.
