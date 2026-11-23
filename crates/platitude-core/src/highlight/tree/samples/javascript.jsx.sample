@@ -3,6 +3,10 @@
 /** A doc comment. */
 import React, { useState } from "react";
 
+function draw(Shape, [First]) {
+  return new Shape(First);
+}
+
 export default function App({ title }) {
   const [count, setCount] = useState(0);
   let text = `count: ${count}`;

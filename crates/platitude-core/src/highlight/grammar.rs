@@ -242,7 +242,7 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["toml"], "toml", || configured(tree_sitter_toml_ng::LANGUAGE.into(), "toml", tree_sitter_toml_ng::HIGHLIGHTS_QUERY, "")),
     entry!(&["yaml", "yml"], "yaml", || configured(tree_sitter_yaml::LANGUAGE.into(), "yaml", tree_sitter_yaml::HIGHLIGHTS_QUERY, "")),
     entry!(&["json", "jsonc"], "json", || configured(tree_sitter_json::LANGUAGE.into(), "json", tree_sitter_json::HIGHLIGHTS_QUERY, "")),
-    entry!(&["js", "mjs", "cjs", "jsx"], "javascript", || configured(tree_sitter_javascript::LANGUAGE.into(), "javascript", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY]), tree_sitter_javascript::INJECTIONS_QUERY)),
+    entry!(&["js", "mjs", "cjs", "jsx"], "javascript", || configured(tree_sitter_javascript::LANGUAGE.into(), "javascript", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY, include_str!("queries/javascript-highlights-params.scm")]), tree_sitter_javascript::INJECTIONS_QUERY)),
     entry!(&["ts", "mts", "cts"], "typescript", || configured(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(), "typescript", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY]), "")),
     entry!(&["tsx"], "tsx", || configured(tree_sitter_typescript::LANGUAGE_TSX.into(), "tsx", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY]), "")),
     entry!(&["py", "pyi"], "python", || configured(tree_sitter_python::LANGUAGE.into(), "python", tree_sitter_python::HIGHLIGHTS_QUERY, "")),

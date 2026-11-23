@@ -11,6 +11,12 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | import React, { useState } from "react";
   kkkkkk ttttt               kkkk sssssss
 | 
+| function draw(Shape, [First]) {
+  kkkkkkkk ffff
+|   return new Shape(First);
+    kkkkkk kkk ttttt ttttt
+| }
+| 
 | export default function App({ title }) {
   kkkkkk kkkkkkk kkkkkkkk ttt
 |   const [count, setCount] = useState(0);
