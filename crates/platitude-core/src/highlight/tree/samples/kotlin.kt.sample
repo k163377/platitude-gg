@@ -43,4 +43,7 @@ fun main(args: Array<String>) {
     while (false) {
         break
     }
+    for (i in 0..2) {
+        continue
+    }
 }

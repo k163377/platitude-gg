@@ -50,7 +50,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     val n: Long = 0xFFL + 42
       kkk    tttt   nnnnn   nn
 |     val ok = true && null == null
-      kkk
+      kkk      nnnn    nnnn    nnnn
 |     if (args.isEmpty()) println(text) else return
       kk                  fffffff       kkkk kkkkkk
 |     for (i in 0 until 3) {
@@ -75,7 +75,13 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
         kkkkkkk
 |     }
 |     while (false) {
-      kkkkk
+      kkkkk  nnnnn
 |         break
+          kkkkk
+|     }
+|     for (i in 0..2) {
+      kkk    kk n  n
+|         continue
+          kkkkkkkk
 |     }
 | }

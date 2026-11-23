@@ -20,6 +20,11 @@
 (function_declaration (identifier) @function)
 (call_expression (identifier) @function)
 
+; The grammar reads these words as identifiers.
+((identifier) @boolean (#any-of? @boolean "true" "false"))
+((identifier) @constant.builtin (#eq? @constant.builtin "null"))
+((identifier) @keyword (#any-of? @keyword "break" "continue"))
+
 [
   "abstract" "actual" "as" "by" "catch" "class" "companion" "const"
   "constructor" "crossinline" "data" "do" "dynamic" "else" "enum"
