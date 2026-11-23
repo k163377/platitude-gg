@@ -389,8 +389,9 @@ pub(super) const HELD_SAVE_VERB: &str = "quit-save-held";
 /// `Hub::shutdown` starts joining the writes still out, so the join lets it
 /// go — the held save, and the held `git add` (`super::run::slow_git_for`).
 pub(crate) const WRITES_JOINING: &str = "writes-joining";
-/// The mark a run's driver leaves beside its pictures to let a preset's
-/// hook go before the app is on its way out — a copy of the app's
+/// The mark a run's driver leaves beside its pictures to let a held write
+/// (a preset's hook, `menu-wait conflict`'s merge tool) go before the app
+/// is on its way out — a copy of the app's
 /// `harness::singleton::LET_GO_FILE` (xtask is std-only), looked for by
 /// `crate::demo::remote::held_until_let_go`. A drift holds the write to
 /// the way out, and the verbs that watch it land wait out their watchdog.

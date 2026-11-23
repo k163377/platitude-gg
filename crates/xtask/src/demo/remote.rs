@@ -396,7 +396,8 @@ pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
     )
 }
 
-/// The hook of [`slowhook`] and [`slowmerge`]: let go by the run's driver
+/// The hook of [`slowhook`] and [`slowmerge`], and the merge tool of
+/// `menu-wait conflict` (`verify::repos::held_tool`): let go by the run's driver
 /// — the mark `Harness.letHookGo` leaves beside the pictures
 /// (`verify::LET_GO_FILE`) — or at the trail's station, whichever comes
 /// first; `by_hand_secs` seconds with no run around it. `sleep` is the blocking
@@ -407,8 +408,8 @@ pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
 /// moves the hook too. The trail's lines are `<seconds>s <station>`, each
 /// ending in its newline (`platitude_app::harness::deadline`); a line the
 /// writer was stopped in has none, and `read` hands it to nothing.
-fn held_until_let_go(by_hand_secs: u64) -> String {
-    /// How often the hook looks for the mark and at the trail, in
+pub(crate) fn held_until_let_go(by_hand_secs: u64) -> String {
+    /// How often the script looks for the mark and at the trail, in
     /// milliseconds.
     const LOOK_MS: u64 = 200;
     format!(

@@ -12,8 +12,9 @@ use qtbridge::qobject;
 use crate::hub::Hub;
 use crate::models::qml_register;
 
-/// The mark [`Harness::let_hook_go`] leaves beside the pictures. The hooks
-/// of `--preset slowhook` and `slowmerge` look for it by this name, which
+/// The mark [`Harness::let_hook_go`] leaves beside the pictures. What holds
+/// a run's write — the hooks of `--preset slowhook` and `slowmerge`, the
+/// merge tool of `menu-wait conflict` — looks for it by this name, which
 /// xtask copies as `xtask::verify::LET_GO_FILE`
 /// (`xtask::demo::remote::held_until_let_go` reads the copy).
 const LET_GO_FILE: &str = "let-go.txt";

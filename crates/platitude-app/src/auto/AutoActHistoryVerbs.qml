@@ -400,11 +400,11 @@ Item {
     // naming the branch the stopped rebase still holds (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is
     // the same over the left menu's `base` row, whose `rebase` row names it (`RefRowMenu.standAgain`).
     // `menu-wait conflict`, over `--preset conflict-kinds`: the plain form's line on the worktree's `both.txt` row,
-    // whose menu is raised while that file is out to the merge editor — the run seeds a tool that sleeps, and git
-    // holds the write queue until it exits (`verify::repos::seed_merge_tool`). `ours=` / `theirs=` are the names the
-    // two conflict rows draw and `lit=` the one tinted as the branch stood on (`WorktreeModel.sideOurs` /
-    // `sideOursCurrent`; `refTint`, which the wait's greyed rows ink muted): the same words and tints as the menu has
-    // with nothing running.
+    // whose menu is raised while that file is out to the merge editor — the run seeds a tool held as the presets'
+    // hooks hold their commit, and git holds the write queue until it exits (`verify::repos::held_tool`). `ours=` /
+    // `theirs=` are the names the two conflict rows draw and `lit=` the one tinted as the branch stood on
+    // (`WorktreeModel.sideOurs` / `sideOursCurrent`; `refTint`, which the wait's greyed rows ink muted): the same
+    // words and tints as the menu has with nothing running.
     // `menu-wait merge`, over `--preset slowmerge`: `side`'s graph row menu raised while `merge side` is out and its
     // commit held by a hook — `MERGE_HEAD` standing, the tree read as `MERGING` (`worktree.opText`). `why=` is what the
     // `cherry-pick` row's tooltip, forced, says: `wait` for the command running, `stopped` for an operation standing.
@@ -677,9 +677,10 @@ Item {
             // its reads still coming: the rewrite moves HEAD on under every one of them (`replayRow`).
             const landed = driver.wroteAndSettled()
             if (op.at("pressed")) {
-                // A hook holds the commit of the plain form, `after` and the merge form until the run lets it go or the
-                // app is on its way out (`demo::remote::slowhook` / `slowmerge`) — `after` lets it go once the menu is
-                // up, the other two never — so it is still out when the menu goes up. One that has landed already
+                // A hook holds the commit of the plain form, `after` and the merge form, and the seeded tool holds the
+                // conflict form's file, until the run lets it go or the app is on its way out
+                // (`demo::remote::slowhook` / `slowmerge`, `verify::repos::held_tool`) — `after` lets it go once the
+                // menu is up, the others never — so it is still out when the menu goes up. One that has landed already
                 // left no moment to raise it in. A replay's menu goes up once the rewrite shows mid-way — HEAD
                 // detached, `REBASING` counted — which is what a menu standing on the worktree as it is would lose its
                 // rows to (`RepoPage.treeAtAsk`).
@@ -698,8 +699,8 @@ Item {
             }
             if (op.mode === "" || op.mode === "conflict") {
                 // The menu stands over the write still out; the reads the press invalidated (the selected commit's
-                // own, the lists' rows) land while the hook holds the commit or the tool sleeps, and the picture is of
-                // them landed.
+                // own, the lists' rows) land while the hook holds the commit or the tool holds the file, and the
+                // picture is of them landed.
                 if (landed) {
                     op.complete({ "name": "menu_wait_during", "when": () => ({ "landed": driver.wroteAndSettled() }),
                                   "report": () => op.missed("its reads could settle under the menu") })

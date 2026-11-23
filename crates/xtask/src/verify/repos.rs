@@ -218,10 +218,44 @@ const SEEDED_TOOL: &str = "demo-editor";
 ///
 /// `open-mergetool`'s picture is taken after the tool exits
 /// (`AutoActDriver.writeBarrier` and `treeBarrier`), where the length buys
-/// only a wait a person watching can see; `menu-wait conflict`'s while it
-/// sleeps, where it holds the write across the beats that raise the menu
-/// and photograph it. Every run pays it.
+/// only a wait a person watching can see. `menu-wait conflict`'s is taken
+/// while the tool is out, which [`held_tool`] holds instead.
 const TOOL_CMD: &str = "sleep 2";
+
+/// Where [`held_tool`] leaves its script, in the repository's git
+/// directory.
+const HELD_TOOL_FILE: &str = "pgg-held-tool";
+
+/// The command of the tool `menu-wait conflict` hands its file to: the
+/// presets' held write (`demo::held_until_let_go`), which that verb's
+/// driver never lets go, so the tool stands until the app is on its way
+/// out. A clock ends it wherever the run stood: once it has, git takes
+/// the file as resolved and the row leaves the conflicts, the menu raised
+/// on it with it, and a completion that had not read the menu yet waits
+/// for it to the ceiling.
+///
+/// The script is a file of `repo`'s git directory, run by `sh`: git
+/// expands a configured tool's command unquoted (`eval $merge_tool_cmd`),
+/// which takes the script's lines and patterns apart.
+fn held_tool(repo: &std::path::Path, path: &std::ffi::OsStr) -> Result<String, String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["rev-parse", "--absolute-git-dir"])
+        .env("PATH", path)
+        .output()
+        .map_err(|e| format!("failed to run git: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("no git directory found for {}", repo.display()));
+    }
+    // `/`-separated as git prints it, which `sh` takes on every OS.
+    let script = format!(
+        "{}/{HELD_TOOL_FILE}",
+        String::from_utf8_lossy(&out.stdout).trim()
+    );
+    std::fs::write(&script, crate::demo::held_until_let_go(2)).map_err(|e| e.to_string())?;
+    Ok(format!("sh '{script}'"))
+}
 
 /// Names a tool in the repository's own config, for the verbs whose
 /// picture is the tool list and the one that hands a file over.
@@ -241,7 +275,8 @@ const TOOL_CMD: &str = "sleep 2";
 /// went well and calls the file failed).
 ///
 /// A `--repo` of one's own is written to as well: the run owns it for its
-/// length (`claim_resource`), and a merge tool named in it is overwritten.
+/// length (`claim_resource`), a merge tool named in it is overwritten, and
+/// `menu-wait conflict` leaves [`held_tool`]'s script in its git directory.
 pub(super) fn seed_merge_tool(
     verb: &str,
     arg: &str,
@@ -253,15 +288,21 @@ pub(super) fn seed_merge_tool(
         ("open-mergetool", _) | ("menu-wait", "conflict") => true,
         _ => return Ok(()),
     };
-    let mut keys = vec![(format!("mergetool.{SEEDED_TOOL}.cmd"), TOOL_CMD.to_string())];
-    if launched {
-        keys.push((
-            format!("mergetool.{SEEDED_TOOL}.trustExitCode"),
-            "true".to_string(),
-        ));
-        keys.push(("merge.guitool".to_string(), SEEDED_TOOL.to_string()));
-    }
+    let held = (verb, arg) == ("menu-wait", "conflict");
     for repo in repos {
+        let cmd = if held {
+            held_tool(repo, path)?
+        } else {
+            TOOL_CMD.to_string()
+        };
+        let mut keys = vec![(format!("mergetool.{SEEDED_TOOL}.cmd"), cmd)];
+        if launched {
+            keys.push((
+                format!("mergetool.{SEEDED_TOOL}.trustExitCode"),
+                "true".to_string(),
+            ));
+            keys.push(("merge.guitool".to_string(), SEEDED_TOOL.to_string()));
+        }
         for (key, value) in &keys {
             let status = Command::new("git")
                 .arg("-C")
@@ -275,7 +316,12 @@ pub(super) fn seed_merge_tool(
             }
         }
     }
-    if launched {
+    if held {
+        println!(
+            "merge editor seeded: {SEEDED_TOOL} runs the git directory's {HELD_TOOL_FILE}, held \
+             until the app is on its way out, and git would launch it"
+        );
+    } else if launched {
         println!("merge editor seeded: {SEEDED_TOOL} runs {TOOL_CMD:?}, and git would launch it");
     } else {
         println!("merge editor named in config: {SEEDED_TOOL} (the list's first wave)");
