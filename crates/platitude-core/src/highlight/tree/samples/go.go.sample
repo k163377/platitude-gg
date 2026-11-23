@@ -1,0 +1,51 @@
+// A line comment.
+/* A block comment. */
+package main
+
+import (
+    "fmt"
+    str "strings"
+)
+
+const Max = 42
+
+type Point struct {
+    X, Y float64
+}
+
+type Shape interface {
+    Area() float64
+}
+
+func (p *Point) Area() float64 {
+    return p.X * p.Y * 1.5e3
+}
+
+func main() {
+    var n int = 0xFF
+    s := "text"
+    raw := `raw`
+    r := 'c'
+    ok := true && nil == nil
+    if ok {
+        fmt.Println(s, raw, r, n, str.ToUpper(s))
+    } else {
+        return
+    }
+    for i := 0; i < 3; i++ {
+        continue
+    }
+    switch n {
+    case 1:
+        fallthrough
+    default:
+    }
+    m := map[string][]int{"a": {1}}
+    ch := make(chan int)
+    go func() { ch <- len(m) }()
+    defer close(ch)
+    select {
+    case v := <-ch:
+        _ = v
+    }
+}

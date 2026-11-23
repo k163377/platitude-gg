@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A comment. -->
+<!DOCTYPE note SYSTEM "note.dtd">
+<root xmlns:x="urn:sample" lang='en'>
+  <x:item id="1" enabled="true">Text &amp; more</x:item>
+  <empty/>
+  <![CDATA[x < y]]>
+  <?target data?>
+</root>

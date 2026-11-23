@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# A comment.
+set -euo pipefail
+
+readonly NAME="sample"
+declare -a items=(one two)
+count=42
+
+greet() {
+    local who="${1:-world}"
+    echo "hello, $who" 'single' $'escaped\n'
+    return 0
+}
+
+if [[ -n "$NAME" && $count -gt 10 ]]; then
+    greet "$NAME" >/dev/null 2>&1
+elif [ -f ./file ]; then
+    :
+else
+    exit 1
+fi
+
+for item in "${items[@]}"; do
+    continue
+done
+
+while read -r line; do
+    break
+done < <(printf '%s\n' a b)
+
+case "$count" in
+    4*) echo four ;;
+    *) ;;
+esac
+
+result=$(( count * 2 ))
+files=$(ls | grep -v '^\.' | wc -l)
+cat <<EOF
+heredoc $NAME
+EOF

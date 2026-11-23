@@ -1,0 +1,48 @@
+//! A module doc.
+// A line comment.
+/* A block comment. */
+use std::collections::HashMap;
+
+#[derive(Debug, Clone)]
+pub struct Point<T> {
+    x: T,
+    y: T,
+}
+
+pub enum Shape {
+    Circle(f64),
+    Square { side: u32 },
+}
+
+impl<T: Copy> Point<T> {
+    pub const ORIGIN: i32 = 0;
+
+    pub fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
+
+fn main() {
+    let mut map: HashMap<&str, u8> = HashMap::new();
+    map.insert("key", b'a');
+    let raw = r"raw\n";
+    let ch = 'c';
+    let n = 42_u64 + 0xFF + 1.5e3 as u64;
+    if n > 10 && true {
+        println!("{n} {raw} {ch}");
+    } else {
+        return;
+    }
+    for i in 0..3 {
+        let _ = Some(i).unwrap_or(0);
+    }
+    match Shape::Circle(1.0) {
+        Shape::Circle(r) => drop(r),
+        _ => {}
+    }
+    let f = |a: i32| -> i32 { a * 2 };
+    'outer: loop {
+        break 'outer;
+    }
+    let _ = (f(1), map.len(), self::main as fn(), None::<u8>);
+}

@@ -1,0 +1,71 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| #!/usr/bin/env bash
+  ccccccccccccccccccc
+| # A comment.
+  cccccccccccc
+| set -euo pipefail
+  fff
+| 
+| readonly NAME="sample"
+                ssssssss
+| declare -a items=(one two)
+| count=42
+| 
+| greet() {
+  fffff
+|     local who="${1:-world}"
+                sssssssssssss
+|     echo "hello, $who" 'single' $'escaped\n'
+      ffff sssssssssssss ssssssss
+|     return 0
+      ffffff
+| }
+| 
+| if [[ -n "$NAME" && $count -gt 10 ]]; then
+  kk       sssssss                      kkkk
+|     greet "$NAME" >/dev/null 2>&1
+      fffff sssssss            n
+| elif [ -f ./file ]; then
+  kkkk                kkkk
+|     :
+      f
+| else
+  kkkk
+|     exit 1
+      ffff
+| fi
+  kk
+| 
+| for item in "${items[@]}"; do
+  kkk      kk sssssssssssss  kk
+|     continue
+      ffffffff
+| done
+  kkkk
+| 
+| while read -r line; do
+  kkkkk ffff          kk
+|     break
+      fffff
+| done < <(printf '%s\n' a b)
+  kkkk     ffffff ssssss
+| 
+| case "$count" in
+  kkkk ssssssss kk
+|     4*) echo four ;;
+          ffff
+|     *) ;;
+| esac
+  kkkk
+| 
+| result=$(( count * 2 ))
+| files=$(ls | grep -v '^\.' | wc -l)
+          ff   ffff    sssss   ff
+| cat <<EOF
+  fff   sss
+| heredoc $NAME
+  sssssssssssss
+| EOF

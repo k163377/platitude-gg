@@ -1,0 +1,45 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| title = "Sample"
+  ttttt   ssssssss
+| literal = 'single'
+  ttttttt   ssssssss
+| multi = """
+  ttttt   sss
+| two lines
+  sssssssss
+| """
+  sss
+| count = 42
+  ttttt   nn
+| ratio = 1.5e3
+  ttttt   nnnnn
+| hex = 0xFF
+  ttt   nnnn
+| enabled = true
+  ttttttt   nnnn
+| when = 1979-05-27T07:32:00Z
+  tttt   ssssssssssssssssssss
+| list = [1, 2, 3]
+  tttt    n  n  n
+| inline = { a = 1, b = "two" }
+  tttttt     t   n  t   sssss
+| 
+| [package]
+   ttttttt
+| name = "demo"
+  tttt   ssssss
+| 
+| [[bin]]
+    ttt
+| name = "tool"
+  tttt   ssssss
+| 
+| [dependencies.serde]
+   tttttttttttt ttttt
+| version = "1"
+  ttttttt   sss

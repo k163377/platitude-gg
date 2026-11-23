@@ -1,0 +1,25 @@
+# A comment.
+/* A block comment. */
+{ pkgs ? import <nixpkgs> { }, lib, ... }:
+
+let
+  name = "sample";
+  version = "1.0";
+  count = 42;
+  ratio = 1.5;
+  enabled = true;
+  nothing = null;
+  path = ./src;
+  greet = who: "hello, ${who}";
+  multi = ''
+    indented ${name}
+  '';
+in
+rec {
+  inherit name version;
+  src = lib.cleanSource path;
+  out = if enabled then greet name else throw "no";
+  list = [ 1 "two" ./three ];
+  merged = { a = 1; } // { b = 2; };
+  check = assert count > 0; with pkgs; hello;
+}

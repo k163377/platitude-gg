@@ -1,0 +1,35 @@
+-- A line comment.
+{- A block comment. -}
+{-# LANGUAGE OverloadedStrings #-}
+module Shapes (Shape (..), greet, area) where
+
+import qualified Data.Map as Map
+import Data.List (sortOn)
+
+data Shape a = Circle Double | Square a
+  deriving (Show, Eq)
+
+class Sized t where
+  size :: t -> Int
+
+instance Sized (Shape a) where
+  size _ = 1
+
+newtype Name = Name String
+
+greet :: Name -> String
+greet (Name name) = "hello, " ++ name ++ ['!']
+
+area :: Shape Double -> Double
+area shape = case shape of
+  Circle r -> pi * r * r
+  Square s -> s * 1.5e3
+
+main :: IO ()
+main = do
+  let total = sum [1, 2, 0xFF] :: Int
+      ok = True && total > 0
+  if ok then putStrLn (greet (Name "x")) else return ()
+  mapM_ print (sortOn negate [total])
+  where
+    helper x = x `div` 2

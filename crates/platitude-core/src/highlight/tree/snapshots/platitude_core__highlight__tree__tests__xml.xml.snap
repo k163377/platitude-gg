@@ -1,0 +1,22 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| <?xml version="1.0" encoding="UTF-8"?>
+    kkk          nnn            sssss
+| <!-- A comment. -->
+  ccccccccccccccccccc
+| <!DOCTYPE note SYSTEM "note.dtd">
+    kkkkkkk tttt kkkkkk  kkkkkkkk
+| <root xmlns:x="urn:sample" lang='en'>
+   kkkk         ssssssssssss      ssss
+|   <x:item id="1" enabled="true">Text &amp; more</x:item>
+     kkkkkk    sss         ssssss      nnnnn       kkkkkk
+|   <empty/>
+     kkkkk
+|   <![CDATA[x < y]]>
+    kkkkkkkkkssssskkk
+|   <?target data?>
+      kkkkkk
+| </root>
+    kkkk

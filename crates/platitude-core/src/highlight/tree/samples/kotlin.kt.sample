@@ -1,0 +1,46 @@
+// A line comment.
+/* A block comment. */
+package demo.sample
+
+import kotlin.math.max
+
+@Target(AnnotationTarget.CLASS)
+annotation class Marker(val name: String)
+
+@Marker("point")
+data class Point(val x: Int, var y: Double = 1.5) {
+    companion object {
+        const val ORIGIN = 0
+    }
+
+    fun shifted(by: Int): Point = copy(x = x + by)
+}
+
+sealed interface Shape
+object Nothing : Shape
+
+enum class Mode { IDLE, BUSY }
+
+fun main(args: Array<String>) {
+    val p = Point(1, 2.0)
+    val text = "x = ${p.x}, escaped = \n"
+    val c = 'c'
+    val n: Long = 0xFFL + 42
+    val ok = true && null == null
+    if (args.isEmpty()) println(text) else return
+    for (i in 0 until 3) {
+        max(i, n.toInt())
+    }
+    when (p.x) {
+        0 -> println("zero")
+        else -> throw IllegalStateException("no")
+    }
+    try {
+        listOf(1).map { it * 2 }
+    } catch (e: Exception) {
+    } finally {
+    }
+    while (false) {
+        break
+    }
+}

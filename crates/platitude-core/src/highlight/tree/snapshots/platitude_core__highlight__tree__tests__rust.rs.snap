@@ -1,0 +1,85 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| //! A module doc.
+  ccccccccccccccccc
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| use std::collections::HashMap;
+  kkk                   ttttttt
+| 
+| #[derive(Debug, Clone)]
+  aaaaaaaaatttttaatttttaa
+| pub struct Point<T> {
+  kkk kkkkkk ttttt t
+|     x: T,
+         t
+|     y: T,
+         t
+| }
+| 
+| pub enum Shape {
+  kkk kkkk ttttt
+|     Circle(f64),
+      tttttt ttt
+|     Square { side: u32 },
+      tttttt         ttt
+| }
+| 
+| impl<T: Copy> Point<T> {
+  kkkk t  tttt  ttttt t
+|     pub const ORIGIN: i32 = 0;
+      kkk kkkkk tttttt  ttt   n
+| 
+|     pub fn new(x: T, y: T) -> Self {
+      kkk kk fff    t     t     tttt
+|         Self { x, y }
+          tttt
+|     }
+| }
+| 
+| fn main() {
+  kk ffff
+|     let mut map: HashMap<&str, u8> = HashMap::new();
+      kkk kkk      ttttttt  ttt  tt    ttttttt  fff
+|     map.insert("key", b'a');
+          ffffff sssss  ssss
+|     let raw = r"raw\n";
+      kkk       ssssssss
+|     let ch = 'c';
+      kkk      sss
+|     let n = 42_u64 + 0xFF + 1.5e3 as u64;
+      kkk     nnnnnn   nnnn   nnnnn kk ttt
+|     if n > 10 && true {
+      kk     nn    nnnn
+|         println!("{n} {raw} {ch}");
+          ffffffff ssssssssssssssss
+|     } else {
+        kkkk
+|         return;
+          kkkkkk
+|     }
+|     for i in 0..3 {
+      kkk   kk n  n
+|         let _ = Some(i).unwrap_or(0);
+          kkk     ffff    fffffffff n
+|     }
+|     match Shape::Circle(1.0) {
+      kkkkk ttttt  ffffff nnn
+|         Shape::Circle(r) => drop(r),
+          ttttt  tttttt       ffff
+|         _ => {}
+|     }
+|     let f = |a: i32| -> i32 { a * 2 };
+      kkk         ttt     ttt       n
+|     'outer: loop {
+              kkkk
+|         break 'outer;
+          kkkkk
+|     }
+|     let _ = (f(1), map.len(), self::main as fn(), None::<u8>);
+      kkk      f n       fff               kk kk    ffff   tt
+| }

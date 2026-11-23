@@ -1,0 +1,87 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| #include <stdio.h>
+  kkkkkkkk sssssssss
+| #include "local.h"
+  kkkkkkkk sssssssss
+| #define MAX(a, b) ((a) > (b) ? (a) : (b))
+  kkkkkkk fff
+| #define LIMIT 10
+  kkkkkkk
+| 
+| #ifdef DEBUG
+  kkkkkk
+| #endif
+  kkkkkk
+| 
+| typedef struct point {
+  kkkkkkk kkkkkk ttttt
+|     int x;
+      ttt
+|     double y;
+      tttttt
+| } point_t;
+    ttttttt
+| 
+| enum mode { IDLE, BUSY };
+  kkkk tttt
+| 
+| static const char *name = "sample";
+  kkkkkk kkkkk tttt         ssssssss
+| extern volatile unsigned long count;
+  kkkkkk kkkkkkkk ttttttttttttt
+| 
+| static inline int square(int v) { return v * v; }
+  kkkkkk kkkkkk ttt ffffff ttt      kkkkkk
+| 
+| int main(int argc, char **argv) {
+  ttt ffff ttt       tttt
+|     char c = 'c';
+      tttt     nnn
+|     float f = 1.5e3f;
+      ttttt     nnnnnn
+|     long n = 0xFFL + 42;
+      tttt     nnnnn   nn
+|     point_t p = { .x = 1, .y = 2.0 };
+      ttttttt            n       nnn
+|     if (argc > 1 && argv != NULL) {
+      kk         n
+|         printf("%s %d\n", name, square(p.x));
+          ffffff sssssssss        ffffff
+|     } else {
+        kkkk
+|         return -1;
+          kkkkkk nn
+|     }
+|     for (int i = 0; i < LIMIT; i++) {
+      kkk  ttt     n
+|         continue;
+          kkkkkkkk
+|     }
+|     while (0) {
+      kkkkk  n
+|         break;
+          kkkkk
+|     }
+|     switch (c) {
+      kkkkkk
+|     case 'a':
+      kkkk nnn
+|         goto done;
+|     default:
+      kkkkkkk
+|         break;
+          kkkkk
+|     }
+| done:
+|     n = sizeof(point_t);
+          kkkkkk
+|     return MAX(n, (long)f) ? true : false;
+      kkkkkk fff     tttt
+| }

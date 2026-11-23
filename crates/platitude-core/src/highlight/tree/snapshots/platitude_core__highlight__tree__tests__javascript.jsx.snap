@@ -1,0 +1,76 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| /** A doc comment. */
+  ccccccccccccccccccccc
+| import React, { useState } from "react";
+  kkkkkk ttttt               kkkk sssssss
+| 
+| export default function App({ title }) {
+  kkkkkk kkkkkkk kkkkkkkk ttt
+|   const [count, setCount] = useState(0);
+    kkkkk                     ffffffff n
+|   let text = `count: ${count}`;
+    kkk        sssssssssssssssss
+|   var re = /ab+c/gi;
+    kkk      ssssssss
+|   const n = 42 + 0xff + 1.5e3 + 10n;
+    kkkkk     nn   nnnn   nnnnn   nnn
+|   if (count > 0 && title !== undefined) {
+    kk          n              nnnnnnnnn
+|     console.log(text, re, n, null, true, this);
+              fff              nnnn  nnnn
+|   } else {
+      kkkk
+|     throw new Error("no");
+      kkkkk kkk ttttt ssss
+|   }
+|   for (const key of Object.keys({ a: 1 })) {
+    kkk  kkkkk     kk tttttt ffff      n
+|     continue;
+      kkkkkkkk
+|   }
+|   try {
+    kkk
+|     JSON.parse("{}");
+           fffff ssss
+|   } catch (e) {
+      kkkkk
+|   } finally {
+      kkkkkkk
+|   }
+|   class Box extends Object {
+    kkkkk ttt kkkkkkk tttttt
+|     static size = 1;
+      kkkkkk        n
+|     #secret = 2;
+                n
+|     get value() {
+      kkk fffff
+|       return this.#secret;
+        kkkkkk
+|     }
+|   }
+|   const Upper = 1;
+    kkkkk ttttt   n
+|   const handle = async (event) => {
+    kkkkk ffffff   kkkkk
+|     await event;
+      kkkkk
+|   };
+|   return (
+    kkkkkk
+|     <div className="app" onClick={() => setCount(count + 1)}>
+       kkk aaaaaaaaa sssss aaaaaaa        ffffffff         n
+|       <Box.Item label={title} />
+         ttt      aaaaa
+|       {text}
+|     </div>
+        kkk
+|   );
+| }

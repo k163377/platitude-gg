@@ -1,0 +1,25 @@
+-- A line comment.
+/* A block comment. */
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  active BOOLEAN DEFAULT TRUE,
+  email VARCHAR(120) UNIQUE,
+  team_id INTEGER REFERENCES teams (id) ON DELETE CASCADE,
+  score DECIMAL(5, 2) DEFAULT 1.5
+);
+
+INSERT INTO users (id, name) VALUES (1, 'Ada');
+
+SELECT u.id, COUNT(*) AS total,
+  CASE WHEN u.active THEN 'yes' ELSE 'no' END AS state
+FROM users AS u
+LEFT JOIN orders o ON o.user_id = u.id
+WHERE u.name LIKE 'A%' AND u.score > 0 OR u.id IN (1, 2)
+GROUP BY u.id
+HAVING COUNT(*) > 1
+ORDER BY total DESC
+LIMIT 10;
+
+UPDATE users SET name = NULL WHERE id = 2;
+DELETE FROM users WHERE active IS FALSE;

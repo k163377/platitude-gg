@@ -1,0 +1,50 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| -- A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| CREATE TABLE IF NOT EXISTS users (
+  kkkkkk kkkkk kk kkk kkkkkk ttttt
+|   id INTEGER PRIMARY KEY,
+       ttttttt kkkkkkk kkk
+|   name VARCHAR(80) NOT NULL,
+         ttttttt nn  kkk tttt
+|   active BOOLEAN DEFAULT TRUE,
+           ttttttt aaaaaaa nnnn
+|   email VARCHAR(120) UNIQUE,
+          ttttttt nnn  kkkkkk
+|   team_id INTEGER REFERENCES teams (id) ON DELETE CASCADE,
+            ttttttt kkkkkkkkkk ttttt      kk kkkkkk kkkkkkk
+|   score DECIMAL(5, 2) DEFAULT 1.5
+          ttttttt n  n  aaaaaaa nnn
+| );
+| 
+| INSERT INTO users (id, name) VALUES (1, 'Ada');
+  kkkkkk kkkk ttttt            kkkkkk  n  sssss
+| 
+| SELECT u.id, COUNT(*) AS total,
+  kkkkkk t     fffff    kk
+|   CASE WHEN u.active THEN 'yes' ELSE 'no' END AS state
+    kkkk kkkk t        kkkk sssss kkkk ssss kkk kk
+| FROM users AS u
+  kkkk ttttt kk
+| LEFT JOIN orders o ON o.user_id = u.id
+  kkkk kkkk tttttt   kk t           t
+| WHERE u.name LIKE 'A%' AND u.score > 0 OR u.id IN (1, 2)
+  kkkkk t      kkkk ssss kkk t         n kk t    kk  n  n
+| GROUP BY u.id
+  kkkkk kk t
+| HAVING COUNT(*) > 1
+  kkkkkk fffff      n
+| ORDER BY total DESC
+  kkkkk kk       aaaa
+| LIMIT 10;
+  kkkkk nn
+| 
+| UPDATE users SET name = NULL WHERE id = 2;
+  kkkkkk ttttt kkk        tttt kkkkk      n
+| DELETE FROM users WHERE active IS FALSE;
+  kkkkkk kkkk ttttt kkkkk        kk nnnnn

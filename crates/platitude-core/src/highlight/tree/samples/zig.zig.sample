@@ -1,0 +1,40 @@
+// A line comment.
+/// A doc comment.
+const std = @import("std");
+
+pub const Point = struct {
+    x: i32,
+    y: f64 = 1.5e3,
+
+    pub fn init(x: i32) Point {
+        return .{ .x = x };
+    }
+};
+
+const Mode = enum { idle, busy };
+const Shape = union(enum) { circle: f32, square: u8 };
+
+pub fn main() !void {
+    var list = std.ArrayList(u8).init(std.heap.page_allocator);
+    defer list.deinit();
+    const text = "text\n";
+    const c = 'c';
+    const n: u64 = 0xFF + 42;
+    const ok = true and null == null;
+    if (ok) {
+        std.debug.print("{s} {c} {d}\n", .{ text, c, n });
+    } else {
+        return error.Failed;
+    }
+    for (text, 0..) |ch, i| {
+        _ = ch;
+        _ = i;
+    }
+    while (false) {}
+    const p = Point.init(1);
+    switch (Mode.idle) {
+        .idle => {},
+        else => unreachable,
+    }
+    try list.append(@intCast(p.x));
+}

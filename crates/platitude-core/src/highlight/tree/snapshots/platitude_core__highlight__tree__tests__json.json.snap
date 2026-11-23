@@ -1,0 +1,24 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| {
+|   "string": "value",
+    ssssssss  sssssss
+|   "escaped": "a\nb",
+    sssssssss  ssssss
+|   "number": 42,
+    ssssssss  nn
+|   "float": -1.5e3,
+    sssssss  nnnnnn
+|   "true": true,
+    ssssss  nnnn
+|   "false": false,
+    sssssss  nnnnn
+|   "null": null,
+    ssssss  nnnn
+|   "array": [1, "two", {"three": 3}],
+    sssssss   n  sssss   sssssss  n
+|   "object": {"nested": {}}
+    ssssssss   ssssssss
+| }

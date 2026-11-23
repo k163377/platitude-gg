@@ -1,0 +1,26 @@
+# A comment.
+#[[ A bracket comment. ]]
+cmake_minimum_required(VERSION 3.25)
+project(sample LANGUAGES CXX VERSION 1.0)
+
+set(SOURCES main.cpp "with space.cpp")
+option(ENABLE_TESTS "Build the tests" ON)
+
+if(ENABLE_TESTS AND NOT WIN32)
+  message(STATUS "tests: ${ENABLE_TESTS}")
+elseif(DEFINED ENV{CI})
+  message(WARNING [[bracket argument]])
+else()
+  return()
+endif()
+
+foreach(src IN LISTS SOURCES)
+  list(APPEND OBJECTS ${src}.o)
+endforeach()
+
+function(add_tool name)
+  add_executable(${name} ${ARGN})
+  target_link_libraries(${name} PRIVATE Qt6::Core)
+endfunction()
+
+add_tool(demo main.cpp)

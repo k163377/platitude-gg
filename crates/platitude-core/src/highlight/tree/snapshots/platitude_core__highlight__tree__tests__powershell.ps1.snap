@@ -1,0 +1,61 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| <# A block comment. #>
+  cccccccccccccccccccccc
+| param(
+  kkkkk
+|     [Parameter(Mandatory = $true)]
+       ttttttttt
+|     [string]$Name,
+       tttttt
+|     [int]$Count = 42
+       ttt          nn
+| )
+| 
+| function Get-Greeting {
+  kkkkkkkk ffffffffffff
+|     [CmdletBinding()]
+       ttttttttttttt
+|     param([string]$Who = 'world')
+      kkkkk  tttttt        sssssss
+|     return "hello, $Who"
+      kkkkkk sssssssssssss
+| }
+| 
+| $items = @(1, 2, 3)
+             n  n  n
+| $table = @{ Key = 'value'; Other = 1.5 }
+                    sssssss          nnn
+| if ($Count -gt 10 -and $true) {
+  kk             nn
+|     Write-Output (Get-Greeting -Who $Name)
+      ffffffffffff  ffffffffffff
+| } elseif ($null -eq $Name) {
+    kkkkkk
+|     exit 1
+      kkkk n
+| } else {
+    kkkk
+|     throw "no"
+      kkkkk ssss
+| }
+| foreach ($item in $items) { continue }
+  kkkkkkk                     kkkkkkkk
+| try { Get-Item ./file } catch { $_ } finally { }
+  kkk   ffffffff          kkkkk        kkkkkkk
+| switch ($Count) {
+  kkkkkk
+|     1 { break }
+      n   kkkkk
+|     default { }
+| }
+| $items | Where-Object { $_ -gt 1 } | ForEach-Object { $_ * 0xFF }
+           ffffffffffff          n     ffffffffffffff        nnnn
+| class Point { [int]$X = 0 }
+                 ttt      n
+| [Point]::new().X
+   ttttt   fff

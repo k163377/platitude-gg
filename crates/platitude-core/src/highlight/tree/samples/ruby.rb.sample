@@ -1,0 +1,44 @@
+# A comment.
+require "json"
+
+module Shapes
+  MAX = 42
+
+  class Point < Struct
+    attr_reader :x, :y
+
+    def initialize(x, y = 1.5)
+      @x = x
+      @@count = 0
+      $global = nil
+    end
+
+    def to_s
+      "point(#{@x}, #{y})"
+    end
+
+    def self.origin
+      new(0, 0)
+    end
+  end
+end
+
+point = Shapes::Point.new(1, 2)
+text = 'single' + %w[a b].join
+pattern = /ab+c/i
+if point && !point.nil?
+  puts text, pattern, :symbol, 0xFF, true
+elsif false
+  nil
+else
+  raise ArgumentError, "no"
+end
+[1, 2].each { |n| next if n.zero? }
+begin
+  JSON.parse("{}")
+rescue StandardError => e
+  retry
+ensure
+  self
+end
+return unless text.empty?

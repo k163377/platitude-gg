@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<!-- A comment. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sample</title>
+  <style>
+    body { color: red; }
+  </style>
+  <script>
+    const n = 42;
+  </script>
+</head>
+<body class="main" data-id='single'>
+  <h1 id=plain>Heading &amp; text</h1>
+  <a href="https://example.com">link</a>
+  <img src="pic.png" alt="">
+  <input type="checkbox" checked />
+</body>
+</html>

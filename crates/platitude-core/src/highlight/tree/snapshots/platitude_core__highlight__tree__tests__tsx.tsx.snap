@@ -1,0 +1,34 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| import { useState } from "react";
+  kkkkkk              kkkk sssssss
+| 
+| type BadgeProps = { label: string; Count?: number };
+  kkkk tttttttttt            tttttt          tttttt
+| 
+| export function Badge({ label, Count = 0 }: BadgeProps): JSX.Element {
+  kkkkkk kkkkkkkk ttttt                  n    tttttttttt   ttt ttttttt
+|   const [open, setOpen] = useState<boolean>(false);
+    kkkkk                   ffffffff ttttttt  nnnnn
+|   const Title = label.toUpperCase();
+    kkkkk ttttt         fffffffffff
+|   return (
+    kkkkkk
+|     <section className="badge" data-open={open}>
+       kkkkkkk aaaaaaaaa sssssss aaaaaaaaa
+|       <h1>{Title}</h1>
+         kk  ttttt   kk
+|       <Panel.Body onClick={() => setOpen(!open)}>
+         ttttt      aaaaaaa        fffffff
+|         {Count > 0 ? <span>{Count}</span> : null}
+           ttttt   n    kkkk  ttttt   kkkk    nnnn
+|       </Panel.Body>
+          ttttt
+|     </section>
+        kkkkkkk
+|   );
+| }

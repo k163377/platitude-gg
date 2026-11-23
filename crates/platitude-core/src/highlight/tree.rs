@@ -220,3 +220,6 @@ fn push_run(line: &mut Vec<Span>, len: usize, color: Rgb) {
         _ => line.push(Span { len, color }),
     }
 }
+
+#[cfg(test)]
+mod tests;

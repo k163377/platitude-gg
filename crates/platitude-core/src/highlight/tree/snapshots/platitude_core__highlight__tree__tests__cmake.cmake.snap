@@ -1,0 +1,50 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| #[[ A bracket comment. ]]
+  ccccccccccccccccccccccccc
+| cmake_minimum_required(VERSION 3.25)
+  ffffffffffffffffffffff
+| project(sample LANGUAGES CXX VERSION 1.0)
+  fffffff
+| 
+| set(SOURCES main.cpp "with space.cpp")
+                       ssssssssssssssss
+| option(ENABLE_TESTS "Build the tests" ON)
+  ffffff              sssssssssssssssss nn
+| 
+| if(ENABLE_TESTS AND NOT WIN32)
+  kk              kkk kkk
+|   message(STATUS "tests: ${ENABLE_TESTS}")
+    fffffff        ssssssssssssssssssssssss
+| elseif(DEFINED ENV{CI})
+  kkkkkk kkkkkkk
+|   message(WARNING [[bracket argument]])
+    fffffff         ssssssssssssssssssss
+| else()
+  kkkk
+|   return()
+    kkkkkk
+| endif()
+  kkkkk
+| 
+| foreach(src IN LISTS SOURCES)
+  kkkkkkk
+|   list(APPEND OBJECTS ${src}.o)
+| endforeach()
+  kkkkkkkkkk
+| 
+| function(add_tool name)
+  kkkkkkkk ffffffff
+|   add_executable(${name} ${ARGN})
+    ffffffffffffff
+|   target_link_libraries(${name} PRIVATE Qt6::Core)
+    fffffffffffffffffffff
+| endfunction()
+  kkkkkkkkkkk
+| 
+| add_tool(demo main.cpp)
+  ffffffff

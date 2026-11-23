@@ -1,0 +1,9 @@
+# A comment.
+! Another comment.
+key=value
+spaced.key = spaced value
+colon:value
+escaped=line\
+  continued
+unicode=A
+empty=

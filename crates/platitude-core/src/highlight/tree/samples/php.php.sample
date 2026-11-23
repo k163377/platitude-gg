@@ -1,0 +1,49 @@
+<?php
+// A line comment.
+/* A block comment. */
+declare(strict_types=1);
+
+namespace Demo\Sample;
+
+use Demo\Base;
+
+#[Attribute]
+final class Point extends Base implements \JsonSerializable
+{
+    public const ORIGIN = 0;
+    private static int $count = 0;
+
+    public function __construct(private float $x = 1.5) {}
+
+    public function jsonSerialize(): mixed
+    {
+        $text = "x = {$this->x}";
+        $raw = 'single';
+        $ok = true && null === null;
+        if ($ok) {
+            echo $text . $raw . PHP_EOL;
+        } elseif (self::$count > 0) {
+            return null;
+        } else {
+            throw new \RuntimeException("no");
+        }
+        foreach ([1, 2] as $key => $value) {
+            continue;
+        }
+        try {
+            strlen($raw);
+        } catch (\Exception $e) {
+        } finally {
+        }
+        $fn = fn(int $n): int => $n * 0xFF;
+        return match ($fn(1)) {
+            1 => 'one',
+            default => 'many',
+        };
+    }
+}
+
+enum Mode: string
+{
+    case Idle = 'idle';
+}

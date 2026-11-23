@@ -1,0 +1,112 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| #import <Foundation/Foundation.h>
+  kkkkkkk sssssssssssssssssssssssss
+| #include <stdio.h>
+  kkkkkkkk sssssssss
+| #define LIMIT 10
+  kkkkkkk
+| #undef OLD_LIMIT
+  kkkkkk
+| 
+| @protocol Shape <NSObject>
+  kkkkkkkkk        tttttttt
+| @required
+  kkkkkkkkk
+| - (double)area;
+  k  tttttt ffff
+| @optional
+  kkkkkkkkk
+| - (double)perimeter;
+  k  tttttt fffffffff
+| @end
+  kkkk
+| 
+| @interface Point : NSObject <Shape> {
+  kkkkkkkkkk ttttt   tttttttt  ttttt
+| @public
+  kkkkkkk
+|     int count;
+      ttt
+| }
+| @property (nonatomic, assign) double x;
+  kkkkkkkkk                     tttttt
+| + (instancetype)origin;
+  k  tttttttttttt ffffff
+| @end
+  kkkk
+| 
+| @implementation Point
+  kkkkkkkkkkkkkkk ttttt
+| 
+| + (instancetype)origin {
+  k  tttttttttttt ffffff
+|     return [[Point alloc] init];
+      kkkkkk         fffff  tttt
+| }
+| 
+| - (double)area {
+  k  tttttt ffff
+|     static volatile int calls = 0;
+      kkkkkk kkkkkkkk ttt         n
+|     calls++;
+|     return self.x * 1.5e3;
+      kkkkkk          nnnnn
+| }
+| 
+| @end
+  kkkk
+| 
+| int main(int argc, const char *argv[]) {
+  ttt ffff ttt       kkkkk tttt
+|     @autoreleasepool {
+      kkkkkkkkkkkkkkkk
+|         NSString *text = @"text";
+          tttttttt         sssssss
+|         NSArray *items = @[@1, @2];
+          ttttttt             n   n
+|         char c = 'c';
+          tttt     nnn
+|         BOOL ok = YES && argv != NULL;
+          tttt
+|         if (ok) {
+          kk
+|             NSLog(@"%@ %c %lu", text, c, (unsigned long)items.count);
+              fffff ssssssssssss            ttttttttttttt
+|         } else {
+            kkkk
+|             return -1;
+              kkkkkk nn
+|         }
+|         @try {
+          kkkk
+|             [[Point origin] area];
+                      ffffff  ffff
+|         } @catch (NSException *e) {
+            kkkkkk  ttttttttttt
+|         } @finally {
+            kkkkkkkk
+|         }
+|         for (int i = 0; i < LIMIT; i++) {
+          kkk  ttt     n
+|             continue;
+              kkkkkkkk
+|         }
+|         void (^block)(int) = ^(int n) { printf("%d\n", n); };
+          tttt          ttt      ttt      ffffff ssssss
+|         block(0xFF);
+          fffff nnnn
+|         id obj = nil;
+          tt
+|         SEL sel = @selector(area);
+          ttt       kkkkkkkkk
+|     }
+|     return 0;
+      kkkkkk n
+| }

@@ -1,0 +1,38 @@
+// A line comment.
+/* A block comment. */
+package demo.sample
+
+import scala.collection.mutable
+
+@deprecated("old", "1.0")
+sealed trait Shape {
+  def area: Double
+}
+
+final case class Point(x: Int, y: Double = 1.5e3) extends Shape {
+  override def area: Double = x * y
+}
+
+object Point {
+  val Origin: Point = Point(0)
+  private lazy val cache = mutable.Map.empty[String, Int]
+
+  def describe[T <: Shape](shape: T): String = {
+    val text = s"area = ${shape.area}"
+    val c = 'c'
+    val n = 0xFF + 42L
+    if (n > 0 && true) println(text) else return null
+    for (i <- 0 until 3 if i > 0) yield i
+    while (false) {}
+    shape match {
+      case Point(x, _) if x > 0 => "positive"
+      case _ => throw new IllegalStateException("no")
+    }
+    try cache("a") catch { case e: Exception => () } finally ()
+    text
+  }
+}
+
+enum Mode {
+  case Idle, Busy
+}

@@ -1,0 +1,43 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| <!DOCTYPE html>
+| <!-- A comment. -->
+  ccccccccccccccccccc
+| <html lang="en">
+   kkkk aaaa  ss
+| <head>
+   kkkk
+|   <meta charset="utf-8">
+     kkkk aaaaaaa  sssss
+|   <title>Sample</title>
+     kkkkk         kkkkk
+|   <style>
+     kkkkk
+|     body { color: red; }
+      kkkk
+|   </style>
+      kkkkk
+|   <script>
+     kkkkkk
+|     const n = 42;
+      kkkkk     nn
+|   </script>
+      kkkkkk
+| </head>
+    kkkk
+| <body class="main" data-id='single'>
+   kkkk aaaaa  ssss  aaaaaaa  ssssss
+|   <h1 id=plain>Heading &amp; text</h1>
+     kk aa sssss                     kk
+|   <a href="https://example.com">link</a>
+     k aaaa  sssssssssssssssssss        k
+|   <img src="pic.png" alt="">
+     kkk aaa  sssssss  aaa
+|   <input type="checkbox" checked />
+     kkkkk aaaa  ssssssss  aaaaaaa
+| </body>
+    kkkk
+| </html>
+    kkkk

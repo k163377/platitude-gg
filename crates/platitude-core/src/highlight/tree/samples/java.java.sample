@@ -1,0 +1,61 @@
+// A line comment.
+/* A block comment. */
+/** A Javadoc comment. */
+package demo.sample;
+
+import java.util.List;
+import static java.lang.Math.max;
+
+@FunctionalInterface
+interface Shape {
+    double area();
+}
+
+public final class Point<T extends Comparable<T>> implements Shape {
+    public static final int ORIGIN = 0;
+    private final double x;
+    private volatile long count = 0xFFL;
+
+    public Point(double x) {
+        this.x = x;
+    }
+
+    @Override
+    public double area() {
+        return x * 1.5e3;
+    }
+
+    enum Mode { IDLE, BUSY }
+
+    public static void main(String[] args) throws Exception {
+        var list = List.of("a", "b");
+        char c = 'c';
+        boolean ok = true && args != null;
+        if (ok) {
+            System.out.println("text: " + c + max(1, 2));
+        } else {
+            throw new IllegalStateException("no");
+        }
+        for (String s : list) {
+            continue;
+        }
+        try {
+            Thread.sleep(1);
+        } catch (InterruptedException e) {
+        } finally {
+        }
+        switch (args.length) {
+            case 0 -> System.exit(0);
+            default -> { }
+        }
+        String block = """
+            text block
+            """;
+        Object o = (Object) list;
+        if (o instanceof List<?> l) {
+            l.size();
+        }
+        Runnable r = () -> {};
+        new Point<String>(1.0).area();
+    }
+}

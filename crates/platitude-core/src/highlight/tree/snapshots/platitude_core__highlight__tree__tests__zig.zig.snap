@@ -1,0 +1,71 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /// A doc comment.
+  cccccccccccccccccc
+| const std = @import("std");
+  kkkkk       kkkkkkk sssss
+| 
+| pub const Point = struct {
+  kkk kkkkk ttttt   kkkkkk
+|     x: i32,
+         ttt
+|     y: f64 = 1.5e3,
+         ttt   nnnnn
+| 
+|     pub fn init(x: i32) Point {
+      kkk kk ffff    ttt
+|         return .{ .x = x };
+          kkkkkk
+|     }
+| };
+| 
+| const Mode = enum { idle, busy };
+  kkkkk tttt   kkkk
+| const Shape = union(enum) { circle: f32, square: u8 };
+  kkkkk ttttt   kkkkk kkkk            ttt          tt
+| 
+| pub fn main() !void {
+  kkk kk ffff    tttt
+|     var list = std.ArrayList(u8).init(std.heap.page_allocator);
+      kkk            fffffffff tt  ffff
+|     defer list.deinit();
+      kkkkk      ffffff
+|     const text = "text\n";
+      kkkkk        ssssssss
+|     const c = 'c';
+      kkkkk     sss
+|     const n: u64 = 0xFF + 42;
+      kkkkk    ttt   nnnn   nn
+|     const ok = true and null == null;
+      kkkkk      nnnn kkk nnnn    nnnn
+|     if (ok) {
+      kk
+|         std.debug.print("{s} {c} {d}\n", .{ text, c, n });
+                    fffff sssssssssssssss
+|     } else {
+        kkkk
+|         return error.Failed;
+          kkkkkk kkkkk
+|     }
+|     for (text, 0..) |ch, i| {
+      kkk        n
+|         _ = ch;
+|         _ = i;
+|     }
+|     while (false) {}
+      kkkkk  nnnnn
+|     const p = Point.init(1);
+      kkkkk           ffff n
+|     switch (Mode.idle) {
+      kkkkkk
+|         .idle => {},
+|         else => unreachable,
+          kkkk    nnnnnnnnnnn
+|     }
+|     try list.append(@intCast(p.x));
+      kkk      ffffff ffffffff
+| }

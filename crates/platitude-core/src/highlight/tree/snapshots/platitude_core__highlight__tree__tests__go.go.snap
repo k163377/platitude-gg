@@ -1,0 +1,89 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| package main
+  kkkkkkk
+| 
+| import (
+  kkkkkk
+|     "fmt"
+      sssss
+|     str "strings"
+          sssssssss
+| )
+| 
+| const Max = 42
+  kkkkk       nn
+| 
+| type Point struct {
+  kkkk ttttt kkkkkk
+|     X, Y float64
+           ttttttt
+| }
+| 
+| type Shape interface {
+  kkkk ttttt kkkkkkkkk
+|     Area() float64
+             ttttttt
+| }
+| 
+| func (p *Point) Area() float64 {
+  kkkk     ttttt         ttttttt
+|     return p.X * p.Y * 1.5e3
+      kkkkkk             nnnnn
+| }
+| 
+| func main() {
+  kkkk
+|     var n int = 0xFF
+      kkk   ttt   nnnn
+|     s := "text"
+           ssssss
+|     raw := `raw`
+             sssss
+|     r := 'c'
+           sss
+|     ok := true && nil == nil
+            nnnn    nnn    nnn
+|     if ok {
+      kk
+|         fmt.Println(s, raw, r, n, str.ToUpper(s))
+|     } else {
+        kkkk
+|         return
+          kkkkkk
+|     }
+|     for i := 0; i < 3; i++ {
+      kkk      n      n
+|         continue
+          kkkkkkkk
+|     }
+|     switch n {
+      kkkkkk
+|     case 1:
+      kkkk n
+|         fallthrough
+          kkkkkkkkkkk
+|     default:
+      kkkkkkk
+|     }
+|     m := map[string][]int{"a": {1}}
+           kkk tttttt   ttt sss   n
+|     ch := make(chan int)
+                 kkkk ttt
+|     go func() { ch <- len(m) }()
+      kk kkkk
+|     defer close(ch)
+      kkkkk
+|     select {
+      kkkkkk
+|     case v := <-ch:
+      kkkk
+|         _ = v
+|     }
+| }

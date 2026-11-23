@@ -1,0 +1,46 @@
+# A comment.
+"""A module docstring."""
+from __future__ import annotations
+import os.path as osp
+
+CONSTANT = 42
+
+
+@dataclass(frozen=True)
+class Point(Base):
+    """A class docstring."""
+
+    x: int = 0
+    y: float = 1.5e3
+
+    def __init__(self, x: int, *args, **kwargs) -> None:
+        super().__init__()
+        self.x = x
+
+    @property
+    def norm(self) -> float:
+        return (self.x ** 2 + self.y ** 2) ** 0.5
+
+
+async def main(values: list[str]) -> dict[str, int]:
+    text = f"value: {CONSTANT!r} {values[0]}"
+    raw = r"\d+" + b"bytes".decode()
+    if values and not None:
+        print(text, raw, True, False)
+    elif len(values) > 10:
+        pass
+    else:
+        raise ValueError("no")
+    for i in range(3):
+        continue
+    while False:
+        break
+    try:
+        await other()
+    except (KeyError, OSError) as error:
+        del error
+    finally:
+        lambda n: n + 0x1F
+    with open(osp.join("a", "b")) as handle:
+        print(handle)
+    return {k: v for k, v in zip("ab", [1, 2])}

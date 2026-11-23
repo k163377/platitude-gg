@@ -1,0 +1,67 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| package demo.sample
+  kkkkkkk
+| 
+| import scala.collection.mutable
+  kkkkkk
+| 
+| @deprecated("old", "1.0")
+  attttttttttasssssaasssssa
+| sealed trait Shape {
+  kkkkkk kkkkk ttttt
+|   def area: Double
+    kkk ffff  tttttt
+| }
+| 
+| final case class Point(x: Int, y: Double = 1.5e3) extends Shape {
+  kkkkk kkkk kkkkk ttttt    ttt     tttttt   nnnnn  kkkkkkk ttttt
+|   override def area: Double = x * y
+    kkkkkkkk kkk ffff  tttttt
+| }
+| 
+| object Point {
+  kkkkkk ttttt
+|   val Origin: Point = Point(0)
+    kkk tttttt  ttttt   ttttt n
+|   private lazy val cache = mutable.Map.empty[String, Int]
+    kkkkkkk kkkk kkk                 ttt       tttttt  ttt
+| 
+|   def describe[T <: Shape](shape: T): String = {
+    kkk ffffffff t    ttttt         t   tttttt
+|     val text = s"area = ${shape.area}"
+      kkk        fssssssssssssssssssssss
+|     val c = 'c'
+      kkk     sss
+|     val n = 0xFF + 42L
+      kkk     nnnn   nnn
+|     if (n > 0 && true) println(text) else return null
+      kk      n    nnnn  fffffff       kkkk kkkkkk nnnn
+|     for (i <- 0 until 3 if i > 0) yield i
+      kkk       n       n kk     n  kkkkk
+|     while (false) {}
+      kkkkk  nnnnn
+|     shape match {
+            kkkkk
+|       case Point(x, _) if x > 0 => "positive"
+        kkkk ttttt       kk     n    ssssssssss
+|       case _ => throw new IllegalStateException("no")
+        kkkk      kkkkk kkk ttttttttttttttttttttt ssss
+|     }
+|     try cache("a") catch { case e: Exception => () } finally ()
+      kkk fffff sss  kkkkk   kkkk    ttttttttt         kkkkkkk
+|     text
+|   }
+| }
+| 
+| enum Mode {
+  kkkk tttt
+|   case Idle, Busy
+    kkkk tttt  tttt
+| }

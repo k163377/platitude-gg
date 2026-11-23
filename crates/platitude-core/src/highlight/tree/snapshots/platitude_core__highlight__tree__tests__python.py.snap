@@ -1,0 +1,87 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| """A module docstring."""
+  sssssssssssssssssssssssss
+| from __future__ import annotations
+  kkkk            kkkkkk
+| import os.path as osp
+  kkkkkk         kk
+| 
+| CONSTANT = 42
+             nn
+| 
+| 
+| @dataclass(frozen=True)
+  ffffffffffffffffffnnnnf
+| class Point(Base):
+  kkkkk ttttt tttt
+|     """A class docstring."""
+      ssssssssssssssssssssssss
+| 
+|     x: int = 0
+         ttt   n
+|     y: float = 1.5e3
+         ttttt   nnnnn
+| 
+|     def __init__(self, x: int, *args, **kwargs) -> None:
+      kkk ffffffff          ttt                      nnnn
+|         super().__init__()
+          fffff
+|         self.x = x
+| 
+|     @property
+      fffffffff
+|     def norm(self) -> float:
+      kkk ffff          ttttt
+|         return (self.x ** 2 + self.y ** 2) ** 0.5
+          kkkkkk            n             n     nnn
+| 
+| 
+| async def main(values: list[str]) -> dict[str, int]:
+  kkkkk kkk ffff              ttt           ttt  ttt
+|     text = f"value: {CONSTANT!r} {values[0]}"
+             ssssssssssssssssssssssssssssssnsss
+|     raw = r"\d+" + b"bytes".decode()
+            ssssss   ssssssss
+|     if values and not None:
+      kk                nnnn
+|         print(text, raw, True, False)
+          fffff            nnnn  nnnnn
+|     elif len(values) > 10:
+      kkkk fff           nn
+|         pass
+          kkkk
+|     else:
+      kkkk
+|         raise ValueError("no")
+          kkkkk ffffffffff ssss
+|     for i in range(3):
+      kkk      fffff n
+|         continue
+          kkkkkkkk
+|     while False:
+      kkkkk nnnnn
+|         break
+          kkkkk
+|     try:
+      kkk
+|         await other()
+          kkkkk fffff
+|     except (KeyError, OSError) as error:
+      kkkkkk  tttttttt  ttttttt  kk
+|         del error
+          kkk
+|     finally:
+      kkkkkkk
+|         lambda n: n + 0x1F
+          kkkkkk        nnnn
+|     with open(osp.join("a", "b")) as handle:
+      kkkk ffff          sss  sss   kk
+|         print(handle)
+          fffff
+|     return {k: v for k, v in zip("ab", [1, 2])}
+      kkkkkk       kkk         fff ssss   n  n

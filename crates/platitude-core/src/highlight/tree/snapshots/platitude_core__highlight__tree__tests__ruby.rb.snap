@@ -1,0 +1,85 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| require "json"
+  fffffff ssssss
+| 
+| module Shapes
+  kkkkkk tttttt
+|   MAX = 42
+          nn
+| 
+|   class Point < Struct
+    kkkkk ttttt   tttttt
+|     attr_reader :x, :y
+      fffffffffff ss  ss
+| 
+|     def initialize(x, y = 1.5)
+      kkk ffffffffff        nnn
+|       @x = x
+             f
+|       @@count = 0
+                  n
+|       $global = nil
+                  nnn
+|     end
+      kkk
+| 
+|     def to_s
+      kkk ffff
+|       "point(#{@x}, #{y})"
+        ssssssssssssssssfsss
+|     end
+      kkk
+| 
+|     def self.origin
+      kkk      ffffff
+|       new(0, 0)
+        fff n  n
+|     end
+      kkk
+|   end
+    kkk
+| end
+  kkk
+| 
+| point = Shapes::Point.new(1, 2)
+  fffff   tttttt  ttttt fff n  n
+| text = 'single' + %w[a b].join
+  ffff   ssssssss      s s  ffff
+| pattern = /ab+c/i
+  fffffff   sssssss
+| if point && !point.nil?
+  kk fffff     fffff ffff
+|   puts text, pattern, :symbol, 0xFF, true
+    ffff ffff  fffffff  sssssss  nnnn  nnnn
+| elsif false
+  kkkkk nnnnn
+|   nil
+    nnn
+| else
+  kkkk
+|   raise ArgumentError, "no"
+    fffff ttttttttttttt  ssss
+| end
+  kkk
+| [1, 2].each { |n| next if n.zero? }
+   n  n  ffff       kkkk kk f fffff
+| begin
+  kkkkk
+|   JSON.parse("{}")
+         fffff ssss
+| rescue StandardError => e
+  kkkkkk ttttttttttttt    f
+|   retry
+    kkkkk
+| ensure
+  kkkkkk
+|   self
+| end
+  kkk
+| return unless text.empty?
+  kkkkkk kkkkkk ffff ffffff

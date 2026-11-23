@@ -1,0 +1,85 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| <?php
+  kkkkk
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| declare(strict_types=1);
+  kkkkkkk              n
+| 
+| namespace Demo\Sample;
+  kkkkkkkkk
+| 
+| use Demo\Base;
+  kkk      tttt
+| 
+| #[Attribute]
+| final class Point extends Base implements \JsonSerializable
+  kkkkk kkkkk       kkkkkkk      kkkkkkkkkk
+| {
+|     public const ORIGIN = 0;
+      kkkkkk kkkkk          n
+|     private static int $count = 0;
+      kkkkkkk kkkkkk ttt          n
+| 
+|     public function __construct(private float $x = 1.5) {}
+      kkkkkk kkkkkkkk fffffffffff kkkkkkk ttttt      nnn
+| 
+|     public function jsonSerialize(): mixed
+      kkkkkk kkkkkkkk fffffffffffff    ttttt
+|     {
+|         $text = "x = {$this->x}";
+                  ssssssssssssssss
+|         $raw = 'single';
+                 ssssssss
+|         $ok = true && null === null;
+                nnnn    nnnn     nnnn
+|         if ($ok) {
+          kk
+|             echo $text . $raw . PHP_EOL;
+              kkkk
+|         } elseif (self::$count > 0) {
+            kkkkkk                 n
+|             return null;
+              kkkkkk nnnn
+|         } else {
+            kkkk
+|             throw new \RuntimeException("no");
+              kkkkk kkk  tttttttttttttttt ssss
+|         }
+|         foreach ([1, 2] as $key => $value) {
+          kkkkkkk   n  n  kk
+|             continue;
+              kkkkkkkk
+|         }
+|         try {
+          kkk
+|             strlen($raw);
+              ffffff
+|         } catch (\Exception $e) {
+            kkkkk  tttttttttt
+|         } finally {
+            kkkkkkk
+|         }
+|         $fn = fn(int $n): int => $n * 0xFF;
+                kk ttt      ttt         nnnn
+|         return match ($fn(1)) {
+          kkkkkk kkkkk      n
+|             1 => 'one',
+              n    sssss
+|             default => 'many',
+              kkkkkkk    ssssss
+|         };
+|     }
+| }
+| 
+| enum Mode: string
+  kkkk       tttttt
+| {
+|     case Idle = 'idle';
+      kkkk        ssssss
+| }

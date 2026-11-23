@@ -1,0 +1,54 @@
+// A line comment.
+/* A block comment. */
+import Foundation
+
+@MainActor
+protocol Shape {
+    var area: Double { get }
+}
+
+struct Point: Shape, Equatable {
+    static let origin = Point(x: 0, y: 0)
+    var x: Double
+    var y: Double = 1.5e3
+    var area: Double { x * y }
+
+    mutating func shift(by delta: Double) -> Point {
+        x += delta
+        return self
+    }
+}
+
+enum Mode: Int {
+    case idle = 0, busy
+}
+
+class Box<T>: NSObject where T: Equatable {
+    private(set) var items: [T] = []
+    override init() { super.init() }
+}
+
+func main() async throws {
+    let text = "count: \(42)"
+    let n = 0xFF + 1_000
+    let ok = true && nil == Optional<Int>.none
+    if ok { print(text, n) } else { return }
+    for i in 0..<3 where i > 0 {
+        continue
+    }
+    guard let first = [1, 2].first else { throw URLError(.badURL) }
+    switch first {
+    case 1: break
+    case _ where first > 2: break
+    default: break
+    }
+    for _ in 0..<2 {
+        continue
+    }
+    do {
+        try await Task.sleep(nanoseconds: 1)
+    } catch {
+    }
+    let closure = { (value: Int) -> Int in value * 2 }
+    _ = closure(first)
+}

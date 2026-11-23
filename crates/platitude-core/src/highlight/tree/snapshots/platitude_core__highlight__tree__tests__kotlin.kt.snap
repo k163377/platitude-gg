@@ -1,0 +1,81 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| package demo.sample
+  kkkkkkk
+| 
+| import kotlin.math.max
+  kkkkkk
+| 
+| @Target(AnnotationTarget.CLASS)
+  attttttaaaaaaaaaaaaaaaaaaaaaaaa
+| annotation class Marker(val name: String)
+             kkkkk tttttt kkk       tttttt
+| 
+| @Marker("point")
+  attttttasssssssa
+| data class Point(val x: Int, var y: Double = 1.5) {
+  kkkk kkkkk ttttt kkk    ttt  kkk    tttttt   nnn
+|     companion object {
+      kkkkkkkkk kkkkkk
+|         const val ORIGIN = 0
+          kkkkk kkk          n
+|     }
+| 
+|     fun shifted(by: Int): Point = copy(x = x + by)
+      kkk fffffff     ttt   ttttt   ffff
+| }
+| 
+| sealed interface Shape
+  kkkkkk kkkkkkkkk ttttt
+| object Nothing : Shape
+  kkkkkk           ttttt
+| 
+| enum class Mode { IDLE, BUSY }
+  kkkk kkkkk tttt
+| 
+| fun main(args: Array<String>) {
+  kkk ffff       ttttt tttttt
+|     val p = Point(1, 2.0)
+      kkk     fffff n  nnn
+|     val text = "x = ${p.x}, escaped = \n"
+      kkk        ssssssssssssssssssssssssss
+|     val c = 'c'
+      kkk     sss
+|     val n: Long = 0xFFL + 42
+      kkk    tttt   nnnnn   nn
+|     val ok = true && null == null
+      kkk
+|     if (args.isEmpty()) println(text) else return
+      kk                  fffffff       kkkk kkkkkk
+|     for (i in 0 until 3) {
+      kkk    kk n       n
+|         max(i, n.toInt())
+          fff
+|     }
+|     when (p.x) {
+      kkkk
+|         0 -> println("zero")
+          n    fffffff ssssss
+|         else -> throw IllegalStateException("no")
+          kkkk    kkkkk fffffffffffffffffffff ssss
+|     }
+|     try {
+      kkk
+|         listOf(1).map { it * 2 }
+          ffffff n             n
+|     } catch (e: Exception) {
+        kkkkk     ttttttttt
+|     } finally {
+        kkkkkkk
+|     }
+|     while (false) {
+      kkkkk
+|         break
+|     }
+| }

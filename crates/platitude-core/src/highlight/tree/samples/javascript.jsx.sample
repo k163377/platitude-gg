@@ -1,0 +1,41 @@
+// A line comment.
+/* A block comment. */
+/** A doc comment. */
+import React, { useState } from "react";
+
+export default function App({ title }) {
+  const [count, setCount] = useState(0);
+  let text = `count: ${count}`;
+  var re = /ab+c/gi;
+  const n = 42 + 0xff + 1.5e3 + 10n;
+  if (count > 0 && title !== undefined) {
+    console.log(text, re, n, null, true, this);
+  } else {
+    throw new Error("no");
+  }
+  for (const key of Object.keys({ a: 1 })) {
+    continue;
+  }
+  try {
+    JSON.parse("{}");
+  } catch (e) {
+  } finally {
+  }
+  class Box extends Object {
+    static size = 1;
+    #secret = 2;
+    get value() {
+      return this.#secret;
+    }
+  }
+  const Upper = 1;
+  const handle = async (event) => {
+    await event;
+  };
+  return (
+    <div className="app" onClick={() => setCount(count + 1)}>
+      <Box.Item label={title} />
+      {text}
+    </div>
+  );
+}

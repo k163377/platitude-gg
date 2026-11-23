@@ -1,0 +1,70 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| import QtQuick
+  kkkkkk ttttttt
+| import QtQuick.Layouts
+  kkkkkk ttttttt ttttttt
+| import "components" as Parts
+  kkkkkk ssssssssssss kk ttttt
+| 
+| Item {
+  tttt
+|     id: root
+|     objectName: "root"
+                  ssssss
+|     property int count: 0
+      kkkkkkkk ttt        n
+|     readonly property real ratio: 1.5
+      kkkkkkkk kkkkkkkk tttt        nnn
+|     property bool active: true
+      kkkkkkkk tttt         nnnn
+|     property var model: null
+      kkkkkkkk ttt        nnnn
+|     required property string label
+      kkkkkkkk kkkkkkkk tttttt
+|     signal clicked(int x, int y)
+      kkkkkk fffffff ttt    ttt
+| 
+|     Layout.fillWidth: true
+                        nnnn
+|     Keys.onPressed: (event) => event.accepted = true
+                                                  nnnn
+|     Component.onCompleted: console.log("ready", count)
+                                     fff sssssss
+| 
+|     function grow(by: int): int {
+      kkkkkkkk ffff     ttt   ttt
+|         if (by > 0) {
+          kk       n
+|             return count + by;
+              kkkkkk
+|         }
+|         for (let i = 0; i < 3; i++) {
+          kkk  kkk     n      n
+|             count += i;
+|         }
+|         return Math.max(0, count);
+          kkkkkk tttt fff n
+|     }
+| 
+|     Rectangle {
+      ttttttttt
+|         anchors.fill: parent
+|         color: root.active ? "#123456" : "transparent"
+                               sssssssss   sssssssssssss
+|         onWidthChanged: root.grow(1)
+                               ffff n
+|     }
+| 
+|     states: State {
+              ttttt
+|         name: "busy"
+                ssssss
+|     }
+| }

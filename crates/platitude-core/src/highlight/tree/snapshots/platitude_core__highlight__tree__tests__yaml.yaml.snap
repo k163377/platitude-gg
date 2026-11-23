@@ -1,0 +1,47 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| %YAML 1.2
+  aaaaaaaaa
+| ---
+| name: sample
+        ssssss
+| quoted: "double"
+          ssssssss
+| single: 'single'
+          ssssssss
+| count: 42
+         nn
+| ratio: 1.5
+         nnn
+| enabled: true
+           nnnn
+| nothing: null
+           nnnn
+| tilde: ~
+         n
+| list:
+|   - one
+      sss
+|   - two
+      sss
+| map: { a: 1, b: two }
+            n     sss
+| anchor: &base
+|   key: value
+         sssss
+| alias: *base
+| tagged: !custom value
+          ttttttt sssss
+| block: |
+         s
+|   literal text
+  ssssssssssssss
+| folded: >
+          s
+|   folded text
+  sssssssssssss
+| ...

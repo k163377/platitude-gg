@@ -1,0 +1,84 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| #include <vector>
+  kkkkkkkk ssssssss
+| #include "shape.hpp"
+  kkkkkkkk sssssssssss
+| 
+| namespace geo {
+  kkkkkkkkk
+| 
+| template <typename T>
+  kkkkkkkk  kkkkkkkk t
+| class Shape : public Base {
+  kkkkk ttttt   kkkkkk tttt
+| public:
+  kkkkkk
+|     explicit Shape(T side) : side_(side) {}
+      kkkkkkkk fffff t
+|     virtual ~Shape() = default;
+      kkkkkkk            kkkkkkk
+|     [[nodiscard]] virtual double area() const noexcept override;
+                    kkkkkkk tttttt ffff   kkkkk kkkkkkkk kkkkkkkk
+|     static constexpr int kSides = 4;
+      kkkkkk kkkkkkkkk ttt          n
+| 
+| private:
+  kkkkkkk
+|     T side_;
+      t
+| };
+| 
+| enum class Mode { Idle, Busy };
+  kkkk kkkkk tttt
+| 
+| }  // namespace geo
+     cccccccccccccccc
+| 
+| double geo::Shape<int>::area() const noexcept { return side_ * 1.5; }
+  tttttt      ttttt ttt          kkkkk kkkkkkkk   kkkkkk         nnn
+| 
+| auto main() -> int {
+  tttt ffff      ttt
+|     std::vector<int> values{1, 2, 3};
+           tttttt ttt         n  n  n
+|     auto text = R"(raw text)";
+      tttt        sssssssssssss
+|     const char c = 'c';
+      kkkkk tttt     nnn
+|     auto n = 0xFFu + 42ull;
+      tttt     nnnnn   nnnnn
+|     for (auto& v : values) {
+      kkk  tttt
+|         v += 1;
+               n
+|     }
+|     if (values.empty() && nullptr == nullptr) {
+      kk         fffff
+|         throw std::runtime_error("empty");
+          kkkkk      fffffffffffff sssssss
+|     }
+|     auto p = std::make_unique<geo::Shape<int>>(2);
+      tttt          fffffffffff      ttttt ttt   n
+|     auto d = static_cast<double>(n) + reinterpret_cast<long>(p.get());
+      tttt     fffffffffff tttttt       ffffffffffffffff tttt    fff
+|     auto f = [&](int x) mutable { return x * 2; };
+      tttt         ttt    kkkkkkk   kkkkkk     n
+|     std::move(values);
+           ffff
+|     try {
+      kkk
+|         f(1);
+          f n
+|     } catch (const std::exception& e) {
+        kkkkk  kkkkk      ttttttttt
+|     }
+|     return this->value ? true : false;
+      kkkkkk
+| }

@@ -1,0 +1,32 @@
+# A comment.
+<# A block comment. #>
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$Name,
+    [int]$Count = 42
+)
+
+function Get-Greeting {
+    [CmdletBinding()]
+    param([string]$Who = 'world')
+    return "hello, $Who"
+}
+
+$items = @(1, 2, 3)
+$table = @{ Key = 'value'; Other = 1.5 }
+if ($Count -gt 10 -and $true) {
+    Write-Output (Get-Greeting -Who $Name)
+} elseif ($null -eq $Name) {
+    exit 1
+} else {
+    throw "no"
+}
+foreach ($item in $items) { continue }
+try { Get-Item ./file } catch { $_ } finally { }
+switch ($Count) {
+    1 { break }
+    default { }
+}
+$items | Where-Object { $_ -gt 1 } | ForEach-Object { $_ * 0xFF }
+class Point { [int]$X = 0 }
+[Point]::new().X

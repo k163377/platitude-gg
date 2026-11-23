@@ -1,0 +1,71 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| import type { Readable } from "stream";
+  kkkkkk kkkk   tttttttt   kkkk ssssssss
+| 
+| export interface Props {
+  kkkkkk kkkkkkkkk ttttt
+|   readonly name: string;
+    kkkkkkkk       tttttt
+|   size?: number;
+           tttttt
+|   onChange(value: boolean): void;
+                    ttttttt   kkkk
+| }
+| 
+| type Pair<T> = [T, T] | null;
+  kkkk tttt t     t  t    nnnn
+| enum Mode { Idle = 0, Busy }
+  kkkk tttt          n
+| declare const MAX: number;
+  kkkkkkk kkkkk ttt  tttttt
+| 
+| abstract class Shape<T extends object> implements Props {
+  kkkkkkkk kkkkk ttttt t kkkkkkk tttttt  kkkkkkkkkk ttttt
+|   readonly name = "shape";
+    kkkkkkkk        sssssss
+|   private static count: number = 0;
+    kkkkkkk kkkkkk        tttttt   n
+|   constructor(protected Width: number, public Height: number) {
+    fffffffffff kkkkkkkkk        tttttt  kkkkkk         tttttt
+|     super();
+|   }
+|   abstract area(): number;
+    kkkkkkkk         tttttt
+|   @logged
+|   describe(this: Shape<T>, Prefix: string): string {
+    ffffffff       ttttt t           tttttt   tttttt
+|     return `${Prefix}: ${this.name}`;
+      kkkkkk sssttttttssssssssssssssss
+|   }
+| }
+| 
+| function pick<K extends keyof Props>(props: Props, key: K): Props[K] {
+  kkkkkkkk ffff t kkkkkkk kkkkk ttttt         ttttt       t   ttttt t
+|   const value = props[key] as unknown as Props[K];
+    kkkkk                    kk ttttttt kk ttttt t
+|   if (typeof value === "undefined") {
+    kk  kkkkkk           sssssssssss
+|     return undefined!;
+      kkkkkk nnnnnnnnn
+|   }
+|   return value satisfies Props[K];
+    kkkkkk       kkkkkkkkk ttttt t
+| }
+| 
+| namespace Util {
+  kkkkkkkkk tttt
+|   export const PI = 3.14;
+    kkkkkk kkkkk tt   nnnn
+| }
+| 
+| let n: bigint = 10n, b: boolean = true, s: symbol = Symbol("s");
+  kkk    tttttt   nnn     ttttttt   nnnn     tttttt   tttttt sss
+| const Upper = new Map<string, number>();
+  kkkkk ttttt   kkk ttt tttttt  tttttt

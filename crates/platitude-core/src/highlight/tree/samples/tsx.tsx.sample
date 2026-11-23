@@ -1,0 +1,17 @@
+// A line comment.
+import { useState } from "react";
+
+type BadgeProps = { label: string; Count?: number };
+
+export function Badge({ label, Count = 0 }: BadgeProps): JSX.Element {
+  const [open, setOpen] = useState<boolean>(false);
+  const Title = label.toUpperCase();
+  return (
+    <section className="badge" data-open={open}>
+      <h1>{Title}</h1>
+      <Panel.Body onClick={() => setOpen(!open)}>
+        {Count > 0 ? <span>{Count}</span> : null}
+      </Panel.Body>
+    </section>
+  );
+}

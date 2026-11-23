@@ -1,0 +1,24 @@
+# A comment.
+%YAML 1.2
+---
+name: sample
+quoted: "double"
+single: 'single'
+count: 42
+ratio: 1.5
+enabled: true
+nothing: null
+tilde: ~
+list:
+  - one
+  - two
+map: { a: 1, b: two }
+anchor: &base
+  key: value
+alias: *base
+tagged: !custom value
+block: |
+  literal text
+folded: >
+  folded text
+...

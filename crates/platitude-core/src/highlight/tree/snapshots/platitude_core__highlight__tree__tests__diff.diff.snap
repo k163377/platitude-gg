@@ -1,0 +1,18 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| diff --git a/src/main.rs b/src/main.rs
+| index 83db48f..bf269f4 100644
+| --- a/src/main.rs
+  kkkkkkkkkkkkkkkkk
+| +++ b/src/main.rs
+  sssssssssssssssss
+| @@ -1,3 +1,3 @@ fn main() {
+  aaaaaaaaaaaaaaaaaaaaaaaaaaa
+|  fn main() {
+| -    println!("old");
+  kkkkkkkkkkkkkkkkkkkkk
+| +    println!("new");
+  sssssssssssssssssssss
+|  }

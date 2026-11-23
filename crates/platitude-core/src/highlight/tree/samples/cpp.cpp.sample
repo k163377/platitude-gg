@@ -1,0 +1,46 @@
+// A line comment.
+/* A block comment. */
+#include <vector>
+#include "shape.hpp"
+
+namespace geo {
+
+template <typename T>
+class Shape : public Base {
+public:
+    explicit Shape(T side) : side_(side) {}
+    virtual ~Shape() = default;
+    [[nodiscard]] virtual double area() const noexcept override;
+    static constexpr int kSides = 4;
+
+private:
+    T side_;
+};
+
+enum class Mode { Idle, Busy };
+
+}  // namespace geo
+
+double geo::Shape<int>::area() const noexcept { return side_ * 1.5; }
+
+auto main() -> int {
+    std::vector<int> values{1, 2, 3};
+    auto text = R"(raw text)";
+    const char c = 'c';
+    auto n = 0xFFu + 42ull;
+    for (auto& v : values) {
+        v += 1;
+    }
+    if (values.empty() && nullptr == nullptr) {
+        throw std::runtime_error("empty");
+    }
+    auto p = std::make_unique<geo::Shape<int>>(2);
+    auto d = static_cast<double>(n) + reinterpret_cast<long>(p.get());
+    auto f = [&](int x) mutable { return x * 2; };
+    std::move(values);
+    try {
+        f(1);
+    } catch (const std::exception& e) {
+    }
+    return this->value ? true : false;
+}

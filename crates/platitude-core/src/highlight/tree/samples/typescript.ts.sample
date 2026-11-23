@@ -1,0 +1,41 @@
+// A line comment.
+/* A block comment. */
+import type { Readable } from "stream";
+
+export interface Props {
+  readonly name: string;
+  size?: number;
+  onChange(value: boolean): void;
+}
+
+type Pair<T> = [T, T] | null;
+enum Mode { Idle = 0, Busy }
+declare const MAX: number;
+
+abstract class Shape<T extends object> implements Props {
+  readonly name = "shape";
+  private static count: number = 0;
+  constructor(protected Width: number, public Height: number) {
+    super();
+  }
+  abstract area(): number;
+  @logged
+  describe(this: Shape<T>, Prefix: string): string {
+    return `${Prefix}: ${this.name}`;
+  }
+}
+
+function pick<K extends keyof Props>(props: Props, key: K): Props[K] {
+  const value = props[key] as unknown as Props[K];
+  if (typeof value === "undefined") {
+    return undefined!;
+  }
+  return value satisfies Props[K];
+}
+
+namespace Util {
+  export const PI = 3.14;
+}
+
+let n: bigint = 10n, b: boolean = true, s: symbol = Symbol("s");
+const Upper = new Map<string, number>();

@@ -1,0 +1,43 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| /* A comment. */
+  cccccccccccccccc
+| @import url("theme.css");
+  kkkkkkk fff sssssssssss
+| 
+| @media (max-width: 600px) {
+  kkkkkk             nnntt
+|   .card > h1:hover::before {
+            kk aaaaa  aaaaaa
+|     content: "text";
+               ssssss
+|     color: #1e293b;
+             sssssss
+|     margin: 0 auto 1.5em -2px;
+              n      nnntt nntt
+|     transition: opacity 200ms ease-in-out !important;
+                          nnntt             kkkkkkkkkk
+|   }
+| }
+| 
+| :root {
+   aaaa
+|   --accent: rgb(96 165 250 / 50%);
+              fff nn nnn nnn   nnt
+| }
+| 
+| #main, a[href^="https"] {
+         k aaaa  sssssss
+|   width: calc(100% - var(--gap));
+           ffff nnnt   fff
+| }
+| 
+| @keyframes spin {
+  kkkkkkkkkk
+|   from { transform: rotate(0deg); }
+    kkkk              ffffff nttt
+|   to { transform: rotate(360deg); }
+    kk              ffffff nnnttt
+| }

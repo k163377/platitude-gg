@@ -1,0 +1,108 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| /** A Javadoc comment. */
+  ccccccccccccccccccccccccc
+| package demo.sample;
+  kkkkkkk
+| 
+| import java.util.List;
+  kkkkkk
+| import static java.lang.Math.max;
+  kkkkkk kkkkkk
+| 
+| @FunctionalInterface
+   aaaaaaaaaaaaaaaaaaa
+| interface Shape {
+  kkkkkkkkk ttttt
+|     double area();
+      tttttt ffff
+| }
+| 
+| public final class Point<T extends Comparable<T>> implements Shape {
+  kkkkkk kkkkk kkkkk ttttt t kkkkkkk tttttttttt t   kkkkkkkkkk ttttt
+|     public static final int ORIGIN = 0;
+      kkkkkk kkkkkk kkkkk ttt          n
+|     private final double x;
+      kkkkkkk kkkkk tttttt
+|     private volatile long count = 0xFFL;
+      kkkkkkk kkkkkkkk tttt         nnnnn
+| 
+|     public Point(double x) {
+      kkkkkk ttttt tttttt
+|         this.x = x;
+|     }
+| 
+|     @Override
+       aaaaaaaa
+|     public double area() {
+      kkkkkk tttttt ffff
+|         return x * 1.5e3;
+          kkkkkk     nnnnn
+|     }
+| 
+|     enum Mode { IDLE, BUSY }
+      kkkk tttt
+| 
+|     public static void main(String[] args) throws Exception {
+      kkkkkk kkkkkk tttt ffff tttttt         kkkkkk ttttttttt
+|         var list = List.of("a", "b");
+          ttt        tttt ff sss  sss
+|         char c = 'c';
+          tttt     sss
+|         boolean ok = true && args != null;
+          ttttttt      nnnn            nnnn
+|         if (ok) {
+          kk
+|             System.out.println("text: " + c + max(1, 2));
+              tttttt     fffffff ssssssss       fff n  n
+|         } else {
+            kkkk
+|             throw new IllegalStateException("no");
+              kkkkk kkk ttttttttttttttttttttt ssss
+|         }
+|         for (String s : list) {
+          kkk  tttttt
+|             continue;
+              kkkkkkkk
+|         }
+|         try {
+          kkk
+|             Thread.sleep(1);
+              tttttt fffff n
+|         } catch (InterruptedException e) {
+            kkkkk  tttttttttttttttttttt
+|         } finally {
+            kkkkkkk
+|         }
+|         switch (args.length) {
+          kkkkkk
+|             case 0 -> System.exit(0);
+              kkkk n    tttttt ffff n
+|             default -> { }
+              kkkkkkk
+|         }
+|         String block = """
+          tttttt         sss
+|             text block
+  ssssssssssssssssssssss
+|             """;
+  sssssssssssssss
+|         Object o = (Object) list;
+          tttttt      tttttt
+|         if (o instanceof List<?> l) {
+          kk    kkkkkkkkkk tttt
+|             l.size();
+                ffff
+|         }
+|         Runnable r = () -> {};
+          tttttttt
+|         new Point<String>(1.0).area();
+          kkk ttttt tttttt  nnn  ffff
+|     }
+| }

@@ -1,0 +1,24 @@
+/* A comment. */
+@import url("theme.css");
+
+@media (max-width: 600px) {
+  .card > h1:hover::before {
+    content: "text";
+    color: #1e293b;
+    margin: 0 auto 1.5em -2px;
+    transition: opacity 200ms ease-in-out !important;
+  }
+}
+
+:root {
+  --accent: rgb(96 165 250 / 50%);
+}
+
+#main, a[href^="https"] {
+  width: calc(100% - var(--gap));
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -1,0 +1,66 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| -- A line comment.
+  cccccccccccccccccc
+| {- A block comment. -}
+  cccccccccccccccccccccc
+| {-# LANGUAGE OverloadedStrings #-}
+  kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
+| module Shapes (Shape (..), greet, area) where
+  kkkkkk         ttttt       ttttt  tttt  kkkkk
+| 
+| import qualified Data.Map as Map
+  kkkkkk kkkkkkkkk          kk
+| import Data.List (sortOn)
+  kkkkkk            tttttt
+| 
+| data Shape a = Circle Double | Square a
+  kkkk ttttt t   tttttt tttttt   tttttt t
+|   deriving (Show, Eq)
+    kkkkkkkk  tttt  tt
+| 
+| class Sized t where
+  kkkkk ttttt t kkkkk
+|   size :: t -> Int
+    tttt    t    ttt
+| 
+| instance Sized (Shape a) where
+  kkkkkkkk ttttt  ttttt t  kkkkk
+|   size _ = 1
+    tttt     n
+| 
+| newtype Name = Name String
+  kkkkkkk tttt   tttt tttttt
+| 
+| greet :: Name -> String
+  tttttffffttttfffftttttt
+| greet (Name name) = "hello, " ++ name ++ ['!']
+  ttttt  tttt tttt    sssssssss    tttt     sss
+| 
+| area :: Shape Double -> Double
+  ttttfffftttttfttttttfffftttttt
+| area shape = case shape of
+  tttt ttttt   kkkk ttttt kk
+|   Circle r -> pi * r * r
+    tttttt t    tt   t   t
+|   Square s -> s * 1.5e3
+    tttttt t    t   nnnnn
+| 
+| main :: IO ()
+  tttt    tt ss
+| main = do
+  tttt   kk
+|   let total = sum [1, 2, 0xFF] :: Int
+    kkk ttttt   ttt  n  n  nnnn     ttt
+|       ok = True && total > 0
+        tt   nnnn    ttttt   n
+|   if ok then putStrLn (greet (Name "x")) else return ()
+    kk tt kkkk tttttttt  ttttt  tttt sss   kkkk tttttt ss
+|   mapM_ print (sortOn negate [total])
+    ttttt ttttt  tttttt tttttt  ttttt
+|   where
+    kkkkk
+|     helper x = x `div` 2
+      tttttt t   t  ttt  n

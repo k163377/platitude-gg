@@ -1,0 +1,95 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| import Foundation
+  kkkkkk
+| 
+| @MainActor
+  aaaaaaaaaa
+| protocol Shape {
+  kkkkkkkk ttttt
+|     var area: Double { get }
+      kkk       tttttt   kkk
+| }
+| 
+| struct Point: Shape, Equatable {
+  kkkkkk ttttt  ttttt  ttttttttt
+|     static let origin = Point(x: 0, y: 0)
+      kkkkkk kkk          fffff    n     n
+|     var x: Double
+      kkk    tttttt
+|     var y: Double = 1.5e3
+      kkk    tttttt   nnnnn
+|     var area: Double { x * y }
+      kkk       tttttt
+| 
+|     mutating func shift(by delta: Double) -> Point {
+      kkkkkkkk kkkk fffff           tttttt     ttttt
+|         x += delta
+|         return self
+          kkkkkk
+|     }
+| }
+| 
+| enum Mode: Int {
+  kkkk tttt  ttt
+|     case idle = 0, busy
+      kkkk        n
+| }
+| 
+| class Box<T>: NSObject where T: Equatable {
+  kkkkk ttt     tttttttt kkkkk    ttttttttt
+|     private(set) var items: [T] = []
+      kkkkkkkkkkkk kkk         t
+|     override init() { super.init() }
+      kkkkkkkk tttt           ffff
+| }
+| 
+| func main() async throws {
+  kkkk ffff   kkkkk kkkkkk
+|     let text = "count: \(42)"
+      kkk        ssssssss  nn s
+|     let n = 0xFF + 1_000
+      kkk     nnnn   nnnnn
+|     let ok = true && nil == Optional<Int>.none
+      kkk      nnnn    nnn
+|     if ok { print(text, n) } else { return }
+      kk      fffff            kkkk   kkkkkk
+|     for i in 0..<3 where i > 0 {
+      kkk   kk n   n kkkkk     n
+|         continue
+          kkkkkkkk
+|     }
+|     guard let first = [1, 2].first else { throw URLError(.badURL) }
+      kkkkk kkk          n  n        kkkk   kkkkk ffffffff
+|     switch first {
+      kkkkkk
+|     case 1: break
+      kkkk n  kkkkk
+|     case _ where first > 2: break
+      kkkk   kkkkk         n  kkkkk
+|     default: break
+      kkkkkkk  kkkkk
+|     }
+|     for _ in 0..<2 {
+      kkk   kk n   n
+|         continue
+          kkkkkkkk
+|     }
+|     do {
+      kk
+|         try await Task.sleep(nanoseconds: 1)
+          kkk kkkkk tttt fffff              n
+|     } catch {
+        kkkkk
+|     }
+|     let closure = { (value: Int) -> Int in value * 2 }
+      kkk                     ttt     ttt kk         n
+|     _ = closure(first)
+          fffffff
+| }

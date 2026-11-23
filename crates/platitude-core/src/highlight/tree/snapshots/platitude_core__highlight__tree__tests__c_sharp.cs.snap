@@ -1,0 +1,112 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| // A line comment.
+  cccccccccccccccccc
+| /* A block comment. */
+  cccccccccccccccccccccc
+| /// <summary>A doc comment.</summary>
+  ccccccccccccccccccccccccccccccccccccc
+| using System;
+  kkkkk
+| using System.Collections.Generic;
+  kkkkk
+| 
+| namespace Demo.Sample;
+  kkkkkkkkk
+| 
+| [Serializable]
+   aaaaaaaaaaaa
+| public sealed class Point<T> : IComparable<T> where T : struct
+  kkkkkk kkkkkk kkkkk ttttt      ttttttttttt t  kkkkk     kkkkkk
+| {
+|     public const int Origin = 0;
+      kkkkkk kkkkk ttt          n
+|     private readonly double _x;
+      kkkkkkk kkkkkkkk tttttt
+|     public int Count { get; private set; } = 42;
+      kkkkkk ttt         kkk  kkkkkkk kkk      nn
+| 
+|     public Point(double x) => _x = x;
+      kkkkkk ttttt tttttt
+| 
+|     public int CompareTo(T other) => 0;
+      kkkkkk ttt fffffffff t           n
+| 
+|     public async Task<string> DescribeAsync(int? limit = null)
+      kkkkkk kkkkk tttt tttttt  fffffffffffff ttt          nnnn
+|     {
+|         var text = $"x = {_x}, limit = {limit}";
+          kkk        ssssssssssssssssssssssssssss
+|         var raw = @"C:\path";
+          kkk       ssssssssss
+|         char c = 'c';
+          tttt     sss
+|         bool ok = true && limit is not null;
+          tttt      nnnn          kk     nnnn
+|         if (ok)
+          kk
+|         {
+|             Console.WriteLine(text + raw + c);
+                      fffffffff
+|         }
+|         else
+          kkkk
+|         {
+|             throw new InvalidOperationException("no");
+              kkkkk kkk ttttttttttttttttttttttttt ssss
+|         }
+|         foreach (var item in new List<int> { 1, 2 })
+          kkkkkkk  kkk      kk kkk tttt ttt    n  n
+|         {
+|             continue;
+              kkkkkkkk
+|         }
+|         try
+          kkk
+|         {
+|             await Task.Delay(1);
+              kkkkk      fffff n
+|         }
+|         catch (Exception e) when (e is TimeoutException)
+          kkkkk  ttttttttt    kkkk    kk
+|         {
+|         }
+|         finally
+          kkkkkkk
+|         {
+|         }
+|         switch (Count)
+          kkkkkk
+|         {
+|             case 0:
+              kkkk n
+|                 break;
+                  kkkkk
+|             default:
+              kkkkkkk
+|                 return nameof(Count);
+                  kkkkkk
+|         }
+|         return 0xFF.ToString() + 1.5e3;
+          kkkkkk nnnn ffffffff     nnnnn
+|     }
+| }
+| 
+| public enum Mode { Idle, Busy }
+  kkkkkk kkkk tttt
+| 
+| public record Person(string Name, int Age);
+  kkkkkk kkkkkk tttttt tttttt       ttt
+| 
+| public static class Extensions
+  kkkkkk kkkkkk kkkkk tttttttttt
+| {
+|     extension(string s)
+      kkkkkkkkk tttttt
+|     {
+|         public int Twice => s.Length * 2;
+          kkkkkk ttt                     n
+|     }
+| }

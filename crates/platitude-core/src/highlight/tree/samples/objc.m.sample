@@ -1,0 +1,62 @@
+// A line comment.
+/* A block comment. */
+#import <Foundation/Foundation.h>
+#include <stdio.h>
+#define LIMIT 10
+#undef OLD_LIMIT
+
+@protocol Shape <NSObject>
+@required
+- (double)area;
+@optional
+- (double)perimeter;
+@end
+
+@interface Point : NSObject <Shape> {
+@public
+    int count;
+}
+@property (nonatomic, assign) double x;
++ (instancetype)origin;
+@end
+
+@implementation Point
+
++ (instancetype)origin {
+    return [[Point alloc] init];
+}
+
+- (double)area {
+    static volatile int calls = 0;
+    calls++;
+    return self.x * 1.5e3;
+}
+
+@end
+
+int main(int argc, const char *argv[]) {
+    @autoreleasepool {
+        NSString *text = @"text";
+        NSArray *items = @[@1, @2];
+        char c = 'c';
+        BOOL ok = YES && argv != NULL;
+        if (ok) {
+            NSLog(@"%@ %c %lu", text, c, (unsigned long)items.count);
+        } else {
+            return -1;
+        }
+        @try {
+            [[Point origin] area];
+        } @catch (NSException *e) {
+        } @finally {
+        }
+        for (int i = 0; i < LIMIT; i++) {
+            continue;
+        }
+        void (^block)(int) = ^(int n) { printf("%d\n", n); };
+        block(0xFF);
+        id obj = nil;
+        SEL sel = @selector(area);
+    }
+    return 0;
+}

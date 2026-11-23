@@ -1,0 +1,22 @@
+# A comment.
+title = "Sample"
+literal = 'single'
+multi = """
+two lines
+"""
+count = 42
+ratio = 1.5e3
+hex = 0xFF
+enabled = true
+when = 1979-05-27T07:32:00Z
+list = [1, 2, 3]
+inline = { a = 1, b = "two" }
+
+[package]
+name = "demo"
+
+[[bin]]
+name = "tool"
+
+[dependencies.serde]
+version = "1"

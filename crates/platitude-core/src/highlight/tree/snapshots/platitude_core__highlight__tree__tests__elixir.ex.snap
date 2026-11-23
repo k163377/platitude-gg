@@ -1,0 +1,69 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # A comment.
+  cccccccccccc
+| defmodule Demo.Point do
+  kkkkkkkkk            kk
+|   @moduledoc """
+    cccccccccc ccc
+|   A module doc.
+  ccccccccccccccc
+|   """
+  ccccc
+|   use GenServer
+    kkk
+|   alias Demo.Shape, as: S
+    kkkkk             ssss
+|   import Enum, only: [map: 2]
+    kkkkkk       ssssss sssssn
+| 
+|   @max 42
+    aaaa nn
+|   defstruct x: 0, y: 1.5e3
+    kkkkkkkkk sssn  sssnnnnn
+| 
+|   @doc "Builds a point."
+    cccc ccccccccccccccccc
+|   @spec new(integer()) :: %__MODULE__{}
+    aaaaa fff fffffff        nnnnnnnnnn
+|   def new(x) when is_integer(x), do: %__MODULE__{x: x}
+    kkk fff    kkkk ffffffffff     ssss nnnnnnnnnn sss
+| 
+|   defp describe(%{x: x} = point) do
+    kkkk ffffffff   sss            kk
+|     text = "x = #{x}"
+             ssssssssss
+|     atom = :ok
+             sss
+|     sigil = ~r/ab+c/i
+              sssssssss
+|     n = 0xFF + 1_000
+          nnnn   nnnnn
+|     if x > 0 and true do
+      kk     n kkk      kk
+|       IO.puts(text)
+           ffff
+|     else
+      kkkk
+|       raise ArgumentError, message: "no"
+        kkkkk                sssssssssssss
+|     end
+      kkk
+|     case point do
+      kkkk       kk
+|       {:ok, value} -> value
+         sss
+|       _ -> nil
+        c
+|     end
+      kkk
+|     map([1, 2], fn n -> n * 2 end) |> length()
+      fff  n  n   kk          n kkk     ffffff
+|     {atom, sigil, n, 'charlist', ?c}
+                       ssssssssss
+|   end
+    kkk
+| end
+  kkk

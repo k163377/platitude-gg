@@ -408,6 +408,26 @@ mod tests {
         }
     }
 
+    /// Every language a path reaches answers for its colours in `tree`'s
+    /// role snapshots, through a sample named for the entry
+    /// (`<name>.<extension>.sample`).
+    #[test]
+    fn every_claimed_language_has_a_role_sample() {
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/highlight/tree/samples");
+        for entry in ENTRIES.iter().filter(|e| !e.matches.is_empty()) {
+            assert!(
+                entry
+                    .matches
+                    .iter()
+                    .any(|m| dir.join(format!("{}.{m}.sample", entry.name)).is_file()),
+                "grammar {} has no sample under {}",
+                entry.name,
+                dir.display()
+            );
+        }
+    }
+
     /// The colour the grammar called `name` paints `needle`'s first
     /// occurrence in `text` — one colour across all of it.
     fn colour_of(name: &str, text: &str, needle: &str) -> Rgb {

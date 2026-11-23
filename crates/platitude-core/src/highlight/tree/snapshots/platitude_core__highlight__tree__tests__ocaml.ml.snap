@@ -1,0 +1,59 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| (* A comment. *)
+  cccccccccccccccc
+| (** A doc comment. *)
+  ccccccccccccccccccccc
+| open Printf
+  kkkk
+| 
+| module Point = struct
+  kkkkkk         kkkkkk
+|   type t = { x : int; mutable y : float }
+    kkkk t         ttt  kkkkkkk     ttttt
+| 
+|   let origin = { x = 0; y = 1.5e3 }
+    kkk                n      nnnnn
+| 
+|   let shift ?(by = 1) p = { p with x = p.x + by }
+    kkk fffff        n          kkkk
+| end
+  kkk
+| 
+| type shape =
+  kkkk ttttt
+|   | Circle of float
+      tttttt kk ttttt
+|   | Square of int
+      tttttt kk ttt
+| 
+| exception Failed of string
+  kkkkkkkkk tttttt kk tttttt
+| 
+| let rec area = function
+  kkk kkk ffff   kkkkkkkk
+|   | Circle r -> 3.14 *. r *. r
+      tttttt      nnnn
+|   | Square s -> float_of_int (s * 0xFF)
+      tttttt      ffffffffffff      nnnn
+| 
+| let () =
+  kkk
+|   let text = "text\n" and c = 'c' in
+    kkk        ssssssss kkk     sss kk
+|   let ok = true && not false in
+    kkk              fff       kk
+|   if ok then printf "%s %c\n" text c else raise (Failed "no");
+    kk    kkkk ffffff sssssssss        kkkk fffff  tttttt ssss
+|   for i = 0 to 3 do ignore i done;
+    kkk     n kk n kk ffffff   kkkk
+|   while false do () done;
+    kkkkk       kk    kkkk
+|   match Point.shift Point.origin with
+    kkkkk       fffff              kkkk
+|   | { x; _ } when x > 0 -> ()
+               kkkk     n
+|   | _ -> ( try failwith "x" with Failure _ -> () )
+             kkk ffffffff sss kkkk ttttttt

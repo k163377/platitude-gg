@@ -1,0 +1,11 @@
+{
+  "string": "value",
+  "escaped": "a\nb",
+  "number": 42,
+  "float": -1.5e3,
+  "true": true,
+  "false": false,
+  "null": null,
+  "array": [1, "two", {"three": 3}],
+  "object": {"nested": {}}
+}

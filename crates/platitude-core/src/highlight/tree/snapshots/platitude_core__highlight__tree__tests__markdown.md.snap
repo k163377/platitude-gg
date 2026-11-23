@@ -1,0 +1,40 @@
+---
+source: crates/platitude-core/src/highlight/tree/tests.rs
+description: "Each sample line (`|`) over the role of each of its characters: c comment, k keyword, t type, f function, s string, n constant, a annotation, blank plain."
+---
+| # Heading one
+    kkkkkkkkkkk
+| 
+| ## Heading two
+     kkkkkkkkkkk
+| 
+| A paragraph with `inline code`, **strong**, *emphasis* and a [link](https://example.com).
+| 
+| - A list item
+| - Another item with an ![image](pic.png)
+| 
+| 1. Numbered
+| 
+| > A quote.
+| 
+| ```rust
+  sssssss
+| fn main() { let s = "hi"; }
+  kksssssssssssssssssssssssss
+| ```
+  sss
+| 
+|     indented code
+  sssssssssssssssss
+| 
+| ---
+| 
+| | Table | Head |
+| | ----- | ---- |
+| | cell  | cell |
+| 
+| <div>html block</div>
+   kkkkkkkk aaaaaaaaaa
+| 
+| [ref]: https://example.com "Title"
+  kkkkk  kkkkkkkkkkkkkkkkkkk sssssss

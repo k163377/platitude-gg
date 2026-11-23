@@ -1,0 +1,34 @@
+# A comment.
+defmodule Demo.Point do
+  @moduledoc """
+  A module doc.
+  """
+  use GenServer
+  alias Demo.Shape, as: S
+  import Enum, only: [map: 2]
+
+  @max 42
+  defstruct x: 0, y: 1.5e3
+
+  @doc "Builds a point."
+  @spec new(integer()) :: %__MODULE__{}
+  def new(x) when is_integer(x), do: %__MODULE__{x: x}
+
+  defp describe(%{x: x} = point) do
+    text = "x = #{x}"
+    atom = :ok
+    sigil = ~r/ab+c/i
+    n = 0xFF + 1_000
+    if x > 0 and true do
+      IO.puts(text)
+    else
+      raise ArgumentError, message: "no"
+    end
+    case point do
+      {:ok, value} -> value
+      _ -> nil
+    end
+    map([1, 2], fn n -> n * 2 end) |> length()
+    {atom, sigil, n, 'charlist', ?c}
+  end
+end
