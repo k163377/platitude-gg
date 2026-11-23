@@ -8,7 +8,9 @@ use tree_sitter::Language;
 use tree_sitter_highlight::HighlightConfiguration;
 
 use super::Rgb;
-use super::theme::{ANNOTATION, COMMENT, CONSTANT, FUNCTION, KEYWORD, PLAIN_RGB, STRING, TYPE};
+use super::theme::{
+    self, ANNOTATION, COMMENT, CONSTANT, FUNCTION, KEYWORD, PLAIN_RGB, STRING, TYPE,
+};
 
 /// The colour a run gets when no capture below claims it — the same
 /// `textPrimary` the regex lexer falls back to.
@@ -19,31 +21,120 @@ pub(super) const PLAIN: Rgb = PLAIN_RGB;
 /// with `theme::PALETTE`).
 ///
 /// Unlisted captures (operators, punctuation, variables) come out
-/// [`PLAIN`]. tree-sitter resolves a capture to the longest listed
-/// dot-prefix, so `keyword` covers `keyword.control` and the narrow
-/// `constant.builtin` stands without the broad `constant`.
-const CAPTURES: [(&str, u32); 20] = [
+/// [`PLAIN`]. tree-sitter resolves a capture to the listed name with the
+/// most dot-separated parts that all appear among the capture's own, in
+/// any position; a tie goes to the earlier row. So `keyword` covers
+/// `keyword.control`, the narrow `constant.builtin` stands without the
+/// broad `constant`, and `tag.attribute` takes `attribute`'s colour.
+///
+/// The rows speak the current generation of the editors' capture
+/// vocabulary, and only the names a shipped query uses. A crate still
+/// shipping the older one has its query renamed on the way in
+/// ([`current_names`]), so no row stands for an older name. A row in
+/// `theme::PLAIN` keeps a narrower name off a broader row's colour: swift's
+/// wildcard `_` (`character.special`) is not a character literal.
+const CAPTURES: [(&str, u32); 16] = [
     ("comment", COMMENT),
     ("keyword", KEYWORD),
-    ("storage", KEYWORD),
     ("type", TYPE),
     ("constructor", TYPE),
     ("function", FUNCTION),
-    ("method", FUNCTION),
     ("string", STRING),
+    ("character", STRING),
+    ("character.special", theme::PLAIN),
     ("number", CONSTANT),
-    ("float", CONSTANT),
     ("boolean", CONSTANT),
     ("constant.builtin", CONSTANT),
-    ("constant.numeric", CONSTANT),
     ("attribute", ANNOTATION),
-    ("decorator", ANNOTATION),
     ("tag", KEYWORD),
-    ("text.title", KEYWORD),
-    ("text.literal", STRING),
-    ("text.uri", KEYWORD),
-    ("text.reference", TYPE),
+    ("markup.heading", KEYWORD),
+    ("markup.raw", STRING),
+    ("markup.link", KEYWORD),
 ];
+
+/// The older capture names some crates still ship, each with the name
+/// nvim-treesitter renamed it to (nvim-treesitter#5831); a name that
+/// starts with one (`method.call`) keeps its tail. `storageclass` and
+/// `type.qualifier` go where the current crates put `static` and
+/// `final`: `keyword.modifier`.
+const RENAMED: [(&str, &str); 18] = [
+    ("conditional", "keyword.conditional"),
+    ("repeat", "keyword.repeat"),
+    ("include", "keyword.import"),
+    ("exception", "keyword.exception"),
+    ("storageclass", "keyword.modifier"),
+    ("type.qualifier", "keyword.modifier"),
+    ("preproc", "keyword.directive"),
+    ("method", "function.method"),
+    ("field", "variable.member"),
+    ("parameter", "variable.parameter"),
+    ("float", "number.float"),
+    ("namespace", "module"),
+    ("text.title", "markup.heading"),
+    ("text.literal", "markup.raw"),
+    ("text.uri", "markup.link.url"),
+    ("text.reference", "markup.link"),
+    ("text.emphasis", "markup.italic"),
+    ("text.strong", "markup.strong"),
+];
+
+/// `query` with every capture in the older vocabulary ([`RENAMED`])
+/// written in the current one, the predicates' references to it with it.
+/// Strings (objc's `"@try"`) and comments are copied as they stand. A
+/// crate that moves to the current names leaves this nothing to do.
+fn current_names(query: &str) -> String {
+    let mut out = String::with_capacity(query.len());
+    let mut chars = query.char_indices().peekable();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            '"' => {
+                out.push(c);
+                while let Some((_, s)) = chars.next() {
+                    out.push(s);
+                    match s {
+                        '\\' => {
+                            if let Some((_, e)) = chars.next() {
+                                out.push(e);
+                            }
+                        }
+                        '"' => break,
+                        _ => {}
+                    }
+                }
+            }
+            ';' => {
+                out.push(c);
+                while let Some(&(_, s)) = chars.peek() {
+                    if s == '\n' {
+                        break;
+                    }
+                    out.push(s);
+                    chars.next();
+                }
+            }
+            '@' => {
+                let start = at + 1;
+                let mut end = start;
+                while let Some(&(i, s)) = chars.peek() {
+                    if !(s.is_ascii_alphanumeric() || s == '_' || s == '.') {
+                        break;
+                    }
+                    end = i + s.len_utf8();
+                    chars.next();
+                }
+                let name = &query[start..end];
+                let renamed = RENAMED.iter().find_map(|(old, new)| {
+                    let tail = name.strip_prefix(old)?;
+                    (tail.is_empty() || tail.starts_with('.')).then(|| format!("{new}{tail}"))
+                });
+                out.push('@');
+                out.push_str(renamed.as_deref().unwrap_or(name));
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
 
 /// The colour behind one highlight index — the same order
 /// [`HighlightConfiguration::configure`] was given.
@@ -76,8 +167,10 @@ fn configured(
     highlights: &str,
     injections: &str,
 ) -> Option<HighlightConfiguration> {
+    // `CAPTURES` speaks one vocabulary.
+    let highlights = current_names(highlights);
     let mut config =
-        HighlightConfiguration::new(language, name, highlights, injections, "").ok()?;
+        HighlightConfiguration::new(language, name, &highlights, injections, "").ok()?;
     // tree-sitter-highlight evaluates the text predicates (`#eq?`,
     // `#match?`, `#any-of?`) and the property ones, and ignores the rest
     // — editors' own, `#lua-match?` and `#has-ancestor?` — so a pattern
@@ -99,14 +192,19 @@ fn configured(
 
 /// Several highlight queries as one, for crates that ship theirs as a
 /// delta over another language's (qmljs over JavaScript's, objc over
-/// C's) and colour almost nothing alone. The specific language goes
-/// first: where two patterns claim one node, tree-sitter keeps the
-/// earlier.
+/// C's) and colour almost nothing alone. The base language goes first,
+/// as tree-sitter-cpp's and tree-sitter-qmljs's own manifests list
+/// theirs: where two patterns claim one node, tree-sitter-highlight
+/// paints the later, so a base's catch-all (`(identifier) @variable`)
+/// put last would take back every node the specific language names.
 ///
 /// Five ship so: qmljs, typescript, tsx, cpp and objc. Only objc says so
 /// (`; inherits:`), so a search of the queries does not find the rest;
 /// what tells is a sample painting something besides `PLAIN` — a language
 /// added takes a `SAMPLES` line (`every_grammar_colours_a_sample_of_its_language`).
+/// javascript layers its own JSX delta too, which no such sample misses
+/// (the base alone paints): there the tell is the crate's second
+/// highlight constant (`JSX_HIGHLIGHT_QUERY`).
 fn layered(queries: &[&str]) -> String {
     queries.join("\n")
 }
@@ -125,20 +223,20 @@ macro_rules! entry {
 #[rustfmt::skip]
 static ENTRIES: [Entry; 37] = [
     entry!(&["rs"], "rust", || configured(tree_sitter_rust::LANGUAGE.into(), "rust", tree_sitter_rust::HIGHLIGHTS_QUERY, tree_sitter_rust::INJECTIONS_QUERY)),
-    entry!(&["qml"], "qml", || configured(tree_sitter_qmljs::LANGUAGE.into(), "qml", &layered(&[tree_sitter_qmljs::HIGHLIGHTS_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY, tree_sitter_javascript::HIGHLIGHT_QUERY]), "")),
+    entry!(&["qml"], "qml", || configured(tree_sitter_qmljs::LANGUAGE.into(), "qml", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY, tree_sitter_qmljs::HIGHLIGHTS_QUERY]), "")),
     entry!(&["kt", "kts"], "kotlin", || configured(tree_sitter_kotlin_ng::LANGUAGE.into(), "kotlin", include_str!("queries/kotlin-highlights.scm"), "")),
     entry!(&["md", "markdown"], "markdown", || configured(tree_sitter_md::LANGUAGE.into(), "markdown", tree_sitter_md::HIGHLIGHT_QUERY_BLOCK, tree_sitter_md::INJECTION_QUERY_BLOCK)),
     entry!(&[], "markdown_inline", || configured(tree_sitter_md::INLINE_LANGUAGE.into(), "markdown_inline", tree_sitter_md::HIGHLIGHT_QUERY_INLINE, tree_sitter_md::INJECTION_QUERY_INLINE)),
     entry!(&["toml"], "toml", || configured(tree_sitter_toml_ng::LANGUAGE.into(), "toml", tree_sitter_toml_ng::HIGHLIGHTS_QUERY, "")),
     entry!(&["yaml", "yml"], "yaml", || configured(tree_sitter_yaml::LANGUAGE.into(), "yaml", tree_sitter_yaml::HIGHLIGHTS_QUERY, "")),
     entry!(&["json", "jsonc"], "json", || configured(tree_sitter_json::LANGUAGE.into(), "json", tree_sitter_json::HIGHLIGHTS_QUERY, "")),
-    entry!(&["js", "mjs", "cjs", "jsx"], "javascript", || configured(tree_sitter_javascript::LANGUAGE.into(), "javascript", tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::INJECTIONS_QUERY)),
-    entry!(&["ts", "mts", "cts"], "typescript", || configured(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(), "typescript", &layered(&[tree_sitter_typescript::HIGHLIGHTS_QUERY, tree_sitter_javascript::HIGHLIGHT_QUERY]), "")),
-    entry!(&["tsx"], "tsx", || configured(tree_sitter_typescript::LANGUAGE_TSX.into(), "tsx", &layered(&[tree_sitter_typescript::HIGHLIGHTS_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY, tree_sitter_javascript::HIGHLIGHT_QUERY]), "")),
+    entry!(&["js", "mjs", "cjs", "jsx"], "javascript", || configured(tree_sitter_javascript::LANGUAGE.into(), "javascript", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY]), tree_sitter_javascript::INJECTIONS_QUERY)),
+    entry!(&["ts", "mts", "cts"], "typescript", || configured(tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(), "typescript", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY]), "")),
+    entry!(&["tsx"], "tsx", || configured(tree_sitter_typescript::LANGUAGE_TSX.into(), "tsx", &layered(&[tree_sitter_javascript::HIGHLIGHT_QUERY, tree_sitter_javascript::JSX_HIGHLIGHT_QUERY, tree_sitter_typescript::HIGHLIGHTS_QUERY]), "")),
     entry!(&["py", "pyi"], "python", || configured(tree_sitter_python::LANGUAGE.into(), "python", tree_sitter_python::HIGHLIGHTS_QUERY, "")),
     entry!(&["java"], "java", || configured(tree_sitter_java::LANGUAGE.into(), "java", tree_sitter_java::HIGHLIGHTS_QUERY, "")),
     entry!(&["c", "h"], "c", || configured(tree_sitter_c::LANGUAGE.into(), "c", tree_sitter_c::HIGHLIGHT_QUERY, "")),
-    entry!(&["cpp", "cc", "cxx", "hpp", "hh", "hxx"], "cpp", || configured(tree_sitter_cpp::LANGUAGE.into(), "cpp", &layered(&[tree_sitter_cpp::HIGHLIGHT_QUERY, tree_sitter_c::HIGHLIGHT_QUERY]), "")),
+    entry!(&["cpp", "cc", "cxx", "hpp", "hh", "hxx"], "cpp", || configured(tree_sitter_cpp::LANGUAGE.into(), "cpp", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_cpp::HIGHLIGHT_QUERY]), "")),
     entry!(&["cs"], "c_sharp", || configured(tree_sitter_c_sharp::LANGUAGE.into(), "c_sharp", tree_sitter_c_sharp::HIGHLIGHTS_QUERY, "")),
     entry!(&["go"], "go", || configured(tree_sitter_go::LANGUAGE.into(), "go", tree_sitter_go::HIGHLIGHTS_QUERY, "")),
     entry!(&["rb"], "ruby", || configured(tree_sitter_ruby::LANGUAGE.into(), "ruby", tree_sitter_ruby::HIGHLIGHTS_QUERY, "")),
@@ -155,7 +253,7 @@ static ENTRIES: [Entry; 37] = [
     // `.mli` stays with the fallback lexer: the crate's one highlight
     // query names nodes the interface grammar does not have.
     entry!(&["ml"], "ocaml", || configured(tree_sitter_ocaml::LANGUAGE_OCAML.into(), "ocaml", tree_sitter_ocaml::HIGHLIGHTS_QUERY, "")),
-    entry!(&["m", "mm"], "objc", || configured(tree_sitter_objc::LANGUAGE.into(), "objc", &layered(&[tree_sitter_objc::HIGHLIGHTS_QUERY, tree_sitter_c::HIGHLIGHT_QUERY]), tree_sitter_objc::INJECTIONS_QUERY)),
+    entry!(&["m", "mm"], "objc", || configured(tree_sitter_objc::LANGUAGE.into(), "objc", &layered(&[tree_sitter_c::HIGHLIGHT_QUERY, tree_sitter_objc::HIGHLIGHTS_QUERY]), tree_sitter_objc::INJECTIONS_QUERY)),
     entry!(&["nix"], "nix", || configured(tree_sitter_nix::LANGUAGE.into(), "nix", tree_sitter_nix::HIGHLIGHTS_QUERY, tree_sitter_nix::INJECTIONS_QUERY)),
     entry!(&["sql"], "sql", || configured(tree_sitter_sequel::LANGUAGE.into(), "sql", tree_sitter_sequel::HIGHLIGHTS_QUERY, "")),
     entry!(&["diff", "patch"], "diff", || configured(tree_sitter_diff::LANGUAGE.into(), "diff", tree_sitter_diff::HIGHLIGHTS_QUERY, "")),
@@ -290,12 +388,13 @@ mod tests {
                     injection(name)
                 })
                 .expect("a grammar reads its own language");
-            // `configure` was given the palette's names and no others, so
-            // any highlight at all is one of its colours.
+            // A row may paint plain (`character.special`): only another
+            // colour tells that the query paints.
             assert!(
-                events
-                    .flatten()
-                    .any(|event| matches!(event, HighlightEvent::HighlightStart(_))),
+                events.flatten().any(|event| matches!(
+                    event,
+                    HighlightEvent::HighlightStart(h) if style(h.0).is_some_and(|c| c != PLAIN)
+                )),
                 "grammar {} left its own sample uncoloured",
                 entry.name
             );
@@ -346,6 +445,29 @@ mod tests {
         }
     }
 
+    /// What only a layered language's own query names keeps its colour:
+    /// a base's catch-all (`(identifier) @variable`) after it would take
+    /// the node back (see [`layered`]).
+    #[test]
+    fn a_layered_language_keeps_what_its_own_query_names() {
+        let jsx = "const a = <div className=\"x\">y</div>;";
+        let qml = "Item {\n    signal clicked()\n}";
+        let objc = "@implementation Foo\n- (void)run { [self doThing]; }\n@end";
+        assert_colours(&[
+            ("cpp", "void Foo::bar() {}", "bar", FUNCTION),
+            ("cpp", "int main() { std::move(x); }", "move", FUNCTION),
+            ("cpp", "class A { void run(); };", "run", FUNCTION),
+            ("javascript", jsx, "div", KEYWORD),
+            ("javascript", jsx, "className", ANNOTATION),
+            ("typescript", "const MAX = 1;", "MAX", TYPE),
+            ("tsx", jsx, "div", KEYWORD),
+            ("tsx", jsx, "className", ANNOTATION),
+            ("qml", qml, "clicked", FUNCTION),
+            ("objc", objc, "Foo", TYPE),
+            ("objc", objc, "doThing", FUNCTION),
+        ]);
+    }
+
     /// A pattern whose predicate tree-sitter-highlight does not evaluate
     /// claims nothing, rather than every node of its shape: objc's
     /// `#has-ancestor?` property and zig's `#lua-match?` constant would
@@ -369,6 +491,58 @@ mod tests {
             ("cmake", "# note\nset(VAR 1)", "note", COMMENT),
             ("zig", "// note\nconst s = 1;", "note", COMMENT),
         ]);
+    }
+
+    /// A crate in the older capture vocabulary paints as one in the
+    /// current: its keywords (`@conditional`, `@include`, `@storageclass`,
+    /// `@type.qualifier`) reach the table renamed ([`current_names`]).
+    #[test]
+    fn a_capture_in_the_older_vocabulary_takes_its_colour() {
+        let objc = "#include <stdio.h>\nstatic volatile int n;\nvoid f(void) { @try { } @catch (id e) { } }\n";
+        let scala = "sealed trait A { def f(x: Boolean) = if (x) 1 else 2 }";
+        let sql = "SELECT CASE WHEN x THEN 1 ELSE 2 END FROM t;";
+        assert_colours(&[
+            ("scala", scala, "else", KEYWORD),
+            ("scala", scala, "sealed", KEYWORD),
+            ("lua", "while x do end", "while", KEYWORD),
+            ("sql", sql, "CASE", KEYWORD),
+            ("objc", objc, "#include", KEYWORD),
+            ("objc", objc, "volatile", KEYWORD),
+            ("objc", objc, "@try", KEYWORD),
+        ]);
+    }
+
+    /// The current vocabulary's characters and markup have rows of their
+    /// own: crates on it name a `'a'` `@character` and CDATA `@markup.raw`.
+    #[test]
+    fn a_character_and_raw_markup_take_the_string_colour() {
+        assert_colours(&[
+            ("haskell", "c = 'a'", "'a'", STRING),
+            ("zig", "const c = 'a';", "'a'", STRING),
+            ("xml", "<a><![CDATA[x < y]]></a>", "x < y", STRING),
+        ]);
+    }
+
+    /// A narrower name keeps off a broader row's colour where it means
+    /// another thing: swift's wildcard `_` (`@character.special`) is no
+    /// character literal.
+    #[test]
+    fn swift_s_wildcard_is_plain() {
+        assert_colours(&[("swift", "switch x { case _: break }", "_", theme::PLAIN)]);
+    }
+
+    /// The renaming touches captures alone: a string or a comment that
+    /// spells one, and a name that only begins like one, stand as they
+    /// are; a predicate's reference follows its capture.
+    #[test]
+    fn an_older_capture_name_is_written_in_the_current_vocabulary() {
+        let older = "(if) @conditional\n(call method: (_) @method.call)\n\
+                     ((x) @include (#any-of? @include \"#include\"))\n\
+                     \"@try\" @exception ; @repeat\n(y) @conditionally\n";
+        let current = "(if) @keyword.conditional\n(call method: (_) @function.method.call)\n\
+                       ((x) @keyword.import (#any-of? @keyword.import \"#include\"))\n\
+                       \"@try\" @keyword.exception ; @repeat\n(y) @conditionally\n";
+        assert_eq!(current_names(older), current);
     }
 
     #[test]

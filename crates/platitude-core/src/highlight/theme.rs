@@ -7,7 +7,7 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 
 /// The colour a run gets when no rule below claims it: the app's own
 /// `textPrimary` (デザイン規約 §シンタックスハイライト).
-const PLAIN: u32 = 0xE2E8F0;
+pub(super) const PLAIN: u32 = 0xE2E8F0;
 
 /// The same colour as [`PLAIN`], in the form the grammar path paints
 /// with (`grammar::PLAIN` re-exports it).
