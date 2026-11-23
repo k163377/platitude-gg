@@ -54,7 +54,8 @@ pub(super) fn run(tree: &Path, args: &[String]) -> Result<(), String> {
     if sides.is_empty() {
         return Err(format!("no side of {} is shot yet", dir.display()));
     }
-    same_scene(&dir, &sides)?;
+    // Slowed as the sides were shot: the scene each side keeps, which `same_scene` holds to one.
+    let slow = u64::from(scene::parse(&same_scene(&dir, &sides)?)?.slow);
     let runs: Vec<(&Side, Vec<Row>)> = sides
         .iter()
         .map(|side| Ok((*side, rows(&dir.join(side.name), &captions)?)))
@@ -67,7 +68,7 @@ pub(super) fn run(tree: &Path, args: &[String]) -> Result<(), String> {
     for (side, rows) in &runs {
         let out = dir.join(format!("{}.png", side.name));
         let picture_height = picture_height(&dir.join(side.name))?;
-        let (frames, ms) = bake(rows, picture_height, end, &out)?;
+        let (frames, ms) = bake(rows, picture_height, end, slow, &out)?;
         println!("film: {} — {frames} frames, {ms} ms", out.display());
     }
     println!("the last frame under each caption:");
@@ -97,7 +98,9 @@ pub(super) fn captions(dir: &Path) -> Result<Vec<String>, String> {
 
 /// Two sides of one film were shot from one scene: a scene changed between
 /// them shows that change as the difference.
-fn same_scene(dir: &Path, sides: &[&Side]) -> Result<(), String> {
+/// The scene every side was shot from — one text for all, or which side
+/// was shot from another.
+fn same_scene(dir: &Path, sides: &[&Side]) -> Result<String, String> {
     let texts: Vec<(&str, String)> = sides
         .iter()
         .map(|side| {
@@ -113,7 +116,7 @@ fn same_scene(dir: &Path, sides: &[&Side]) -> Result<(), String> {
              again from the scene as it stands",
             texts[0].0
         )),
-        None => Ok(()),
+        None => Ok(texts[0].1.clone()),
     }
 }
 
@@ -180,8 +183,17 @@ pub(super) fn picture_height(side: &Path) -> Result<u32, String> {
 }
 
 /// The side as an APNG at `out`; says how many frames and milliseconds.
-fn bake(rows: &[Row], picture_height: u32, end: u64, out: &Path) -> Result<(usize, u64), String> {
-    let times: Vec<u64> = rows.iter().map(|row| row.ms).collect();
+/// `slow` stretches the shot's clock before the film's is laid over it: a
+/// film `slow` times slower picks its frames that much finer.
+fn bake(
+    rows: &[Row],
+    picture_height: u32,
+    end: u64,
+    slow: u64,
+    out: &Path,
+) -> Result<(usize, u64), String> {
+    let times: Vec<u64> = rows.iter().map(|row| row.ms * slow).collect();
+    let end = end * slow;
     let files: Vec<Vec<u8>> = rows
         .iter()
         .map(|row| std::fs::read(&row.file).map_err(|e| format!("{}: {e}", row.file.display())))

@@ -47,6 +47,10 @@ pub(super) struct Scene {
     /// A heavy repository's wait, on the demo's: what a change to how long
     /// the reader waits is filmed with, on both sides alike.
     pub(super) slow_git: String,
+    /// How many times slower than it was shot the film plays (`bake`):
+    /// what a frame or two decides — a read landing a beat earlier — is
+    /// seen at 1. The band's milliseconds stay the shot's own.
+    pub(super) slow: u32,
     pub(super) captions: Vec<String>,
     pub(super) steps: Vec<Step>,
 }
@@ -89,6 +93,9 @@ const ACTS: &[(&str, Option<usize>)] = &[
     ("wr", Some(1)),
     ("k", None),
     ("kc", None),
+    ("kd", None),
+    ("ku", None),
+    ("kr", None),
     ("lc", None),
     ("t", None),
     ("fw", None),
@@ -115,6 +122,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
         scale: 1,
         tick: 80,
         slow_git: String::new(),
+        slow: 1,
         captions: Vec::new(),
         steps: Vec::new(),
     };
@@ -156,6 +164,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
             "view" => scene.views.push(four(rest).map_err(at)?),
             "scale" => scene.scale = positive(rest).map_err(at)?,
             "tick" => scene.tick = positive(rest).map_err(at)?,
+            "slow" => scene.slow = positive(rest).map_err(at)?,
             "slowgit" => {
                 crate::verify::git_shim::Slow::parse(rest).map_err(at)?;
                 scene.slow_git = rest.to_string();
@@ -198,8 +207,11 @@ fn act(line: &str) -> Result<String, String> {
                 return Err(format!("`{verb}:` takes {count} integers, comma-separated"));
             }
         }
-        ("k", None) if !KEYS.contains(&arg) => {
-            return Err(format!("`k:{arg}` names no key ({})", KEYS.join(" ")));
+        ("k" | "kd" | "ku", None) if !KEYS.contains(&arg) => {
+            return Err(format!("`{verb}:{arg}` names no key ({})", KEYS.join(" ")));
+        }
+        ("kr", None) if arg != "up" && arg != "down" => {
+            return Err("`kr:` repeats an arrow of the graph's walk: `up` or `down`".to_string());
         }
         ("kc", None) => match arg.split_once(',') {
             Some((modifier, key)) if MODIFIERS.contains(&modifier) && KEYS.contains(&key) => {}
@@ -339,6 +351,13 @@ git:commit --allow-empty -q -m more1
         );
         assert_eq!(scene.views, [[260, 88, 760, 340]]);
         assert_eq!(scene.tick, 40);
+        assert_eq!(
+            scene.slow, 1,
+            "a film plays as it was shot unless it says otherwise"
+        );
+        let slowed = parse(&SCENE.replace("tick 40\n", "tick 40\nslow 4\n")).expect("parses");
+        assert_eq!(slowed.slow, 4);
+        assert!(parse(&SCENE.replace("tick 40\n", "tick 40\nslow 0\n")).is_err());
         assert_eq!(scene.captions.len(), 2);
         assert_eq!(scene.steps[0], Step::Caption(0));
         assert_eq!(scene.steps[3], Step::Caption(1));
@@ -367,13 +386,25 @@ git:commit --allow-empty -q -m more1
                 "repo deep\nview 0 0 10 10\ncap -\ncap x\n{step}\n"
             ))
         };
-        for right in ["m:1,2", "lc:ctrl,1,2", "lc:shift,1,2", "lc:alt,1,2"] {
+        for right in [
+            "m:1,2",
+            "lc:ctrl,1,2",
+            "lc:shift,1,2",
+            "lc:alt,1,2",
+            "kd:down",
+            "kr:down",
+            "kr:up",
+            "ku:down",
+        ] {
             assert!(with(right).is_ok(), "{right}");
         }
         for wrong in [
             "m:1",
             "m:1,x",
             "k:nokey",
+            "kd:nokey",
+            "ku:",
+            "kr:left",
             "kc:meta,esc",
             "lc:ctrl,1",
             "lc:meta,1,2",

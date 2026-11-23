@@ -18,6 +18,7 @@ import platitude.ui.input
 //   c:n|text caption · w:ms wait · m:x,y move · g:x0,y0,x1,y1,ms glide · l:x,y left click · r:x,y right click
 //   d:x,y left press · u:x,y left release (moves and glides between them carry the button)
 //   wh:n wheel notches · wr:d wheel delta · k:name key · kc:mod,name key with a modifier · t:text type
+//   kd:name key down · ku:name key up · kr:up|down one repeat of an arrow held over the graph
 //   fw:path|text write a file in the repository (\n \r escaped) · cp:from|to copy a file over another in it
 //   git:a b c run git in the repository · rt:fn|arg a write of the tab's (`@head` HEAD's commit)
 //   pg:fn|arg a page function
@@ -52,6 +53,11 @@ Item {
     /// of a looping film sees where it stands and can name the frame. The setup's frames, cut by `bake`, are 0 —
     /// unnumbered — and named sNNNN.png.
     property int number: 0
+    /// When the first frame past the setup was asked for, -1 before it: the band says each frame's milliseconds from
+    /// it, the clock `bake` lays every side on — a slowed film keeps saying the shot's own time.
+    property real clockFrom: -1
+    /// The band's milliseconds, set with `number`.
+    property int bandMs: 0
     /// The band's caption. With `number`, set as the grab is asked for and its frames.tsv row written: a caption
     /// step played before the grab renders would otherwise put the next caption over the row's.
     property string bandCaption: ""
@@ -190,6 +196,25 @@ Item {
         } else if (verb === "k") {
             ev.keyClick(acts.keyOf(arg), Qt.NoModifier, -1)
             acts.shootSoon()
+        } else if (verb === "kd") {
+            // A key going down and staying there: its release is a `ku:` of its own, so what a held key does between
+            // the two can be filmed (`kr:`).
+            ev.keyPress(acts.keyOf(arg), Qt.NoModifier, -1)
+            acts.shootSoon()
+        } else if (verb === "ku") {
+            ev.keyRelease(acts.keyOf(arg), Qt.NoModifier, -1)
+            acts.shootSoon()
+        } else if (verb === "kr") {
+            // One repeat of an arrow held over the graph. TestEvent cannot say a key event is the OS's repeat
+            // (`isAutoRepeat`), so it goes in where the graph's key handler hands a repeat on — the step the
+            // `graph-step-hold` verb walks by, with the key's own signal before it as the handler raises it.
+            const graph = acts.window.curPage !== null ? acts.window.curPage.pageGraphPane : null
+            Harness.report("film repeat " + arg + " " + (graph !== null))
+            if (graph !== null) {
+                graph.keyReached()
+                graph.stepRow(arg === "up" ? -1 : 1, true)
+            }
+            acts.shootSoon()
         } else if (verb === "lc") {
             // A left click with a modifier held: Ctrl to light one more row, Shift to light a run.
             const at = arg.split(",")
@@ -272,6 +297,9 @@ Item {
         if (!setup)
             acts.filmed++
         acts.number = setup ? 0 : acts.filmed
+        if (!setup && acts.clockFrom < 0)
+            acts.clockFrom = acts.shotAt
+        acts.bandMs = setup ? 0 : Math.round(acts.shotAt - acts.clockFrom)
         acts.bandCaption = acts.captionText
         const name = (setup ? "s" : "f") + String(setup ? acts.frames - acts.filmed : acts.filmed).padStart(4, "0")
             + ".png"
@@ -322,7 +350,9 @@ Item {
             const t = acts.now()
             if (!acts.shooting && t >= acts.nextFrame) {
                 acts.shoot()
-                acts.nextFrame = (Math.floor(t / acts.tick) + 1) * acts.tick
+                // Once ending, this was the last frame: a tick shorter than a grab would start the next before the
+                // end below ever sees none in flight.
+                acts.nextFrame = acts.ending ? Infinity : (Math.floor(t / acts.tick) + 1) * acts.tick
             }
             if (acts.glide !== null) {
                 const g = acts.glide
@@ -470,7 +500,7 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.spaceMd
                 y: Theme.spaceSm
-                text: acts.number > 0 ? "コマ " + acts.number : ""
+                text: acts.number > 0 ? acts.bandMs + " ms  コマ " + acts.number : ""
                 color: Theme.textSecondary
                 font.family: Theme.uiFamily
                 font.pixelSize: Theme.fontXl
@@ -492,7 +522,7 @@ Item {
             id: numberRoom
 
             visible: false
-            text: "コマ 0000"
+            text: "00000 ms  コマ 0000"
             font.family: Theme.uiFamily
             font.pixelSize: Theme.fontXl
         }
