@@ -301,12 +301,17 @@ fn entry_for(path: &str) -> Option<&'static Entry> {
 }
 
 /// The configuration an injection names — markdown's inline grammar,
-/// the language of a fenced code block. Unknown names read as plain
-/// text, which is what an unhighlightable fence should look like.
+/// the language of a fenced code block. A name is a language's own
+/// (`javascript`) or one of the extensions it claims (`js`), in any case,
+/// as a fence's info string names it. Unknown names read as plain text,
+/// which is what an unhighlightable fence should look like.
 pub(super) fn injection(name: &str) -> Option<&'static HighlightConfiguration> {
     ENTRIES
         .iter()
-        .find(|e| e.name == name)
+        .find(|e| {
+            e.name.eq_ignore_ascii_case(name)
+                || e.matches.iter().any(|m| m.eq_ignore_ascii_case(name))
+        })
         .and_then(lang_of)
         .map(|lang| &lang.config)
 }
@@ -597,5 +602,17 @@ mod tests {
         // Groovy's crate ships no queries, so gradle scripts read
         // through the fallback lexer.
         assert!(!claims("build.gradle"));
+    }
+
+    #[test]
+    fn an_injection_names_a_language_by_its_name_or_extension_in_any_case() {
+        let named = |name: &str| injection(name).map(|config| config.language_name.as_str());
+        assert_eq!(named("javascript"), Some("javascript"));
+        assert_eq!(named("js"), Some("javascript"));
+        assert_eq!(named("Rust"), Some("rust"));
+        assert_eq!(named("yml"), Some("yaml"));
+        assert_eq!(named("SQL"), Some("sql"));
+        assert_eq!(named("markdown_inline"), Some("markdown_inline"));
+        assert_eq!(named("console"), None);
     }
 }

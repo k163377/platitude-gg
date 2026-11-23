@@ -17,6 +17,10 @@ Inline <b>html</b> tags.
 fn main() { let s = "hi"; }
 ```
 
+```py
+def twice(n): return n * 2
+```
+
     indented code
 
 ---

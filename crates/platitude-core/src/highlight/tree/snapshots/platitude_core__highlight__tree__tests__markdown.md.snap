@@ -29,6 +29,13 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | ```
   sss
 | 
+| ```py
+  sssss
+| def twice(n): return n * 2
+  kkksfffffssssskkkkkksssssn
+| ```
+  sss
+| 
 |     indented code
   sssssssssssssssss
 | 
