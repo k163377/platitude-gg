@@ -75,7 +75,8 @@ async fn toolbar(
         (Some(git), None) => git.clone(),
         (None, _) => String::new(),
     };
-    let route = marks.route(&named, REMOTES);
+    let carried = marks.status_push();
+    let route = carried.route(&named, REMOTES);
     let track = if route.goes_elsewhere() {
         remote::push_track(exec, repo, &branch, cancel)
             .await

@@ -251,7 +251,8 @@ async fn standing_of(
         .await
         .expect("marks");
     let track = track_of(repo, exec, cancel).await;
-    let route = marks.route(
+    let carried = marks.status_push();
+    let route = carried.route(
         status.upstream.as_deref().unwrap_or_default(),
         ["fork", "origin"],
     );

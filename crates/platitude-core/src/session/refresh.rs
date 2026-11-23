@@ -296,7 +296,10 @@ impl RepoSession {
         // A branch with an upstream: with none, the push asks where it goes
         // and nothing is counted. One measured against a branch here goes
         // to a remote by a mark alone. Not the one HEAD is on, which the
-        // status tick counts.
+        // status tick counts. A listed upstream is there to count against,
+        // and a branch here is taken to be: a gone one costs this read a
+        // branch it did not need, and is weighed as gone where the row is
+        // read (`RefsSnapshot::branch_push`).
         let elsewhere: std::collections::HashSet<&str> = refs
             .iter()
             .filter(|entry| entry.kind == RefKind::LocalBranch && !entry.is_head)
@@ -311,7 +314,7 @@ impl RepoSession {
                     remotes.marks.marked(local.short.as_str()),
                     remotes.list.iter().map(|r| r.name.as_str()),
                 )
-                .goes_elsewhere()
+                .counts_elsewhere(true)
             })
             .map(|local| local.short.as_str())
             .collect();

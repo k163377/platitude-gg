@@ -145,6 +145,16 @@ impl<'a> PushRoute<'a> {
         matches!(self.marked, Marked::Remote(_)) && !self.upstream_on_marked
     }
 
+    /// Whether the destination's own counts are the ones that speak for the
+    /// push, so a read has to ask for them ([`super::push_track`] on the
+    /// status tick, [`super::push_tracks`] on the refs read): the upstream
+    /// is there to count against (`upstream_counted`) — with none, the push
+    /// asks where it goes and nothing is counted — and the push goes
+    /// elsewhere ([`Self::goes_elsewhere`]).
+    pub fn counts_elsewhere(self, upstream_counted: bool) -> bool {
+        upstream_counted && self.upstream != Upstream::None && self.goes_elsewhere()
+    }
+
     /// Where the push sends `branch`, spelled `<remote>/<branch>` as the
     /// toolbar and the branch's row show it. `None` where there is no
     /// branch to send, or nowhere at all to send it — a branch measured
@@ -235,6 +245,27 @@ mod tests {
         assert!(!route(Upstream::Here, Marked::Unmarked).goes_elsewhere());
         assert!(!route(Upstream::Remote("origin/main"), Marked::Here).goes_elsewhere());
         assert!(!route(Upstream::Remote("origin/main"), Marked::Unmarked).goes_elsewhere());
+    }
+
+    /// The destination's own counts are asked for only where they speak:
+    /// an upstream there to count against, and the push going elsewhere.
+    #[test]
+    fn only_a_counted_upstream_with_the_push_elsewhere_reads_the_destination() {
+        let elsewhere = route(Upstream::Remote("origin/main"), Marked::Remote("my"));
+        assert!(elsewhere.counts_elsewhere(true));
+        assert!(
+            !elsewhere.counts_elsewhere(false),
+            "no count against the upstream: the push asks where it goes"
+        );
+        assert!(
+            !route(Upstream::Remote("origin/main"), Marked::Remote("origin"))
+                .counts_elsewhere(true)
+        );
+        assert!(route(Upstream::Here, Marked::Remote("origin")).counts_elsewhere(true));
+        assert!(
+            !route(Upstream::None, Marked::Remote("origin")).counts_elsewhere(true),
+            "nothing configured: a first push, nothing counted"
+        );
     }
 
     /// Every arm of `plan_push`'s destination.

@@ -153,7 +153,7 @@ impl RepoSession {
     }
 
     /// The branch's counts against where a mark sends its push, read only
-    /// where that is not the upstream's remote ([`Self::push_goes_elsewhere`]):
+    /// where those are the ones that speak ([`Self::push_counts_elsewhere`]):
     /// a process every tick, and nothing else reads them. A read that could
     /// not tell repeats the branch's last answer (`Standing::push_of`).
     async fn read_push_track(
@@ -161,10 +161,10 @@ impl RepoSession {
         workdir: &std::path::Path,
         branch: &str,
         status: &WorktreeStatus,
-        marks: &remote::PushMarks,
+        push: &remote::StatusPush,
         cancel: &CancellationToken,
     ) -> Option<remote::PushTrack> {
-        let told = if self.push_goes_elsewhere(status, marks) {
+        let told = if self.push_counts_elsewhere(status, push) {
             remote::push_track(&self.executor, workdir, branch, cancel).await
         } else {
             Ok(None)
@@ -203,37 +203,26 @@ impl RepoSession {
         {
             status.upstream = Some(named);
         }
-        let track = self
-            .read_push_track(workdir, &branch, status, &marks, cancel)
+        let mut push = marks.status_push();
+        push.track = self
+            .read_push_track(workdir, &branch, status, &push, cancel)
             .await;
-        let push = remote::StatusPush {
-            upstream_here: marks.upstream_is_here(),
-            push_remote: marks.push_remote,
-            push_default: marks.push_default.map(|marked| marked.remote),
-            track,
-        };
         self.standing.set_push(&branch, push.clone());
         push
     }
 
-    /// [`remote::PushRoute::goes_elsewhere`] for a status whose upstream
-    /// git can compare against — with none the push asks where it goes,
-    /// and no count is read. Whether that upstream is a branch here is the
-    /// configuration's to say, not the status's short name for it. The
-    /// remote names are the kept ones, not read for this; before the first
-    /// listing the cut falls back to the mark's exact prefix.
-    fn push_goes_elsewhere(&self, status: &WorktreeStatus, marks: &remote::PushMarks) -> bool {
-        let Some(upstream) = status
-            .upstream
-            .as_deref()
-            .filter(|_| status.upstream_counts.is_some())
-        else {
-            return false;
-        };
+    /// [`remote::PushRoute::counts_elsewhere`] for this status, along the
+    /// route the toolbar's answer reads ([`remote::StatusPush::route`]).
+    /// Whether the upstream is a branch here is the configuration's to say,
+    /// not the status's short name for it. The remote names are the kept
+    /// ones, not read for this; before the first listing the cut falls back
+    /// to the mark's exact prefix.
+    fn push_counts_elsewhere(&self, status: &WorktreeStatus, push: &remote::StatusPush) -> bool {
+        let upstream = status.upstream.as_deref().unwrap_or_default();
+        let counted = status.upstream_counts.is_some();
         let elsewhere = |names: &[remote::Remote]| {
-            marks
-                .route(upstream, names.iter().map(|remote| remote.name.as_str()))
-                .goes_elsewhere()
+            push.route(upstream, names.iter().map(|remote| remote.name.as_str()))
+                .counts_elsewhere(counted)
         };
         self.remotes
             .peek(|remotes| elsewhere(&remotes.list))

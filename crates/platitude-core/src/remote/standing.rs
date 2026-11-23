@@ -134,7 +134,7 @@ pub struct StatusPush {
     pub push_remote: Option<String>,
     /// The repository's mark, `remote.pushDefault`, as this read found it;
     /// `None` where unset. What the toolbar weighs the push under
-    /// ([`HeadPush::route`]), not the refs snapshot's copy
+    /// ([`Self::route`]), not the refs snapshot's copy
     /// (`session::RefsSnapshot::marks`): a moved mark sends the refs out
     /// again (`RepoSession::note_push_default`), and they land before or
     /// after this tick — beside the counts it read, either order would
@@ -150,6 +150,27 @@ pub struct StatusPush {
     /// everywhere else, and where nothing here tracks the branch over
     /// there.
     pub track: Option<PushTrack>,
+}
+
+impl StatusPush {
+    /// The push's route under the two marks this read found, measured
+    /// against `upstream` — as the status names it, empty where none; a
+    /// branch here where configuration says so ([`Self::upstream_here`]) —
+    /// and cut against the configured `remotes`. The one route of the
+    /// branch HEAD is on: the tick weighs by it whether to read the
+    /// destination's counts (`RepoSession::read_status_push`), and the
+    /// toolbar's answer is read along it ([`HeadPush::route`]).
+    pub fn route<'a>(
+        &'a self,
+        upstream: &'a str,
+        remotes: impl IntoIterator<Item = &'a str>,
+    ) -> PushRoute<'a> {
+        PushRoute::new(
+            Upstream::of(upstream, self.upstream_here),
+            Marked::of(self.push_remote.as_deref(), self.push_default.as_deref()),
+            remotes,
+        )
+    }
 }
 
 /// The push of the branch HEAD is on, as the worktree holds it: HEAD's
@@ -185,14 +206,7 @@ impl HeadPush {
     /// Its route under the two marks the status read, the upstream cut
     /// against the configured `remotes`.
     pub fn route<'a>(&'a self, remotes: impl IntoIterator<Item = &'a str>) -> PushRoute<'a> {
-        PushRoute::new(
-            Upstream::of(&self.upstream, self.status.upstream_here),
-            Marked::of(
-                self.status.push_remote.as_deref(),
-                self.status.push_default.as_deref(),
-            ),
-            remotes,
-        )
+        self.status.route(&self.upstream, remotes)
     }
 
     /// The toolbar's whole answer, along [`Self::route`]; `fallback_remote`

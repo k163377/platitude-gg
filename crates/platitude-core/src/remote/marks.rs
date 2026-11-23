@@ -239,7 +239,7 @@ fn each_scoped_record(bytes: &[u8], mut each: impl FnMut(&str, &str, Option<&str
 /// the status tick: a second spelling, in another layer, lets a fork
 /// workflow's label name a remote the push never goes to. The marks'
 /// order is read once ([`Self::marked`]), which the send matches on and
-/// the label's route ([`Self::route`]) weighs; how the two then name the
+/// the label's route weighs ([`Self::status_push`]); how the two then name the
 /// destination is held together by a test (the route's module doc). Every
 /// branch's own mark at once is [`kept_marks`]'s. Net:
 /// `push_default_integration`.
@@ -273,19 +273,21 @@ impl PushMarks {
         )
     }
 
-    /// The push's route off these keys, measured against `upstream` — as
-    /// the status names it, empty where none —, which configuration alone
-    /// says is a branch here ([`Self::upstream_is_here`]).
-    pub fn route<'a>(
-        &'a self,
-        upstream: &'a str,
-        remotes: impl IntoIterator<Item = &'a str>,
-    ) -> super::PushRoute<'a> {
-        super::PushRoute::new(
-            super::Upstream::of(upstream, self.upstream_is_here()),
-            self.marked(),
-            remotes,
-        )
+    /// What a status carries of these keys ([`super::StatusPush`]): both
+    /// marks, and whether the upstream is a branch here — which
+    /// configuration alone says ([`Self::upstream_is_here`]). The counts
+    /// over there are the tick's to add, where the route it gives
+    /// ([`super::StatusPush::route`]) says they speak.
+    pub fn status_push(&self) -> super::StatusPush {
+        super::StatusPush {
+            push_remote: self.push_remote.clone(),
+            push_default: self
+                .push_default
+                .as_ref()
+                .map(|marked| marked.remote.clone()),
+            upstream_here: self.upstream_is_here(),
+            track: None,
+        }
     }
 
     /// Whether the branch is measured against a branch here

@@ -654,9 +654,9 @@ mod tests {
     /// off the keys — so this walks every arrangement of the three keys
     /// through both, from the same [`PushMarks`]: the label as the status
     /// tick builds it, the upstream named from the keys
-    /// ([`PushMarks::upstream_name`]) and the route taken off them
-    /// ([`PushMarks::route`]). Where the send has nowhere to go, the label
-    /// names nothing.
+    /// ([`PushMarks::upstream_name`]) and the route taken off what the
+    /// status carries of them ([`PushMarks::status_push`]). Where the send
+    /// has nowhere to go, the label names nothing.
     #[test]
     fn the_label_names_the_remote_the_send_uses() {
         // (branch.main.pushRemote, remote.pushDefault, what the branch tracks)
@@ -688,7 +688,8 @@ mod tests {
                 .map(|spec| spec.target.to_string())
                 .unwrap_or_default();
             let upstream = keys.upstream_name().unwrap_or_default();
-            let route = keys.route(&upstream, REMOTES);
+            let carried = keys.status_push();
+            let route = carried.route(&upstream, REMOTES);
             assert_eq!(
                 route.target("main", "origin").unwrap_or_default(),
                 sent,
