@@ -640,7 +640,7 @@ Item {
                 })
             }
             page.showWip()
-            wipPane.setMessage("chore: held by a sleeping hook", "")
+            wipPane.setMessage("chore: held by a hook", "")
             return driver.pressCommitNow("commit")
         }
         onTriggered: {

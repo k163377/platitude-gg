@@ -524,7 +524,7 @@ Item {
                 // The write count as the commit went in, kept: one past it is the held write's answer.
                 op.input("committed", () => {
                     op.witness("seqBefore", tab.writeSeq)
-                    tab.commit("chore: held by a sleeping hook", "", false, false)
+                    tab.commit("chore: held by a hook", "", false, false)
                 })
                 return
             }
