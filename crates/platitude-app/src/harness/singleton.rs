@@ -16,7 +16,7 @@ use crate::models::qml_register;
 /// a run's write — the hooks of `--preset slowhook` and `slowmerge`, the
 /// merge tool of `menu-wait conflict` — looks for it by this name, which
 /// xtask copies as `xtask::verify::LET_GO_FILE`
-/// (`xtask::demo::remote::held_until_let_go` reads the copy).
+/// (`xtask::verify::held_until_let_go` reads the copy).
 const LET_GO_FILE: &str = "let-go.txt";
 
 /// Everything a run was told to do, read once at startup (`super::knobs`).

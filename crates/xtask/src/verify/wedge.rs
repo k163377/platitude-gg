@@ -29,7 +29,7 @@ const WEDGED_EXIT: i32 = 97;
 const REPORT_FILE: &str = "wedge.txt";
 /// The trail the app keeps beside the pictures — a copy of its
 /// `harness::deadline::TRAIL_FILE`, read here at a ceiling and by what
-/// holds a write for its run (`crate::demo::remote::held_until_let_go`).
+/// holds a write for its run (`super::held_until_let_go`).
 pub(crate) const TRAIL_FILE: &str = "stations.txt";
 
 /// The ledger the machine's budget stands in, beside the repository's

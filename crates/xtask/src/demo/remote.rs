@@ -346,10 +346,11 @@ pub(super) fn hooked(repo: &mut DemoRepo) -> Result<(), String> {
 /// still in flight when the verbs close the window or raise a menu across
 /// it.
 ///
-/// Under a verify-ui run the hook ([`held_until_let_go`]) holds until the
-/// run's driver lets it go or the app is on its way out; which verb lets it
-/// go, and when, is its driver's to say (`WindowDialogActs`' `quitTimer`,
-/// `AutoActHistoryVerbs`' `menuWaitTimer`). A clock would end the commit
+/// Under a verify-ui run the hook ([`crate::verify::held_until_let_go`])
+/// holds until the run's driver lets it go or the app is on its way out;
+/// which verb lets it go, and when, is its driver's to say
+/// (`WindowDialogActs`' `quitTimer`, `AutoActHistoryVerbs`'
+/// `menuWaitTimer`). A clock would end the commit
 /// wherever the run stood — on a busy machine before the completion, or
 /// between it and the pictures. In a repository opened by hand there is no
 /// run, and the hold is two seconds.
@@ -360,7 +361,7 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
     install_hook(
         &repo.work.join(".git").join("hooks"),
         "pre-commit",
-        &held_until_let_go(2),
+        &crate::verify::held_until_let_go(2),
     )
 }
 
@@ -371,9 +372,9 @@ pub(super) fn slowhook(repo: &mut DemoRepo) -> Result<(), String> {
 /// (git 2.55 measured), so the tree reads as `MERGING` while the write is
 /// out (`menu-wait merge`).
 ///
-/// Under a verify-ui run the hook ([`held_until_let_go`]) holds the commit
-/// until the app's trail says it is joining its writes on the way out — the
-/// verb's driver never lets it go sooner (`AutoActHistoryVerbs`'
+/// Under a verify-ui run the hook ([`crate::verify::held_until_let_go`])
+/// holds the commit until the app's trail says it is joining its writes on
+/// the way out — the verb's driver never lets it go sooner (`AutoActHistoryVerbs`'
 /// `menuWaitTimer`), and its pictures are taken by then — as
 /// `--slow-git … until=writes-joining` holds a git call
 /// (`verify::git_shim`): the app hands the run's `_PGG_SHOT_DIR` to every
@@ -392,55 +393,7 @@ pub(super) fn slowmerge(repo: &mut DemoRepo) -> Result<(), String> {
     install_hook(
         &repo.work.join(".git").join("hooks"),
         "prepare-commit-msg",
-        &held_until_let_go(8),
-    )
-}
-
-/// The hook of [`slowhook`] and [`slowmerge`], and the merge tool of
-/// `menu-wait conflict` (`verify::repos::held_tool`): let go by the run's driver
-/// — the mark `Harness.letHookGo` leaves beside the pictures
-/// (`verify::LET_GO_FILE`) — or at the trail's station, whichever comes
-/// first; `by_hand_secs` seconds with no run around it. `sleep` is the blocking
-/// command all three OSes agree on (`verify::repos`). The trail, its
-/// station and the ceiling are the ones the run's own wedge reading, git
-/// shim and watchdog use (`verify::TRAIL_FILE`, `verify::WRITES_JOINING`,
-/// `verify::WATCHDOG_MS`), so a renamed file or station or a moved ceiling
-/// moves the hook too. The trail's lines are `<seconds>s <station>`, each
-/// ending in its newline (`platitude_app::harness::deadline`); a line the
-/// writer was stopped in has none, and `read` hands it to nothing.
-pub(crate) fn held_until_let_go(by_hand_secs: u64) -> String {
-    /// How often the script looks for the mark and at the trail, in
-    /// milliseconds.
-    const LOOK_MS: u64 = 200;
-    format!(
-        r#"#!/bin/sh
-if [ -z "$_PGG_SHOT_DIR" ]; then
-  sleep {by_hand_secs}
-  exit 0
-fi
-shots="$(printf '%s' "$_PGG_SHOT_DIR" | tr '\\' '/')"
-trail="$shots/{trail}"
-looks=0
-while [ "$looks" -lt {looks} ]; do
-  if [ -f "$shots/{let_go}" ]; then
-    exit 0
-  fi
-  if [ -f "$trail" ]; then
-    while IFS= read -r line; do
-      case "$line" in
-        *" {station}") exit 0 ;;
-      esac
-    done < "$trail"
-  fi
-  sleep {look}
-  looks=$((looks + 1))
-done
-"#,
-        looks = crate::verify::WATCHDOG_MS / LOOK_MS,
-        trail = crate::verify::TRAIL_FILE,
-        let_go = crate::verify::LET_GO_FILE,
-        station = crate::verify::WRITES_JOINING,
-        look = format_args!("{}.{:03}", LOOK_MS / 1000, LOOK_MS % 1000),
+        &crate::verify::held_until_let_go(8),
     )
 }
 

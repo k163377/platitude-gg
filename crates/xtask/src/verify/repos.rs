@@ -227,7 +227,7 @@ const TOOL_CMD: &str = "sleep 2";
 const HELD_TOOL_FILE: &str = "pgg-held-tool";
 
 /// The command of the tool `menu-wait conflict` hands its file to: the
-/// presets' held write (`demo::held_until_let_go`), which that verb's
+/// presets' held write (`super::held_until_let_go`), which that verb's
 /// driver never lets go, so the tool stands until the app is on its way
 /// out. A clock ends it wherever the run stood: once it has, git takes
 /// the file as resolved and the row leaves the conflicts, the menu raised
@@ -253,7 +253,7 @@ fn held_tool(repo: &std::path::Path, path: &std::ffi::OsStr) -> Result<String, S
         "{}/{HELD_TOOL_FILE}",
         String::from_utf8_lossy(&out.stdout).trim()
     );
-    std::fs::write(&script, crate::demo::held_until_let_go(2)).map_err(|e| e.to_string())?;
+    std::fs::write(&script, super::held_until_let_go(2)).map_err(|e| e.to_string())?;
     Ok(format!("sh '{script}'"))
 }
 

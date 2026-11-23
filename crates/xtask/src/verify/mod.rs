@@ -8,6 +8,7 @@ mod contract;
 mod coverage;
 mod faults;
 pub(crate) mod git_shim;
+mod held;
 mod look;
 pub(crate) mod loops;
 mod observed;
@@ -30,6 +31,7 @@ mod wedge;
 pub(crate) use child::{LET_GO_FILE, WRITES_JOINING};
 pub use coverage::run as verbs;
 pub(crate) use faults::run as wedge_check;
+pub(crate) use held::held_until_let_go;
 pub(crate) use look::look_into;
 pub(crate) use options::{WATCHDOG_MS, canonical_line, suite_words};
 pub(crate) use ownership::{
