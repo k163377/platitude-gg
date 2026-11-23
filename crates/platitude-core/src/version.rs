@@ -104,7 +104,8 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `for-each-ref`: `--points-at=` (2.7), `--count`,
 ///   `--sort=refname:short`, `--format=` with `refname[:short]`,
 ///   `objecttype`, `objectname`, `*objectname`, `upstream[:track]`,
-///   `HEAD`, `creatordate:unix`, `push`, `push:remoteref`, `push:track`.
+///   `HEAD`, `creatordate:unix`, `push`, `push:remotename`, `push:remoteref`,
+///   `push:track`.
 ///   `-c push.default=current` plus `refs/heads/<branch>` is covered by
 ///   `push_default_integration`, including the push destination fields.
 /// - `log`: `-z`, `-1`, `-r`, `-p`, `--name-status`, `--date-order`,

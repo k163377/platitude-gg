@@ -244,6 +244,7 @@ fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
     at.push_tracks = vec![(
         "topic".to_string(),
         PushTrack {
+            remote: "origin".to_string(),
             tracking: "origin/topic".to_string(),
             counts: crate::AheadBehind::default(),
         },
@@ -292,6 +293,7 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
     at.push_tracks = vec![(
         "counted".to_string(),
         PushTrack {
+            remote: "fork".to_string(),
             tracking: "fork/counted".to_string(),
             counts: crate::AheadBehind {
                 ahead: 1,
@@ -346,6 +348,7 @@ fn counts_ahead_of_their_row_stand_with_nothing_to_lease_to() {
     at.push_tracks = vec![(
         "counted".to_string(),
         PushTrack {
+            remote: "fork".to_string(),
             tracking: "fork/counted".to_string(),
             counts: crate::AheadBehind {
                 ahead: 1,
@@ -373,6 +376,7 @@ fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
     at.push_tracks = vec![(
         "counted".to_string(),
         PushTrack {
+            remote: "fork".to_string(),
             tracking: "fork/counted".to_string(),
             counts: crate::AheadBehind {
                 ahead: 1,

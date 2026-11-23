@@ -332,12 +332,14 @@ fn commits_on_both_sides_of_the_upstream_block_the_pull() {
     assert_eq!(read(0, 3), (0, 3, false));
 }
 
-/// The push destination's own counts go blank with the upstream's.
+/// The push destination's own counts go blank with the upstream's, and so
+/// does the branch's own mark.
 #[test]
 fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     let mut model = WorktreeModel::default();
     let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
     let track = platitude_core::remote::PushTrack {
+        remote: "fork".to_string(),
         tracking: "fork/feature".to_string(),
         counts: platitude_core::AheadBehind {
             ahead: 1,
@@ -347,6 +349,7 @@ fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     if let StateMsg::Status(status) = &mut read {
         status.push = platitude_core::remote::StatusPush {
             push_remote: Some("fork".to_string()),
+            push_default: Some("origin".to_string()),
             upstream_here: true,
             track: Some(track.clone()),
         };
@@ -355,11 +358,14 @@ fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     let told = model.head_push_now().status;
     assert_eq!(told.track, Some(track));
     assert!(told.upstream_here);
+    assert_eq!(told.push_remote.as_deref(), Some("fork"));
 
     model.absorb(vec![head_on("main", NEXT, 2)]);
     let told = model.head_push_now().status;
     assert_eq!(told.track, None, "feature's destination is not main's");
     assert!(!told.upstream_here);
+    assert_eq!(told.push_remote, None, "nor is feature's mark");
+    assert_eq!(told.push_default, None, "nor the mark read beside it");
 }
 
 #[test]

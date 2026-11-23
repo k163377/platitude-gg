@@ -150,12 +150,13 @@ struct Inner {
     /// The merge tool as the last status read that asked for it saw it,
     /// repeated by the reads that did not ask.
     merge_tool: String,
-    /// The push destination's counts as the last read that could tell
-    /// left them, and the branch they are about
-    /// (`RepoSession::read_push_track`): one failed read would drop a
-    /// diverged `push -f` to the plain shape for a tick, and a hold under
-    /// way with it.
-    push_track: Option<(String, crate::remote::PushTrack)>,
+    /// The push reading of the branch HEAD is on as the last tick left it,
+    /// and the branch it is about (`RepoSession::read_status_push`),
+    /// repeated by a tick whose read could not tell: one failed counts
+    /// read would drop a diverged `push -f` to the plain shape for a tick,
+    /// and a hold under way with it; one failed marks read would name the
+    /// upstream while the push goes where the marks say.
+    push: Option<(String, crate::remote::StatusPush)>,
 }
 
 impl Default for Standing {
@@ -307,17 +308,17 @@ impl Standing {
         self.lock().merge_tool = tool;
     }
 
-    /// The kept push counts where they are about `branch`; nothing where
-    /// the last read was about another.
-    pub(super) fn push_track_of(&self, branch: &str) -> Option<crate::remote::PushTrack> {
-        match &self.lock().push_track {
-            Some((kept, track)) if kept == branch => Some(track.clone()),
+    /// The kept push reading where it is about `branch`; nothing where the
+    /// last read was about another.
+    pub(super) fn push_of(&self, branch: &str) -> Option<crate::remote::StatusPush> {
+        match &self.lock().push {
+            Some((kept, push)) if kept == branch => Some(push.clone()),
             _ => None,
         }
     }
 
-    pub(super) fn set_push_track(&self, branch: &str, track: Option<crate::remote::PushTrack>) {
-        self.lock().push_track = track.map(|track| (branch.to_string(), track));
+    pub(super) fn set_push(&self, branch: &str, push: crate::remote::StatusPush) {
+        self.lock().push = Some((branch.to_string(), push));
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -347,20 +348,25 @@ mod tests {
 
     /// What a failed read repeats is only ever the same branch's answer.
     #[test]
-    fn the_kept_push_counts_are_the_branch_they_were_read_for() {
+    fn the_kept_push_reading_is_the_branch_it_was_read_for() {
         let standing = Standing::default();
-        let track = crate::remote::PushTrack {
-            tracking: "fork/main".to_string(),
-            counts: crate::AheadBehind {
-                ahead: 1,
-                behind: 2,
-            },
+        let push = crate::remote::StatusPush {
+            push_default: Some("fork".to_string()),
+            track: Some(crate::remote::PushTrack {
+                remote: "fork".to_string(),
+                tracking: "fork/main".to_string(),
+                counts: crate::AheadBehind {
+                    ahead: 1,
+                    behind: 2,
+                },
+            }),
+            ..crate::remote::StatusPush::default()
         };
-        assert_eq!(standing.push_track_of("main"), None);
-        standing.set_push_track("main", Some(track.clone()));
-        assert_eq!(standing.push_track_of("main"), Some(track));
+        assert_eq!(standing.push_of("main"), None);
+        standing.set_push("main", push.clone());
+        assert_eq!(standing.push_of("main"), Some(push));
         assert_eq!(
-            standing.push_track_of("topic"),
+            standing.push_of("topic"),
             None,
             "main's destination is not topic's"
         );

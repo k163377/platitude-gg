@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides};
-use crate::remote::{Marked, PushRoute, RemoteTagRef, Upstream};
+use crate::remote::{PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
 ///
@@ -284,17 +284,11 @@ impl RefsSnapshot {
         };
         let remotes = || self.remote_names.iter().map(String::as_str);
         let route = PushRoute::new(upstream, self.marks.marked(short), remotes());
-        // Only counts against where the marks send the branch now: a read
-        // that could not tell repeats counts taken before a mark moved.
         let track = self
             .push_tracks
             .binary_search_by(|(name, _)| name.as_str().cmp(short))
             .ok()
-            .map(|at| &self.push_tracks[at].1)
-            .filter(|track| {
-                crate::refs::split_remote_ref(&track.tracking, remotes())
-                    .is_some_and(|(on, _)| route.marked() == Marked::Remote(on))
-            });
+            .map(|at| &self.push_tracks[at].1);
         let read = crate::remote::push_reading(route, upstream_counts, track);
         BranchPushFacts {
             standing: read.standing,

@@ -316,6 +316,7 @@ async fn the_status_says_the_upstream_is_here() {
         (
             true,
             Some(PushTrack {
+                remote: "origin".to_string(),
                 tracking: "origin/topic".to_string(),
                 counts: platitude_core::AheadBehind::default(),
             })

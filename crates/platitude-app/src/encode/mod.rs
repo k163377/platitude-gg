@@ -34,7 +34,7 @@ pub use markup::{
     spelled_ranges,
 };
 pub use mates::{Mates, mates_of};
-pub use push::{Push, ToolbarPush, named};
+pub use push::{Push, ToolbarPush};
 pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_after, flatten_patches, is_combined, is_new_file,
     is_unmerged_only, mode_change, pair_rows, whole_only_why,

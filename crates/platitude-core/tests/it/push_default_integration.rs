@@ -299,6 +299,7 @@ async fn a_push_elsewhere_is_counted_against_the_destinations_own_ref() {
     assert_eq!(
         track_of(&repo.path, &exec, &cancel).await,
         Some(remote::PushTrack {
+            remote: "fork".to_string(),
             tracking: "fork/main".to_string(),
             counts: platitude_core::AheadBehind {
                 ahead: 1,
@@ -408,6 +409,7 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
     assert_eq!(
         track,
         remote::PushTrack {
+            remote: "fork".to_string(),
             tracking: "fork/main".to_string(),
             counts: platitude_core::AheadBehind {
                 ahead: 1,
@@ -419,6 +421,193 @@ async fn the_status_carries_the_destinations_counts_only_where_the_push_goes_els
         asked(&sink) > 0,
         "the count above is of the command that read these"
     );
+    session.close_and_wait().await;
+}
+
+/// The fork fetched into `refs/remotes/copy/` — a name no remote has: the
+/// counts there are still the fork's, so the toolbar reads them where the
+/// mark sends the push, and a branch's row does too.
+#[tokio::test(flavor = "multi_thread")]
+async fn counts_fetched_under_another_name_still_speak_for_the_marked_remote() {
+    let (_origin, _fork, mut repo) = fork_diverged();
+    repo.git(&[
+        "config",
+        "remote.fork.fetch",
+        "+refs/heads/*:refs/remotes/copy/*",
+    ]);
+    repo.git(&["fetch", "-q", "fork"]);
+    let (exec, cancel) = env();
+    let track = track_of(&repo.path, &exec, &cancel).await;
+    assert_eq!(
+        track
+            .as_ref()
+            .map(|track| (track.remote.as_str(), track.tracking.as_str())),
+        Some(("fork", "copy/main"))
+    );
+    let status = platitude_core::status::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("status");
+    let head = remote::HeadPush {
+        branch: "main".to_string(),
+        settled: true,
+        upstream: status.upstream.clone().unwrap_or_default(),
+        upstream_counts: status.upstream_counts,
+        status: remote::StatusPush {
+            push_default: Some("fork".to_string()),
+            track,
+            ..remote::StatusPush::default()
+        },
+        ..remote::HeadPush::default()
+    };
+    let facts = head.facts(["fork", "origin"], "origin");
+    assert_eq!(
+        (
+            facts.standing,
+            facts.target.as_str(),
+            facts.measured.as_str()
+        ),
+        (remote::PushStanding::Diverged, "fork/main", "copy/main")
+    );
+
+    repo.git(&["switch", "-c", "aside"]);
+    let (sink, session) = opened(&repo).await;
+    let row = sink
+        .wait_for("main's row off the refs", |evs| {
+            evs.iter().rev().find_map(|e| match e {
+                SessionEvent::RefsLoaded { snapshot, .. } => {
+                    Some(snapshot.branch_push("main", "origin"))
+                }
+                _ => None,
+            })
+        })
+        .await;
+    let copy_tip = repo.git(&["rev-parse", "refs/remotes/copy/main"]);
+    assert_eq!(
+        (
+            row.standing,
+            row.target.as_str(),
+            row.lease.map(|oid| oid.to_hex())
+        ),
+        (
+            remote::PushStanding::Diverged,
+            "fork/main",
+            Some(copy_tip.trim().to_string())
+        )
+    );
+    session.close_and_wait().await;
+}
+
+/// The toolbar's answer — standing and destination — held as the app holds
+/// it: the last status beside the last refs snapshot, which gives the
+/// remotes' names.
+fn toolbar(
+    status: &platitude_core::status::WorktreeStatus,
+    push: &remote::StatusPush,
+    snapshot: &platitude_core::session::RefsSnapshot,
+) -> (remote::PushStanding, String) {
+    let head = remote::HeadPush {
+        branch: status.branch_head.clone().unwrap_or_default(),
+        settled: true,
+        upstream: status.upstream.clone().unwrap_or_default(),
+        upstream_counts: status.upstream_counts,
+        status: push.clone(),
+        ..remote::HeadPush::default()
+    };
+    let facts = head.facts(snapshot.remote_names.iter().map(String::as_str), "origin");
+    (facts.standing, facts.target)
+}
+
+/// Every answer the toolbar passes through from event `from` on, the one
+/// it held there first, each once in a row.
+fn toolbar_passes(sink: &CaptureSink, from: usize) -> Vec<(remote::PushStanding, String)> {
+    type Held<'a> = (
+        Option<(
+            &'a platitude_core::status::WorktreeStatus,
+            &'a remote::StatusPush,
+        )>,
+        Option<&'a platitude_core::session::RefsSnapshot>,
+    );
+    fn note(held: Held<'_>, passes: &mut Vec<(remote::PushStanding, String)>) {
+        if let (Some((status, push)), Some(snapshot)) = held {
+            let answer = toolbar(status, push, snapshot);
+            if passes.last() != Some(&answer) {
+                passes.push(answer);
+            }
+        }
+    }
+    let events = sink.events.lock().unwrap();
+    let mut held: Held<'_> = (None, None);
+    let mut passes = Vec::new();
+    for (at, event) in events.iter().enumerate() {
+        if at == from {
+            note(held, &mut passes);
+        }
+        let moved = match event {
+            SessionEvent::StatusLoaded { status, push, .. } => {
+                held.0 = Some((status.as_ref(), push));
+                true
+            }
+            SessionEvent::RefsLoaded { snapshot, .. } => {
+                held.1 = Some(snapshot.as_ref());
+                true
+            }
+            _ => false,
+        };
+        if moved && at >= from {
+            note(held, &mut passes);
+        }
+    }
+    passes
+}
+
+/// Waits for a status, and the refs with the repository's mark on
+/// `marked`, among the events from `from` on.
+async fn both_read(sink: &CaptureSink, from: usize, marked: Option<&str>) {
+    sink.wait_for("a status and the refs after the mark moved", |evs| {
+        let refs = evs[from..].iter().any(|e| {
+            matches!(e, SessionEvent::RefsLoaded { snapshot, .. }
+                if snapshot.marks.origin.push_default.as_ref().map(|m| m.remote.as_str())
+                    == marked)
+        });
+        let status = evs[from..]
+            .iter()
+            .any(|e| matches!(e, SessionEvent::StatusLoaded { .. }));
+        (refs && status).then_some(())
+    })
+    .await;
+}
+
+/// A mark moved outside, through the toolbar: each answer it passes
+/// through is the old destination's or the new one's, never the fork with
+/// nothing counted (`Elsewhere`) — a plain `push` over a diverged fork.
+///
+/// Measured: unset, the status lands before the refs read the move sends
+/// out (`RepoSession::note_push_default`); set again, the refs land first,
+/// the status tick reading the fork's counts one process more. Held side by
+/// side, either order pairs a mark with counts read under another.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_mark_moved_outside_reaches_the_toolbar_whole() {
+    let (_origin, _fork, mut repo) = fork_diverged();
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    poll_landed(&session).await;
+    let diverged = (remote::PushStanding::Diverged, "fork/main".to_string());
+    let ready = (remote::PushStanding::Ready, "origin/main".to_string());
+
+    let from = sink.events.lock().unwrap().len();
+    repo.git(&["config", "--unset", "remote.pushDefault"]);
+    poll_landed(&session).await;
+    both_read(&sink, from, None).await;
+    assert_eq!(
+        toolbar_passes(&sink, from),
+        [diverged.clone(), ready.clone()]
+    );
+
+    let from = sink.events.lock().unwrap().len();
+    repo.git(&["config", "remote.pushDefault", "fork"]);
+    poll_landed(&session).await;
+    both_read(&sink, from, Some("fork")).await;
+    assert_eq!(toolbar_passes(&sink, from), [ready, diverged]);
     session.close_and_wait().await;
 }
 
@@ -560,6 +749,7 @@ async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
             Ok(vec![(
                 "main".to_string(),
                 remote::PushTrack {
+                    remote: "fork".to_string(),
                     tracking: "fork/main".to_string(),
                     counts: platitude_core::AheadBehind {
                         ahead: 1,
@@ -612,6 +802,80 @@ async fn a_count_read_that_cannot_tell_repeats_the_last_answer() {
     assert!(
         reads.load(std::sync::atomic::Ordering::SeqCst) >= 2,
         "the second snapshot asked again and was not told"
+    );
+    session.close_and_wait().await;
+}
+
+/// A status tick whose marks read cannot tell repeats the branch's last
+/// push reading whole — the marks with the counts read under them: an
+/// empty one would weigh the toolbar's push by the upstream alone, a plain
+/// push over the fork it diverged from. The read answers until the test
+/// says, then fails (`remote::mock_push_marks`, on this thread's runtime
+/// as above).
+#[tokio::test]
+#[mry::lock(remote::push_marks)]
+async fn a_marks_read_that_cannot_tell_repeats_the_last_push_reading() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let failed = std::sync::Arc::new(AtomicUsize::new(0));
+    let failing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let (count, told) = (
+        std::sync::Arc::clone(&failed),
+        std::sync::Arc::clone(&failing),
+    );
+    remote::mock_push_marks().returns_with(move || {
+        if told.load(Ordering::SeqCst) {
+            count.fetch_add(1, Ordering::SeqCst);
+            return Err(GitError::UnexpectedOutput {
+                command: "git config".to_string(),
+                message: "made to fail".to_string(),
+            });
+        }
+        Ok(remote::PushMarks {
+            push_default: Some(remote::PushDefault {
+                remote: "fork".to_string(),
+                local: true,
+            }),
+            tracks: Some("origin".to_string()),
+            merge: Some("refs/heads/main".to_string()),
+            ..remote::PushMarks::default()
+        })
+    });
+    let (_origin, _fork, repo) = fork_diverged();
+    let (sink, session) = opened(&repo).await;
+    sink.opening_settled(&session).await;
+    let last_push = |from: usize| {
+        sink.wait_for("a status", move |evs| {
+            evs[from..].iter().rev().find_map(|e| match e {
+                SessionEvent::StatusLoaded { status, push, .. } => {
+                    Some((status.items.len(), push.clone()))
+                }
+                _ => None,
+            })
+        })
+    };
+    let (_, read) = last_push(0).await;
+    assert_eq!(
+        (
+            read.push_default.as_deref(),
+            read.track.as_ref().map(|track| track.tracking.as_str())
+        ),
+        (Some("fork"), Some("fork/main"))
+    );
+
+    failing.store(true, Ordering::SeqCst);
+    let from = sink.events.lock().unwrap().len();
+    std::fs::write(
+        repo.path.join("note.txt"),
+        "a change for the tick to read\n",
+    )
+    .expect("write a file");
+    poll_landed(&session).await;
+    let (files, repeated) = last_push(from).await;
+    assert_eq!(files, 1, "the tick after the change");
+    assert_eq!(repeated, read);
+    assert!(
+        failed.load(Ordering::SeqCst) >= 1,
+        "that tick asked for the marks and was not told"
     );
     session.close_and_wait().await;
 }

@@ -303,13 +303,13 @@ impl Footprint for crate::remote::KeptMarks {
 
 impl Footprint for crate::remote::PushTrack {
     fn heap_bytes(&self) -> usize {
-        self.tracking.heap_bytes()
+        self.remote.heap_bytes() + self.tracking.heap_bytes()
     }
 }
 
 impl Footprint for crate::remote::StatusPush {
     fn heap_bytes(&self) -> usize {
-        self.push_remote.heap_bytes() + self.track.heap_bytes()
+        self.push_remote.heap_bytes() + self.push_default.heap_bytes() + self.track.heap_bytes()
     }
 }
 

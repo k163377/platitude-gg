@@ -155,7 +155,7 @@ impl RepoSession {
     /// The branch's counts against where a mark sends its push, read only
     /// where that is not the upstream's remote ([`Self::push_goes_elsewhere`]):
     /// a process every tick, and nothing else reads them. A read that could
-    /// not tell repeats the branch's last answer (`Standing`).
+    /// not tell repeats the branch's last answer (`Standing::push_of`).
     async fn read_push_track(
         &self,
         workdir: &std::path::Path,
@@ -169,25 +169,22 @@ impl RepoSession {
         } else {
             Ok(None)
         };
-        match told {
-            Ok(track) => {
-                self.standing.set_push_track(branch, track.clone());
-                track
-            }
-            Err(_) => self.standing.push_track_of(branch),
-        }
+        told.unwrap_or_else(|_| self.standing.push_of(branch).and_then(|kept| kept.track))
     }
 
     /// What a status carries about the push of its branch
-    /// ([`remote::StatusPush`]), the counts against where a mark sends it
-    /// read by [`Self::read_push_track`] — and the
-    /// upstream's name in `status`, put as the send names it
+    /// ([`remote::StatusPush`]): both marks, and the counts against where
+    /// they send it read by [`Self::read_push_track`] — and the upstream's
+    /// name in `status`, put as the send names it
     /// ([`remote::PushMarks::upstream_name`]) in place of git's shortening,
     /// before anything weighs it. Read every tick so a mark moved from a
-    /// terminal shows on the next one; a detached HEAD has nothing to push,
-    /// and a read that fails says nothing and leaves git's name. The
-    /// repository's mark rides the refs snapshot instead, so a moved default
-    /// sends the refs out again ([`RepoSession::note_push_default`]).
+    /// terminal shows on the next one; a detached HEAD has nothing to push.
+    /// A marks read that fails leaves git's name and repeats the branch's
+    /// last reading whole, so its counts stay beside the marks they were
+    /// read under. A moved
+    /// repository's mark also sends the refs out again
+    /// ([`RepoSession::note_push_default`]), for the sidebar's badge and the
+    /// other branches' rows.
     async fn read_status_push(
         self: &Arc<Self>,
         workdir: &std::path::Path,
@@ -198,7 +195,7 @@ impl RepoSession {
             return remote::StatusPush::default();
         };
         let Ok(marks) = remote::push_marks(&self.executor, workdir, &branch, cancel).await else {
-            return remote::StatusPush::default();
+            return self.standing.push_of(&branch).unwrap_or_default();
         };
         self.note_push_default(&marks.push_default);
         if status.upstream.is_some()
@@ -209,11 +206,14 @@ impl RepoSession {
         let track = self
             .read_push_track(workdir, &branch, status, &marks, cancel)
             .await;
-        remote::StatusPush {
+        let push = remote::StatusPush {
             upstream_here: marks.upstream_is_here(),
             push_remote: marks.push_remote,
+            push_default: marks.push_default.map(|marked| marked.remote),
             track,
-        }
+        };
+        self.standing.set_push(&branch, push.clone());
+        push
     }
 
     /// [`remote::PushRoute::goes_elsewhere`] for a status whose upstream

@@ -141,8 +141,10 @@ impl RepoSession {
     /// re-reads refs to say the new one. `seen` is the status tick's read
     /// of the effective config ([`crate::remote::push_marks`]): the stat
     /// above misses a `--global remote.pushDefault`, and without this the
-    /// toolbar names the old destination while the send
-    /// (`plan_current_push`) goes to the new.
+    /// sidebar's badge and the other branches' rows name the old
+    /// destination while the send (`plan_current_push`) goes to the new.
+    /// The toolbar weighs the tick's own read
+    /// (`remote::StatusPush::push_default`), whichever lands first.
     ///
     /// Only a held answer is compared (none means the next listing reads
     /// the current state anyway); the re-read caches the new mark, so the

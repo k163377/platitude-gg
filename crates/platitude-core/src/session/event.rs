@@ -204,10 +204,11 @@ pub enum SessionEvent {
         /// or when nothing is conflicted. Display only: the launch reads
         /// the config again.
         merge_tool: String,
-        /// What the tick read of the push of the status's branch. Rides the
-        /// status so it is never read against another branch (the
-        /// repository-wide mark rides the refs snapshot,
-        /// `RepoSession::note_push_default`).
+        /// What the tick read of the push of the status's branch, both
+        /// marks among it. Rides the status so it is never read against
+        /// another branch; the toolbar weighs the push under these marks,
+        /// not the refs snapshot's copy of the repository's
+        /// ([`crate::remote::StatusPush::push_default`]).
         push: crate::remote::StatusPush,
         /// Pending paths whose change has something to say about line
         /// endings. Shared: most status reads repeat the previous answer.

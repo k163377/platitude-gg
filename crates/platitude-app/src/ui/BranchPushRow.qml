@@ -30,7 +30,8 @@ AppMenuItem {
     readonly property bool publishing: pushRow.facts.pushState === "publish"
     /// The first push's words: where it goes is asked — or, out, there is nowhere to name.
     readonly property bool firstPushWords: pushRow.publishing || pushRow.facts.pushStaysHere
-    readonly property bool overwrites: pushRow.facts.pushState === "behind" || pushRow.facts.pushState === "diverged"
+    /// Only the held overwrite reaches — the toolbar's rule (`remote::PushStanding::overwrites`).
+    readonly property bool overwrites: pushRow.facts.pushOverwrites
     /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
     /// (`BandPushButton`).
     readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")

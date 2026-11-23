@@ -31,6 +31,10 @@ pub use self::branch::{
 pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
+/// The session tests' mock of [`push_marks`] (mry builds it into debug
+/// builds only).
+#[cfg(debug_assertions)]
+pub use self::marks::mock_push_marks;
 pub use self::marks::{
     BranchPushRemote, KeptMarks, OriginMarks, PushDefault, PushMarks, clear_origin, kept_marks,
     mark_origin, push_marks,

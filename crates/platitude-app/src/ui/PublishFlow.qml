@@ -43,7 +43,8 @@ Item {
     /// — the one the send resolves: the standing, the label, the tip's counts, the overwrite's lease and the first
     /// push's upstream below are all its fields, never re-derived here, or the label and the send part ways. The
     /// branch's push is the model's record, handed on as read (`WorktreeModel.headPush`: whether the upstream is a
-    /// branch here is the status's word, never read off its name, and the branch's own mark rides with the status).
+    /// branch here is the status's word, never read off its name, and both marks ride with the status — not the tab's
+    /// `pushDefault`, which lands before or after the counts read under it).
     ///
     /// Where a mark sends the push to another remote than the upstream's — a branch here being on none — the counts
     /// that speak for it are the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
@@ -54,7 +55,7 @@ Item {
     /// as `stale info`. Headless: `push-target` / `push-hover` / `force-push` on `--preset forkdiverged`, and
     /// `push-target forkmark --preset forkmark` for no tracking ref.
     readonly property var pushFacts:
-        GitFacts.toolbarPush(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
+        GitFacts.toolbarPush(publishFlow.worktree.headPush, publishFlow.repoTab.state === "open",
                              publishFlow.repoTab.remoteNames, publishFlow.repoTab.defaultRemote)
     /// Where the button would send this branch: the branch's own mark, then the repository's, then the upstream
     /// (デザイン規約 §リモートを書き留める). Headless: `push-target` — the label is in a tooltip, which no picture can judge:
@@ -77,7 +78,10 @@ Item {
     /// branch (`HeadPush::settled`). `elsewhere` is only for a destination with no tracking ref here (a fetch refspec
     /// outside `refs/remotes/`, or a `remote.<name>.push` that renames). The counts are the last fetch's, so they prove
     /// the negative only: a push may still be refused. A tab that is not open stands closed whatever its branch says.
-    readonly property string pushState: publishFlow.repoTab.state !== "open" ? "closed" : publishFlow.pushFacts.state
+    /// Read for the words the button says; what a press does in it is core's too (below).
+    readonly property string pushState: publishFlow.pushFacts.state
+    /// Only the held overwrite reaches (`remote::PushStanding::overwrites`): the button's `push -f` shape.
+    readonly property bool pushOverwrites: publishFlow.pushFacts.overwrites
     /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
     /// are against, which an overwrite leases to — none where the push would stay here, as the branch row's
     /// (`RefsSnapshot::branch_push`; both read `remote::push_reading`).
@@ -89,16 +93,10 @@ Item {
     /// so the doors that send one beside another — the toolbar's button, the question's pill — wait on this, and only
     /// one is ever out.
     readonly property bool pushDoorsOpen: publishFlow.repoTab.busyCount === 0 && !publishFlow.repoTab.settling
-    readonly property bool canPush: (publishFlow.pushState === "publish"
-                                     || publishFlow.pushState === "elsewhere"
-                                     || publishFlow.pushState === "ready")
-                                    && publishFlow.pushDoorsOpen
-    /// `behind` too: the far side has commits this branch lacks, so only an overwrite reaches, and both states have a
-    /// tracking ref to lease against.
-    readonly property bool canForcePush: (publishFlow.pushState === "ready"
-                                          || publishFlow.pushState === "behind"
-                                          || publishFlow.pushState === "diverged")
-                                         && publishFlow.pushDoorsOpen
+    /// A plain press sends (`remote::PushStanding::sends_plain`) and the doors are open.
+    readonly property bool canPush: publishFlow.pushFacts.sendsPlain && publishFlow.pushDoorsOpen
+    /// The held overwrite reaches (`pushOverwrites`) and the doors are open.
+    readonly property bool canForcePush: publishFlow.pushOverwrites && publishFlow.pushDoorsOpen
     /// What git said to the last refused push of each branch, by branch — a refusal is about that branch's standing, so
     /// whichever door sent it (the toolbar, the branch's row) it is that branch's, until a push of it lands or the
     /// branch is gone (`forgetUnlisted`) (デザイン規約 §リモートへ送る). Most refusals (`fetch first`) are about that

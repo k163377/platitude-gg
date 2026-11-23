@@ -58,6 +58,7 @@ Item {
         /// Which branch went, read back the way the page would send it.
         property string sentBranch: ""
         property string pushState: "behind"
+        property bool pushOverwrites: true
         property int pushBehind: 1
         property int pushAhead: 0
         property bool pushFailed: false

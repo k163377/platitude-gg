@@ -191,30 +191,33 @@ impl GitFacts {
 
     /// What the toolbar's push stands on, read whole
     /// (`remote::HeadPush::facts`): the standing in the word
-    /// `PublishFlow.pushState` branches on, where the label says it goes,
-    /// the counts the tip says and the remote branch an overwrite leases
-    /// to — all off one destination, the one the send
-    /// (`remote::plan_current_push`) resolves. A closed tab is the caller's
-    /// to add: this answers for the repository alone.
+    /// `PublishFlow.pushState` branches on and what a press does in it,
+    /// where the label says it goes, the counts the tip says and the remote
+    /// branch an overwrite leases to — all off one destination, the one the
+    /// send (`remote::plan_current_push`) resolves. A tab that is not
+    /// `open` stands closed whatever its branch says; the label is still
+    /// named.
     ///
     /// `head` is the model's own record handed on as it was read
-    /// (`WorktreeModel.headPush`); QML builds none. The repository's mark
-    /// (`RepoTab.pushDefault`, empty for none), the configured remotes and
-    /// the remote a branch that tracks nothing, marked nowhere, goes to are
-    /// the tab's.
+    /// (`WorktreeModel.headPush`); QML builds none. Both marks are the
+    /// status's, read with the counts under them — never the tab's
+    /// `pushDefault`, which the refs snapshot sends out before or after
+    /// (`remote::StatusPush::push_default`). The configured remotes and the
+    /// remote a branch that tracks nothing, marked nowhere, goes to are the
+    /// tab's.
     #[qslot]
     fn toolbar_push(
         &self,
         head: crate::encode::Push,
-        push_default: String,
+        open: bool,
         remote_names: Vec<String>,
         default_remote: String,
     ) -> One<crate::encode::ToolbarPush> {
-        let push_default = crate::encode::named(push_default.as_str());
-        One::new(
-            head.facts(push_default, names(&remote_names), &default_remote)
-                .into(),
-        )
+        let mut facts = head.facts(names(&remote_names), &default_remote);
+        if !open {
+            facts.standing = platitude_core::remote::PushStanding::Closed;
+        }
+        One::new(facts.into())
     }
 
     /// What the right-click menu on a ref may offer, as the words
@@ -669,8 +672,9 @@ mod tests {
     use super::{GitFacts, file_lines};
     use platitude_core::remote::{HeadPush, PushTrack, StatusPush};
 
-    /// `main` one commit ahead of `origin/main`, marked nowhere of its own.
-    fn head(track: Option<PushTrack>) -> crate::encode::Push {
+    /// `main` one commit ahead of `origin/main`, marked nowhere of its own,
+    /// the repository's mark as the status read it.
+    fn head(track: Option<PushTrack>, push_default: &str) -> crate::encode::Push {
         crate::encode::Push::new(HeadPush {
             branch: "main".into(),
             settled: true,
@@ -681,20 +685,21 @@ mod tests {
             }),
             status: StatusPush {
                 track,
+                push_default: Some(push_default.to_string()).filter(|mark| !mark.is_empty()),
                 ..StatusPush::default()
             },
             ..HeadPush::default()
         })
     }
 
-    /// The tab's empty mark is no mark; one on another remote takes the
-    /// push there, under the branch's own name, read by the counts there.
+    /// No mark leaves the push to the upstream; one on another remote takes
+    /// it there, under the branch's own name, read by the counts there.
     #[test]
-    fn the_toolbars_push_is_read_off_the_models_record_under_the_tabs_mark() {
+    fn the_toolbars_push_is_read_off_the_models_record_under_its_marks() {
         let push = |track: Option<PushTrack>, push_default: &str| {
             let answer = GitFacts.toolbar_push(
-                head(track),
-                push_default.to_string(),
+                head(track, push_default),
+                true,
                 vec!["fork".to_string(), "origin".to_string()],
                 "origin".to_string(),
             );
@@ -704,6 +709,8 @@ mod tests {
             push(None, ""),
             crate::encode::ToolbarPush {
                 state: "ready".into(),
+                sends_plain: true,
+                overwrites: false,
                 target: "origin/main".into(),
                 measured: "origin/main".into(),
                 ahead: 1,
@@ -722,6 +729,7 @@ mod tests {
             "nothing counted over there"
         );
         let there = PushTrack {
+            remote: "fork".into(),
             tracking: "fork/main".into(),
             counts: platitude_core::AheadBehind {
                 ahead: 1,
@@ -738,6 +746,32 @@ mod tests {
             ),
             ("diverged", "fork/main", 1, 2),
             "the destination's own counts, and its ref to lease to"
+        );
+        assert_eq!(
+            (diverged.sends_plain, diverged.overwrites),
+            (false, true),
+            "only the held overwrite reaches"
+        );
+    }
+
+    /// A tab that is not open sends nothing, and still names where its
+    /// branch would go.
+    #[test]
+    fn a_tab_that_is_not_open_stands_closed() {
+        let answer = GitFacts.toolbar_push(
+            head(None, ""),
+            false,
+            vec!["origin".to_string()],
+            "origin".to_string(),
+        );
+        assert_eq!(
+            (
+                answer.state.as_str(),
+                answer.sends_plain,
+                answer.overwrites,
+                answer.target.as_str()
+            ),
+            ("closed", false, false, "origin/main")
         );
     }
 

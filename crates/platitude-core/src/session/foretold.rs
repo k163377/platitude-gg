@@ -362,6 +362,7 @@ mod tests {
             merge_tool: "meld".to_string(),
             push: remote::StatusPush {
                 push_remote: Some("fork".to_string()),
+                push_default: None,
                 upstream_here: true,
                 track: None,
             },

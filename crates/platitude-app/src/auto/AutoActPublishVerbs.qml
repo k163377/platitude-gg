@@ -251,7 +251,8 @@ Item {
     }
     /// _PGG_AUTO_ACT=push-target: the toolbar's destination and standing, off the bindings the button reads
     /// (`RepoPage.pushTargetLabel` / `pushState`), with the marks that decided it — the label cannot say which one git
-    /// followed. `worktree.loaded` is the barrier: before the first status every mark reads unset.
+    /// followed. Both marks ride the status (`headPush`), so the barrier is a status about HEAD's branch
+    /// (`worktree.countsSettled`): before one every mark reads unset and the push stands closed.
     PageStage {
         id: pushTargetTimer
         name: "push_target"
@@ -259,12 +260,13 @@ Item {
             "name": "push_target_ready",
             "when": () => ({
                 "loaded": worktree.loaded,
+                "counts": worktree.countsSettled,
                 "open": repoTab.state === "open",
                 "idle": repoTab.busyCount === 0 }),
             "report": () => "push_target label=" + page.pushTargetLabel
                             + " state=" + page.pushState
                             + " branch_mark=" + worktree.headPush.pushRemote
-                            + " repo_mark=" + repoTab.pushDefault
+                            + " repo_mark=" + worktree.headPush.pushDefault
                             + " tracks=" + worktree.upstream })
     }
     /// _PGG_AUTO_ACT=push-hover: the tip on the band's push button, the one place the count a push sends (or an

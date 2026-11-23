@@ -18,8 +18,13 @@ pub type Push = One<HeadPush>;
 /// the tip says.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ToolbarPush {
-    /// `PushStanding`'s word (`publish` / `ready` / `stays-here` …).
+    /// `PushStanding`'s word (`publish` / `ready` / `stays-here` …), for
+    /// the words the button says.
     pub state: String,
+    /// A plain press sends (`PushStanding::sends_plain`).
+    pub sends_plain: bool,
+    /// Only the held overwrite reaches (`PushStanding::overwrites`).
+    pub overwrites: bool,
     pub target: String,
     pub measured: String,
     pub ahead: i32,
@@ -31,6 +36,8 @@ impl From<HeadPushFacts> for ToolbarPush {
     fn from(facts: HeadPushFacts) -> Self {
         Self {
             state: facts.standing.as_str().to_string(),
+            sends_plain: facts.standing.sends_plain(),
+            overwrites: facts.standing.overwrites(),
             target: facts.target,
             measured: facts.measured,
             ahead: shown(facts.counts.ahead),
@@ -44,6 +51,8 @@ impl Record for ToolbarPush {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
             .put("state", &self.state)
+            .put("sendsPlain", &self.sends_plain)
+            .put("overwrites", &self.overwrites)
             .put("target", &self.target)
             .put("measured", &self.measured)
             .put("ahead", &self.ahead)
@@ -55,6 +64,8 @@ impl Record for ToolbarPush {
     fn from_map(map: &QVariantMap) -> Option<Self> {
         Some(Self {
             state: field(map, "state")?,
+            sends_plain: field(map, "sendsPlain")?,
+            overwrites: field(map, "overwrites")?,
             target: field(map, "target")?,
             measured: field(map, "measured")?,
             ahead: field(map, "ahead")?,
@@ -64,11 +75,12 @@ impl Record for ToolbarPush {
     }
 }
 
-/// Flat, under `WorktreeModel`'s property names (`pushRemote`, `tracked` —
-/// what the harness reads off it), in Qt's spellings of "nothing": a flag
-/// down beside the upstream's counts, an empty name for the mark and the
-/// destination's tracking ref ([`named`]). The counts are Qt's `int`s, a
-/// count past one drawn as its largest.
+/// Flat, under `WorktreeModel`'s property names (`pushRemote`,
+/// `pushDefault`, `tracked` — what the harness reads off it), in Qt's
+/// spellings of "nothing": a flag down beside the upstream's counts, an
+/// empty name for each mark and the destination's tracking ref
+/// ([`named`]) — its remote riding beside it. The counts are Qt's `int`s,
+/// a count past one drawn as its largest.
 impl Record for HeadPush {
     fn to_map(&self) -> QVariantMap {
         let counts = self.upstream_counts.unwrap_or_default();
@@ -89,6 +101,14 @@ impl Record for HeadPush {
                 self.status.push_remote.as_deref().unwrap_or_default(),
             )
             .put(
+                "pushDefault",
+                self.status.push_default.as_deref().unwrap_or_default(),
+            )
+            .put(
+                "pushTrackRemote",
+                track.map_or("", |track| track.remote.as_str()),
+            )
+            .put(
                 "pushTracking",
                 track.map_or("", |track| track.tracking.as_str()),
             )
@@ -101,6 +121,7 @@ impl Record for HeadPush {
         let tracked: bool = field(map, "tracked")?;
         let counts = counts_of(field(map, "ahead")?, field(map, "behind")?);
         let pushed = counts_of(field(map, "pushAhead")?, field(map, "pushBehind")?);
+        let remote: String = field(map, "pushTrackRemote")?;
         Some(Self {
             branch: field(map, "branch")?,
             detached: field(map, "detached")?,
@@ -110,8 +131,10 @@ impl Record for HeadPush {
             upstream_counts: tracked.then_some(counts),
             status: StatusPush {
                 push_remote: named(field(map, "pushRemote")?),
+                push_default: named(field(map, "pushDefault")?),
                 upstream_here: field(map, "upstreamHere")?,
                 track: named(field(map, "pushTracking")?).map(|tracking| PushTrack {
+                    remote,
                     tracking,
                     counts: pushed,
                 }),
@@ -121,9 +144,9 @@ impl Record for HeadPush {
 }
 
 /// Qt's word for no name — an empty string — read as none: the one place
-/// the toolbar's push reads it so, for the record's mark and tracking ref
-/// as for the tab's mark (`GitFacts.toolbarPush`).
-pub fn named<S: AsRef<str>>(name: S) -> Option<S> {
+/// the toolbar's push reads it so, for the record's marks and tracking ref
+/// (`GitFacts.toolbarPush`).
+fn named<S: AsRef<str>>(name: S) -> Option<S> {
     Some(name).filter(|name| !name.as_ref().is_empty())
 }
 
@@ -158,8 +181,10 @@ mod tests {
             }),
             status: StatusPush {
                 push_remote: Some("fork".into()),
+                push_default: Some("origin".into()),
                 upstream_here: false,
                 track: Some(PushTrack {
+                    remote: "fork".into(),
                     tracking: "fork/feature/日本語".into(),
                     counts: AheadBehind {
                         ahead: 1,
@@ -194,10 +219,12 @@ mod tests {
         let mut map = marked_elsewhere().to_map();
         map.insert(QString::from("tracked"), false.to_qvariant());
         map.insert(QString::from("pushRemote"), String::new().to_qvariant());
+        map.insert(QString::from("pushDefault"), String::new().to_qvariant());
         map.insert(QString::from("pushTracking"), String::new().to_qvariant());
         let read = HeadPush::from_map(&map).expect("a record");
         assert_eq!(read.upstream_counts, None);
         assert_eq!(read.status.push_remote, None);
+        assert_eq!(read.status.push_default, None);
         assert_eq!(read.status.track, None);
     }
 

@@ -92,14 +92,16 @@ Item {
             "push": all.push
         }, again === undefined ? "" : again)
     }
-    /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts.
+    /// A push row's answer in `state`, going to `origin/feature/topic-a` and leased to `fed789` where it counts —
+    /// `overwrites` as core answers it for that state (`remote::PushStanding::overwrites`).
     function pushing(state) {
-        return { "state": state, "target": "origin/feature/topic-a", "lease": "fed789",
-                 "upstream": "origin/feature/topic-a" }
+        return { "state": state, "overwrites": state === "behind" || state === "diverged",
+                 "target": "origin/feature/topic-a", "lease": "fed789", "upstream": "origin/feature/topic-a" }
     }
     /// …and where the push would stay in this repository (`stays-here` — measured against another branch here and
     /// marked to no remote, or marked to `.`): that alone, every other field empty.
-    readonly property var pushingHere: ({ "state": "stays-here", "target": "", "lease": "", "upstream": "" })
+    readonly property var pushingHere:
+        ({ "state": "stays-here", "overwrites": false, "target": "", "lease": "", "upstream": "" })
     /// git turns the plain delete of `name` down, handed to the card as the carrying menu hands it: cleared as the
     /// delete is asked, then the name (`RepoTab.branchDeleteRefused`), so each refusal is an edge of its own.
     function refuse(name) {

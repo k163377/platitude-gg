@@ -19,15 +19,12 @@ ActionButton {
     /// with it (規約 §回数押し「警告の色は枠と印が持つ」). git's words end the tip. Two stages only: unlike fetch's
     /// `Resume`, nothing pushes by itself, so nothing stopped and there is no new move to offer.
     readonly property bool failed: pushButton.curPage !== null && pushButton.curPage.pushFailed
-    /// The standings where an overwrite is the only send there is (デザイン規約 §リモートへ送る). There the button takes
-    /// the hold and a click does nothing: a plain push cannot land in either, so one button never carries two
-    /// meanings, and the hold is the confirmation (no dialog — the lease guards it, §相手の履歴を置き換える). `elsewhere`
-    /// stays plain: nothing here tracks the branch over there, so no commit is on screen for the lease to pin to.
-    /// `behind` takes the overwrite shape too: the only send that reaches from there rewinds the far side, a plain
-    /// push being answered "nothing to send". What it costs is the far side's `behind` commits, said in the same
-    /// sentence as `diverged` (`sentenceTo`). Out of reach, the way back from a history sent and then regretted would
-    /// leave the screen.
-    readonly property bool forceShape: pushButton.mode === "diverged" || pushButton.mode === "behind"
+    /// Where an overwrite is the only send there is — which standings those are is core's
+    /// (`remote::PushStanding::overwrites`, `RepoPage.pushOverwrites`). There the button takes the hold and a click does
+    /// nothing, and the hold is the confirmation (no dialog — the lease guards it, §相手の履歴を置き換える). What it costs
+    /// is the far side's `behind` commits, said in one sentence for both standings (`sentenceTo`). Out of reach, the way
+    /// back from a history sent and then regretted would leave the screen.
+    readonly property bool forceShape: pushButton.curPage !== null && pushButton.curPage.pushOverwrites
     /// The shape as the press under way was given it, settled when the button goes down (デザイン規約 §回数押し): `mode`
     /// moves between presses with the fetch behind every press. Everything the shape decides reads this
     /// (`ActionButton.armedPresses`); a press whose shape went is dropped (`HoldDriver.stale`).
@@ -68,7 +65,7 @@ ActionButton {
                + ":" + pushButton.curPage.pushTargetLabel
     // Down while a rebase plan is composed: it rewrites the very commits a push would send.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
-             && (pushButton.curPage.canPush || (pushButton.forceShape && pushButton.curPage.canForcePush))
+             && (pushButton.curPage.canPush || pushButton.curPage.canForcePush)
     onHeld: pushButton.curPage.forcePush()
     tip: {
         if (pushButton.curPage === null)

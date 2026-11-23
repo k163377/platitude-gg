@@ -343,6 +343,10 @@ impl PushMarks {
 /// `wipAv22x`'s keys. A key set at several levels answers with its last
 /// record, as `--get` does — but for the multi-valued two, kept as git
 /// keeps them: every fetch refspec in order, and the first merge.
+///
+/// The session tests mock this (`mock_push_marks`); mry copies what a mock
+/// matches on, so the borrowed arguments are skipped.
+#[mry::mry(skip_args(GitExecutor, Path, str, CancellationToken))]
 pub async fn push_marks(
     executor: &GitExecutor,
     workdir: &Path,

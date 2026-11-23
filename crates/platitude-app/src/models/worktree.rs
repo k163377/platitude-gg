@@ -76,10 +76,10 @@ pub struct WorktreeModel {
     status_seq: i32,
     /// The branch the last status read HEAD on, for `counts_settled`.
     status_branch: String,
-    /// Whether `upstream` / `ahead` / `behind` (and the push's own counts,
-    /// `head_push`) are about the branch the record names. Between a move
-    /// of HEAD and the status behind it they are blank and the push
-    /// standing is closed.
+    /// Whether `upstream` / `ahead` / `behind` (and the push reading,
+    /// `head_push`, both marks among it) are about the branch the record
+    /// names. Between a move of HEAD and the status behind it they are
+    /// blank and the push stands closed, naming no destination.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
     /// the ones below only while it is the branch HEAD is on (`settle`).
@@ -97,8 +97,8 @@ pub struct WorktreeModel {
     /// blank whenever they are.
     pull_blocked: bool,
     /// What the last status read of the push of its branch
-    /// (`StatusMsg::push`), shown through `head_push` — its upstream and
-    /// counts only while it is the branch HEAD is on.
+    /// (`StatusMsg::push`), shown through `head_push` only while it is the
+    /// branch HEAD is on.
     status_push: platitude_core::remote::StatusPush,
     op_text: String,
     /// The same operation in git's spelling (`cherry-pick`), for the pill
@@ -461,12 +461,10 @@ impl WorktreeModel {
     }
 
     /// The push of the branch HEAD is on: the last status's reading of it,
-    /// its upstream and counts blank until that status is about this
-    /// branch (`counts_settled`). The branch's own mark is the last
-    /// status's whichever branch it read.
+    /// blank — the branch's own mark too — until that status is about this
+    /// branch (`counts_settled`).
     fn head_push_now(&self) -> platitude_core::remote::HeadPush {
         let settled = self.counts_settled;
-        let told = &self.status_push;
         platitude_core::remote::HeadPush {
             branch: self.branch.clone(),
             detached: self.detached,
@@ -474,10 +472,10 @@ impl WorktreeModel {
             settled,
             upstream: self.upstream.clone(),
             upstream_counts: self.status_upstream_counts.filter(|_| settled),
-            status: platitude_core::remote::StatusPush {
-                push_remote: told.push_remote.clone(),
-                upstream_here: settled && told.upstream_here,
-                track: told.track.clone().filter(|_| settled),
+            status: if settled {
+                self.status_push.clone()
+            } else {
+                platitude_core::remote::StatusPush::default()
             },
         }
     }

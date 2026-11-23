@@ -455,8 +455,8 @@ Item {
         function test_the_delete_table_closes_the_rows_used_often_above_the_cards() {
             root.aimAt({ pullRuns: "aside" })
             const facts = root.branchFacts()
-            facts.branch.push = { "state": "ready", "target": "origin/feature/topic-a", "lease": "fed789",
-                                  "upstream": "origin/feature/topic-a" }
+            facts.branch.push = { "state": "ready", "overwrites": false, "target": "origin/feature/topic-a",
+                                  "lease": "fed789", "upstream": "origin/feature/topic-a" }
             menu.offerCommit(facts)
             const shown = root.shownOrder()
             const at = word => shown.indexOf(word)

@@ -154,6 +154,8 @@ AppMenu {
         /// overwrite is leased to, and the upstream the first push's question opens on. `pushState` is empty where
         /// the row has no seat.
         property string pushState: ""
+        /// Only the held overwrite reaches (`branchPush`'s `overwrites`, core's rule).
+        property bool pushOverwrites: false
         property string pushTarget: ""
         property string pushLease: ""
         property string pushUpstream: ""
@@ -174,9 +176,9 @@ AppMenu {
     /// reading answers no `delete-remote`, which is what greys the rows that reach it), `open` whether the tab is,
     /// `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
     /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
-    /// on (`NavSectionModel.branchPush`: `state`, `target`, `lease`, `upstream`). Every `facts` a branch card stands on
-    /// carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are written below as they come, and
-    /// the unset row stands on them.
+    /// on (`NavSectionModel.branchPush`: `state`, `overwrites`, `target`, `lease`, `upstream`). Every `facts` a branch
+    /// card stands on carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are written below as
+    /// they come, and the unset row stands on them.
     ///
     /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
     /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
@@ -219,6 +221,7 @@ AppMenu {
             state.deleteMerged = true
             state.deleteAsked = false
             state.pushState = ""
+            state.pushOverwrites = false
             state.pushTarget = ""
             state.pushLease = ""
             state.pushUpstream = ""
@@ -276,6 +279,7 @@ AppMenu {
         state.pushMoved = pushMoved
         state.pushStaysHere = pushMoved ? state.pushStaysHere : pushed && push.state === "stays-here"
         state.pushState = pushMoved ? state.pushState : pushSeated ? push.state : ""
+        state.pushOverwrites = pushMoved ? state.pushOverwrites : pushSeated && push.overwrites
         state.pushTarget = pushMoved ? state.pushTarget : pushSeated ? push.target : ""
         state.pushLease = pushMoved ? state.pushLease : pushSeated ? push.lease : ""
         state.pushUpstream = pushMoved ? state.pushUpstream : pushSeated ? push.upstream : ""

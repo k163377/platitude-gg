@@ -29,6 +29,7 @@ Item {
             property string branch: "main"
         }
         property string pushState: "ready"
+        property bool pushOverwrites: false
         property string pushTargetLabel: "origin/main"
         property int pushAhead: 1
         property int pushBehind: 0
@@ -36,7 +37,7 @@ Item {
         property string pushFailReason: ""
         property bool planShown: false
         property bool canPush: true
-        property bool canForcePush: true
+        property bool canForcePush: false
     }
 
     BandFetchButton {

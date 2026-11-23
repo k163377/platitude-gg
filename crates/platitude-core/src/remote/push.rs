@@ -259,8 +259,8 @@ pub async fn push(
 
 /// How `branch` stands against the tracking ref of where a mark sends
 /// its push ([`super::PushRoute::goes_elsewhere`]): one `for-each-ref`, git naming
-/// the ref through that remote's fetch refspecs (`%(push)`) and counting
-/// against it (`%(push:track)`).
+/// the remote (`%(push:remotename)`), the ref through that remote's fetch
+/// refspecs (`%(push)`) and counting against it (`%(push:track)`).
 ///
 /// Asked as `push.default=current`, the branch under its own name — the
 /// refspec [`plan_push`] sends there. The default `simple` names
@@ -281,7 +281,7 @@ pub async fn push_track(
             "-c",
             "push.default=current",
             "for-each-ref",
-            "--format=%(push)%00%(push:remoteref)%00%(push:track)",
+            "--format=%(push)%00%(push:remotename)%00%(push:remoteref)%00%(push:track)",
         ])
         .arg(format!("refs/heads/{branch}"));
     let out = executor.run(cmd, cancel).await?;
@@ -307,7 +307,7 @@ pub async fn push_tracks(
         "-c",
         "push.default=current",
         "for-each-ref",
-        "--format=%(refname:lstrip=2)%00%(push)%00%(push:remoteref)%00%(push:track)",
+        "--format=%(refname:lstrip=2)%00%(push)%00%(push:remotename)%00%(push:remoteref)%00%(push:track)",
         "refs/heads",
     ]);
     let out = executor.run(cmd, cancel).await?;
@@ -337,11 +337,16 @@ fn parse_push_track(branch: &str, bytes: &[u8]) -> Option<PushTrack> {
     )
 }
 
-/// One line: `<ref>\0<remote ref>\0<track>`. Every way of having nothing
-/// to count against answers none.
+/// One line: `<ref>\0<remote>\0<remote ref>\0<track>`. Every way of
+/// having nothing to count against answers none.
 fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
     let mut fields = line.split(|b| *b == 0);
-    let (tracking, remote_ref, track) = (fields.next()?, fields.next()?, fields.next()?);
+    let (tracking, remote, remote_ref, track) = (
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+        fields.next()?,
+    );
     // Set only by a `remote.<name>.push` refspec, which moves `%(push)`
     // where the send's own refspec does not go.
     if !remote_ref.is_empty() && remote_ref != format!("refs/heads/{branch}").as_bytes() {
@@ -356,6 +361,7 @@ fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
         return None;
     }
     Some(PushTrack {
+        remote: std::str::from_utf8(remote).ok()?.to_string(),
         tracking: tracking.to_string(),
         counts: crate::refs::parse_track(track),
     })
@@ -369,6 +375,15 @@ mod tests {
     use crate::remote::standing::Upstream;
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
+
+    /// A [`PushTrack`] read for the fork.
+    fn fork(tracking: &str, ahead: u32, behind: u32) -> PushTrack {
+        PushTrack {
+            remote: "fork".to_string(),
+            tracking: tracking.to_string(),
+            counts: crate::AheadBehind { ahead, behind },
+        }
+    }
 
     fn far(remote: &str, branch: &str) -> RemoteBranch {
         RemoteBranch {
@@ -528,39 +543,36 @@ mod tests {
     fn a_push_track_counts_only_against_a_remote_branch_the_send_reaches() {
         let track = |line: &[u8]| parse_push_track("main", line);
         assert_eq!(
-            track(b"refs/remotes/fork/main\0\0[ahead 1, behind 1]\n"),
-            Some(PushTrack {
-                tracking: "fork/main".to_string(),
-                counts: crate::AheadBehind {
-                    ahead: 1,
-                    behind: 1
-                },
-            })
+            track(b"refs/remotes/fork/main\0fork\0\0[ahead 1, behind 1]\n"),
+            Some(fork("fork/main", 1, 1))
         );
         assert_eq!(
-            track(b"refs/remotes/fork/main\0\0\n"),
-            Some(PushTrack {
-                tracking: "fork/main".to_string(),
-                counts: crate::AheadBehind::default(),
-            }),
+            track(b"refs/remotes/fork/main\0fork\0\0\n"),
+            Some(fork("fork/main", 0, 0)),
             "level with it is a count too"
         );
         assert_eq!(
-            track(b"refs/remotes/fork/main\0refs/heads/main\0[ahead 1]\n")
-                .map(|track| track.tracking)
-                .as_deref(),
-            Some("fork/main"),
+            track(b"refs/remotes/copy/main\0fork\0\0[ahead 1, behind 1]\n"),
+            Some(fork("copy/main", 1, 1)),
+            "a fetch refspec that takes the branch in under another name"
+        );
+        assert_eq!(
+            track(b"refs/remotes/fork/main\0fork\0refs/heads/main\0[ahead 1]\n"),
+            Some(fork("fork/main", 1, 0)),
             "a push refspec that sends the branch under its own name"
         );
         for (line, why) in [
-            (&b"refs/remotes/fork/main\0\0[gone]\n"[..], "never fetched"),
-            (b"\0\0\n", "no fetch refspec takes the branch in"),
             (
-                b"refs/remotes/fork/wip\0refs/heads/wip\0\n",
+                &b"refs/remotes/fork/main\0fork\0\0[gone]\n"[..],
+                "never fetched",
+            ),
+            (b"\0fork\0\0\n", "no fetch refspec takes the branch in"),
+            (
+                b"refs/remotes/fork/wip\0fork\0refs/heads/wip\0\n",
                 "a push refspec that renames the branch: the send goes elsewhere",
             ),
             (
-                b"refs/mirror/fork/main\0\0[ahead 1]\n",
+                b"refs/mirror/fork/main\0fork\0\0[ahead 1]\n",
                 "not a remote branch: nothing on screen to lease against",
             ),
             (b"", "no such branch"),
@@ -573,34 +585,16 @@ mod tests {
     /// `push_track` fields.
     #[test]
     fn push_tracks_keep_the_branches_that_have_something_to_count_against() {
-        let bytes = b"feature/x\0refs/remotes/fork/feature/x\0\0[behind 2]\n\
-              lone\0refs/remotes/fork/lone\0\0[gone]\n\
-              main\0refs/remotes/fork/main\0\0[ahead 1, behind 1]\n\
-              wip\0\0\0\n";
+        let bytes = b"feature/x\0refs/remotes/fork/feature/x\0fork\0\0[behind 2]\n\
+              lone\0refs/remotes/fork/lone\0fork\0\0[gone]\n\
+              main\0refs/remotes/fork/main\0fork\0\0[ahead 1, behind 1]\n\
+              wip\0\0fork\0\0\n";
         let tracks = parse_push_tracks(bytes);
         assert_eq!(
             tracks,
             [
-                (
-                    "feature/x".to_string(),
-                    PushTrack {
-                        tracking: "fork/feature/x".to_string(),
-                        counts: crate::AheadBehind {
-                            ahead: 0,
-                            behind: 2
-                        },
-                    }
-                ),
-                (
-                    "main".to_string(),
-                    PushTrack {
-                        tracking: "fork/main".to_string(),
-                        counts: crate::AheadBehind {
-                            ahead: 1,
-                            behind: 1
-                        },
-                    }
-                ),
+                ("feature/x".to_string(), fork("fork/feature/x", 0, 2)),
+                ("main".to_string(), fork("fork/main", 1, 1)),
             ],
             "`lone` was never fetched, and no fetch refspec takes `wip` in"
         );

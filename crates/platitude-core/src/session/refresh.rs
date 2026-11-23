@@ -263,7 +263,7 @@ impl RepoSession {
             .retain(|mark| head.branch.as_deref() != Some(mark.branch.as_str()));
         let held = self.published_snapshot();
         // A read that could not tell repeats the last answer, as the status
-        // tick's does (`Standing::push_track_of`): a diverged row falling to
+        // tick's does (`Standing::push_of`): a diverged row falling to
         // the plain push would lose its overwrite.
         snapshot.push_tracks = push_tracks.unwrap_or_else(|| {
             held.as_ref()
