@@ -33,7 +33,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
       kkkkkk kkkkkkkk fffffffffffff    ttttt
 |     {
 |         $text = "x = {$this->x}";
-                  ssssssssssssssss
+                  ssssss     ss ss
 |         $raw = 'single';
                  ssssssss
 |         $ok = true && null === null;

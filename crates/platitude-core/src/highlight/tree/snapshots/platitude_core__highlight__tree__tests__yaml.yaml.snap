@@ -37,11 +37,9 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | tagged: !custom value
           ttttttt sssss
 | block: |
-         s
 |   literal text
   ssssssssssssss
 | folded: >
-          s
 |   folded text
   sssssssssssss
 | ...

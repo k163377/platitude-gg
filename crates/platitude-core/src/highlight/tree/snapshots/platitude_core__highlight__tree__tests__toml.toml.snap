@@ -5,41 +5,41 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | # A comment.
   cccccccccccc
 | title = "Sample"
-  ttttt   ssssssss
+          ssssssss
 | literal = 'single'
-  ttttttt   ssssssss
+            ssssssss
 | multi = """
-  ttttt   sss
+          sss
 | two lines
   sssssssss
 | """
   sss
 | count = 42
-  ttttt   nn
+          nn
 | ratio = 1.5e3
-  ttttt   nnnnn
+          nnnnn
 | hex = 0xFF
-  ttt   nnnn
+        nnnn
 | enabled = true
-  ttttttt   nnnn
+            nnnn
 | when = 1979-05-27T07:32:00Z
-  tttt   ssssssssssssssssssss
+         ssssssssssssssssssss
 | list = [1, 2, 3]
-  tttt    n  n  n
+          n  n  n
 | inline = { a = 1, b = "two" }
-  tttttt     t   n  t   sssss
+                 n      sssss
 | 
 | [package]
    ttttttt
 | name = "demo"
-  tttt   ssssss
+         ssssss
 | 
 | [[bin]]
     ttt
 | name = "tool"
-  tttt   ssssss
+         ssssss
 | 
 | [dependencies.serde]
    tttttttttttt ttttt
 | version = "1"
-  ttttttt   sss
+            sss

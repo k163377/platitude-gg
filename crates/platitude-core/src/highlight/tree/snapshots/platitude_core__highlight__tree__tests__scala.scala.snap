@@ -13,7 +13,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
   kkkkkk
 | 
 | @deprecated("old", "1.0")
-  attttttttttasssssaasssssa
+   tttttttttt sssss asssss
 | sealed trait Shape {
   kkkkkk kkkkk ttttt
 |   def area: Double
@@ -36,7 +36,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   def describe[T <: Shape](shape: T): String = {
     kkk ffffffff t    ttttt         t   tttttt
 |     val text = s"area = ${shape.area}"
-      kkk        fssssssssssssssssssssss
+      kkk        fssssssss  sssss      s
 |     val c = 'c'
       kkk     sss
 |     val n = 0xFF + 42L
@@ -55,7 +55,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
         kkkk      kkkkk kkk ttttttttttttttttttttt ssss
 |     }
 |     try cache("a") catch { case e: Exception => () } finally ()
-      kkk fffff sss  kkkkk   kkkk    ttttttttt         kkkkkkk
+      kkk       sss  kkkkk   kkkk    ttttttttt         kkkkkkk
 |     text
 |   }
 | }

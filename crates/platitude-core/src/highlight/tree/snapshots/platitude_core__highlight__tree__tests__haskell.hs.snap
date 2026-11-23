@@ -9,58 +9,58 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | {-# LANGUAGE OverloadedStrings #-}
   kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk
 | module Shapes (Shape (..), greet, area) where
-  kkkkkk         ttttt       ttttt  tttt  kkkkk
+  kkkkkk         ttttt                    kkkkk
 | 
 | import qualified Data.Map as Map
   kkkkkk kkkkkkkkk          kk
 | import Data.List (sortOn)
-  kkkkkk            tttttt
+  kkkkkk
 | 
 | data Shape a = Circle Double | Square a
-  kkkk ttttt t   tttttt tttttt   tttttt t
+  kkkk ttttt     tttttt tttttt   tttttt
 |   deriving (Show, Eq)
     kkkkkkkk  tttt  tt
 | 
 | class Sized t where
-  kkkkk ttttt t kkkkk
+  kkkkk ttttt   kkkkk
 |   size :: t -> Int
-    tttt    t    ttt
+    ffff         ttt
 | 
 | instance Sized (Shape a) where
-  kkkkkkkk ttttt  ttttt t  kkkkk
+  kkkkkkkk ttttt  ttttt    kkkkk
 |   size _ = 1
-    tttt     n
+    ffff     n
 | 
 | newtype Name = Name String
   kkkkkkk tttt   tttt tttttt
 | 
 | greet :: Name -> String
-  tttttffffttttfffftttttt
+  ffffff  fttttf  ftttttt
 | greet (Name name) = "hello, " ++ name ++ ['!']
-  ttttt  tttt tttt    sssssssss    tttt     sss
+  fffff  tttt         sssssssss             sss
 | 
 | area :: Shape Double -> Double
-  ttttfffftttttfttttttfffftttttt
+  fffff  ftttttfttttttf  ftttttt
 | area shape = case shape of
-  tttt ttttt   kkkk ttttt kk
+  ffff         kkkk       kk
 |   Circle r -> pi * r * r
-    tttttt t    tt   t   t
+    tttttt
 |   Square s -> s * 1.5e3
-    tttttt t    t   nnnnn
+    tttttt          nnnnn
 | 
 | main :: IO ()
-  tttt    tt ss
+          tt
 | main = do
-  tttt   kk
+  ffff   kk
 |   let total = sum [1, 2, 0xFF] :: Int
-    kkk ttttt   ttt  n  n  nnnn     ttt
+    kkk         fff  n  n  nnnn     ttt
 |       ok = True && total > 0
-        tt   nnnn    ttttt   n
+             nnnn            n
 |   if ok then putStrLn (greet (Name "x")) else return ()
-    kk tt kkkk tttttttt  ttttt  tttt sss   kkkk tttttt ss
+    kk    kkkk ffffffff  fffff  tttt sss   kkkk ffffff
 |   mapM_ print (sortOn negate [total])
-    ttttt ttttt  tttttt tttttt  ttttt
+    fffff        ffffff
 |   where
     kkkkk
 |     helper x = x `div` 2
-      tttttt t   t  ttt  n
+      ffffff             n

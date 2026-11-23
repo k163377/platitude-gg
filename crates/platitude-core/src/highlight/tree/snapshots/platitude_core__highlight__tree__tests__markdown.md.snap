@@ -9,7 +9,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
      kkkkkkkkkkk
 | 
 | A paragraph with `inline code`, **strong**, *emphasis* and a [link](https://example.com).
-                   sssssssssssss                                kkkk  kkkkkkkkkkkkkkkkkkk
+                    sssssssssss                                 kkkk  kkkkkkkkkkkkkkkkkkk
 | 
 | Inline <b>html</b> tags.
           k       k
@@ -23,18 +23,16 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | > A quote.
 | 
 | ```rust
-  sssssss
+     ssss
 | fn main() { let s = "hi"; }
-  kksffffssssskkkssssssssssss
+  kksffff  s skkksssssssss s
 | ```
-  sss
 | 
 | ```py
-  sssss
+     ss
 | def twice(n): return n * 2
-  kkksfffffssssskkkkkksssssn
+  kkksfffffs ssskkkkkks s sn
 | ```
-  sss
 | 
 |     indented code
   sssssssssssssssss

@@ -14,7 +14,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     content: "text";
                ssssss
 |     color: #1e293b;
-             sssssss
+              ssssss
 |     margin: 0 auto 1.5em -2px;
               n      nnntt nntt
 |     transition: opacity 200ms ease-in-out !important;

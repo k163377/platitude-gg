@@ -17,7 +17,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
          ttt   nnnnn
 | 
 |     pub fn init(x: i32) Point {
-      kkk kk ffff    ttt
+      kkk kk ffff    ttt  ttttt
 |         return .{ .x = x };
           kkkkkk
 |     }
@@ -49,7 +49,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     } else {
         kkkk
 |         return error.Failed;
-          kkkkkk kkkkk
+          kkkkkk kkkkk tttttt
 |     }
 |     for (text, 0..) |ch, i| {
       kkk        n
@@ -59,9 +59,9 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     while (false) {}
       kkkkk  nnnnn
 |     const p = Point.init(1);
-      kkkkk           ffff n
+      kkkkk     ttttt ffff n
 |     switch (Mode.idle) {
-      kkkkkk
+      kkkkkk  tttt
 |         .idle => {},
 |         else => unreachable,
           kkkk    nnnnnnnnnnn

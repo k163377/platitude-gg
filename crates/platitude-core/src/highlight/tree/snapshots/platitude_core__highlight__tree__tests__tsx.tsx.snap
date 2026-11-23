@@ -23,7 +23,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |       <h1>{Title}</h1>
          kk  ttttt   kk
 |       <Panel.Body onClick={() => setOpen(!open)}>
-         ttttt      aaaaaaa        fffffff
+         ttttt      aaaaaaa
 |         {Count > 0 ? <span>{Count}</span> : null}
            ttttt   n    kkkk  ttttt   kkkk    nnnn
 |       </Panel.Body>

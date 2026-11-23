@@ -19,7 +19,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | if(ENABLE_TESTS AND NOT WIN32)
   kk              kkk kkk
 |   message(STATUS "tests: ${ENABLE_TESTS}")
-    fffffff        ssssssssssssssssssssssss
+    fffffff        ssssssss               s
 | elseif(DEFINED ENV{CI})
   kkkkkk kkkkkkk
 |   message(WARNING [[bracket argument]])

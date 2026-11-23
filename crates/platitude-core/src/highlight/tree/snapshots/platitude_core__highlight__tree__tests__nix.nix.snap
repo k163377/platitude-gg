@@ -24,11 +24,11 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   path = ./src;
            sssss
 |   greet = who: "hello, ${who}";
-                 sssssssssssssss
+                 ssssssss      s
 |   multi = ''
             ss
 |     indented ${name}
-  ssssssssssssssssssss
+  sssssssssssss
 |   '';
   ssss
 | in
@@ -39,7 +39,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
     kkkkkkk
 |   src = lib.cleanSource path;
 |   out = if enabled then greet name else throw "no";
-          kk         kkkk fffff      kkkk fffff ssss
+          kk         kkkk            kkkk fffff ssss
 |   list = [ 1 "two" ./three ];
              n sssss sssssss
 |   merged = { a = 1; } // { b = 2; };

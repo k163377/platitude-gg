@@ -33,13 +33,13 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | }
 | 
 | func (p *Point) Area() float64 {
-  kkkk     ttttt         ttttttt
+  kkkk     ttttt  ffff   ttttttt
 |     return p.X * p.Y * 1.5e3
       kkkkkk             nnnnn
 | }
 | 
 | func main() {
-  kkkk
+  kkkk ffff
 |     var n int = 0xFF
       kkk   ttt   nnnn
 |     s := "text"
@@ -53,6 +53,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     if ok {
       kk
 |         fmt.Println(s, raw, r, n, str.ToUpper(s))
+              fffffff                   fffffff
 |     } else {
         kkkk
 |         return
@@ -75,11 +76,11 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     m := map[string][]int{"a": {1}}
            kkk tttttt   ttt sss   n
 |     ch := make(chan int)
-                 kkkk ttt
+            ffff kkkk ttt
 |     go func() { ch <- len(m) }()
-      kk kkkk
+      kk kkkk           fff
 |     defer close(ch)
-      kkkkk
+      kkkkk fffff
 |     select {
       kkkkkk
 |     case v := <-ch:

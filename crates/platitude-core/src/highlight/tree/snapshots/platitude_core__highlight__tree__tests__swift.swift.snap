@@ -45,7 +45,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | class Box<T>: NSObject where T: Equatable {
   kkkkk ttt     tttttttt kkkkk    ttttttttt
 |     private(set) var items: [T] = []
-      kkkkkkkkkkkk kkk         t
+      kkkkkkk kkk  kkk         t
 |     override init() { super.init() }
       kkkkkkkk tttt           ffff
 | }

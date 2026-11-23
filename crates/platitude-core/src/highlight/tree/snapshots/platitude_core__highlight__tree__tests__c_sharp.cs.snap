@@ -38,7 +38,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
       kkkkkk kkkkk tttt tttttt  fffffffffffff ttt          nnnn
 |     {
 |         var text = $"x = {_x}, limit = {limit}";
-          kkk        ssssssssssssssssssssssssssss
+          kkk        ssssss    ssssssssss       s
 |         var raw = @"C:\path";
           kkk       ssssssssss
 |         char c = 'c';

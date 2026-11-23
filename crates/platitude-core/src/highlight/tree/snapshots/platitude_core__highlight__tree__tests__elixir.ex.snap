@@ -36,7 +36,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   defp describe(%{x: x} = point) do
     kkkk ffffffff   sss            kk
 |     text = "x = #{x}"
-             ssssssssss
+             sssss    s
 |     atom = :ok
              sss
 |     sigil = ~r/ab+c/i

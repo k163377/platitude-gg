@@ -12,7 +12,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
   kkk                   ttttttt
 | 
 | #[derive(Debug, Clone)]
-  aaaaaaaaatttttaatttttaa
+  a aaaaaa ttttt attttt
 | pub struct Point<T> {
   kkk kkkkkk ttttt t
 |     x: T,
@@ -81,5 +81,5 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
           kkkkk
 |     }
 |     let _ = (f(1), map.len(), self::main as fn(), None::<u8>);
-      kkk      f n       fff               kk kk    ffff   tt
+      kkk      f n       fff    kkkk       kk kk    ffff   tt
 | }

@@ -9,13 +9,13 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | <!DOCTYPE note SYSTEM "note.dtd">
     kkkkkkk tttt kkkkkk  kkkkkkkk
 | <root xmlns:x="urn:sample" lang='en'>
-   kkkk         ssssssssssss      ssss
+   kkkk          ssssssssss        ss
 |   <x:item id="1" enabled="true">Text &amp; more</x:item>
-     kkkkkk    sss         ssssss      nnnnn       kkkkkk
+     kkkkkk     s           ssss       nnnnn       kkkkkk
 |   <empty/>
      kkkkk
 |   <![CDATA[x < y]]>
-    kkkkkkkkkssssskkk
+    kkkkkkkk ssssskkk
 |   <?target data?>
       kkkkkk
 | </root>

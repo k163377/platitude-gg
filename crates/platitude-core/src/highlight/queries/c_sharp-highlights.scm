@@ -1,4 +1,4 @@
-;; Laid over tree-sitter-c-sharp's own highlights (`grammar::layered`):
+;; Laid over tree-sitter-c-sharp's own highlights (`grammar::Entry::highlights`):
 ;; tokens its grammar reads that its query leaves out. Part of this
 ;; repository, MIT like the rest of it.
 ;;

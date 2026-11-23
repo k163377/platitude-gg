@@ -42,7 +42,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   describe(this: Shape<T>, Prefix: string): string {
     ffffffff       ttttt t           tttttt   tttttt
 |     return `${Prefix}: ${this.name}`;
-      kkkkkk sssttttttssssssssssssssss
+      kkkkkk s         ss            s
 |   }
 | }
 | 

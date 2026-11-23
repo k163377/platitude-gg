@@ -16,7 +16,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | 
 | 
 | @dataclass(frozen=True)
-  ffffffffffffffffffnnnnf
+  fffffffffff       nnnnf
 | class Point(Base):
   kkkkk ttttt tttt
 |     """A class docstring."""
@@ -44,7 +44,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | async def main(values: list[str]) -> dict[str, int]:
   kkkkk kkk ffff              ttt           ttt  ttt
 |     text = f"value: {CONSTANT!r} {values[0]}"
-             ssssssssssssssssssssssssssssssnsss
+             sssssssss            s        n  s
 |     raw = r"\d+" + b"bytes".decode()
             ssssss   ssssssss
 |     if values and not None:

@@ -14,7 +14,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | function draw(Shape, [First]) {
   kkkkkkkk ffff
 |   return new Shape(First);
-    kkkkkk kkk ttttt ttttt
+    kkkkkk kkk
 | }
 | 
 | export default function App({ title }) {
@@ -22,9 +22,9 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   const [count, setCount] = useState(0);
     kkkkk                     ffffffff n
 |   let text = `count: ${count}`;
-    kkk        sssssssssssssssss
+    kkk        ssssssss        s
 |   var re = /ab+c/gi;
-    kkk      ssssssss
+    kkk       ssss ss
 |   const n = 42 + 0xff + 1.5e3 + 10n;
     kkkkk     nn   nnnn   nnnnn   nnn
 |   if (count > 0 && title !== undefined) {
@@ -72,7 +72,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   return (
     kkkkkk
 |     <div className="app" onClick={() => setCount(count + 1)}>
-       kkk aaaaaaaaa sssss aaaaaaa        ffffffff         n
+       kkk aaaaaaaaa sssss aaaaaaa                         n
 |       <Box.Item label={title} />
          ttt      aaaaa
 |       {text}

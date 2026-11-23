@@ -68,7 +68,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     @autoreleasepool {
       kkkkkkkkkkkkkkkk
 |         NSString *text = @"text";
-          tttttttt         sssssss
+          tttttttt          ssssss
 |         NSArray *items = @[@1, @2];
           ttttttt             n   n
 |         char c = 'c';
@@ -78,7 +78,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |         if (ok) {
           kk
 |             NSLog(@"%@ %c %lu", text, c, (unsigned long)items.count);
-              fffff ssssssssssss            ttttttttttttt
+              fffff  sssssssssss            ttttttttttttt
 |         } else {
             kkkk
 |             return -1;

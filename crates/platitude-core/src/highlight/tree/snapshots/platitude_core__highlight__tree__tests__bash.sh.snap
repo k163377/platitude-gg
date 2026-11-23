@@ -17,17 +17,17 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | greet() {
   fffff
 |     local who="${1:-world}"
-                sssssssssssss
+                s           s
 |     echo "hello, $who" 'single' $'escaped\n'
-      ffff sssssssssssss ssssssss
+      ffff ssssssss    s ssssssss
 |     return 0
       ffffff
 | }
 | 
 | if [[ -n "$NAME" && $count -gt 10 ]]; then
-  kk       sssssss                      kkkk
+  kk       s     s                      kkkk
 |     greet "$NAME" >/dev/null 2>&1
-      fffff sssssss            n
+      fffff s     s            n
 | elif [ -f ./file ]; then
   kkkk                kkkk
 |     :
@@ -40,7 +40,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
   kk
 | 
 | for item in "${items[@]}"; do
-  kkk      kk sssssssssssss  kk
+  kkk      kk s           s  kk
 |     continue
       ffffffff
 | done
@@ -54,7 +54,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
   kkkk     ffffff ssssss
 | 
 | case "$count" in
-  kkkk ssssssss kk
+  kkkk s      s kk
 |     4*) echo four ;;
           ffff
 |     *) ;;
@@ -67,5 +67,5 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | cat <<EOF
   fff   sss
 | heredoc $NAME
-  sssssssssssss
+  ssssssss
 | EOF

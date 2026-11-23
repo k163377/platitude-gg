@@ -23,7 +23,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     param([string]$Who = 'world')
       kkkkk  tttttt        sssssss
 |     return "hello, $Who"
-      kkkkkk sssssssssssss
+      kkkkkk ssssssss    s
 | }
 | 
 | $items = @(1, 2, 3)
