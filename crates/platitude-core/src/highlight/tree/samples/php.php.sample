@@ -47,3 +47,5 @@ enum Mode: string
 {
     case Idle = 'idle';
 }
+?>
+<p class="lead">Done, <b><?= $name ?></b>.</p>

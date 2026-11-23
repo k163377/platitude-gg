@@ -83,3 +83,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |     case Idle = 'idle';
       kkkk        ssssss
 | }
+| ?>
+  kk
+| <p class="lead">Done, <b><?= $name ?></b>.</p>
+   k aaaaa  ssss         k kkk       kk  k    k

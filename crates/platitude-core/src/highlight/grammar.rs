@@ -252,7 +252,7 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["cs"], "c_sharp", || configured(tree_sitter_c_sharp::LANGUAGE.into(), "c_sharp", &layered(&[tree_sitter_c_sharp::HIGHLIGHTS_QUERY, include_str!("queries/c_sharp-highlights.scm")]), "")),
     entry!(&["go"], "go", || configured(tree_sitter_go::LANGUAGE.into(), "go", tree_sitter_go::HIGHLIGHTS_QUERY, "")),
     entry!(&["rb"], "ruby", || configured(tree_sitter_ruby::LANGUAGE.into(), "ruby", tree_sitter_ruby::HIGHLIGHTS_QUERY, "")),
-    entry!(&["php"], "php", || configured(tree_sitter_php::LANGUAGE_PHP.into(), "php", tree_sitter_php::HIGHLIGHTS_QUERY, tree_sitter_php::INJECTIONS_QUERY)),
+    entry!(&["php"], "php", || configured(tree_sitter_php::LANGUAGE_PHP.into(), "php", tree_sitter_php::HIGHLIGHTS_QUERY, &layered(&[tree_sitter_php::INJECTIONS_QUERY, include_str!("queries/php-injections-text.scm")]))),
     entry!(&["swift"], "swift", || configured(tree_sitter_swift::LANGUAGE.into(), "swift", tree_sitter_swift::HIGHLIGHTS_QUERY, tree_sitter_swift::INJECTIONS_QUERY)),
     entry!(&["html", "htm"], "html", || configured(tree_sitter_html::LANGUAGE.into(), "html", tree_sitter_html::HIGHLIGHTS_QUERY, tree_sitter_html::INJECTIONS_QUERY)),
     entry!(&["css"], "css", || configured(tree_sitter_css::LANGUAGE.into(), "css", tree_sitter_css::HIGHLIGHTS_QUERY, "")),
