@@ -501,23 +501,6 @@ impl NavSectionModel {
         }
     }
 
-    /// The upstream this branch is configured with, wherever it stands —
-    /// a remote reading, a branch here, or gone
-    /// (`BranchItem::upstream_named`). What the menu offers to take off;
-    /// empty where it has none, and for every section but the branches.
-    ///
-    /// Not `upstream_of`: that one answers remote readings only and is
-    /// empty for a branch here (`remote = .`) and for a gone upstream, which
-    /// can be taken off all the same. The menu's entrances read the same
-    /// off `branch_upstream`.
-    #[qslot]
-    pub(super) fn upstream_named(&self, name: String) -> String {
-        self.all
-            .branch_named(&name)
-            .map_or("", platitude_core::session::BranchItem::upstream_named)
-            .to_string()
-    }
-
     /// What a branch's card reads of its upstream (`BranchUpstream`), read
     /// as the menu opens and as it stands again, and handed on whole to
     /// `GitFacts.refMenuOffers`. A row of any `kind` but `branch` reads

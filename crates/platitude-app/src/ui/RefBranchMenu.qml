@@ -350,7 +350,7 @@ AppMenu {
     // puts it back (§回数押しの色). The press runs
     // `unsetUpstreamRequested` → the carrying menu → `RepoTab.unsetUpstream` → `RepoSession::unset_upstream`
     // (`AfterWrite::Config`). Headless: `unset-upstream [chip:]<branch>` reads the row, `unset-upstream-go` presses it
-    // through until the list's `upstreamNamed` is empty.
+    // through until the list's `branchUpstream` names no upstream.
     AppMenuItem {
         id: refUnsetUpstreamItem
         //: Followed by the upstream it takes off: "Unset upstream origin/feature".

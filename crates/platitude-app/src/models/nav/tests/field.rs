@@ -812,7 +812,7 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
 /// What the BRANCH card names, and in which colour, when the upstream
 /// comes off: wherever the configured upstream stands — a remote reading,
 /// a branch here (the one the worktree is on, or another), or gone
-/// (`upstream_named` / `upstream_where`, デザイン規約 §ref の種別).
+/// (`branch_upstream`'s `upstream` / `upstream_where`, デザイン規約 §ref の種別).
 #[test]
 fn an_upstream_is_named_wherever_it_stands() {
     let mut reads = local("reads", false);
@@ -842,7 +842,10 @@ fn an_upstream_is_named_wherever_it_stands() {
     model.arrange();
     let told = |name: &str| {
         (
-            model.upstream_named(name.to_string()),
+            model
+                .branch_upstream("branch".to_string(), name.to_string())
+                .upstream
+                .clone(),
             model.upstream_where(name.to_string(), "main".to_string()),
         )
     };

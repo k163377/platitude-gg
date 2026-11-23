@@ -757,6 +757,10 @@ Item {
         function card() {
             return unsetUpstreamTimer.onChip ? driver.commitBranchCard : refBranchCard
         }
+        /// The upstream the listing names for the branch now, listed or gone; empty for none.
+        function upstream() {
+            return branchesModel.branchUpstream("branch", unsetUpstreamTimer.branch).upstream
+        }
         // The shape is fixed as the card opens: seat, chip, what it names, the plain delete's presses and ink.
         function line() {
             const row = unsetUpstreamTimer.card().unsetUpstreamItem
@@ -797,7 +801,7 @@ Item {
         }
     }
     // The row's press, then git's answer, judged on the branch's own row: the listing the write's refresh publishes
-    // names no upstream for it, listed or gone (`NavSectionModel.upstreamNamed`).
+    // names no upstream for it, listed or gone (`NavSectionModel.branchUpstream`'s `upstream`).
     PageStage {
         id: unsetLandedTimer
         name: "unset_landed"
@@ -815,9 +819,9 @@ Item {
                 "when": () => ({
                     "ready": driver.wroteAndSettled(),
                     "page": PageSettled.settled(page),
-                    "unnamed": branchesModel.upstreamNamed(unsetUpstreamTimer.branch) === "" || repoTab.writeRefused }),
+                    "unnamed": unsetUpstreamTimer.upstream() === "" || repoTab.writeRefused }),
                 "report": () => "unset_upstream_landed refused=" + repoTab.writeRefused
-                                + " upstream=" + branchesModel.upstreamNamed(unsetUpstreamTimer.branch) })
+                                + " upstream=" + unsetUpstreamTimer.upstream() })
         }
     }
 }
