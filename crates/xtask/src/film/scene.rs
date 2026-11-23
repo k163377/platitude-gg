@@ -51,6 +51,10 @@ pub(super) struct Scene {
     /// what a frame or two decides — a read landing a beat earlier — is
     /// seen at 1. The band's milliseconds stay the shot's own.
     pub(super) slow: u32,
+    /// How many tabs the window opens: the scene's repository in front,
+    /// after as many empty ones as it takes (`shoot::tab_repos`) — a strip
+    /// that overflows, for what the strip does.
+    pub(super) tabs: u32,
     pub(super) captions: Vec<String>,
     pub(super) steps: Vec<Step>,
 }
@@ -123,6 +127,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
         tick: 80,
         slow_git: String::new(),
         slow: 1,
+        tabs: 1,
         captions: Vec::new(),
         steps: Vec::new(),
     };
@@ -165,6 +170,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
             "scale" => scene.scale = positive(rest).map_err(at)?,
             "tick" => scene.tick = positive(rest).map_err(at)?,
             "slow" => scene.slow = positive(rest).map_err(at)?,
+            "tabs" => scene.tabs = positive(rest).map_err(at)?,
             "slowgit" => {
                 crate::verify::git_shim::Slow::parse(rest).map_err(at)?;
                 scene.slow_git = rest.to_string();
@@ -437,6 +443,20 @@ git:commit --allow-empty -q -m more1
         assert!(with("slowgit add").is_err());
         assert!(with("slowgit").is_err());
         assert_eq!(parse(SCENE).expect("parses").slow_git, "");
+    }
+
+    /// One tab unless the scene asks for a strip.
+    #[test]
+    fn a_strip_is_asked_for_by_its_count() {
+        let with = |line: &str| {
+            parse(&format!(
+                "repo deep\n{line}\nview 0 0 10 10\ncap -\ncap x\n"
+            ))
+        };
+        assert_eq!(with("tabs 12").expect("parses").tabs, 12);
+        assert!(with("tabs 0").is_err());
+        assert!(with("tabs").is_err());
+        assert_eq!(parse(SCENE).expect("parses").tabs, 1);
     }
 
     /// Every verb a scene may write is one the component plays.

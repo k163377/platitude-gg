@@ -100,7 +100,12 @@ fn shoot(
     command
         .arg("verify-ui")
         .arg("film")
-        .arg(scene::arg(scene, side.tag, side.colour))
+        .arg(scene::arg(scene, side.tag, side.colour));
+    // The tab opened last is the one in front: the scene's own.
+    for tab in tab_repos(dir, side, scene.tabs)? {
+        command.arg("--repo").arg(tab);
+    }
+    command
         .arg("--repo")
         .arg(&work)
         .arg("--config-dir")
@@ -229,6 +234,35 @@ fn prep(root: &Path, work: &Path, prep: &[Vec<String>]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// The tabs a scene opens before its own (`tabs <n>`): empty repositories,
+/// named apart so the strip reads them as tabs of their own, built again
+/// for each side.
+fn tab_repos(dir: &Path, side: &Side, tabs: u32) -> Result<Vec<PathBuf>, String> {
+    if tabs <= 1 {
+        return Ok(Vec::new());
+    }
+    let root = fresh(&dir.join(format!("pgg-film-tabs-{}", side.name)))?;
+    (1..tabs)
+        .map(|n| {
+            let path = root.join(format!("tab-{n:02}"));
+            let out = Command::new("git")
+                .args(["init", "-q"])
+                .arg(&path)
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .output()
+                .map_err(|e| format!("starting git: {e}"))?;
+            if !out.status.success() {
+                return Err(format!(
+                    "git init {} failed: {}",
+                    path.display(),
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ));
+            }
+            Ok(path)
+        })
+        .collect()
 }
 
 /// A directory emptied for this run.
