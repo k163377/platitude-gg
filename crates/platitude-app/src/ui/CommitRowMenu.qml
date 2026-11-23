@@ -229,10 +229,8 @@ Item {
     function offerCarried() {
         carriedMenu.offer()
     }
-    /// `facts` is what the cards stand on, read where the models are (`CommitMenuState.cardFacts`): `branch` and
-    /// `tag`, each already aimed at the target or emptied because the target is the other's kind, `worktree` — the
-    /// worktree the target names or the one holding its branch (undefined for none) — with `worktreeHere`, and
-    /// `making`, the two rows that make a worktree (`RefWorktreeMenu.standOn`).
+    /// `facts` is what the cards stand on, read where the models are (`RefMenuFacts.stand`, aimed at the target): each
+    /// card reads its part by name, and a card whose kind the target is not stands on nothing.
     function offerCommit(facts) {
         // Every card stands on its facts before `offer()`: its `applies` decides whether its row counts
         // (`AppMenu.offeredRows`).
@@ -256,14 +254,14 @@ Item {
     /// card's branch may point elsewhere by then, `branchAt` (`CommitMenuState.aimedAt`); left out, the row's commit.
     /// `again`: why the menu stands again — `follow` or `wait` (`CommitMenuState.standAgain`, `RefBranchMenu.standOn`).
     function standCards(facts, branchAt, again) {
-        worktreeCommitMenu.standOn(facts.worktree, facts.worktreeHere, facts.making)
+        worktreeCommitMenu.standOn(facts)
         const branchy = rowMenu.targetKind === "branch" || rowMenu.targetKind === "remote"
         const branchKind = branchy ? rowMenu.targetKind : ""
         const branchName = branchy ? rowMenu.targetName : ""
         branchCommitMenu.standOn(branchKind, branchName, branchName, branchAt === undefined ? rowMenu.oid : branchAt,
-                                 facts.branch, again)
+                                 facts, again)
         const tagged = rowMenu.targetKind === "tag"
-        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts.tag, again)
+        tagCommitMenu.standOn(tagged ? "tag" : "", tagged ? rowMenu.targetName : "", rowMenu.oid, facts, again)
     }
     /// The commit, the stash or the other worktree's work the menu stands on is gone — with the command it waited for,
     /// or outside while it stood: nothing left to act on. The pair's menu reads nothing of the tree, so it is never

@@ -20,7 +20,7 @@ import platitude.ui.words
 // entrance and forget the other; the first-level push and delete rows are carried the same way. Only on a local
 // branch (`applies`): the sidebar row itself, or on a graph row the name its chip draws. A remote branch has no
 // upstream rows, so the card goes title row and all; its delete is a row of the first-level table. **It reads no model
-// and runs no write**: the entrance reads the facts (`branchFacts`), `standOn` stands the card on them as the menu
+// and runs no write**: the entrance reads the facts (`RefMenuFacts`), `standOn` stands the card on them as the menu
 // opens and as it stands again, and the card and the rows on it signal what was pressed (rules/app-ui.md の「配線」).
 // Standing on plain values is what lets `tests/qml/tst_branchcard.qml` drive the real card, the only place the
 // sentences are checked (see `holderLeaf`).
@@ -120,9 +120,10 @@ AppMenu {
         property string upstream: ""
         property string upstreamWhere: ""
         /// The commit that reading showed as the menu opened: the lease of every delete that reaches it
-        /// (`branchesModel.upstreamOidOf`, kept through the menu standing again, so a fetch behind the open menu leaves
-        /// the press on the tip the reader saw — or greys it, `remoteMoved`). Headless: `delete-both-go side` /
-        /// `delete-upstream-go next`, `--preset stack` — a lease that misses fails the write.
+        /// (`NavSectionModel.branchUpstream`'s `remoteCounterpartOid`, kept through the menu standing again, so a
+        /// fetch behind the open menu leaves the press on the tip the reader saw — or greys it, `remoteMoved`).
+        /// Headless: `delete-both-go side` / `delete-upstream-go next`, `--preset stack` — a lease that misses fails
+        /// the write.
         property string remoteCounterpartOid: ""
         /// The reading as the tree has it now, which `Set upstream…` starts from: the delete rows keep the one the menu
         /// went up with (`remoteCounterpart`), the upstream rows read the tree as it is.
@@ -170,17 +171,17 @@ AppMenu {
         property bool pushMoved: false
     }
 
-    /// Stands the card on that branch. `facts` is what the carrying menu read for it: `heldByWorktree` the other
-    /// worktree holding this row's local branch, `holderLeaf` the name it goes by and `holderHome` whether it is the
-    /// repository's own, `remoteCounterpart` the reading a local branch speaks for and `remoteCounterpartOid` its
-    /// commit, `upstream` the one it is configured with (a gone one too) — the three off one
-    /// `NavSectionModel.branchUpstream` — and `upstreamWhere` where that name stands, `offers` core's words (a drifted
-    /// reading answers no `delete-remote`, which is what greys the rows that reach it), `open` whether the tab is,
-    /// `merged` what the drawn rows say about the plain delete (`yes` / `no`, empty
-    /// for a tip or a reference older than the window, whose answer only git has), and `push` what the push row stands
-    /// on (`NavSectionModel.branchPush`: `state`, `sendsPlain`, `overwrites`, `target`, `lease`, `upstream`). Every
-    /// `facts` a branch card stands on carries `upstream` / `upstreamWhere`, a QML test's hand-built ones too: they are
-    /// written below as they come, and the unset row stands on them.
+    /// Stands the card on that branch. `facts` is what the carrying menu read for it (`RefMenuFacts.stand`): `lead`
+    /// the other worktree holding this row's local branch (`path`), the name it goes by (`called`) and whether it is
+    /// the repository's own (`home`); `card` what the branch reads of its upstream (`NavSectionModel.branchUpstream` —
+    /// `remoteCounterpart` the reading a local branch speaks for and `remoteCounterpartOid` its commit, `upstream` the
+    /// one it is configured with, a gone one too); `menu` core's answer for the rows (`GitFacts.refMenu` — a drifted
+    /// reading answers no `deleteRemote`, which is what greys the rows that reach it — and `upstreamWhere`, where that
+    /// upstream stands); `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` /
+    /// `no`, empty for a tip or a reference older than the window, whose answer only git has), and `push` what the push
+    /// row stands on (`NavSectionModel.branchPush`: `state`, `sendsPlain`, `overwrites`, `target`, `lease`,
+    /// `upstream`). Every `facts` a branch card stands on carries all of them, a QML test's hand-built ones too: they
+    /// are written below as they come, and the unset row stands on `upstream` / `upstreamWhere`.
     ///
     /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
     /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
@@ -233,16 +234,17 @@ AppMenu {
             return
         }
         // What the rows may offer is core's rule (`offers::ref_menu`).
-        const offers = facts.offers
-        const canDelete = offers.includes("delete")
-        const onCurrentBranch = offers.includes("current")
+        const menu = facts.menu
+        const card = facts.card
+        const canDelete = menu.delete
+        const onCurrentBranch = menu.current
         // A remote branch's own delete is leased to the commit its row stood on (`BranchDeleteRow`); a local branch's
         // remote rows to its reading as it was, name and commit (`BranchRemoteDeleteRow` / `BranchBothDeleteRow`).
         const ownLease = sameRef && kind === "remote"
         const readingHeld = sameRef && kind === "branch" && state.remoteCounterpart !== ""
         const remoteMoved = ownLease ? state.remoteMoved || oidHex !== state.refOid
-                          : readingHeld && (state.remoteMoved || facts.remoteCounterpart !== state.remoteCounterpart
-                                            || facts.remoteCounterpartOid !== state.remoteCounterpartOid)
+                          : readingHeld && (state.remoteMoved || card.remoteCounterpart !== state.remoteCounterpart
+                                            || card.remoteCounterpartOid !== state.remoteCounterpartOid)
         // A local branch the worktree is not on — the one it is on has the toolbar's own button (デザイン規約 §メニュー
         // 「そこにしか入口が無いものだけ」) — and only where a press reaches, by core's rules, the toolbar's (`sendsPlain`
         // / `overwrites`): nothing to name is no row. Nothing to send keeps its seat, out (`clean`; user decision —
@@ -265,19 +267,19 @@ AppMenu {
         state.refName = name
         state.refId = full
         state.refOid = ownLease ? state.refOid : oidHex
-        state.heldByWorktree = facts.heldByWorktree
-        state.holderLeaf = facts.holderLeaf
-        state.holderHome = facts.holderHome === true
-        state.upstream = facts.upstream
-        state.upstreamWhere = facts.upstreamWhere
+        state.heldByWorktree = facts.lead.path
+        state.holderLeaf = facts.lead.called
+        state.holderHome = facts.lead.home
+        state.upstream = card.upstream
+        state.upstreamWhere = menu.upstreamWhere
         state.remoteMoved = remoteMoved
-        state.remoteCounterpart = readingHeld ? state.remoteCounterpart : facts.remoteCounterpart
-        state.remoteCounterpartOid = readingHeld ? state.remoteCounterpartOid : facts.remoteCounterpartOid
-        state.readingNow = facts.remoteCounterpart
+        state.remoteCounterpart = readingHeld ? state.remoteCounterpart : card.remoteCounterpart
+        state.remoteCounterpartOid = readingHeld ? state.remoteCounterpartOid : card.remoteCounterpartOid
+        state.readingNow = card.remoteCounterpart
         state.canDelete = canDelete
-        state.canDeleteRemote = offers.includes("delete-remote")
-        state.canSetUpstream = offers.includes("set-upstream")
-        state.canUnsetUpstream = offers.includes("unset-upstream")
+        state.canDeleteRemote = menu.deleteRemote
+        state.canSetUpstream = menu.setUpstream
+        state.canUnsetUpstream = menu.unsetUpstream
         state.onCurrentBranch = onCurrentBranch
         state.pushMoved = pushMoved
         state.pushStaysHere = pushMoved ? state.pushStaysHere : pushed && push.state === "stays-here"

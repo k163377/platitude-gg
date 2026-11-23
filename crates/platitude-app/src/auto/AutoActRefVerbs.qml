@@ -137,7 +137,7 @@ Item {
         } else if (act === "delete-upstream-go" || act === "delete-both-go") {
             // A local branch's menu and a row of its delete table that reaches its reading: that alone, or the pair.
             // What reaches the remote is leased to the reading's commit as the BRANCH card froze it
-            // (`RefRowMenu.branchFacts`, `remoteCounterpartOid`), so a card holding the wrong one is a refused write —
+            // (`RefMenuFacts.stand`, `remoteCounterpartOid`), so a card holding the wrong one is a refused write —
             // `[rejected] (stale info)`, and the run fails on `write failed`, which is the judgement. The branch has to
             // be tracked, merged and in step (`--preset stack`'s `side` / `next`). The picture: the row gone from
             // BRANCHES, the chip's cloud dropped.
@@ -188,7 +188,7 @@ Item {
             pullBlockedTimer.start()
         } else if (act === "tag-chip-menu") {
             // `<tag>@<row>`: the graph row's menu aimed at that tag's chip on that row — a reading one remote alone
-            // draws names that remote on its own (`CommitMenuState.tagFacts`). Every remote is read first.
+            // draws names that remote on its own (`CommitMenuState.standRow`). Every remote is read first.
             const at = arg.split("@")
             tagChipTimer.tag = at[0]
             tagChipTimer.row = at.length > 1 ? Number(at[1]) : 0
@@ -276,8 +276,8 @@ Item {
                              : act === "delete-tag-both" ? "both-delete" : "")
         } else if (act === "move-branch") {
             // Past the question, for the write it guards.
-            page.switchTo("force", repoTab.localNameFor(arg),
-                          repoTab.localNameFor(arg), arg)
+            page.switchTo("force", remotesModel.landsOn("remote", arg),
+                          remotesModel.landsOn("remote", arg), arg)
         } else {
             return false
         }

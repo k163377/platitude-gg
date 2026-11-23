@@ -39,8 +39,8 @@ FocusScope {
 
     /// The blank page's "Open repository…" button (folder picker).
     signal openRepositoryPicker()
-    /// A worktree asked for by path (a WORKTREES row, `openHolder`): a worktree of this repository stands this tab
-    /// in it (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
+    /// A worktree asked for by path (a WORKTREES row, a press on a branch another worktree holds — `switchToRef`): a
+    /// worktree of this repository stands this tab in it (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     signal openRepositoryPathRequested(string path)
     /// _PGG_AUTO_ACT=settings wants the window's settings dialog open for the screenshot.
     signal settingsDialogRequested()
@@ -683,7 +683,8 @@ FocusScope {
     property string moveLanding: ""
     function absorbMoveLanding() {
         if (page.moveLanding !== ""
-                && GitFacts.moveLanded(page.moveLanding, worktree.standing, branchesModel.oidOfName(page.moveLanding)))
+                && GitFacts.moveLanded(page.moveLanding, worktree.standing,
+                                       branchesModel.oidOfName(page.moveLanding) !== ""))
             page.moveLanding = ""
     }
 
@@ -739,15 +740,6 @@ FocusScope {
         if (chip)
             page.switchToRef(chip.kind, chip.name)
     }
-    // A branch another worktree holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
-    // **the press goes to that worktree** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded
-    // rows name the worktree first (`RefRowMenu`'s `Open`), and for the wordless doors (the graph's double-click, a
-    // chip's press) the landing names it: the tab's tree mark and folder, the WORKTREES row's green (§タブの所作).
-    function openHolder(local) {
-        const held = worktreesModel.worktreeHolding(local)
-        if (held !== "")
-            page.openRepositoryPathRequested(held)
-    }
     /// Answers whether the press did anything — a move sent, or a question raised in front of one. `false` is a press
     /// turned away, which the headless double press reads (動詞 `switch-remote-twice`): from outside, both presses
     /// look alike.
@@ -767,14 +759,18 @@ FocusScope {
                 || page.doorsHeldWhy !== "")
             return false
         // Which move the lookups add up to is core's rule (offers::switch_action); a remote row's holder is asked of
-        // the local branch it lands on.
-        const local = kind === "remote" ? remotesModel.localNameFor(name) : name
-        const action = GitFacts.switchAction(kind, local, worktree.standing,
-                                             worktreesModel.worktreeHolding(local), branchesModel.oidOfName(local))
+        // the local branch it lands on — the row read as its menu reads it (`NavSectionModel.leadOf`).
+        const local = remotesModel.landsOn(kind, name)
+        const lead = worktreesModel.leadOf(kind, name, local)
+        const action = GitFacts.switchAction(lead, worktree.standing, branchesModel.oidOfName(local) !== "")
+        // A branch another worktree holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
+        // **the press goes to that worktree** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded
+        // rows name the worktree first (`RefRowMenu`'s `Open`), and for the wordless doors (the graph's double-click, a
+        // chip's press) the landing names it: the tab's tree mark and folder, the WORKTREES row's green (§タブの所作).
         // Before the leave question: no put-down clears the holder road, so undoing a rebase first would spend the
         // undo on a move that was never possible.
         if (action === "holder") {
-            page.openHolder(local)
+            page.openRepositoryPathRequested(lead.path)
             return true
         }
         // The branch already out, a tag or the detached marker moves nothing, so it raises nothing either — ahead of
@@ -1994,7 +1990,7 @@ FocusScope {
     // `replays` word: the boxes run only the amend, so the save button's phrase is `commit --amend` alone (core's
     // `RepoSession::reword` replays a commit under HEAD, but nothing in the UI hands it one).
     readonly property string messageEdit: GitFacts.messageEdit(
-        !page.blank && repoTab.state === "open", worktree.standing, detailsModel.shaHex, page.selectedStashRef)
+        !page.blank && repoTab.state === "open", worktree.standing, detailsModel.shaHex, page.selectedStashRef !== "")
 
     // Asked on every selection and read only when the answer names the commit on screen — verifying runs gpg or
     // ssh-keygen and lands after the details. A signature changes only with the hash, so nothing asks twice.

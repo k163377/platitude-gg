@@ -12,10 +12,9 @@ import platitude.ui.words
 // the row names no tag; the push and delete rows join only when the target is a tag, a divider between push and the
 // deletes.
 //
-// It reads no model and runs no write: the carrying menu asks core (`RefRowMenu.tagFacts` /
-// `CommitMenuState.tagFacts`) and runs the requests. Decided here is only what the rows do with the answer — which
-// has a seat, which greys, which push form is drawn — so `tests/qml/tst_tagcard.qml` drives the real card on values.
-// The two `tagFacts` stay two: shared at the third (rules/structure.md §共通化).
+// It reads no model and runs no write: the carrying menu asks core through one part both entrances hold
+// (`RefMenuFacts`) and runs the requests. Decided here is only what the rows do with the answer — which greys, which
+// push form is drawn — so `tests/qml/tst_tagcard.qml` drives the real card on values.
 AppMenu {
     id: tagMenu
 
@@ -74,11 +73,12 @@ AppMenu {
         property string reach: ""
         property string heldBack: ""
         property string tagCarriers: ""
-        property bool tagHere: false
         property bool canPushTag: false
         property bool canDelete: false
-        property bool canDeleteRemoteTag: false
-        property bool canDeleteTagEverywhere: false
+        /// The two deletes that reach over there, by core's seat word (`offers::Seat`): `live`, `greyed` — a reading
+        /// held back keeps its seat — or empty for none.
+        property string deleteRemoteTag: ""
+        property string deleteTagEverywhere: ""
         /// Whether deleting from `reach` leaves the name nowhere (`deleteRemoteTagRequested`).
         property bool tagOnlyThere: false
         /// Why those rows stand greyed, in words (`Words.differsFrom` / `Words.severalRemotesHave`).
@@ -92,17 +92,17 @@ AppMenu {
     }
 
     /// Stands the card on that row, off answers already in hand. `oidHex` is the row's commit, where a name would be
-    /// made, tag or not. `facts` is what the carrying menu read (`NavSectionModel.tagMenu`): `pushRemote` (where
-    /// pushes go), `tagDriftOid` (where that remote last had this name, when elsewhere), `tagReach` / `tagHeldBack` /
-    /// `tagCarriers` (where the deletes reach and why they grey), `tagOnlyThere`, `tagHere`, `tagAt` (the commit the
-    /// tag here points at now), and `offers`
-    /// (`GitFacts.refMenuOffers` — `offers::RefMenuOffers::words`). All of it is in hand before the card shows, so
-    /// the push row's shape is settled as it opens. `again`: why the menu stands again with the card up — `follow`, on
-    /// what moved while it stood (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it
-    /// waited for left (`AppMenu.waitEnded`) —; empty as the menu is raised. Standing again, the push stays on the
-    /// remote and the reading the menu went up with (デザイン規約 §メニュー「表示も押下も開いた時」): moved since — a
-    /// fetch outside, or the one the menu waited for, brought another reading — the row keeps what it showed and greys
-    /// (`pushMoved`), since the held overwrite would replace a commit it never showed.
+    /// made, tag or not. `facts` is what the carrying menu read (`RefMenuFacts.stand`): on a tag's row, `card` the
+    /// tag's record (`NavSectionModel.tagMenu` — `pushRemote` where pushes go, `lease` where that remote last had this
+    /// name when elsewhere, `reach` / `heldBack` / `carriers` where the deletes reach and why they grey, `rowGoes`),
+    /// `tagAt` the commit the tag here points at now, and `menu` core's answer for the rows (`GitFacts.refMenu` —
+    /// `pushTag`, `delete` and the seats of the two that reach over there). All of it is in hand before the card
+    /// shows, so the push row's shape is settled as it opens. `again`: why the menu stands again with the card up —
+    /// `follow`, on what moved while it stood (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the
+    /// command it waited for left (`AppMenu.waitEnded`) —; empty as the menu is raised. Standing again, the push stays
+    /// on the remote and the reading the menu went up with (デザイン規約 §メニュー「表示も押下も開いた時」): moved
+    /// since — a fetch outside, or the one the menu waited for, brought another reading — the row keeps what it showed
+    /// and greys (`pushMoved`), since the held overwrite would replace a commit it never showed.
     function standOn(kind, full, oidHex, facts, again) {
         const tagged = kind === "tag"
         const sameTag = (again === "follow" || again === "wait") && tagged && kind === state.kind
@@ -110,37 +110,38 @@ AppMenu {
         // Latched as the menu went up, not read off the row as it is: a push that stopped applying for a while (the
         // tag deleted here) and came back on another reading would otherwise take that reading as its lease.
         const pushHeld = sameTag && state.pushShown
-        const drift = tagged ? facts.tagDriftOid : ""
+        const card = tagged ? facts.card : undefined
+        const drift = tagged ? card.lease : ""
+        const pushRemote = tagged ? card.pushRemote : ""
         const pushMoved = pushHeld
-                          && (state.pushMoved || facts.pushRemote !== state.pushRemote || drift !== state.tagDriftOid)
+                          && (state.pushMoved || pushRemote !== state.pushRemote || drift !== state.tagDriftOid)
         state.kind = kind
         state.refId = full
         state.refOid = oidHex
         state.tagAt = tagged ? facts.tagAt : ""
         state.pushMoved = pushMoved
-        state.pushRemote = pushMoved ? state.pushRemote : facts.pushRemote
+        state.pushRemote = pushMoved ? state.pushRemote : pushRemote
         state.tagDriftOid = pushMoved ? state.tagDriftOid : drift
-        state.reach = tagged ? facts.tagReach : ""
-        state.heldBack = tagged ? facts.tagHeldBack : ""
-        state.tagCarriers = tagged ? facts.tagCarriers : ""
-        state.tagHere = tagged && facts.tagHere
+        state.reach = tagged ? card.reach : ""
+        state.heldBack = tagged ? card.heldBack : ""
+        state.tagCarriers = tagged ? card.carriers : ""
         if (!tagged) {
             state.canPushTag = false
             state.pushShown = false
             state.canDelete = false
-            state.canDeleteRemoteTag = false
-            state.canDeleteTagEverywhere = false
+            state.deleteRemoteTag = ""
+            state.deleteTagEverywhere = ""
             state.tagOnlyThere = false
             return
         }
-        state.tagOnlyThere = facts.tagOnlyThere
-        // Which delete rows have a seat is core's answer (offers::ref_menu).
-        const offers = facts.offers
-        state.canPushTag = offers.includes("push-tag")
+        state.tagOnlyThere = card.rowGoes
+        // Which rows have a seat, and which of those grey, is core's answer (offers::ref_menu).
+        const menu = facts.menu
+        state.canPushTag = menu.pushTag
         state.pushShown = sameTag ? state.pushShown : state.canPushTag
-        state.canDelete = offers.includes("delete")
-        state.canDeleteRemoteTag = offers.includes("delete-remote-tag")
-        state.canDeleteTagEverywhere = offers.includes("delete-tag-everywhere")
+        state.canDelete = menu.delete
+        state.deleteRemoteTag = menu.deleteRemoteTag
+        state.deleteTagEverywhere = menu.deleteTagEverywhere
     }
 
     // `dismiss()` folds every level (rules-refs/app-ui.md「メニューを閉じるのは自分」).
@@ -233,18 +234,18 @@ AppMenu {
         codeName: state.reach !== "" ? "" : state.refId
         growsForText: false
         // A reading held back keeps its seat and greys; a side that does not exist is gone
-        // (デザイン規約 §左メニューの所作 の削除の表). This card is assembled from offered rows, so `offered` must be
-        // `can… || heldBack` here and on `Delete both`: off `can…` alone a drifted row loses its seat and nothing on
-        // the menu reads the state. The branch's delete table is fixed (`BranchDeleteRow`), so its `offered` stays
-        // plain — fixed because the current branch's menu would otherwise come up empty; a tag's card always has a
-        // live row.
+        // (デザイン規約 §左メニューの所作 の削除の表). This card is assembled from offered rows, so `offered` is the
+        // seat core gave it, here and on `Delete both`: off the live rows alone a drifted row would lose its seat and
+        // nothing on the menu would read the state. The branch's delete table is fixed (`BranchDeleteRow`), so its
+        // `offered` stays plain — fixed because the current branch's menu would otherwise come up empty; a tag's card
+        // always has a live row.
         // Held back is "not now", both ways (user decision — ask before changing): `drift`, for the reason the branch's
         // remote rows grey (`BranchRemoteDeleteRow`) — a tag's reading has no namespace, so it goes from the menu that
         // names that remote; `unnamed` (the remote pushes go to lacks the name, several others carry it): that it is
         // over there can be said, but which remote to send to is not decided until a step names one.
-        offered: state.kind === "tag" && (state.canDeleteRemoteTag || state.heldBack !== "")
-        blockedReason: state.canDeleteRemoteTag ? "" : state.heldWhy
-        reasonMarks: state.canDeleteRemoteTag ? [] : state.heldMarks
+        offered: state.kind === "tag" && state.deleteRemoteTag !== ""
+        blockedReason: state.deleteRemoteTag === "live" ? "" : state.heldWhy
+        reasonMarks: state.deleteRemoteTag === "live" ? [] : state.heldMarks
         holdPresses: Metrics.holdPressesWarned
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
@@ -258,9 +259,9 @@ AppMenu {
     AppMenuItem {
         id: refBothTagDeleteItem
         text: qsTr("Delete both")
-        offered: state.kind === "tag" && (state.canDeleteTagEverywhere || (state.heldBack !== "" && state.tagHere))
-        blockedReason: state.canDeleteTagEverywhere ? "" : state.heldWhy
-        reasonMarks: state.canDeleteTagEverywhere ? [] : state.heldMarks
+        offered: state.kind === "tag" && state.deleteTagEverywhere !== ""
+        blockedReason: state.deleteTagEverywhere === "live" ? "" : state.heldWhy
+        reasonMarks: state.deleteTagEverywhere === "live" ? [] : state.heldMarks
         holdPresses: Metrics.holdPressesWarned
         // Only names go — git keeps the object — so never the danger of the branch's `-D`.
         holdTone: Theme.warning

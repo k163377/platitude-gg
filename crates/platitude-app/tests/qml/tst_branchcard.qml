@@ -4,7 +4,7 @@ import QtTest
 import platitude.ui
 import "painted.js" as Painted
 
-// The real branch card (`RefBranchMenu`) standing on the answers a menu would hand it (`RefRowMenu.branchFacts`), and
+// The real branch card (`RefBranchMenu`) standing on the answers a menu would hand it (`RefMenuFacts.stand`), and
 // the four rows it lends the level above — the push beside `pull` and the delete table (`BranchPushRow` /
 // `BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), laid out as both entrances lay them: which rows
 // each keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a state may
@@ -20,7 +20,8 @@ Item {
     /// What a press asked for, last one wins: the card and its rows run nothing themselves.
     property string asked: ""
 
-    /// Word lists as `offers::RefMenuOffers::words` answers them — data, not a rule.
+    /// The rows on offer, named in words — data, not a rule —, turned into the record `GitFacts.refMenu` answers by
+    /// `menuOf`.
     readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream",
                                  "unset-upstream"]
     /// The branch the worktree is on: no move, no delete, and the rows say so.
@@ -66,6 +67,13 @@ Item {
         }
     }
 
+    /// The record `GitFacts.refMenu` answers (`encode::RefMenu`) where `words` are on offer and the upstream stands
+    /// `upstreamWhere`: the part of it the BRANCH card reads.
+    function menuOf(words, upstreamWhere) {
+        return { "delete": words.includes("delete"), "deleteRemote": words.includes("delete-remote"),
+                 "setUpstream": words.includes("set-upstream"), "unsetUpstream": words.includes("unset-upstream"),
+                 "current": words.includes("current"), "upstreamWhere": upstreamWhere }
+    }
     /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on
     /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
     /// (`NavSectionModel.branchPush`), none by default. `again`: why the menu stands again with the card up
@@ -80,15 +88,12 @@ Item {
             all[key] = fields[key]
         root.asked = ""
         branchCard.standOn(all.kind, all.name, all.full, oid === undefined ? "abc123" : oid, {
-            "heldByWorktree": all.heldByWorktree,
-            "holderLeaf": all.holderLeaf,
-            "remoteCounterpart": all.remoteCounterpart,
-            "upstream": all.upstream,
-            "upstreamWhere": all.upstreamWhere,
-            "remoteCounterpartOid": all.remoteCounterpartOid,
+            "lead": { "path": all.heldByWorktree, "called": all.holderLeaf, "home": false },
+            "card": { "remoteCounterpart": all.remoteCounterpart, "remoteCounterpartOid": all.remoteCounterpartOid,
+                      "upstream": all.upstream },
+            "menu": root.menuOf(all.offers, all.upstreamWhere),
             "open": all.open,
             "merged": all.merged,
-            "offers": all.offers,
             "push": all.push
         }, again === undefined ? "" : again)
     }

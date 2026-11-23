@@ -10,6 +10,7 @@ mod labels;
 mod landing;
 mod markup;
 mod mates;
+mod menu;
 mod metatype;
 mod push;
 mod rows;
@@ -34,6 +35,7 @@ pub use markup::{
     spelled_ranges,
 };
 pub use mates::{Mates, mates_of};
+pub use menu::{RefMenu, WorktreeMaking};
 pub use push::{Push, ToolbarPush};
 pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_after, flatten_patches, is_combined, is_new_file,

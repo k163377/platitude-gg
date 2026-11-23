@@ -573,13 +573,6 @@ impl RepoTab {
         self.write_answer_text(index, |a| &a.report_fact)
     }
 
-    /// Local branch name a remote-tracking ref would take: the ref minus
-    /// the longest matching configured remote (a remote may be `my/fork`).
-    #[qslot]
-    fn local_name_for(&self, remote_ref: String) -> String {
-        self.local_name_of(remote_ref)
-    }
-
     #[qslot]
     fn attach(&mut self, tab_id: i32) {
         self.attach_feed(tab_id)

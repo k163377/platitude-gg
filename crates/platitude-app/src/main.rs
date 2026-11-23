@@ -295,6 +295,7 @@ fn main() {
     qrc::embed!("ui/RefChipStack.qml");
     qrc::embed!("ui/RefListPopup.qml");
     qrc::embed!("ui/RefBranchMenu.qml");
+    qrc::embed!("ui/RefMenuFacts.qml");
     qrc::embed!("ui/RefRowMenu.qml");
     qrc::embed!("ui/RefTagMenu.qml");
     qrc::embed!("ui/RemoteRowMenu.qml");

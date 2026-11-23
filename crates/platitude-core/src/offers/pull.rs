@@ -79,23 +79,26 @@ pub struct PullOffer {
     pub out: Option<PullOut>,
 }
 
-impl PullOffer {
-    /// The offer as words, the shape `GitFacts.pullRow` answers with:
-    /// `here` / `aside`, then `out-standing` / `out-diverged` / `out-own` /
-    /// `out-held`.
-    pub fn words(&self) -> Vec<&'static str> {
-        let mut words = vec![match self.runs {
-            PullRuns::Here => "here",
-            PullRuns::Aside => "aside",
-        }];
-        match self.out {
-            Some(PullOut::Standing) => words.push("out-standing"),
-            Some(PullOut::Diverged) => words.push("out-diverged"),
-            Some(PullOut::OwnCommits) => words.push("out-own"),
-            Some(PullOut::Held) => words.push("out-held"),
-            None => {}
+impl PullRuns {
+    /// The word the menu's record carries it in (`Words.pullOut` and the
+    /// row's sentence read it).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Here => "here",
+            Self::Aside => "aside",
         }
-        words
+    }
+}
+
+impl PullOut {
+    /// The word the menu's record carries it in (`Words.pullOut`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Standing => "standing",
+            Self::Diverged => "diverged",
+            Self::OwnCommits => "own",
+            Self::Held => "held",
+        }
     }
 }
 
@@ -250,10 +253,6 @@ mod tests {
             assert_eq!(runs(on(kind, "v1.0")), None, "{kind:?} is no branch");
         }
         assert_eq!(
-            on(RefKind::Branch, "main").map(|offer| offer.words()),
-            Some(vec!["here"])
-        );
-        assert_eq!(
             pull_row(&standing(None, &tree()), tracking(Some(0))),
             None,
             "a row that names no ref"
@@ -372,10 +371,6 @@ mod tests {
             None,
             "detached, no remote row is an end of the tree's comparison"
         );
-        assert_eq!(
-            pull_on(RefKind::Branch, "main", &merging(false)).map(|offer| offer.words()),
-            Some(vec!["here", "out-standing"])
-        );
     }
 
     #[test]
@@ -431,10 +426,6 @@ mod tests {
                 .and_then(|offer| offer.out),
             Some(PullOut::Held),
             "and over a standing operation: finishing it here frees nothing there"
-        );
-        assert_eq!(
-            aside("feat", &tree(), Leads::Holder, Some(0)).map(|offer| offer.words()),
-            Some(vec!["aside", "out-held"])
         );
     }
 }

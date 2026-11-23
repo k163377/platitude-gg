@@ -25,8 +25,8 @@ impl FarSide {
     /// The far side as a row of `kind` reads it: a branch's on a local
     /// branch's row, a tag's on a tag's, and nothing on any other pairing.
     ///
-    /// The kind is the menu's word and the far side the model's record,
-    /// handed to `GitFacts.refMenuOffers` apart, so no type keeps the two
+    /// The kind is the row's word and the far side the card's record,
+    /// handed to `GitFacts.refMenu` apart, so no type keeps the two
     /// together; this is the one place they are matched.
     pub(super) fn on(self, kind: RefKind) -> Self {
         match (kind, self) {

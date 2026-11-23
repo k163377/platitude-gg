@@ -271,6 +271,16 @@ fn a_remote_row_derives_its_local_name_from_its_own_snapshot() {
 
     assert_eq!(model.local_name_of("my/fork/feature/one"), "feature/one");
     assert_eq!(model.local_name_of("unknown/feature"), "unknown/feature");
+    assert_eq!(
+        model.landing_of("remote", "my/fork/feature/one"),
+        "feature/one"
+    );
+    assert_eq!(
+        model.landing_of("branch", "my/fork/feature/one"),
+        "my/fork/feature/one",
+        "a branch row lands on itself, whatever it is called"
+    );
+    assert_eq!(model.landing_of("tag", "v1.0"), "", "no other row lands");
 }
 /// Same tags, no model reset.
 #[test]

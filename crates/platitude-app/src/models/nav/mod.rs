@@ -118,7 +118,7 @@ impl Record for HeldMark {
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads,
 /// with what its rows read over there flat beside them (`encode::put_far`:
 /// `sides`, `hasRemote` and the `heldBack` the card words its greyed rows
-/// by) — the record QML hands `GitFacts.refMenuOffers` as it is.
+/// by) — the record QML hands `GitFacts.refMenu` as it is (`CardRecord`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenu {
     pub push_remote: String,
@@ -175,9 +175,10 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 /// as it stands again (`NavSectionModel::branch_upstream`): the remote
 /// reading it speaks for and that reading's commit — what the card's
 /// remote deletes name and are leased to —, the upstream it is configured
-/// with, and core's part flat beside them (`encode::put_far`), off the same
-/// row (`RefsSnapshot::branch_upstream`). QML hands the record to
-/// `GitFacts.refMenuOffers` as it is.
+/// with, where that stands and the commit it is on, and core's part flat
+/// beside them (`encode::put_far`), off the same row
+/// (`RefsSnapshot::branch_upstream`). QML hands the record to
+/// `GitFacts.refMenu` as it is (`CardRecord`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BranchUpstream {
     /// `None` on a row that is no local branch's: it reads nothing over
@@ -190,6 +191,12 @@ pub struct BranchUpstream {
     /// Listed or gone, a branch here too (`BranchItem::upstream_named`);
     /// empty where it has none.
     pub upstream: String,
+    /// That upstream is a branch here (`BranchItem::upstream_here`).
+    pub upstream_here: bool,
+    /// Hex; the commit that upstream stands on — what the plain delete is
+    /// measured against (`BranchItem::upstream_oid`). Empty where there is
+    /// none, and git then measures against HEAD.
+    pub upstream_oid: String,
 }
 
 impl Record for BranchUpstream {
@@ -200,6 +207,8 @@ impl Record for BranchUpstream {
             .put("remoteCounterpart", &self.counterpart)
             .put("remoteCounterpartOid", &self.counterpart_oid)
             .put("upstream", &self.upstream)
+            .put("upstreamHere", &self.upstream_here)
+            .put("upstreamOid", &self.upstream_oid)
             .done()
     }
 
@@ -215,6 +224,8 @@ impl Record for BranchUpstream {
             counterpart: field(map, "remoteCounterpart")?,
             counterpart_oid: field(map, "remoteCounterpartOid")?,
             upstream: field(map, "upstream")?,
+            upstream_here: field(map, "upstreamHere")?,
+            upstream_oid: field(map, "upstreamOid")?,
         })
     }
 }
@@ -229,6 +240,11 @@ impl From<platitude_core::session::BranchUpstreamFacts> for BranchUpstream {
                 .map(|oid| oid.to_hex())
                 .unwrap_or_default(),
             upstream: facts.upstream,
+            upstream_here: facts.upstream_here,
+            upstream_oid: facts
+                .upstream_oid
+                .map(|oid| oid.to_hex())
+                .unwrap_or_default(),
         }
     }
 }
@@ -297,6 +313,7 @@ mod card;
 mod drain;
 mod field;
 mod item;
+mod menu;
 mod qmodel;
 mod qobject;
 mod role;
@@ -314,6 +331,7 @@ use card::CardRows;
 use item::{FOLDED, HELD, NavItem, fold_state};
 /// The worktree rows' state words, which `GitFacts` hands to core's card rule.
 pub(crate) use item::{LOCKED, MAIN, PRUNABLE};
+pub(crate) use menu::{CardRecord, RowLead};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 use worktree_card::{NewWorktree, WorktreeRow, WorktreeRows};

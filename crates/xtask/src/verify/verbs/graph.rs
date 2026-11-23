@@ -548,7 +548,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The chip's own entrance raises the row's menu aimed at that name —
     // no second menu on the chip's side (デザイン規約 §グラフ行の右クリック);
     // `ref=false` is the ref menu staying away. A window checks the aim:
-    // the press reaches `CommitMenuState.askRefRows` with the chip's name
+    // the press reaches `CommitMenuState.standRow` with the chip's name
     // and the tree's branch (the drawing is `tst_commitrowmenu.qml`, the
     // answer `offers::ref_menu`). The two lines are the two aims — a name
     // the tree is not on, and the one it is; neither stands for the

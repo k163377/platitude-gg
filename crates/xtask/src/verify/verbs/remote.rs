@@ -152,7 +152,7 @@ pub(super) const TABLE: &[Verb] = &[
     // rows a side offers is core's
     // (`offers::each_delete_row_needs_the_side_it_names`) and the card's
     // use of it `tests/qml/tst_tagcard.qml`'s; these claim the two parts of
-    // the record the menu reads (`RefRowMenu.tagFacts` — `tagMenu`):
+    // the record the menu reads (`RefMenuFacts.stand` — `tagMenu`):
     // `:remote` that the sides arrived (unread answers `here`, one row
     // instead of three), `:drift` that the lease did. No run for a name on
     // one side only: core and the card test already decide those.
@@ -198,7 +198,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The graph row's menu on a tag's chip that draws one remote's reading
     // (`v3.2-split` on HEAD's row is mirror's, the copy here standing a row
     // down): that remote is named on its own, so the card pushes to it and
-    // deletes from it (`CommitMenuState.tagFacts` → `tagAimAt`).
+    // deletes from it (`CommitMenuState.standRow` → `tagAimAt`).
     Verb {
         name: "tag-chip-menu",
         when: &[(

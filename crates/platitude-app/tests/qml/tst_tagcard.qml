@@ -3,9 +3,9 @@ import QtQuick.Controls.Fusion
 import QtTest
 import platitude.ui
 
-// The real `RefTagMenu` standing on the answers a menu would have read (`RefRowMenu.tagFacts`): which row has a seat,
-// which greys and why, which push form is drawn, and what each press asks for. Which rows a state may offer is
-// `offers::ref_menu`'s and is not recomputed here.
+// The real `RefTagMenu` standing on the answers a menu would have read (`RefMenuFacts.stand`): which row has a seat,
+// which greys and why, which push form is drawn, and what each press asks for. Which rows a state may offer, and which
+// of them grey, is `offers::ref_menu`'s and is not recomputed here.
 Item {
     id: root
     width: 320
@@ -14,14 +14,18 @@ Item {
     /// What a press asked for, last one wins: the card runs nothing itself.
     property string asked: ""
 
-    /// Core's words (`offers::RefMenuOffers::words`) for a tag on each of its sides — data; the mapping is tested in
-    /// `offers::tests::ref_menu::each_delete_row_needs_the_side_it_names`.
-    readonly property var here: ["branch-here", "integrate", "delete", "push-tag"]
-    readonly property var overThere: ["branch-here", "integrate", "delete-remote-tag"]
-    readonly property var both: ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag",
-                                 "delete-tag-everywhere"]
-    /// The remote's copy on another commit: core takes both rows that reach the remote away.
-    readonly property var drifted: ["branch-here", "integrate", "delete", "push-tag"]
+    /// Core's answer (`GitFacts.refMenu` — the part the card reads) for a tag on each of its sides — data; the rule is
+    /// tested in `offers::tests::ref_menu::each_delete_row_needs_the_side_it_names`. The two deletes that reach over
+    /// there come as seats: `live`, `greyed`, or empty for none.
+    readonly property var here: ({ "pushTag": true, "delete": true, "deleteRemoteTag": "", "deleteTagEverywhere": "" })
+    readonly property var overThere: ({ "pushTag": false, "delete": false, "deleteRemoteTag": "live",
+                                        "deleteTagEverywhere": "" })
+    readonly property var both: ({ "pushTag": true, "delete": true, "deleteRemoteTag": "live",
+                                   "deleteTagEverywhere": "live" })
+    /// A reading held back — the remote's copy on another commit, or several remotes carrying the name — keeps both
+    /// rows that reach over there in their seats, greyed.
+    readonly property var drifted: ({ "pushTag": true, "delete": true, "deleteRemoteTag": "greyed",
+                                      "deleteTagEverywhere": "greyed" })
 
     RefTagMenu {
         id: card
@@ -35,24 +39,27 @@ Item {
             root.asked = "delete-both " + tag + " " + remote + " " + expect
     }
 
-    /// The card on `offers`, the rest as `NavSectionModel.tagMenu` answers for a name `origin` carries: the deletes
-    /// reach it, and a drift holds them back. `over` replaces any of those answers. `again`: why the menu stands again
-    /// with the card up (`RefTagMenu.standOn`'s — `follow` / `wait`), none as it is raised.
-    function standOn(offers, drift, onlyThere, over, again) {
+    /// The card on core's answer `menu`, the tag's record as `NavSectionModel.tagMenu` answers for a name `origin`
+    /// carries: the deletes reach it, and a drift holds them back. `over` replaces any of the record's fields, or
+    /// `tagAt`. `again`: why the menu stands again with the card up (`RefTagMenu.standOn`'s — `follow` / `wait`), none
+    /// as it is raised.
+    function standOn(menu, drift, onlyThere, over, again) {
         root.asked = ""
-        const facts = {
+        const tag = {
             "pushRemote": "origin",
-            "tagDriftOid": drift,
-            "tagReach": "origin",
-            "tagHeldBack": drift !== "" ? "drift" : "",
-            "tagCarriers": "origin",
-            "tagOnlyThere": onlyThere,
-            "tagHere": offers.includes("delete"),
-            "tagAt": "abc123",
-            "offers": offers
+            "lease": drift,
+            "reach": "origin",
+            "heldBack": drift !== "" ? "drift" : "",
+            "carriers": "origin",
+            "rowGoes": onlyThere
         }
-        for (const key in (over || {}))
-            facts[key] = over[key]
+        const facts = { "card": tag, "menu": menu, "tagAt": "abc123" }
+        for (const key in (over || {})) {
+            if (key === "tagAt")
+                facts.tagAt = over[key]
+            else
+                tag[key] = over[key]
+        }
         card.standOn("tag", "v1.0", "abc123", facts, again === undefined ? "" : again)
     }
 
@@ -68,14 +75,14 @@ Item {
         /// Read off `offered`: a card missing a row frames exactly like one that never offered it.
         function test_the_delete_rows_a_name_grows_data() {
             return [
-                { tag: "made here", offers: root.here, local: true, remote: false, both: false },
-                { tag: "only over there", offers: root.overThere, local: false, remote: true, both: false },
-                { tag: "on both sides", offers: root.both, local: true, remote: true, both: true },
+                { tag: "made here", menu: root.here, local: true, remote: false, both: false },
+                { tag: "only over there", menu: root.overThere, local: false, remote: true, both: false },
+                { tag: "on both sides", menu: root.both, local: true, remote: true, both: true },
             ]
         }
 
         function test_the_delete_rows_a_name_grows(data) {
-            root.standOn(data.offers, "", false)
+            root.standOn(data.menu, "", false)
             compare(card.deleteTagItem.offered, data.local, "tag --delete")
             compare(card.deleteRemoteTagItem.offered, data.remote, "push --delete")
             compare(card.deleteTagBothItem.offered, data.both, "both at once")
@@ -99,9 +106,8 @@ Item {
             compare(card.pushTagItem.holdTone, Theme.warning, "reaching past this machine is the warning tone")
         }
 
-        /// The card's own rule, not core's: there is a name over there and only this row can say where it is, so the
-        /// two rows core took away stand greyed (デザイン規約 §左メニューの所作 の削除の表). Any other missing offer
-        /// takes the seat with it.
+        /// There is a name over there and only this row can say where it is, so the two rows that reach it keep their
+        /// seats greyed (デザイン規約 §左メニューの所作 の削除の表), and say why. A seat core does not give is no row.
         function test_a_drifted_reading_keeps_the_two_rows_that_reach_it_and_greys_them() {
             root.standOn(root.drifted, "deadbee", false)
             verify(card.deleteRemoteTagItem.offered, "the seat is kept")
@@ -116,8 +122,7 @@ Item {
         /// unasked, so the two rows reaching over there stand greyed and name who has it — each is reached from its
         /// own line (デザイン規約 §左メニューの所作 の削除の表).
         function test_a_name_several_remotes_carry_unasked_greys_the_rows_reaching_them() {
-            root.standOn(root.drifted, "", false,
-                         { "tagReach": "", "tagHeldBack": "unnamed", "tagCarriers": "fork, mirror" })
+            root.standOn(root.drifted, "", false, { "reach": "", "heldBack": "unnamed", "carriers": "fork, mirror" })
             verify(card.deleteRemoteTagItem.offered, "the seat is kept")
             verify(card.deleteTagBothItem.offered)
             compare(card.deleteRemoteTagItem.blockedReason, "Several remotes have it: fork, mirror")
@@ -125,8 +130,8 @@ Item {
             compare(card.deleteRemoteTagItem.codeName, "v1.0", "and names no remote it cannot reach")
             compare(card.deleteRemoteTagItem.nameMark, "tag", "behind its mark")
 
-            root.standOn(["branch-here", "integrate"], "", false,
-                         { "tagReach": "", "tagHeldBack": "unnamed", "tagCarriers": "fork, mirror", "tagHere": false })
+            root.standOn({ "pushTag": false, "delete": false, "deleteRemoteTag": "greyed", "deleteTagEverywhere": "" },
+                         "", false, { "reach": "", "heldBack": "unnamed", "carriers": "fork, mirror" })
             verify(card.deleteRemoteTagItem.offered)
             verify(!card.deleteTagBothItem.offered, "a name not held here has no both")
         }
@@ -138,12 +143,12 @@ Item {
             compare(card.deleteRemoteTagItem.text, "v1.0 from origin")
             compare(card.pushTagItem.text, "to origin")
 
-            root.standOn(root.overThere, "", true, { "tagReach": "fork", "tagCarriers": "fork" })
+            root.standOn(root.overThere, "", true, { "reach": "fork", "carriers": "fork" })
             compare(card.deleteRemoteTagItem.text, "v1.0 from fork")
             card.deleteRemoteTagItem.held()
             compare(root.asked, "delete-remote fork v1.0 true abc123", "sent where the row said, leased to its commit")
 
-            root.standOn(root.both, "", false, { "tagReach": "fork" })
+            root.standOn(root.both, "", false, { "reach": "fork" })
             card.deleteTagBothItem.held()
             compare(root.asked, "delete-both v1.0 fork abc123")
         }
@@ -151,16 +156,14 @@ Item {
         /// A stash is nobody's history, so it has no card at all.
         function test_a_row_that_names_no_tag_holds_the_one_row_about_the_commit() {
             root.asked = ""
-            card.standOn("branch", "feature/topic-a", "abc123",
-                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] })
+            card.standOn("branch", "feature/topic-a", "abc123", { "card": undefined, "tagAt": "" })
             verify(card.applies, "a branch row still offers the mark")
             verify(card.tagHereItem.offered)
             for (const row of [card.pushTagItem, card.deleteTagItem, card.deleteRemoteTagItem,
                                card.deleteTagBothItem]) {
                 verify(!row.offered, "nothing a name answers for")
             }
-            card.standOn("stash", "stash@{0}", "abc123",
-                         { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] })
+            card.standOn("stash", "stash@{0}", "abc123", { "card": undefined, "tagAt": "" })
             verify(!card.applies, "and a stash has no card at all")
         }
 

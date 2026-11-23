@@ -63,6 +63,20 @@ fn the_kind_word_is_the_chips() {
     assert_eq!(RefKind::from_word("worktree"), Some(RefKind::Worktree));
 }
 
+/// The two rows' answer: the new branch's row, and the row's own branch out
+/// as `checkout`, greyed for `out`.
+fn rows(
+    here: bool,
+    checkout: Option<WorktreeCheckout>,
+    out: Option<WorktreeAddOut>,
+) -> WorktreeOffers {
+    WorktreeOffers {
+        here,
+        checkout,
+        checkout_out: out,
+    }
+}
+
 /// The two rows that make a worktree, asked of an idle repository on `main`
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
@@ -76,13 +90,15 @@ fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
 
 #[test]
 fn a_free_branch_goes_out_as_it_is_and_any_commit_takes_a_new_one() {
-    let offers = making(Some(RefKind::Branch), "feature/login");
-    assert_eq!(offers.words(), vec!["here", "checkout-branch"]);
-    assert_eq!(making(None, "").words(), vec!["here"], "a commit row");
-    assert_eq!(making(Some(RefKind::Tag), "v1").words(), vec!["here"]);
     assert_eq!(
-        making(Some(RefKind::Worktree), "C:/work/detached").words(),
-        vec!["here"],
+        making(Some(RefKind::Branch), "feature/login"),
+        rows(true, Some(WorktreeCheckout::Branch), None)
+    );
+    assert_eq!(making(None, ""), rows(true, None, None), "a commit row");
+    assert_eq!(making(Some(RefKind::Tag), "v1"), rows(true, None, None));
+    assert_eq!(
+        making(Some(RefKind::Worktree), "C:/work/detached"),
+        rows(true, None, None),
         "a branchless worktree has no branch to take out"
     );
 }
@@ -92,8 +108,12 @@ fn a_free_branch_goes_out_as_it_is_and_any_commit_takes_a_new_one() {
 #[test]
 fn a_branch_already_out_greys_its_worktree_add() {
     assert_eq!(
-        making(Some(RefKind::Branch), "main").words(),
-        vec!["here", "checkout-branch", "out-current"]
+        making(Some(RefKind::Branch), "main"),
+        rows(
+            true,
+            Some(WorktreeCheckout::Branch),
+            Some(WorktreeAddOut::Current)
+        )
     );
     let main = TreeStanding::on("main");
     let held = worktree_rows(
@@ -104,7 +124,14 @@ fn a_branch_already_out_greys_its_worktree_add() {
         false,
         false,
     );
-    assert_eq!(held.words(), vec!["here", "checkout-branch", "out-held"]);
+    assert_eq!(
+        held,
+        rows(
+            true,
+            Some(WorktreeCheckout::Branch),
+            Some(WorktreeAddOut::Held)
+        )
+    );
     assert_eq!(
         making(Some(RefKind::Branch), "feature/login").checkout_out,
         None,
@@ -124,8 +151,12 @@ fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
         false,
     );
     assert_eq!(
-        stopped.words(),
-        vec!["here", "checkout-branch", "out-stopped"]
+        stopped,
+        rows(
+            true,
+            Some(WorktreeCheckout::Branch),
+            Some(WorktreeAddOut::Stopped)
+        )
     );
 }
 
@@ -146,8 +177,8 @@ fn a_detached_tree_holds_no_branch() {
 #[test]
 fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
     assert_eq!(
-        making(Some(RefKind::Remote), "origin/feature/login").words(),
-        vec!["here", "checkout-track"]
+        making(Some(RefKind::Remote), "origin/feature/login"),
+        rows(true, Some(WorktreeCheckout::Track), None)
     );
     let main = TreeStanding::on("main");
     let local_there = worktree_rows(
@@ -155,7 +186,7 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         false,
         true,
     );
-    assert_eq!(local_there.words(), vec!["here"]);
+    assert_eq!(local_there, rows(true, None, None));
 }
 
 /// Not even a stopped operation keeps a new worktree from being made: nothing

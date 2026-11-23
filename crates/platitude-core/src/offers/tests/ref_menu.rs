@@ -58,18 +58,6 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             on_current_branch: false,
         }
     );
-    assert_eq!(
-        offers.words(),
-        [
-            "switch",
-            "branch-here",
-            "integrate",
-            "delete",
-            "delete-remote",
-            "set-upstream",
-            "unset-upstream"
-        ]
-    );
 }
 
 /// The rows that reach over there are the cards': the row's own menu reads
@@ -328,17 +316,6 @@ fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
     assert!(merging.branch_here, "kept, greyed");
     assert!(merging.integrate_from, "kept, greyed");
     assert!(merging.delete, "a delete moves no working tree");
-    assert_eq!(
-        merging.words(),
-        [
-            "switch",
-            "asks",
-            "branch-here",
-            "integrate",
-            "standing",
-            "delete"
-        ]
-    );
     let rebasing = standing(true);
     assert!(rebasing.standing);
     assert!(rebasing.branch_here, "kept, greyed");
@@ -472,17 +449,6 @@ fn each_delete_row_needs_the_side_it_names() {
     assert!(both.delete);
     assert_eq!(both.delete_remote_tag, Seat::Live);
     assert_eq!(both.delete_tag_everywhere, Seat::Live);
-    assert_eq!(
-        both.words(),
-        [
-            "branch-here",
-            "integrate",
-            "delete",
-            "push-tag",
-            "delete-remote-tag",
-            "delete-tag-everywhere"
-        ]
-    );
 }
 
 /// A remote holding the name on another commit, or several carrying it
@@ -579,6 +545,31 @@ fn a_row_that_names_no_ref_offers_none_of_a_refs_rows() {
     assert_eq!(
         ref_menu(&standing(None, &main), FarSide::Unread),
         RefMenuOffers::default()
+    );
+}
+
+/// The colour the upstream's name wears: a remote reading, a branch here,
+/// or the one HEAD is on — told by the tree the menu stands on, a gone
+/// one by where it was configured.
+#[test]
+fn an_upstream_stands_where_its_configuration_and_the_tree_say() {
+    let main = TreeStanding::on("main");
+    assert_eq!(upstream_place("", false, &main), UpstreamPlace::None);
+    assert_eq!(
+        upstream_place("origin/feat", false, &main),
+        UpstreamPlace::Remote
+    );
+    assert_eq!(upstream_place("main", true, &main), UpstreamPlace::Current);
+    assert_eq!(upstream_place("release", true, &main), UpstreamPlace::Local);
+    assert_eq!(
+        upstream_place("main", true, &TreeStanding::detached()),
+        UpstreamPlace::Local,
+        "detached, no branch is the one HEAD is on"
+    );
+    assert_eq!(
+        upstream_place("origin/main", true, &main),
+        UpstreamPlace::Local,
+        "a branch here may be called like a remote one"
     );
 }
 

@@ -10,12 +10,14 @@
 //! not depend on when it was opened.
 //!
 //! **These are the rules, and the app holds no copy.** It asks by value
-//! through `GitFacts` (`refMenuOffers` / `commitMenuOffers`, frozen into
+//! through `GitFacts` (`refMenu` — one answer per stand, read by both
+//! entrances through `RefMenuFacts` — and `commitMenuOffers`, frozen into
 //! the menus' `can*` as `RefRowMenu.offerOn` / `CommitMenuState.openRowMenu`
 //! open; `switchAction` for `RepoPage.switchToRef`), and what follows from
 //! the standing state arrives as `WorktreeModel` properties derived at
 //! drain (`movesBlocked` / `leaveUndoes` / `leaveCode` / `opSkipFree`).
-//! QML keeps only the lookups that feed them and the `qsTr` wording.
+//! QML keeps only the lookups that feed them, the `qsTr` wording and each
+//! row's kind condition.
 
 mod far;
 mod message;
@@ -233,50 +235,46 @@ pub struct RefMenuOffers {
     pub on_current_branch: bool,
 }
 
-impl RefMenuOffers {
-    /// The offers as words, the shape `GitFacts.refMenuOffers` answers with.
-    pub fn words(&self) -> Vec<&'static str> {
-        let mut words: Vec<&'static str> = Vec::new();
-        if self.switch_to {
-            words.push("switch");
+/// Where the upstream a local branch is configured with stands, which is
+/// the colour its name wears on the BRANCH card (デザイン規約 §ref の種別
+/// 「名前の色 = 在処」).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UpstreamPlace {
+    /// No upstream.
+    #[default]
+    None,
+    /// A remote branch, listed or gone.
+    Remote,
+    /// A branch here other than the one HEAD is on, listed or gone.
+    Local,
+    /// The branch HEAD is on.
+    Current,
+}
+
+impl UpstreamPlace {
+    /// The word the menu's record carries it in; empty for [`Self::None`].
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Remote => "remote",
+            Self::Local => "local",
+            Self::Current => "current",
         }
-        if self.switch_asks {
-            words.push("asks");
-        }
-        if self.branch_here {
-            words.push("branch-here");
-        }
-        if self.integrate_from {
-            words.push("integrate");
-        }
-        if self.standing {
-            words.push("standing");
-        }
-        if self.delete {
-            words.push("delete");
-        }
-        if self.delete_remote {
-            words.push("delete-remote");
-        }
-        if self.push_tag {
-            words.push("push-tag");
-        }
-        if self.delete_remote_tag == Seat::Live {
-            words.push("delete-remote-tag");
-        }
-        if self.delete_tag_everywhere == Seat::Live {
-            words.push("delete-tag-everywhere");
-        }
-        if self.set_upstream {
-            words.push("set-upstream");
-        }
-        if self.unset_upstream {
-            words.push("unset-upstream");
-        }
-        if self.on_current_branch {
-            words.push("current");
-        }
-        words
+    }
+}
+
+/// Where `upstream` stands: `here` is whether it is a branch of this
+/// repository (`branch.<n>.remote = .`), listed or gone —
+/// `session::BranchItem::upstream_here`; a name alone cannot say so.
+pub fn upstream_place(upstream: &str, here: bool, tree: &TreeStanding) -> UpstreamPlace {
+    if upstream.is_empty() {
+        UpstreamPlace::None
+    } else if !here {
+        UpstreamPlace::Remote
+    } else if tree.is_current(upstream) {
+        UpstreamPlace::Current
+    } else {
+        UpstreamPlace::Local
     }
 }
 
@@ -608,27 +606,24 @@ pub enum WorktreeCheckout {
     Track,
 }
 
-impl WorktreeOffers {
-    /// The offers as words, the shape `GitFacts.worktreeOffers` answers with:
-    /// `here`, then `checkout-branch` / `checkout-track`, then `out-current`
-    /// / `out-held` / `out-stopped`.
-    pub fn words(&self) -> Vec<&'static str> {
-        let mut words: Vec<&'static str> = Vec::new();
-        if self.here {
-            words.push("here");
+impl WorktreeAddOut {
+    /// The word the menu's record carries it in (`WorktreeMaking`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Current => "current",
+            Self::Held => "held",
+            Self::Stopped => "stopped",
         }
-        match self.checkout {
-            Some(WorktreeCheckout::Branch) => words.push("checkout-branch"),
-            Some(WorktreeCheckout::Track) => words.push("checkout-track"),
-            None => {}
+    }
+}
+
+impl WorktreeCheckout {
+    /// The word the menu's record carries it in (`WorktreeMaking`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Branch => "branch",
+            Self::Track => "track",
         }
-        match self.checkout_out {
-            Some(WorktreeAddOut::Current) => words.push("out-current"),
-            Some(WorktreeAddOut::Held) => words.push("out-held"),
-            Some(WorktreeAddOut::Stopped) => words.push("out-stopped"),
-            None => {}
-        }
-        words
     }
 }
 

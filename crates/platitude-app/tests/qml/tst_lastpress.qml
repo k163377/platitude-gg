@@ -43,10 +43,14 @@ Item {
     /// later, as `checkedBranch` / `checkedMerged`.
     function standOn(name) {
         branchCard.standOn("branch", name, name, "abc123", {
-            "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/" + name, "upstream": "origin/" + name,
-            "upstreamWhere": "remote",
-            "remoteCounterpartOid": "def456", "open": true, "merged": "",
-            "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"]
+            "lead": { "path": "", "called": "", "home": false },
+            "card": { "remoteCounterpart": "origin/" + name, "remoteCounterpartOid": "def456",
+                      "upstream": "origin/" + name },
+            // The part of `GitFacts.refMenu`'s answer the card reads (`encode::RefMenu`).
+            "menu": { "delete": true, "deleteRemote": true, "setUpstream": true, "unsetUpstream": false,
+                      "current": false, "upstreamWhere": "remote" },
+            "open": true,
+            "merged": ""
         })
     }
 

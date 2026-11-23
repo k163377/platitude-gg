@@ -114,7 +114,7 @@ Item {
             // Both presses go out in one turn — `busyCount` only rises once the queue starts the write, so a tick
             // between them would be turned away by the busy gate and prove nothing. The argument is a remote branch
             // with no local one (`origin/feature/remote-only` on `basic`).
-            switchTwiceTimer.branch = repoTab.localNameFor(arg)
+            switchTwiceTimer.branch = remotesModel.landsOn("remote", arg)
             switchTwiceTimer.writesBefore = repoTab.writeSeq
             page.switchToRef("remote", arg)
             // `switchToRef` answers whether the press did anything; an ungated build says it did.

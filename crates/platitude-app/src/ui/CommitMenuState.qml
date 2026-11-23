@@ -32,18 +32,27 @@ QtObject {
         onTriggered: menuState.follow()
     }
     required property GraphModel graphModel
-    /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
+    /// What the rows on the name the menu is aimed at and the cards at the foot stand on, read through `menuFacts`;
+    /// where the name points now (`aimedAt`) and what it was renamed to (`standAgain`) off the sections themselves.
     required property NavSectionModel worktreesModel
-    /// What the cards at the foot need worked out for them: the reading a branch carries and where a tag stands
-    /// (`cardFacts`).
     required property NavSectionModel branchesModel
     required property NavSectionModel tagsModel
-    /// Where a remote branch the menu is aimed at points now (`aimedAt`).
     required property NavSectionModel remotesModel
     /// What the GITHUB card at the foot stands on.
     required property GitHubLinks githubLinks
     /// The menu these answers are handed to, and the one this opens.
     required property CommitRowMenu menu
+    /// What the rows on the menu's name and every card stand on, read in one place for this entrance and the
+    /// sidebar's (`RefRowMenu.menuFacts`).
+    readonly property RefMenuFacts menuFacts: RefMenuFacts {
+        id: menuFacts
+        repoTab: menuState.repoTab
+        graphModel: menuState.graphModel
+        worktreesModel: menuState.worktreesModel
+        branchesModel: menuState.branchesModel
+        remotesModel: menuState.remotesModel
+        tagsModel: menuState.tagsModel
+    }
 
     property string menuOid: ""
     // The stash's selector ("" on an ordinary commit); a stash gets its own menu (デザイン規約 §グラフ行の右クリック).
@@ -87,161 +96,6 @@ QtObject {
     /// the same reading. A hold mark coming re-indents every row (`AppMenu.holdIndent`), which only the menu standing
     /// again brings: the press count the commit now needs wins over the words' x.
     property bool menuTipHeldElsewhere: false
-
-    /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the commit
-    /// and the name the menu is aimed at (`offers::worktree_rows`): any commit takes a new branch; a local branch, or a
-    /// remote one with no local branch, goes out as it is — to the folder `newWorktreeFor` names, looked at here as the
-    /// menu opens and each time it stands again, the row greyed where the branch is out already or something is
-    /// already there.
-    function askWorktreeRows(kind, name, oidHex) {
-        const local = kind === "remote" ? menuState.repoTab.localNameFor(name) : name
-        const held = kind === "branch" || kind === "remote" ? menuState.worktreesModel.worktreeHolding(local) : ""
-        // A stopped rebase or bisect here holds it with the tree detached: no listing names this tree its holder.
-        const stopped = kind === "branch" ? menuState.worktreesModel.heldByOperation(local) : undefined
-        const stoppedHere = stopped !== undefined && stopped.here
-        const offers = GitFacts.worktreeOffers(
-            kind, name, oidHex,
-            menuState.repoTab.state === "open",
-            menuState.tree,
-            held,
-            stoppedHere,
-            kind === "remote" && menuState.branchesModel.oidOfName(local) !== "")
-        const checkout = offers.includes("checkout-branch") ? "branch"
-                       : offers.includes("checkout-track") ? "track" : ""
-        const place = checkout === "" ? undefined : menuState.worktreesModel.newWorktreeFor(local)
-        return {
-            "oid": oidHex,
-            // Only where worktrees have a place to go: a box whose Enter could make nothing is not offered.
-            "here": offers.includes("here") && menuState.worktreesModel.worktreesPlaced(),
-            // No place to name (the listing not in yet): no row, rather than one that cannot say where it goes.
-            "checkout": place === undefined ? "" : checkout,
-            "branch": place === undefined ? "" : local,
-            "start": checkout === "track" ? name : "",
-            "path": place === undefined ? "" : place.path,
-            "place": place === undefined ? "" : place.name,
-            "taken": place === undefined ? "" : place.taken,
-            // Why that row greys: the branch is out here, in the worktree named, or under an operation stopped here
-            // (`offers::WorktreeAddOut`).
-            "out": offers.includes("out-current") ? "current" : offers.includes("out-held") ? "held"
-                 : offers.includes("out-stopped") ? "stopped" : "",
-            "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
-            "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
-            "stoppedBy": stoppedHere ? stopped.by : ""
-        }
-    }
-
-    /// What the `switch` and `pull` rows read, asked of the name the menu is aimed at. Empty on a row that draws none,
-    /// which is what takes both rows off the menu.
-    function askRefRows(kind, name, oidHex) {
-        menuState.menuCanSwitch = false
-        menuState.menuSwitchAsks = false
-        menuState.menuHeldLeaf = ""
-        menuState.menuHeldHome = false
-        menuState.menuPullRuns = ""
-        menuState.menuPullOut = ""
-        menuState.menuPullUpstream = ""
-        if (kind !== "branch" && kind !== "remote" && kind !== "worktree")
-            return
-        const held = menuState.worktreeLeadingFrom(kind, name)
-        // Nothing over there: the rows that reach it are the cards'.
-        const offers = GitFacts.refMenuOffers(
-            kind, name, oidHex, menuState.repoTab.state === "open", menuState.tree, held, undefined)
-        menuState.menuCanSwitch = offers.includes("switch")
-        menuState.menuSwitchAsks = offers.includes("asks")
-        // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
-        menuState.menuHeldLeaf = held === "" ? "" : menuState.worktreesModel.worktreeCalled(held)
-        menuState.menuHeldHome = held !== "" && menuState.worktreesModel.worktreeHome(held)
-        menuState.menuPullUpstream = menuState.branchesModel.upstreamOf(name)
-        const pull = GitFacts.pullRow(
-            kind, name, menuState.repoTab.state === "open", menuState.tree,
-            held, menuState.menuPullUpstream, menuState.branchesModel.aheadOf(name))
-        menuState.menuPullRuns = pull.length > 0 ? pull[0] : ""
-        menuState.menuPullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
-    }
-
-    /// The other worktree the menu's name leads to: the one holding the branch (a remote row through the local
-    /// branch of the same name), or the worktree with no branch whose chip, named by its folder, the menu is aimed at
-    /// — unless this tab stands in it. Empty for none.
-    function worktreeLeadingFrom(kind, name) {
-        if (kind === "branch")
-            return menuState.worktreesModel.worktreeHolding(name)
-        if (kind === "remote")
-            return menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(name))
-        if (kind === "worktree" && !GitFacts.samePath(name, menuState.repoTab.repoPath))
-            return name
-        return ""
-    }
-
-    /// What the cards at the foot stand on, aimed at the menu's name — each emptied where that name is another's
-    /// kind, so that card holds only what can still be made here. The BRANCH card stands where its branch points,
-    /// `aimAt` (`aimedAt`). The WORKTREE card stands on the worktree with no branch whose chip, named by its folder,
-    /// the menu is aimed at, or on the one holding the chip's local branch — not a remote chip's, which only leads
-    /// there (`RefRowMenu.offerOn`) — and on what its making rows would make (`askWorktreeRows`). Read here, where the
-    /// models are.
-    function cardFacts(oidHex, aimAt) {
-        const kind = menuState.menu.targetKind
-        const branchy = kind === "branch" || kind === "remote"
-        const name = menuState.menu.targetName
-        const worktree = kind === "worktree" ? name : kind === "branch" ? menuState.worktreeLeadingFrom(kind, name) : ""
-        return {
-            "branch": menuState.branchFacts(branchy ? kind : "", branchy ? name : "", aimAt),
-            "tag": menuState.tagFacts(kind === "tag" ? "tag" : "", kind === "tag" ? name : "", oidHex),
-            "worktree": worktree === "" ? undefined : menuState.worktreesModel.worktreeFacts(worktree),
-            "worktreeHere": GitFacts.samePath(worktree, menuState.repoTab.repoPath),
-            "making": menuState.askWorktreeRows(kind, name, oidHex)
-        }
-    }
-
-    /// What the BRANCH card stands on — the same answer `RefRowMenu.branchFacts` gives at the other entrance.
-    function branchFacts(kind, full, oidHex) {
-        if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "holderHome": false,
-                     "remoteCounterpart": "", "remoteCounterpartOid": "", "offers": [], "open": false, "merged": "" }
-        const held = kind === "branch"
-            ? menuState.worktreesModel.worktreeHolding(full)
-            : menuState.worktreesModel.worktreeHolding(menuState.repoTab.localNameFor(full))
-        const reading = menuState.branchesModel.branchUpstream(kind, full)
-        const open = menuState.repoTab.state === "open"
-        return {
-            "heldByWorktree": held,
-            "holderLeaf": held === "" ? "" : menuState.worktreesModel.worktreeCalled(held),
-            "holderHome": held !== "" && menuState.worktreesModel.worktreeHome(held),
-            "remoteCounterpart": reading.remoteCounterpart,
-            "upstream": reading.upstream,
-            "upstreamWhere": reading.upstream === ""
-                             ? "" : menuState.branchesModel.upstreamWhere(full, menuState.tree.branch),
-            "remoteCounterpartOid": reading.remoteCounterpartOid,
-            "open": open,
-            "push": kind === "branch"
-                    ? menuState.branchesModel.branchPush(full, menuState.repoTab.defaultRemote) : undefined,
-            "merged": !open || kind !== "branch" ? "" : menuState.graphModel.branchDeleteMerged(
-                oidHex, menuState.branchesModel.upstreamOidOf(full), menuState.tree.headOid),
-            "offers": GitFacts.refMenuOffers(kind, full, oidHex, open, menuState.tree, held, reading)
-        }
-    }
-
-    /// What the TAG card stands on — the same answer `RefRowMenu.tagFacts` gives at the other entrance. A chip drawing
-    /// one remote's reading names that remote on its own, so the card's `push` and deletes act on it (user decision —
-    /// ask before changing; `NavSectionModel.tagAimAt`). The copy here and a reading several remotes share on this
-    /// commit name none: the card's default stands.
-    function tagFacts(kind, full, oidHex) {
-        if (kind !== "tag")
-            return { "pushRemote": menuState.repoTab.defaultRemote, "offers": [] }
-        const menu = menuState.tagsModel.tagMenu(full, menuState.repoTab.defaultRemote,
-                                                 menuState.tagsModel.tagAimAt(full, oidHex))
-        return {
-            "pushRemote": menu.pushRemote,
-            "tagDriftOid": menu.lease,
-            "tagReach": menu.reach,
-            "tagHeldBack": menu.heldBack,
-            "tagCarriers": menu.carriers,
-            "tagOnlyThere": menu.rowGoes,
-            "tagHere": menu.sides === "here" || menu.sides === "both",
-            "tagAt": menuState.tagsModel.oidOfName(full),
-            "offers": GitFacts.refMenuOffers(
-                kind, full, oidHex, menuState.repoTab.state === "open", menuState.tree, "", menu)
-        }
-    }
 
     /// The menu on another worktree's uncommitted row (デザイン規約 §別の worktree を読む), at `path` as the row names
     /// it — read off the tree as `openRowMenu` reads it, and greyed while a command is out as every menu is.
@@ -365,7 +219,7 @@ QtObject {
         // No running command is asked about: the menu waits for one with its rows greyed (`AppMenu.runningWhy`), so it
         // has one shape whenever it is opened.
         const offers = GitFacts.commitMenuOffers(
-            menuState.repoTab.state === "open", menuState.tree, oidHex, menuState.menuStashRef,
+            menuState.repoTab.state === "open", menuState.tree, oidHex, menuState.menuStashRef !== "",
             menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)))
         if (menuState.menuStashRef !== "") {
             menuState.menuStashCanWrite = offers.includes("stash-write")
@@ -383,7 +237,23 @@ QtObject {
         menuState.menuCanMoveBranch = offers.includes("move-branch")
         menuState.menuCanBranchHere = offers.includes("branch-here")
         menuState.menuOpStanding = offers.includes("standing")
-        menuState.askRefRows(menuState.menu.targetKind, menuState.menu.targetName, aimAt)
-        return menuState.cardFacts(oidHex, aimAt)
+        // The name the menu is aimed at: its `switch` and `pull` rows and every card at the foot, the BRANCH card where
+        // its branch points (`aimAt`). A chip drawing one remote's reading of a tag names that remote on its own, so
+        // the TAG card's `push` and deletes act on it (user decision — ask before changing;
+        // `NavSectionModel.tagAimAt`); the copy here and a reading several remotes share on this commit name none, and
+        // the card's default stands.
+        const kind = menuState.menu.targetKind
+        const name = menuState.menu.targetName
+        const facts = menuFacts.stand(kind, name, oidHex, menuState.tree,
+                                      kind === "tag" ? menuState.tagsModel.tagAimAt(name, oidHex) : "", aimAt)
+        const menu = facts.menu
+        menuState.menuCanSwitch = menu.switch
+        menuState.menuSwitchAsks = menu.switchAsks
+        menuState.menuHeldLeaf = facts.lead.called
+        menuState.menuHeldHome = facts.lead.home
+        menuState.menuPullUpstream = kind === "branch" ? facts.card.remoteCounterpart : ""
+        menuState.menuPullRuns = menu.pullRuns
+        menuState.menuPullOut = menu.pullOut
+        return facts
     }
 }

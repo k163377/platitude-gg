@@ -1,4 +1,5 @@
 use super::*;
+use menu::RowLead;
 
 #[qobject(Base = QAbstractItemModel, ConvertToCamelCase, NoQmlElement)]
 impl NavSectionModel {
@@ -399,14 +400,6 @@ impl NavSectionModel {
         Optional::new(self.renamed_worktree(&path, &name))
     }
 
-    /// Whether new worktrees have a place at all (`has_place_for_worktrees`) —
-    /// not before the listing lands, nor for a bare repository's linked
-    /// worktrees.
-    #[qslot]
-    fn worktrees_placed(&self) -> bool {
-        self.has_place_for_worktrees()
-    }
-
     /// The path of the worktree with no branch that a chip on the graph
     /// names by its folder: `name` standing on `head` (`worktree_standing`);
     /// empty where none does.
@@ -503,7 +496,7 @@ impl NavSectionModel {
 
     /// What a branch's card reads of its upstream (`BranchUpstream`), read
     /// as the menu opens and as it stands again, and handed on whole to
-    /// `GitFacts.refMenuOffers`. A row of any `kind` but `branch` reads
+    /// `GitFacts.refMenu`. A row of any `kind` but `branch` reads
     /// nothing over there: a remote branch is a reading, with no upstream
     /// of its own — and its name may be a local branch's as well. Asked of
     /// the branches section.
@@ -513,34 +506,6 @@ impl NavSectionModel {
             return One::new(BranchUpstream::default());
         }
         One::new(self.all.branch_upstream(&name))
-    }
-
-    /// Where that upstream stands, which is the colour its name wears
-    /// (デザイン規約 §ref の種別「名前の色 = 在処」): `remote` for a remote
-    /// branch, listed or gone; `current` for the branch `current` names,
-    /// the one the worktree is on; `local` for any other branch here. Empty
-    /// where there is none, and for every section but the branches.
-    #[qslot]
-    pub(super) fn upstream_where(&self, name: String, current: String) -> String {
-        let Some(branch) = self.all.branch_named(&name) else {
-            return String::new();
-        };
-        let word = if !branch.upstream.is_empty() {
-            "remote"
-        } else if !branch.upstream_local.is_empty() {
-            if branch.upstream_local.as_str() == current {
-                "current"
-            } else {
-                "local"
-            }
-        } else if branch.upstream_gone.is_empty() {
-            ""
-        } else if branch.upstream_here {
-            "local"
-        } else {
-            "remote"
-        };
-        word.to_string()
     }
 
     /// How far the branch of this name stands from what it reads, as of
@@ -656,7 +621,7 @@ impl NavSectionModel {
     /// where the push goes and what it is leased to, which remote the
     /// deletes reach and why they stand greyed, and whether the row goes
     /// with them (`RefsSnapshot::tag_menu`), and the sides the name stands
-    /// on — the record `GitFacts.refMenuOffers` reads the card's rows off.
+    /// on — the record `GitFacts.refMenu` reads the card's rows off.
     /// `aim` is a remote the reader named on its own — a carrier's line, a
     /// chip drawing that remote's reading (`tag_aim_at`) — or empty. Asked
     /// of the tags section.
@@ -742,6 +707,22 @@ impl NavSectionModel {
         self.worktree_with(&branch)
     }
 
+    /// A ref's row as its menu asks core about it (`RowLead`): the row's
+    /// two words and the local branch it lands on, the worktree a press on
+    /// it opens — the one holding a branch or a remote branch's local one,
+    /// or a worktree on no branch itself, unless the tab stands in it —,
+    /// the worktree its WORKTREE card stands on, the operation stopped here
+    /// that holds a local branch, and whether new worktrees have a place.
+    /// `local` is the local branch the row lands on (the remotes section's
+    /// `landsOn`). Read as a menu opens and as it
+    /// stands again, or as a press on a ref is weighed, and handed on whole
+    /// to `GitFacts.refMenu` / `switchAction`. Asked of the worktrees
+    /// section.
+    #[qslot]
+    pub(super) fn lead_of(&self, kind: String, full: String, local: String) -> One<RowLead> {
+        One::new(self.row_lead(&kind, &full, &local))
+    }
+
     /// The worktree a stopped rebase or bisect holds this branch in —
     /// this window's own too — `undefined` where none does. git renames no
     /// such branch, from any worktree (builtin/branch.c
@@ -820,11 +801,15 @@ impl NavSectionModel {
         self.told(Role::OidHex, &oid, Role::Full)
     }
 
-    /// Local branch name a remote-tracking ref would take. The remotes
-    /// snapshot owns both the visible row and its configured prefixes.
+    /// The local branch a press on the row `full` of `kind` lands on: a
+    /// remote branch's of its name — the ref minus the longest configured
+    /// remote (a remote may be `my/fork`), the ref whole where none owns
+    /// it —, a branch's own, none for any other row. The one entrance: the
+    /// remotes snapshot owns the configured prefixes. Asked of the remotes
+    /// section.
     #[qslot]
-    fn local_name_for(&self, remote_ref: String) -> String {
-        self.local_name_of(&remote_ref)
+    fn lands_on(&self, kind: String, full: String) -> String {
+        self.landing_of(&kind, &full)
     }
 
     /// The two stage letters git reports for a worktree path (`UU`,

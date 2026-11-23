@@ -9,12 +9,13 @@
 
 use std::ops::RangeInclusive;
 
-use platitude_core::offers::{BranchFar, FarSide, Leads, Reading, RowStanding, TreeStanding};
+use platitude_core::offers::{FarSide, RowStanding, TreeStanding, UpstreamPlace};
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{Chips, Fields, Mates, One, Optional, Record, field};
+use crate::encode::{Chips, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field};
+use crate::models::nav::{CardRecord, RowLead};
 
 /// The singleton every QML file can ask a rule of without wiring a model
 /// through.
@@ -116,36 +117,6 @@ impl GitFacts {
         .to_string()
     }
 
-    /// The two rows that make a worktree (`offers::worktree_rows`), as
-    /// words: `here`, then `checkout-branch` / `checkout-track`, then
-    /// `out-current` / `out-held` / `out-stopped`. `kind` and `full` are the
-    /// row's two words, empty on a commit row that draws no name; `tree`
-    /// the menu's `WorktreeModel.reading` and `held_by_worktree` the worktree
-    /// holding the row's branch (both as `refMenuOffers`);
-    /// `local_exists` whether a remote row's local branch is there;
-    /// `stopped_here` whether a rebase or bisect stopped in this tree holds
-    /// the branch.
-    #[qslot]
-    #[expect(clippy::too_many_arguments)]
-    fn worktree_offers(
-        &self,
-        kind: String,
-        full: String,
-        oid_hex: String,
-        open: bool,
-        tree: One<TreeStanding>,
-        held_by_worktree: String,
-        stopped_here: bool,
-        local_exists: bool,
-    ) -> Vec<String> {
-        let row = row_standing(&kind, &full, &oid_hex, open, &tree, &held_by_worktree);
-        platitude_core::offers::worktree_rows(&row, stopped_here, local_exists)
-            .words()
-            .into_iter()
-            .map(str::to_string)
-            .collect()
-    }
-
     /// The remote half of a remote-tracking name (`origin/main`), as the
     /// writes read it (`TrackedBranch::listed`): the longest of
     /// `remote_names` wins (a remote's name may contain `/`); where none
@@ -213,10 +184,14 @@ impl GitFacts {
         One::new(facts.into())
     }
 
-    /// What the right-click menu on a ref may offer, as the words
-    /// `RefRowMenu.offerOn` reads — asked as the menu opens and as it
-    /// stands again, never by a binding (app-ui.md「メニューは `AppMenu`
-    /// 系で書く」).
+    /// What the right-click menu on a ref offers for one stand, read whole
+    /// (`encode::RefMenu`): the row's own rows and the BRANCH and TAG cards'
+    /// (`offers::ref_menu`), where the branch's upstream stands
+    /// (`offers::upstream_place`), the `pull` row (`offers::pull_row`) and
+    /// the WORKTREE card's two making rows (`offers::worktree_rows`). Asked
+    /// as the menu opens and as it stands again, never by a binding
+    /// (app-ui.md「メニューは `AppMenu` 系で書く」), by both entrances through
+    /// one part (`RefMenuFacts`).
     ///
     /// `tree` is the model's own record handed on as it was read:
     /// `WorktreeModel.reading` as the menu stood on it — the model's, or the
@@ -227,76 +202,57 @@ impl GitFacts {
     /// nothing standing) with only a warning in the log (`encode::One`).
     /// Every slot here that takes a `tree` takes it so.
     ///
-    /// `held_by_worktree` is the worktree the row leads to, empty for none
-    /// (`RefRowMenu.standOn`'s `held`). `far` is the record the row's card
-    /// stood on, handed on as it was read — `NavSectionModel.branchUpstream`
-    /// on a BRANCH card, `tagMenu` on a TAG card — and `undefined` for the
-    /// row's own menu, which reads nothing over there (`offers::FarSide`).
+    /// `lead` is the row and where it leads, as the worktrees section
+    /// answered it (`NavSectionModel.leadOf`). `card` is the record the
+    /// row's card stood on, handed on as it was read —
+    /// `NavSectionModel.branchUpstream` on a branch's or a remote branch's
+    /// row, `tagMenu` on a tag's — and `undefined` on any other row, which
+    /// reads nothing over there (`offers::FarSide`). The `pull` row reads
+    /// the same record: on a local branch's row, its far side is the row's
+    /// own. `local_listed`: the local branch the row lands on is there —
+    /// a remote row whose local one is takes its way through that row.
     #[qslot]
-    #[expect(clippy::too_many_arguments)]
-    fn ref_menu_offers(
+    fn ref_menu(
         &self,
-        kind: String,
-        full: String,
         oid_hex: String,
         open: bool,
         tree: One<TreeStanding>,
-        held_by_worktree: String,
-        far: Optional<FarSide>,
-    ) -> Vec<String> {
-        let row = row_standing(&kind, &full, &oid_hex, open, &tree, &held_by_worktree);
-        platitude_core::offers::ref_menu(&row, far.unwrap_or_default())
-            .words()
-            .into_iter()
-            .map(str::to_string)
-            .collect()
-    }
-
-    /// The `pull` row of a ref's menu as words — what it runs, then why it
-    /// is greyed (`offers::PullOffer::words`); empty where there is no row.
-    /// Asked beside `refMenuOffers` wherever the menu stands its rows.
-    #[qslot]
-    #[expect(clippy::too_many_arguments)]
-    fn pull_row(
-        &self,
-        kind: String,
-        full: String,
-        open: bool,
-        tree: One<TreeStanding>,
-        held_by_worktree: String,
-        row_upstream: String,
-        row_ahead: i32,
-    ) -> Vec<String> {
-        let row = row_standing(&kind, &full, "", open, &tree, &held_by_worktree);
-        let own = FarSide::Branch(BranchFar {
-            reading: if row_upstream.is_empty() {
-                Reading::None
-            } else {
-                Reading::Together
-            },
-            tracked: !row_upstream.is_empty(),
-            has_remote: true,
-            ahead: u32::try_from(row_ahead).unwrap_or(0),
-        });
-        platitude_core::offers::pull_row(&row, own)
-            .map(|offer| offer.words().into_iter().map(str::to_string).collect())
-            .unwrap_or_default()
+        lead: One<RowLead>,
+        card: Optional<CardRecord>,
+        local_listed: bool,
+    ) -> One<RefMenu> {
+        use platitude_core::offers;
+        let row = row_standing(&lead, &oid_hex, open, &tree);
+        let far = card.as_ref().map_or(FarSide::Unread, CardRecord::far);
+        let upstream = match &*card {
+            Some(CardRecord::Branch(upstream)) => {
+                offers::upstream_place(&upstream.upstream, upstream.upstream_here, &tree)
+            }
+            _ => UpstreamPlace::None,
+        };
+        let making = offers::worktree_rows(&row, !lead.stopped_by.is_empty(), local_listed);
+        One::new(RefMenu::new(
+            offers::ref_menu(&row, far),
+            offers::pull_row(&row, far),
+            upstream,
+            WorktreeMaking::new(making, lead.placed),
+        ))
     }
 
     /// What the right-click menu on a commit row may offer, the same way
-    /// (`CommitMenuState.openRowMenu`). `provisional`: the row is one the
-    /// discard log's picked entry draws (`GraphModel.provisionalAt`).
+    /// (`CommitMenuState.openRowMenu`). `stash`: the row is a stash's;
+    /// `provisional`: the row is one the discard log's picked entry draws
+    /// (`GraphModel.provisionalAt`).
     #[qslot]
     fn commit_menu_offers(
         &self,
         open: bool,
         tree: One<TreeStanding>,
         oid_hex: String,
-        stash_ref: String,
+        stash: bool,
         provisional: bool,
     ) -> Vec<String> {
-        let offers =
-            platitude_core::offers::commit_menu(open, &tree, &oid_hex, !stash_ref.is_empty());
+        let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, stash);
         let offers = if provisional {
             offers.on_provisional()
         } else {
@@ -308,8 +264,9 @@ impl GitFacts {
     /// What the details pane's message boxes do with the commit on screen,
     /// in the word `RepoPage.messageEdit` branches on: `amend` where typing
     /// lands, `stash` / `not-head` / `standing` where it does not, `""` with
-    /// no message on screen. Asked as a live binding, not at open: the
-    /// boxes stay open while HEAD moves, and must stop taking typing then.
+    /// no message on screen; `stash`: the commit on screen is a stash's.
+    /// Asked as a live binding, not at open: the boxes stay open while HEAD
+    /// moves, and must stop taking typing then.
     // The binding follows `tree` through the model's property
     // (`WorktreeModel.standing`, one notification for every field), so the
     // answer moves with HEAD and the operation; `open` is the page's and
@@ -320,33 +277,32 @@ impl GitFacts {
         open: bool,
         tree: One<TreeStanding>,
         oid_hex: String,
-        stash_ref: String,
+        stash: bool,
     ) -> String {
-        platitude_core::offers::message_edit(open, &tree, &oid_hex, !stash_ref.is_empty())
+        platitude_core::offers::message_edit(open, &tree, &oid_hex, stash)
             .as_str()
             .to_string()
     }
 
     /// The move a press on a ref adds up to, in the word
     /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
-    /// `move` / `holder`, or `""` — also for any `kind` but the chip words
-    /// `branch` / `remote` (the chip's own `kind`, which the sidebar's
-    /// `refSwitchRequested` hands on too), and for no `local` to land on
-    /// (`offers::SwitchTarget`).
+    /// `move` / `holder`, or `""` — also for any row but a branch's or a
+    /// remote branch's (the chip's own `kind`, which the sidebar's
+    /// `refSwitchRequested` hands on too), and for no local branch to land
+    /// on (`offers::SwitchTarget`). `lead` is the row as `refMenu` takes
+    /// it, `local_listed` whether its local branch is there.
     #[qslot]
     fn switch_action(
         &self,
-        kind: String,
-        local: String,
+        lead: One<RowLead>,
         tree: One<TreeStanding>,
-        held_by_worktree: String,
-        local_oid: String,
+        local_listed: bool,
     ) -> String {
         platitude_core::offers::switch_action(
-            platitude_core::offers::SwitchTarget::from_words(&kind, &local),
+            platitude_core::offers::SwitchTarget::from_words(&lead.kind, &lead.local),
             &tree,
-            !held_by_worktree.is_empty(),
-            !local_oid.is_empty(),
+            lead.leads == platitude_core::offers::Leads::Holder,
+            local_listed,
         )
         .as_str()
         .to_string()
@@ -354,10 +310,11 @@ impl GitFacts {
 
     /// Whether the move a press already sent has reached the screen —
     /// `RepoPage` holds the next press until it has, so a double press
-    /// sends one command.
+    /// sends one command. `landing_listed`: the branch it lands on is
+    /// listed.
     #[qslot]
-    fn move_landed(&self, landing: String, tree: One<TreeStanding>, landing_oid: String) -> bool {
-        platitude_core::offers::move_landed(&landing, &tree, !landing_oid.is_empty())
+    fn move_landed(&self, landing: String, tree: One<TreeStanding>, landing_listed: bool) -> bool {
+        platitude_core::offers::move_landed(&landing, &tree, landing_listed)
     }
 
     /// Whether `name` is the branch HEAD is on — the name a question draws
@@ -613,29 +570,19 @@ impl GitFacts {
     }
 }
 
-/// The row a ref menu's slots are asked about, as they ask it: a worktree's
-/// row held is the worktree itself, any other row's the worktree holding
-/// its branch.
+/// The row `refMenu` is asked about, standing on `tree`.
 fn row_standing<'a>(
-    kind: &'a str,
-    full: &'a str,
+    lead: &'a RowLead,
     oid_hex: &str,
     open: bool,
     tree: &'a TreeStanding,
-    held_by_worktree: &str,
 ) -> RowStanding<'a> {
-    let target = platitude_core::offers::RefTarget::from_words(kind, full);
-    let leads = match (held_by_worktree.is_empty(), kind) {
-        (true, _) => Leads::Nowhere,
-        (false, "worktree") => Leads::Itself,
-        (false, _) => Leads::Holder,
-    };
     RowStanding {
-        target,
+        target: platitude_core::offers::RefTarget::from_words(&lead.kind, &lead.full),
         has_commit: !oid_hex.is_empty(),
         open,
         tree,
-        leads,
+        leads: lead.leads,
     }
 }
 
@@ -784,6 +731,96 @@ mod tests {
                 answer.target.as_str()
             ),
             ("closed", false, false, "origin/main")
+        );
+    }
+
+    /// One stand answers every row of a ref's menu off the row's lead and
+    /// its card's record: here a branch another worktree has out, tracking
+    /// `origin/topic` with a commit of its own.
+    #[test]
+    fn a_refs_menu_is_answered_whole_for_one_stand() {
+        use crate::encode::{One, Optional};
+        use crate::models::nav::{BranchUpstream, CardRecord, RowLead};
+        use platitude_core::offers::{BranchFar, Leads, Reading, TreeStanding};
+        let tree = || {
+            One::new(TreeStanding {
+                branch: "main".into(),
+                upstream: "origin/main".into(),
+                ..TreeStanding::default()
+            })
+        };
+        let lead = RowLead {
+            kind: "branch".into(),
+            full: "topic".into(),
+            local: "topic".into(),
+            leads: Leads::Holder,
+            path: "C:/work/other".into(),
+            called: "other".into(),
+            placed: true,
+            ..RowLead::default()
+        };
+        let card = BranchUpstream {
+            far: Some(BranchFar {
+                reading: Reading::Together,
+                tracked: true,
+                has_remote: true,
+                ahead: 1,
+            }),
+            counterpart: "origin/topic".into(),
+            upstream: "origin/topic".into(),
+            ..BranchUpstream::default()
+        };
+        let oid = "ab".repeat(20);
+        let menu = (*GitFacts.ref_menu(
+            oid.clone(),
+            true,
+            tree(),
+            One::new(lead.clone()),
+            Optional::some(CardRecord::Branch(card)),
+            true,
+        ))
+        .clone();
+        assert!(
+            menu.switch_to && !menu.switch_asks,
+            "the press opens the holder"
+        );
+        assert!(!menu.delete, "git keeps a branch out elsewhere");
+        assert!(menu.delete_remote && menu.set_upstream && menu.unset_upstream);
+        assert_eq!(menu.upstream_where, "remote");
+        assert_eq!(
+            (menu.pull_runs.as_str(), menu.pull_out.as_str()),
+            ("aside", "held"),
+            "the pull row reads the card's record as the row's own far side"
+        );
+        assert_eq!(
+            (
+                menu.making.here,
+                menu.making.checkout.as_str(),
+                menu.making.out.as_str()
+            ),
+            (true, "branch", "held")
+        );
+        assert_eq!(
+            GitFacts.switch_action(One::new(lead.clone()), tree(), true),
+            "holder"
+        );
+        let nowhere = RowLead {
+            placed: false,
+            ..lead
+        };
+        let unplaced =
+            GitFacts.ref_menu(oid, true, tree(), One::new(nowhere), Optional::none(), true);
+        assert!(
+            !unplaced.making.here,
+            "a box whose Enter could make nothing is not offered"
+        );
+        assert_eq!(
+            (
+                unplaced.upstream_where.as_str(),
+                unplaced.pull_runs.as_str()
+            ),
+            ("", ""),
+            "no card record, nothing read over there"
         );
     }
 

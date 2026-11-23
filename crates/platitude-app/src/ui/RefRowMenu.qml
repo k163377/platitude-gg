@@ -37,15 +37,15 @@ Item {
         id: followLater
         onTriggered: refRowMenu.follow()
     }
-    /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
+    /// What the rows and cards stand on, read through `menuFacts`; the `rebase` row's note off the drawn rows
+    /// (`rebasePublished`), and a branch renamed with the menu up followed off the branches (`standAgain`).
     required property GraphModel graphModel
-    /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
-    /// Read for the tag card (`tagFacts`).
     required property NavSectionModel tagsModel
-    /// Where a remote branch points now and which selector a stash answers to now, for the menu standing again
-    /// (`standAgain`) — the stash off the listing, which holds every entry the graph's walk may not reach.
+    /// Read through `menuFacts` too; where a remote branch points now and which selector a stash answers to now, for
+    /// the menu standing again (`standAgain`) — the stash off the listing, which holds every entry the graph's walk
+    /// may not reach.
     required property NavSectionModel remotesModel
     required property NavSectionModel stashesModel
     /// What the GITHUB card at the foot stands on.
@@ -96,8 +96,9 @@ Item {
     property string pullRuns: ""
     /// Why that row is greyed — `standing` / `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
     property string pullOut: ""
-    /// The remote branch this row's branch tracks, which the `own` reason names. `branchesModel.upstreamOf` names a
-    /// remote reading only, so a branch tracking a local one (`branch.<n>.remote = .`) has no `aside` row.
+    /// The remote branch this row's branch tracks, which the `own` reason names — the reading its BRANCH card speaks
+    /// for (`NavSectionModel.branchUpstream`'s `remoteCounterpart`): a remote one only, so a branch tracking a local
+    /// one (`branch.<n>.remote = .`) has no `aside` row.
     property string pullUpstream: ""
     /// The stash's drop, in the last group with the branch's delete table; a tag's deletes are its card's
     /// (`RefTagMenu`).
@@ -150,6 +151,17 @@ Item {
     readonly property alias worktreeCard: worktreeMenu
     readonly property alias tagCard: tagMenu
     readonly property alias githubCard: githubMenu
+    /// What the rows and every card stand on, read in one place for this entrance and the graph row's
+    /// (`CommitMenuState.menuFacts`).
+    readonly property RefMenuFacts menuFacts: RefMenuFacts {
+        id: menuFacts
+        repoTab: refRowMenu.repoTab
+        graphModel: refRowMenu.graphModel
+        worktreesModel: refRowMenu.worktreesModel
+        branchesModel: refRowMenu.branchesModel
+        remotesModel: refRowMenu.remotesModel
+        tagsModel: refRowMenu.tagsModel
+    }
 
     /// What the page answers for: moving the worktree, the delete git may still refuse, and the stash drop that two
     /// menus share.
@@ -178,94 +190,6 @@ Item {
     signal renameFollowed(string from, string to)
 
     anchors.fill: parent
-
-    /// The BRANCH card's `facts` (`RefBranchMenu.standOn`), read here because this is where the models are. A remote
-    /// row is held through the local branch of the same name. What the card reads of the branch's upstream and what
-    /// core's rows read over there are one record (`NavSectionModel.branchUpstream` — nothing for a remote row),
-    /// handed on as it is.
-    function branchFacts(kind, full, oidHex) {
-        if (kind !== "branch" && kind !== "remote")
-            return { "heldByWorktree": "", "holderLeaf": "", "holderHome": false,
-                     "remoteCounterpart": "", "remoteCounterpartOid": "", "offers": "", "open": false, "merged": "" }
-        const held = kind === "branch"
-            ? refRowMenu.worktreesModel.worktreeHolding(full)
-            : refRowMenu.worktreesModel.worktreeHolding(refRowMenu.repoTab.localNameFor(full))
-        const reading = refRowMenu.branchesModel.branchUpstream(kind, full)
-        const open = refRowMenu.repoTab.state === "open"
-        return {
-            "heldByWorktree": held,
-            "holderLeaf": held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held),
-            "holderHome": held !== "" && refRowMenu.worktreesModel.worktreeHome(held),
-            "remoteCounterpart": reading.remoteCounterpart,
-            "upstream": reading.upstream,
-            "upstreamWhere": reading.upstream === ""
-                             ? "" : refRowMenu.branchesModel.upstreamWhere(full, refRowMenu.tree.branch),
-            "remoteCounterpartOid": reading.remoteCounterpartOid,
-            "open": open,
-            "push": kind === "branch"
-                    ? refRowMenu.branchesModel.branchPush(full, refRowMenu.repoTab.defaultRemote) : undefined,
-            "merged": !open || kind !== "branch" ? "" : refRowMenu.graphModel.branchDeleteMerged(
-                oidHex, refRowMenu.branchesModel.upstreamOidOf(full), refRowMenu.tree.headOid),
-            "offers": GitFacts.refMenuOffers(kind, full, oidHex, open, refRowMenu.tree, held, reading)
-        }
-    }
-
-    /// The TAG card's `facts` (`RefTagMenu.standOn`), read here because this is where the models are. What the card
-    /// reaches and why its rows are held back live in the TAGS section alone (`NavSectionModel.tagMenu`); `aim` is a
-    /// remote the reader named on its own.
-    function tagFacts(kind, full, oidHex, aim) {
-        if (kind !== "tag")
-            return { "pushRemote": refRowMenu.repoTab.defaultRemote, "offers": "" }
-        const menu = refRowMenu.tagsModel.tagMenu(full, refRowMenu.repoTab.defaultRemote, aim)
-        return {
-            "pushRemote": menu.pushRemote,
-            "tagDriftOid": menu.lease,
-            "tagReach": menu.reach,
-            "tagHeldBack": menu.heldBack,
-            "tagCarriers": menu.carriers,
-            "tagOnlyThere": menu.rowGoes,
-            "tagHere": menu.sides === "here" || menu.sides === "both",
-            "tagAt": refRowMenu.tagsModel.oidOfName(full),
-            // The record the card stands on is what core's rows read over there, handed on as it is.
-            "offers": GitFacts.refMenuOffers(
-                kind, full, oidHex, refRowMenu.repoTab.state === "open", refRowMenu.tree, "", menu)
-        }
-    }
-
-    /// What the WORKTREE card's two making rows stand on (`RefWorktreeMenu.standOn`'s `making`), asked of the row
-    /// (`offers::worktree_rows`) — `held` the worktree holding its branch, as `offerOn` found it. A local branch, or a
-    /// remote one with no local branch, goes out as it is to the folder `newWorktreeFor` names, greyed where the branch
-    /// is out already; the folder is looked at here, as the menu opens and each time it stands again. The same answer
-    /// `CommitMenuState.askWorktreeRows` gives the graph row's card.
-    function askWorktreeRows(kind, full, oidHex, held) {
-        const local = kind === "remote" ? refRowMenu.repoTab.localNameFor(full) : full
-        // As `CommitMenuState.askWorktreeRows`: a stopped operation here holds its branch with no listed holder.
-        const stopped = kind === "branch" ? refRowMenu.worktreesModel.heldByOperation(local) : undefined
-        const stoppedHere = stopped !== undefined && stopped.here
-        const offers = GitFacts.worktreeOffers(
-            kind, full, oidHex, refRowMenu.repoTab.state === "open",
-            refRowMenu.tree, kind === "branch" || kind === "remote" ? held : "", stoppedHere,
-            kind === "remote" && refRowMenu.branchesModel.oidOfName(local) !== "")
-        const checkout = offers.includes("checkout-branch") ? "branch"
-                       : offers.includes("checkout-track") ? "track" : ""
-        const place = checkout === "" ? undefined : refRowMenu.worktreesModel.newWorktreeFor(local)
-        return {
-            "oid": oidHex,
-            // Only where worktrees have a place to go (`CommitMenuState.askWorktreeRows`).
-            "here": offers.includes("here") && refRowMenu.worktreesModel.worktreesPlaced(),
-            "checkout": place === undefined ? "" : checkout,
-            "branch": place === undefined ? "" : local,
-            "start": checkout === "track" ? full : "",
-            "path": place === undefined ? "" : place.path,
-            "place": place === undefined ? "" : place.name,
-            "taken": place === undefined ? "" : place.taken,
-            "out": offers.includes("out-current") ? "current" : offers.includes("out-held") ? "held"
-                 : offers.includes("out-stopped") ? "stopped" : "",
-            "holderLeaf": held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held),
-            "holderHome": held !== "" && refRowMenu.worktreesModel.worktreeHome(held),
-            "stoppedBy": stoppedHere ? stopped.by : ""
-        }
-    }
 
     /// Opens on that ref, deciding there and then what it offers. Says whether it opened at all: a ref with nothing to
     /// offer — the current branch met as a chip — falls back to the row's own menu.
@@ -366,44 +290,28 @@ Item {
         refRowMenu.refOid = oidHex
         refRowMenu.openedFor = worktreePath
         refRowMenu.openedAim = aim === undefined ? "" : aim
-        branchMenu.standOn(kind, name, full, oidHex, refRowMenu.branchFacts(kind, full, oidHex), again)
-        tagMenu.standOn(kind, full, oidHex, refRowMenu.tagFacts(kind, full, oidHex, aim === undefined ? "" : aim),
-                        again)
-        // Whether another worktree has this row's branch out (through the same-named local branch for a remote
-        // row): `switch` then opens that worktree instead (offers::SwitchAction::OpenHolder). A worktree with no
-        // branch leads to itself, unless this tab already stands in it.
-        const held = kind === "branch" ? refRowMenu.worktreesModel.worktreeHolding(full)
-                   : kind === "remote" ? refRowMenu.worktreesModel.worktreeHolding(
-                                             refRowMenu.repoTab.localNameFor(full))
-                   : kind === "worktree" && !GitFacts.samePath(full, refRowMenu.repoTab.repoPath) ? full
-                                       : ""
-        // The card's `worktree remove` stands on a worktree the row itself names or whose branch it is: a remote row
-        // leads to the holder of the same-named local branch, but the worktree is not what it names
-        // (デザイン規約 §メニュー の入れ子).
-        const worktreeAt = worktreePath !== undefined ? worktreePath : kind === "remote" ? "" : held
-        worktreeMenu.standOn(worktreeAt === "" ? undefined : refRowMenu.worktreesModel.worktreeFacts(worktreeAt),
-                         GitFacts.samePath(worktreeAt, refRowMenu.repoTab.repoPath),
-                         refRowMenu.askWorktreeRows(kind, full, oidHex, held))
-        // Core's rule (offers::ref_menu), asked once per stand: the rows read the answers, not the models.
-        // Nothing over there: the rows that reach it are the cards' (`RefBranchMenu`, `RefTagMenu`).
-        const offers = GitFacts.refMenuOffers(
-            kind, full, oidHex, refRowMenu.repoTab.state === "open", refRowMenu.tree, held, undefined)
-        refRowMenu.canSwitch = offers.includes("switch")
-        refRowMenu.switchAsks = offers.includes("asks")
-        // As its WORKTREES row names it (`NavSectionModel.worktreeCalled`).
-        refRowMenu.heldLeaf = held === "" ? "" : refRowMenu.worktreesModel.worktreeCalled(held)
-        refRowMenu.heldHome = held !== "" && refRowMenu.worktreesModel.worktreeHome(held)
-        refRowMenu.canBranchHere = offers.includes("branch-here")
-        refRowMenu.canIntegrateFrom = offers.includes("integrate")
-        refRowMenu.opStanding = offers.includes("standing")
+        // Core's rule (offers::ref_menu), asked once per stand: the rows and the cards read the answer, not the models.
+        const facts = menuFacts.stand(kind, full, oidHex, refRowMenu.tree, refRowMenu.openedAim, oidHex, worktreePath)
+        branchMenu.standOn(kind, name, full, oidHex, facts, again)
+        tagMenu.standOn(kind, full, oidHex, facts, again)
+        worktreeMenu.standOn(facts)
+        const menu = facts.menu
+        // Another worktree having this row's branch out (through the same-named local branch for a remote row) makes
+        // `switch` open that worktree instead (offers::SwitchAction::OpenHolder); a worktree with no branch leads to
+        // itself, unless this tab already stands in it. Named as its WORKTREES row names it
+        // (`NavSectionModel.worktreeCalled`).
+        refRowMenu.canSwitch = menu.switch
+        refRowMenu.switchAsks = menu.switchAsks
+        refRowMenu.heldLeaf = facts.lead.called
+        refRowMenu.heldHome = facts.lead.home
+        refRowMenu.canBranchHere = menu.branchHere
+        refRowMenu.canIntegrateFrom = menu.integrate
+        refRowMenu.opStanding = menu.standing
         // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
-        refRowMenu.pullUpstream = refRowMenu.branchesModel.upstreamOf(full)
-        const pull = GitFacts.pullRow(
-            kind, full, refRowMenu.repoTab.state === "open", refRowMenu.tree,
-            held, refRowMenu.pullUpstream, refRowMenu.branchesModel.aheadOf(full))
-        refRowMenu.pullRuns = pull.length > 0 ? pull[0] : ""
-        refRowMenu.pullOut = pull.length > 1 ? pull[1].replace("out-", "") : ""
-        refRowMenu.canDelete = offers.includes("delete")
+        refRowMenu.pullUpstream = kind === "branch" ? facts.card.remoteCounterpart : ""
+        refRowMenu.pullRuns = menu.pullRuns
+        refRowMenu.pullOut = menu.pullOut
+        refRowMenu.canDelete = menu.delete
         // Only where the row that wears it is offered, and live: a greyed row warns of a press that cannot be made.
         refRowMenu.rebasePublished =
             refRowMenu.integrateOffered && !refRowMenu.opStanding

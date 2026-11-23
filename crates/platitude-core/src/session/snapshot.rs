@@ -107,6 +107,13 @@ pub struct BranchUpstreamFacts {
     /// The upstream it is configured with, listed or gone, a branch here
     /// too ([`BranchItem::upstream_named`]) — what taking it off names.
     pub upstream: String,
+    /// That upstream is a branch of this repository
+    /// ([`BranchItem::upstream_here`]) — where its name stands.
+    pub upstream_here: bool,
+    /// The commit that upstream stands on, whichever kind it is — what
+    /// `branch --delete` measures the tip against
+    /// ([`BranchItem::upstream_oid`]).
+    pub upstream_oid: Option<Oid>,
 }
 
 impl RefsSnapshot {
@@ -346,6 +353,8 @@ impl RefsSnapshot {
                 .to_string(),
             counterpart_oid: reading.and_then(|branch| branch.upstream_oid),
             upstream: branch.map_or("", BranchItem::upstream_named).to_string(),
+            upstream_here: branch.is_some_and(|branch| branch.upstream_here),
+            upstream_oid: branch.and_then(|branch| branch.upstream_oid),
         }
     }
 

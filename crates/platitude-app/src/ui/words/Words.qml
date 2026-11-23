@@ -229,7 +229,7 @@ QtObject {
         //: %1 is the remote branch this branch tracks, e.g. origin/feature/login.
         return qsTr("Cannot fast-forward — it has commits not on %1").arg(upstream)
     }
-    /// Why the `pull` row is greyed, by the word `GitFacts.pullRow` answered after `out-`: an operation stands here,
+    /// Why the `pull` row is greyed, by the word `GitFacts.refMenu` answers in `pullOut`: an operation stands here,
     /// the tree diverged, the row's branch has commits its `upstream` lacks, or another worktree has it out — `leaf`
     /// is that worktree's folder. Empty where the row is live.
     function pullOut(out, leaf, upstream) {

@@ -812,7 +812,8 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
 /// What the BRANCH card names, and in which colour, when the upstream
 /// comes off: wherever the configured upstream stands — a remote reading,
 /// a branch here (the one the worktree is on, or another), or gone
-/// (`branch_upstream`'s `upstream` / `upstream_where`, デザイン規約 §ref の種別).
+/// (`branch_upstream`'s `upstream` / `upstreamHere`, read by core's
+/// `upstream_place` on the tree the menu stands on, デザイン規約 §ref の種別).
 #[test]
 fn an_upstream_is_named_wherever_it_stands() {
     let mut reads = local("reads", false);
@@ -840,13 +841,17 @@ fn an_upstream_is_named_wherever_it_stands() {
     list.sort_by(|a, b| a.short.cmp(&b.short));
     let mut model = section("branches", Source::Locals(locals(list)));
     model.arrange();
+    let on_main = platitude_core::offers::TreeStanding {
+        branch: "main".to_string(),
+        ..Default::default()
+    };
     let told = |name: &str| {
+        let card = model.branch_upstream("branch".to_string(), name.to_string());
         (
-            model
-                .branch_upstream("branch".to_string(), name.to_string())
-                .upstream
-                .clone(),
-            model.upstream_where(name.to_string(), "main".to_string()),
+            card.upstream.clone(),
+            platitude_core::offers::upstream_place(&card.upstream, card.upstream_here, &on_main)
+                .word()
+                .to_string(),
         )
     };
     let pair = |named: &str, place: &str| (named.to_string(), place.to_string());
@@ -908,6 +913,8 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
             counterpart: "origin/reads".to_string(),
             counterpart_oid: oid("b").to_hex(),
             upstream: "origin/reads".to_string(),
+            upstream_here: false,
+            upstream_oid: oid("b").to_hex(),
         }
     );
     assert_eq!(
@@ -961,8 +968,8 @@ fn a_branch_rows_push_carries_cores_press_rules() {
     }
 }
 
-/// What `GitFacts.refMenuOffers` reads off the record a card hands it as it
-/// was read: its far side, whichever model's record it is.
+/// What `GitFacts.refMenu` reads off the record a card hands it as it was
+/// read: its far side, whichever model's record it is (`CardRecord`).
 #[test]
 fn a_cards_record_is_read_as_its_far_side() {
     use platitude_core::offers::{BranchFar, FarSide, Reading, TagFar, TagSides};
@@ -977,13 +984,20 @@ fn a_cards_record_is_read_as_its_far_side() {
         counterpart: "origin/main".to_string(),
         counterpart_oid: oid("b").to_hex(),
         upstream: "origin/main".to_string(),
+        upstream_here: false,
+        upstream_oid: oid("b").to_hex(),
     };
+    let read = |map: &qtbridge::qtbridge_type_lib::QVariantMap| {
+        CardRecord::from_map(map).map(|card| card.far())
+    };
+    assert_eq!(read(&upstream.to_map()), Some(FarSide::Branch(far)));
     assert_eq!(
-        FarSide::from_map(&upstream.to_map()),
-        Some(FarSide::Branch(far))
+        CardRecord::from_map(&upstream.to_map()),
+        Some(CardRecord::Branch(upstream.clone())),
+        "handed back whole"
     );
     assert_eq!(
-        FarSide::from_map(&BranchUpstream::default().to_map()),
+        read(&BranchUpstream::default().to_map()),
         Some(FarSide::Unread),
         "a row that is no local branch's"
     );
@@ -998,7 +1012,7 @@ fn a_cards_record_is_read_as_its_far_side() {
         far: tag,
         ..TagMenu::default()
     };
-    assert_eq!(FarSide::from_map(&menu.to_map()), Some(FarSide::Tag(tag)));
+    assert_eq!(read(&menu.to_map()), Some(FarSide::Tag(tag)));
 }
 
 /// What a rename asks about: the remote branch the renamed one is measured

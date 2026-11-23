@@ -17,16 +17,61 @@ Item {
 
     /// What a press asked for, last one wins: the menu runs nothing itself.
     property string asked: ""
-    /// The WORKTREE card's making rows where a case is not about them (`CommitMenuState.askWorktreeRows`).
-    readonly property var makingNothing: ({ "oid": "", "here": false, "checkout": "", "branch": "", "start": "",
-                                             "path": "", "place": "", "taken": "", "out": "", "holderLeaf": "",
-                                             "holderHome": false, "stoppedBy": "" })
-    /// The making rows of a case that is about them: `makingNothing` with `fields` over it.
-    function making(fields) {
-        const all = Object.assign({}, root.makingNothing)
+    /// Core's answer for a stand (`GitFacts.refMenu` — `encode::RefMenu`) where nothing is on offer, with `fields`
+    /// over it: the rows a case is about, named as the record names them.
+    function menuOf(fields) {
+        const all = { "switch": false, "switchAsks": false, "branchHere": false, "integrate": false, "standing": false,
+                      "delete": false, "deleteRemote": false, "setUpstream": false, "unsetUpstream": false,
+                      "current": false, "upstreamWhere": "", "pushTag": false, "deleteRemoteTag": "",
+                      "deleteTagEverywhere": "", "pullRuns": "", "pullOut": "",
+                      "making": { "here": false, "checkout": "", "out": "" } }
         for (const key in fields)
             all[key] = fields[key]
         return all
+    }
+    /// What the cards stand on (`RefMenuFacts.stand`) for a row drawing a branch nothing holds, tracking
+    /// `origin/feature/topic-a`; `fields` replaces any part of it — the card's record, core's answer, the lead.
+    function stand(fields) {
+        const all = {
+            "lead": { "kind": "branch", "full": "feature/topic-a", "local": "feature/topic-a", "leads": "",
+                      "path": "", "called": "", "home": false, "worktree": "", "stoppedBy": "",
+                      "placed": true },
+            "menu": root.menuOf({ "switch": true, "branchHere": true, "integrate": true, "delete": true,
+                                  "deleteRemote": true, "setUpstream": true, "upstreamWhere": "remote" }),
+            "card": { "remoteCounterpart": "origin/feature/topic-a", "remoteCounterpartOid": "abc123",
+                      "upstream": "origin/feature/topic-a" },
+            "oid": "abc123",
+            "open": true,
+            "push": undefined,
+            "merged": "yes",
+            "tagAt": "",
+            "worktree": undefined,
+            "worktreeHere": false,
+            "place": undefined
+        }
+        for (const key in (fields || {}))
+            all[key] = fields[key]
+        return all
+    }
+    /// A stand whose WORKTREE card makes what `fields` says (`RefWorktreeMenu.standOn`), and whose other cards hold
+    /// nothing: `here`, `checkout` and `out` as core answers them; `branch` (the local branch the row lands on),
+    /// `start` (the remote branch a tracking one is made off), `holderLeaf` / `stoppedBy` (what holds it) as the row's
+    /// lead says them; `path` / `place` / `taken` as the place it would go — none without a `checkout`.
+    function making(fields) {
+        const all = Object.assign({ "here": false, "checkout": "", "out": "", "branch": "", "start": "",
+                                    "holderLeaf": "", "stoppedBy": "", "path": "", "place": "", "taken": "" },
+                                  fields)
+        return root.stand({
+            "lead": { "kind": all.start !== "" ? "remote" : "branch",
+                      "full": all.start !== "" ? all.start : all.branch, "local": all.branch, "leads": "",
+                      "path": "", "called": all.holderLeaf, "home": false, "worktree": "",
+                      "stoppedBy": all.stoppedBy, "placed": true },
+            "menu": root.menuOf({ "making": { "here": all.here, "checkout": all.checkout, "out": all.out } }),
+            "card": { "remoteCounterpart": "", "remoteCounterpartOid": "", "upstream": "" },
+            "open": false,
+            "merged": "",
+            "place": all.checkout === "" ? undefined : { "path": all.path, "name": all.place, "taken": all.taken }
+        })
     }
 
     CommitRowMenu {
@@ -114,18 +159,6 @@ Item {
             shown.push(item.subMenu ? item.subMenu.title : item.code !== "" ? item.code : item.text)
         }
         return shown
-    }
-
-    /// What the cards stand on for a row drawing a branch nothing holds (`CommitMenuState.cardFacts`).
-    function branchFacts() {
-        return {
-            "branch": { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
-                        "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
-                        "remoteCounterpartOid": "abc123", "open": true, "merged": "yes",
-                        "offers": ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream"] },
-            "tag": { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] },
-            "making": root.makingNothing
-        }
     }
 
     /// `fields` names only what this case is about.
@@ -253,7 +286,7 @@ Item {
         /// them — and a warning goes with the press it warned of. The move stays live: it asks first.
         function test_a_standing_operation_greys_every_row_that_starts_or_rewrites_history() {
             root.aimAt({ opStanding: true, published: true, rebasePublished: true, hardResetTakes: 2 })
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             verify(menu.menu.openSub(menu.resetSubmenu))
             for (const item of [menu.branchHereItem, root.row("cherry-pick"), root.row("revert"), root.row("squash"),
                                 root.row("drop"), root.row("rebase --interactive"), root.row("merge"),
@@ -326,14 +359,14 @@ Item {
         function test_a_menu_raised_under_a_running_command_waits_for_it_with_every_row() {
             root.aimAt({})
             menu.runningWhy = ""
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             const idle = root.rowsOf(menu.menu)
             menu.menu.dismiss()
             verify(idle.rows > 0)
             compare(idle.greyed, 0, "nothing runs, nothing greys")
 
             menu.runningWhy = Words.otherCommandRunning
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             verify(menu.menu.visible, "the menu comes up")
             const under = root.rowsOf(menu.menu)
             compare(under.rows, idle.rows, "with the rows it has with nothing running")
@@ -356,7 +389,7 @@ Item {
         /// a row the reading takes away greys where it is, in a card as on the first level, and none comes in.
         function test_a_menu_stood_again_keeps_its_shape_at_every_level() {
             root.aimAt({ pullRuns: "" })
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             verify(menu.menu.openSub(menu.branchCard))
             const first = root.rowsOf(menu.menu).rows
             const card = root.rowsOf(menu.branchCard).rows
@@ -364,8 +397,9 @@ Item {
 
             menu.holdShape()
             root.aimAt({ canSwitch: false })
-            const facts = root.branchFacts()
-            facts.branch.offers = ["switch", "branch-here", "integrate", "delete", "delete-remote"]
+            const facts = root.stand()
+            facts.menu = root.menuOf({ "switch": true, "branchHere": true, "integrate": true, "delete": true,
+                                       "deleteRemote": true, "upstreamWhere": "remote" })
             menu.standCards(facts)
             verify(menu.switchItem.withdrawn, "a row the reading takes away greys where it is")
             compare(menu.switchItem.blockedWhy, menu.switchItem.withdrawnWhy)
@@ -379,7 +413,7 @@ Item {
         /// and the reset card's rows have no offer of their own to lose.
         function test_a_card_stood_away_greys_every_row_in_it() {
             root.aimAt({})
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             verify(menu.menu.openSub(menu.resetSubmenu))
             menu.holdShape()
             menu.canMoveBranch = false
@@ -450,7 +484,7 @@ Item {
         function test_a_menu_already_up_greys_nothing_for_a_command_started_under_it() {
             root.aimAt({})
             menu.runningWhy = ""
-            menu.offerCommit(root.branchFacts())
+            menu.offerCommit(root.stand())
             verify(menu.menu.openSub(menu.branchCard))
             menu.runningWhy = Words.otherCommandRunning
             compare(root.rowsOf(menu.menu).greyed, 0)
@@ -464,10 +498,10 @@ Item {
         /// (デザイン規約 §メニュー).
         function test_the_delete_table_closes_the_rows_used_often_above_the_cards() {
             root.aimAt({ pullRuns: "aside" })
-            const facts = root.branchFacts()
-            facts.branch.push = { "state": "ready", "sendsPlain": true, "overwrites": false,
-                                  "target": "origin/feature/topic-a", "lease": "fed789",
-                                  "upstream": "origin/feature/topic-a" }
+            const facts = root.stand()
+            facts.push = { "state": "ready", "sendsPlain": true, "overwrites": false,
+                           "target": "origin/feature/topic-a", "lease": "fed789",
+                           "upstream": "origin/feature/topic-a" }
             menu.offerCommit(facts)
             const shown = root.shownOrder()
             const at = word => shown.indexOf(word)
@@ -500,30 +534,31 @@ Item {
 
         /// The other card comes up holding only what can still be made here.
         function test_each_card_is_aimed_only_at_a_name_of_its_own_kind_data() {
-            const branchy = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
-                              "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
-                              "remoteCounterpartOid": "abc123", "open": true, "merged": "yes",
-                              "offers": ["switch", "branch-here", "integrate", "delete", "set-upstream"] }
-            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
-                            "upstream": "", "upstreamWhere": "",
-                            "open": false, "merged": "", "offers": [] }
-            // A tag standing here only, in core's words as `tst_tagcard.qml` spells them.
-            const tagged = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "",
-                             "tagHeldBack": "", "tagCarriers": "", "tagHere": true, "tagAt": "abc123",
-                             "offers": ["branch-here", "integrate", "delete", "push-tag"] }
-            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
+            const branchy = root.stand({
+                "menu": root.menuOf({ "switch": true, "branchHere": true, "integrate": true, "delete": true,
+                                      "setUpstream": true, "upstreamWhere": "remote" }) })
+            // A tag standing here only, as `tst_tagcard.qml` spells core's answer and the tag's record.
+            const tagged = root.stand({
+                "lead": { "kind": "tag", "full": "v1.0", "local": "", "leads": "", "path": "", "called": "",
+                          "home": false, "worktree": "", "stoppedBy": "", "placed": true },
+                "card": { "pushRemote": "origin", "lease": "", "reach": "", "heldBack": "", "carriers": "",
+                          "rowGoes": false },
+                "menu": root.menuOf({ "branchHere": true, "integrate": true, "delete": true, "pushTag": true }),
+                "open": false,
+                "merged": "",
+                "tagAt": "abc123" })
             return [
                 {
                     tag: "the chip drew a branch",
                     aim: { targetKind: "branch", targetName: "feature/topic-a" },
-                    facts: { "branch": branchy, "tag": notag, "making": root.makingNothing },
+                    facts: branchy,
                     named: "feature/topic-a",
                     tagNamed: "",
                 },
                 {
                     tag: "the chip drew a tag",
                     aim: { targetKind: "tag", targetName: "v1.0" },
-                    facts: { "branch": empty, "tag": tagged, "making": root.makingNothing },
+                    facts: tagged,
                     named: "",
                     tagNamed: "v1.0",
                 },
@@ -553,15 +588,10 @@ Item {
         /// greys with the reason where something is in the way there, and both hand up what the menu froze — a remote
         /// branch sent with the remote one it is made off.
         function test_the_worktree_card_makes_worktrees_and_names_where_they_go() {
-            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
-                            "upstream": "", "upstreamWhere": "",
-                            "open": false, "merged": "", "offers": [] }
-            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
-            const making = root.making({ "oid": menu.oid, "here": true, "checkout": "branch",
-                                         "branch": "feature/topic-a", "path": "C:/work/repo.worktrees/feature-topic-a",
-                                         "place": "feature-topic-a" })
             root.aimAt({})
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": making })
+            menu.offerCommit(root.making({ "here": true, "checkout": "branch", "branch": "feature/topic-a",
+                                           "path": "C:/work/repo.worktrees/feature-topic-a",
+                                           "place": "feature-topic-a" }))
             const card = menu.worktreeCard
             verify(card.applies, "the card stands on a row that names no worktree")
             verify(!card.removeWorktreeItem.offered, "with nothing to take away")
@@ -584,46 +614,46 @@ Item {
                     "worktree-add branch feature/topic-a  C:/work/repo.worktrees/feature-topic-a feature-topic-a")
 
             root.aimAt({ targetKind: "remote", targetName: "origin/feature/remote-only" })
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "track", "branch": "feature/remote-only",
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "track", "branch": "feature/remote-only",
                 "start": "origin/feature/remote-only", "path": "C:/work/repo.worktrees/feature-remote-only",
-                "place": "feature-remote-only" }) })
+                "place": "feature-remote-only" }))
             card.worktreeAddItem.triggered()
             compare(root.asked, "worktree-add track feature/remote-only origin/feature/remote-only "
                     + "C:/work/repo.worktrees/feature-remote-only feature-remote-only")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/blocked",
-                "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" }) })
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "branch", "branch": "feature/blocked",
+                "path": "C:/work/repo.worktrees/feature-blocked", "place": "feature-blocked", "taken": "folder" }))
             compare(card.worktreeAddItem.blockedReason, "The folder is not empty — feature-blocked")
             compare(card.worktreeAddItem.tipMarkWord, "feature-blocked", "the tip's tree mark stands before the folder")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "fix/listed",
-                "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" }) })
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "branch", "branch": "fix/listed",
+                "path": "C:/work/repo.worktrees/fix-listed", "place": "fix-listed", "taken": "listed" }))
             compare(card.worktreeAddItem.blockedReason, "Taken by another worktree — fix-listed")
             compare(card.worktreeAddItem.tipMarkWord, "fix-listed")
 
             // The branch already out — here, or in the worktree named — greys the row on that, whatever the place.
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "main",
-                "path": "C:/work/repo.worktrees/main", "place": "main", "out": "current" }) })
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "branch", "branch": "main",
+                "path": "C:/work/repo.worktrees/main", "place": "main", "out": "current" }))
             verify(card.worktreeAddItem.offered, "the branch the tab stands on keeps the row")
             compare(card.worktreeAddItem.blockedReason, "Switch away first — this is the branch you are on")
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/topic-a",
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "branch", "branch": "feature/topic-a",
                 "path": "C:/work/repo.worktrees/feature-topic-a", "place": "feature-topic-a", "out": "held",
-                "holderLeaf": "topic" }) })
+                "holderLeaf": "topic" }))
             compare(card.worktreeAddItem.blockedReason, Words.checkedOutElsewhere("topic"))
             compare(card.worktreeAddItem.tipMarkWord, "topic", "the holder's folder wears its mark in the tip")
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.making({
-                "oid": menu.oid, "here": true, "checkout": "branch", "branch": "feature/clash",
+            menu.offerCommit(root.making({
+                "here": true, "checkout": "branch", "branch": "feature/clash",
                 "path": "C:/work/repo.worktrees/feature-clash", "place": "feature-clash", "out": "stopped",
-                "stoppedBy": "rebase" }) })
+                "stoppedBy": "rebase" }))
             compare(card.worktreeAddItem.blockedReason, "Being rebased in this worktree",
                     "a stop here holds the branch with the tree detached")
 
-            menu.offerCommit({ "branch": empty, "tag": notag, "making": root.makingNothing })
+            menu.offerCommit(root.making({}))
             verify(!card.worktreeAddItem.offered, "a row whose name has no branch to take out has no row")
             verify(!card.applies, "and a row with nothing to make or take away has no card")
             menu.menu.dismiss()
@@ -632,33 +662,34 @@ Item {
         /// The cards' leases come up through this menu as the oids they are — a lease passed on as a flag would
         /// reach git as `true`.
         function test_the_carried_cards_hand_their_leases_up_whole() {
-            const empty = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "", "remoteCounterpartOid": "",
-                            "upstream": "", "upstreamWhere": "",
-                            "open": false, "merged": "", "offers": [] }
-            const drifted = { "pushRemote": "origin", "tagDriftOid": "deadbee", "tagOnlyThere": false,
-                              "tagReach": "origin", "tagHeldBack": "drift", "tagCarriers": "origin", "tagHere": true,
-                              "tagAt": "abc123",
-                              "offers": ["branch-here", "integrate", "delete", "push-tag"] }
+            const drifted = root.stand({
+                "card": { "pushRemote": "origin", "lease": "deadbee", "reach": "origin", "heldBack": "drift",
+                          "carriers": "origin", "rowGoes": false },
+                "menu": root.menuOf({ "branchHere": true, "integrate": true, "delete": true, "pushTag": true,
+                                      "deleteRemoteTag": "greyed", "deleteTagEverywhere": "greyed" }),
+                "tagAt": "abc123" })
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
-            menu.offerCommit({ "branch": empty, "tag": drifted, "making": root.makingNothing })
+            menu.offerCommit(drifted)
             menu.tagCard.pushTagItem.held()
             compare(root.asked, "push origin v1.0 deadbee")
 
-            const both = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "tagReach": "origin",
-                           "tagHeldBack": "", "tagCarriers": "origin", "tagHere": true, "tagAt": "abc123",
-                           "offers": ["branch-here", "integrate", "delete", "push-tag", "delete-remote-tag"] }
+            const both = root.stand({
+                "card": { "pushRemote": "origin", "lease": "", "reach": "origin", "heldBack": "",
+                          "carriers": "origin", "rowGoes": false },
+                "menu": root.menuOf({ "branchHere": true, "integrate": true, "delete": true, "pushTag": true,
+                                      "deleteRemoteTag": "live" }),
+                "tagAt": "abc123" })
             root.aimAt({ targetKind: "tag", targetName: "v1.0" })
-            menu.offerCommit({ "branch": empty, "tag": both, "making": root.makingNothing })
+            menu.offerCommit(both)
             menu.tagCard.deleteRemoteTagItem.held()
             compare(root.asked, "delete-remote-tag origin v1.0 " + menu.oid)
 
-            const reading = { "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "",
-                              "upstream": "", "upstreamWhere": "",
-                              "remoteCounterpartOid": "", "open": true, "merged": "",
-                              "offers": ["delete"] }
-            const notag = { "pushRemote": "origin", "tagDriftOid": "", "tagOnlyThere": false, "offers": [] }
+            const reading = root.stand({
+                "card": { "remoteCounterpart": "", "remoteCounterpartOid": "", "upstream": "" },
+                "menu": root.menuOf({ "delete": true }),
+                "merged": "" })
             root.aimAt({ targetKind: "remote", targetName: "origin/main" })
-            menu.offerCommit({ "branch": reading, "tag": notag, "making": root.makingNothing })
+            menu.offerCommit(reading)
             menu.deleteItem.held()
             compare(root.asked, "delete-remote origin/main " + menu.oid)
         }
