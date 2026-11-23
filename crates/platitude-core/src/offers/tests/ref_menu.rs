@@ -1,4 +1,4 @@
-use super::super::testkit::target;
+use super::super::testkit::{standing, target};
 use super::super::*;
 
 /// The rows of `full`'s menu on an idle, open repository on `main` that no
@@ -6,11 +6,7 @@ use super::super::*;
 /// one input at a time.
 fn reading(kind: RefKind, full: &str, far: FarSide) -> RefMenuOffers {
     ref_menu(
-        target(kind, full),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        false,
+        &standing(Some(target(kind, full)), &TreeStanding::on("main")),
         far,
     )
 }
@@ -27,6 +23,7 @@ fn upstream(reading: Reading) -> FarSide {
         reading,
         tracked: reading != Reading::None,
         has_remote: true,
+        ahead: 0,
     })
 }
 
@@ -54,8 +51,8 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             delete_remote: true,
             // A branch goes out through the toolbar; the tag rows are a tag's.
             push_tag: false,
-            delete_remote_tag: false,
-            delete_tag_everywhere: false,
+            delete_remote_tag: Seat::Gone,
+            delete_tag_everywhere: Seat::Gone,
             set_upstream: true,
             unset_upstream: true,
             on_current_branch: false,
@@ -87,8 +84,8 @@ fn a_rows_own_menu_reads_nothing_over_there() {
     let tag = offers_on(RefKind::Tag, "v1.0");
     assert!(tag.delete, "read as a tag here");
     assert!(!tag.push_tag);
-    assert!(!tag.delete_remote_tag);
-    assert!(!tag.delete_tag_everywhere);
+    assert_eq!(tag.delete_remote_tag, Seat::Gone);
+    assert_eq!(tag.delete_tag_everywhere, Seat::Gone);
 }
 
 /// The far side is the model's record and the kind the menu's word, handed
@@ -136,6 +133,7 @@ fn only_a_branch_with_an_upstream_has_one_to_take_off() {
                 reading: Reading::None,
                 tracked,
                 has_remote,
+                ahead: 0,
             }),
         )
         .unset_upstream
@@ -167,11 +165,13 @@ fn the_current_branch_and_a_held_one_take_their_upstream_off_too() {
         "this writes configuration, not the branch"
     );
     let held = ref_menu(
-        target(RefKind::Branch, "feat"),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        true,
+        &RowStanding {
+            leads: Leads::Holder,
+            ..standing(
+                Some(target(RefKind::Branch, "feat")),
+                &TreeStanding::on("main"),
+            )
+        },
         upstream(Reading::Together),
     );
     assert!(
@@ -219,11 +219,13 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
 #[test]
 fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
     let offers = ref_menu(
-        target(RefKind::Branch, "feat"),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        true,
+        &RowStanding {
+            leads: Leads::Holder,
+            ..standing(
+                Some(target(RefKind::Branch, "feat")),
+                &TreeStanding::on("main"),
+            )
+        },
         FarSide::Unread,
     );
     assert!(offers.switch_to, "the press goes through to that worktree");
@@ -253,11 +255,10 @@ fn a_branch_out_in_another_worktree_asks_nothing_while_moves_are_blocked() {
         for (kind, full) in [(RefKind::Branch, "feat"), (RefKind::Remote, "origin/feat")] {
             let asks = |held: bool| {
                 ref_menu(
-                    target(kind, full),
-                    "abc123",
-                    true,
-                    &tree,
-                    held,
+                    &RowStanding {
+                        leads: if held { Leads::Holder } else { Leads::Nowhere },
+                        ..standing(Some(target(kind, full)), &tree)
+                    },
                     FarSide::Unread,
                 )
                 .switch_asks
@@ -276,11 +277,13 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
     // `push --delete` touches nothing on this machine, so a local hold
     // does not bar it.
     let offers = ref_menu(
-        target(RefKind::Remote, "origin/feat"),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        true,
+        &RowStanding {
+            leads: Leads::Holder,
+            ..standing(
+                Some(target(RefKind::Remote, "origin/feat")),
+                &TreeStanding::on("main"),
+            )
+        },
         FarSide::Unread,
     );
     assert!(offers.delete);
@@ -308,15 +311,14 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
 fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
     let standing = |detached: bool| {
         ref_menu(
-            target(RefKind::Branch, "feat"),
-            "abc123",
-            true,
-            &if detached {
-                TreeStanding::detached().standing("REBASE 1/3")
-            } else {
-                TreeStanding::on("main").standing("MERGING")
-            },
-            false,
+            &standing(
+                Some(target(RefKind::Branch, "feat")),
+                &if detached {
+                    TreeStanding::detached().standing("REBASE 1/3")
+                } else {
+                    TreeStanding::on("main").standing("MERGING")
+                },
+            ),
             FarSide::Unread,
         )
     };
@@ -350,14 +352,13 @@ fn a_standing_operation_asks_and_greys_new_history_but_not_deletes() {
 #[test]
 fn a_blocked_move_asks_with_no_operation_standing() {
     let offers = ref_menu(
-        target(RefKind::Branch, "feat"),
-        "abc123",
-        true,
-        &TreeStanding {
-            moves_blocked: true,
-            ..TreeStanding::on("main")
-        },
-        false,
+        &standing(
+            Some(target(RefKind::Branch, "feat")),
+            &TreeStanding {
+                moves_blocked: true,
+                ..TreeStanding::on("main")
+            },
+        ),
         FarSide::Unread,
     );
     assert!(offers.switch_asks);
@@ -372,14 +373,13 @@ fn a_blocked_move_asks_with_no_operation_standing() {
 fn the_mark_follows_the_blocked_move_and_not_the_badge() {
     let under_the_badge = |moves_blocked: bool| {
         ref_menu(
-            target(RefKind::Branch, "feat"),
-            "abc123",
-            true,
-            &TreeStanding {
-                moves_blocked,
-                ..TreeStanding::detached().standing("REBASING")
-            },
-            false,
+            &standing(
+                Some(target(RefKind::Branch, "feat")),
+                &TreeStanding {
+                    moves_blocked,
+                    ..TreeStanding::detached().standing("REBASING")
+                },
+            ),
             FarSide::Unread,
         )
     };
@@ -399,11 +399,7 @@ fn the_mark_follows_the_blocked_move_and_not_the_badge() {
 fn detached_or_unborn_has_no_branch_to_integrate_into() {
     let on = |tree: &TreeStanding| {
         ref_menu(
-            target(RefKind::Branch, "feat"),
-            "abc123",
-            true,
-            tree,
-            false,
+            &standing(Some(target(RefKind::Branch, "feat")), tree),
             FarSide::Unread,
         )
     };
@@ -453,22 +449,29 @@ fn only_a_tag_is_pushed_from_this_menu_and_only_with_a_remote_to_send_it_to() {
 fn each_delete_row_needs_the_side_it_names() {
     let here = tag_offers(Some(TagSides::Here), true);
     assert!(here.delete, "made here, so `tag --delete` names it");
-    assert!(!here.delete_remote_tag, "no remote is known to carry it");
-    assert!(!here.delete_tag_everywhere);
+    assert_eq!(
+        here.delete_remote_tag,
+        Seat::Gone,
+        "no remote is known to carry it"
+    );
+    assert_eq!(here.delete_tag_everywhere, Seat::Gone);
 
     let over_there = tag_offers(Some(TagSides::Remote), true);
     assert!(
         !over_there.delete,
         "`tag --delete` would have nothing to name"
     );
-    assert!(over_there.delete_remote_tag);
-    assert!(
-        !over_there.delete_tag_everywhere,
+    assert_eq!(over_there.delete_remote_tag, Seat::Live);
+    assert_eq!(
+        over_there.delete_tag_everywhere,
+        Seat::Gone,
         "there is no local half to take with it"
     );
 
     let both = tag_offers(Some(TagSides::Both), true);
-    assert!(both.delete && both.delete_remote_tag && both.delete_tag_everywhere);
+    assert!(both.delete);
+    assert_eq!(both.delete_remote_tag, Seat::Live);
+    assert_eq!(both.delete_tag_everywhere, Seat::Live);
     assert_eq!(
         both.words(),
         [
@@ -483,25 +486,38 @@ fn each_delete_row_needs_the_side_it_names() {
 }
 
 /// A remote holding the name on another commit, or several carrying it
-/// with none named: both rows that reach over there are out, and the push
-/// stays — as the leased overwrite where it is a drift (デザイン規約
-/// §相手の履歴を置き換える).
+/// with none named: both rows that reach over there keep their seats
+/// greyed, and the push stays — as the leased overwrite where it is a drift
+/// (デザイン規約 §相手の履歴を置き換える).
 #[test]
-fn a_tag_held_back_over_there_loses_both_rows_that_reach_it() {
-    for held_back in [TagDeleteHeld::Drifted, TagDeleteHeld::Unnamed] {
-        let held = reading(
+fn a_tag_held_back_over_there_greys_both_rows_that_reach_it() {
+    let held = |sides: TagSides, has_remote: bool, held_back: TagDeleteHeld| {
+        reading(
             RefKind::Tag,
             "v1.0",
             FarSide::Tag(TagFar {
-                sides: Some(TagSides::Both),
-                has_remote: true,
+                sides: Some(sides),
+                has_remote,
                 held_back,
             }),
+        )
+    };
+    for held_back in [TagDeleteHeld::Drifted, TagDeleteHeld::Unnamed] {
+        let both = held(TagSides::Both, true, held_back);
+        assert!(both.delete, "{held_back:?}");
+        assert!(both.push_tag, "{held_back:?}");
+        assert_eq!(both.delete_remote_tag, Seat::Greyed, "{held_back:?}");
+        assert_eq!(both.delete_tag_everywhere, Seat::Greyed, "{held_back:?}");
+        assert_eq!(
+            held(TagSides::Remote, true, held_back).delete_tag_everywhere,
+            Seat::Gone,
+            "{held_back:?}: the pair needs a name here to hold back"
         );
-        assert!(held.delete, "{held_back:?}");
-        assert!(held.push_tag, "{held_back:?}");
-        assert!(!held.delete_remote_tag, "{held_back:?}");
-        assert!(!held.delete_tag_everywhere, "{held_back:?}");
+        assert_eq!(
+            held(TagSides::Both, false, held_back).delete_remote_tag,
+            Seat::Greyed,
+            "{held_back:?}: the hold names a reading left from before, and says so"
+        );
     }
 }
 
@@ -513,8 +529,8 @@ fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
     let unread = tag_offers(None, true);
     assert!(unread.delete);
     assert!(unread.push_tag);
-    assert!(!unread.delete_remote_tag);
-    assert!(!unread.delete_tag_everywhere);
+    assert_eq!(unread.delete_remote_tag, Seat::Gone);
+    assert_eq!(unread.delete_tag_everywhere, Seat::Gone);
 }
 
 /// No remote configured outweighs a stale reading.
@@ -522,8 +538,8 @@ fn an_unread_tag_keeps_its_local_delete_and_offers_no_remote_one() {
 fn no_remote_leaves_the_tag_only_its_local_delete() {
     let offers = tag_offers(Some(TagSides::Both), false);
     assert!(offers.delete);
-    assert!(!offers.delete_remote_tag);
-    assert!(!offers.delete_tag_everywhere);
+    assert_eq!(offers.delete_remote_tag, Seat::Gone);
+    assert_eq!(offers.delete_tag_everywhere, Seat::Gone);
 }
 
 /// A tag names a commit, so a stopped operation or unmerged files do not
@@ -531,21 +547,47 @@ fn no_remote_leaves_the_tag_only_its_local_delete() {
 #[test]
 fn a_stopped_operation_does_not_hold_a_tag_back() {
     let offers = ref_menu(
-        target(RefKind::Tag, "v1.0"),
-        "abc123",
-        true,
-        &TreeStanding::on("main").standing("REBASING"),
-        false,
+        &standing(
+            Some(target(RefKind::Tag, "v1.0")),
+            &TreeStanding::on("main").standing("REBASING"),
+        ),
         tag_far(Some(TagSides::Both), true),
     );
     assert!(offers.push_tag);
-    assert!(offers.delete_remote_tag);
-    assert!(offers.delete_tag_everywhere);
+    assert_eq!(offers.delete_remote_tag, Seat::Live);
+    assert_eq!(offers.delete_tag_everywhere, Seat::Live);
 }
 
 #[test]
 fn a_stash_is_nobodys_history_to_branch_from() {
     assert!(!offers_on(RefKind::Stash, "stash@{0}").branch_here);
+}
+
+#[test]
+fn a_row_on_no_commit_starts_nothing_on_it() {
+    let main = TreeStanding::on("main");
+    let row = RowStanding {
+        has_commit: false,
+        ..standing(Some(target(RefKind::Branch, "feat")), &main)
+    };
+    assert!(!ref_menu(&row, FarSide::Unread).branch_here);
+}
+
+#[test]
+fn a_row_that_names_no_ref_offers_none_of_a_refs_rows() {
+    let main = TreeStanding::on("main");
+    assert_eq!(
+        ref_menu(&standing(None, &main), FarSide::Unread),
+        RefMenuOffers::default()
+    );
+}
+
+#[test]
+fn every_lead_reads_back_as_its_word() {
+    for leads in [Leads::Nowhere, Leads::Holder, Leads::Itself] {
+        assert_eq!(Leads::from_word(leads.word()), Some(leads));
+    }
+    assert_eq!(Leads::from_word("elsewhere"), None);
 }
 
 #[test]

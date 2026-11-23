@@ -21,7 +21,8 @@ pub(crate) fn put_far(fields: Fields, far: &FarSide) -> Fields {
             .put("far", "branch")
             .put("reading", upstream.reading.word())
             .put("tracked", &upstream.tracked)
-            .put("hasRemote", &upstream.has_remote),
+            .put("hasRemote", &upstream.has_remote)
+            .put("ahead", &upstream.ahead),
         FarSide::Tag(tag) => fields
             .put("far", "tag")
             .put("sides", tag.sides.map_or("", TagSides::word))
@@ -40,6 +41,7 @@ pub(crate) fn read_far(map: &QVariantMap) -> Option<FarSide> {
             reading: Reading::from_word(&field::<String>(map, "reading")?)?,
             tracked: field(map, "tracked")?,
             has_remote: field(map, "hasRemote")?,
+            ahead: field(map, "ahead")?,
         })),
         "tag" => Some(FarSide::Tag(TagFar {
             sides: sides_of(&field::<String>(map, "sides")?)?,
@@ -89,6 +91,7 @@ mod tests {
                     reading,
                     tracked: reading != Reading::None,
                     has_remote: true,
+                    ahead: 2,
                 })
             });
         let tags = [
@@ -160,6 +163,7 @@ mod tests {
             .put("reading", "elsewhere")
             .put("tracked", &true)
             .put("hasRemote", &true)
+            .put("ahead", &0u32)
             .done();
         assert_eq!(FarSide::from_map(&record), None);
         let record = Fields::new().put("far", "stash").done();

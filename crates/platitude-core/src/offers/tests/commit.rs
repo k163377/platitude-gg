@@ -14,7 +14,7 @@ fn main_at(head: &str) -> TreeStanding {
 /// The commit-menu inputs of the same idle repository, `oid` under the
 /// pointer.
 fn commit_offers(oid: &str, head: &str) -> CommitMenuOffers {
-    commit_menu(true, &main_at(head), oid, "")
+    commit_menu(true, &main_at(head), oid, false)
 }
 
 #[test]
@@ -57,9 +57,14 @@ fn a_commit_the_discard_log_draws_offers_only_what_adds() {
         ["cherry-pick", "branch-here"]
     );
     assert_eq!(
-        commit_menu(true, &main_at("def456").standing("MERGING"), "abc123", "")
-            .on_provisional()
-            .words(),
+        commit_menu(
+            true,
+            &main_at("def456").standing("MERGING"),
+            "abc123",
+            false
+        )
+        .on_provisional()
+        .words(),
         ["cherry-pick", "branch-here", "standing"],
         "what stays greys under a standing operation as anywhere"
     );
@@ -80,7 +85,7 @@ fn detached_keeps_only_the_rows_that_ask_nothing_of_a_branch() {
         head_oid: "def456".into(),
         ..TreeStanding::detached()
     };
-    let offers = commit_menu(true, &detached, "abc123", "");
+    let offers = commit_menu(true, &detached, "abc123", false);
     assert!(
         offers.cherry_pick && offers.revert,
         "cherry-pick and revert run detached"
@@ -93,7 +98,12 @@ fn detached_keeps_only_the_rows_that_ask_nothing_of_a_branch() {
 
 #[test]
 fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
-    let offers = commit_menu(true, &main_at("def456").standing("MERGING"), "abc123", "");
+    let offers = commit_menu(
+        true,
+        &main_at("def456").standing("MERGING"),
+        "abc123",
+        false,
+    );
     assert_eq!(
         offers,
         CommitMenuOffers {
@@ -118,12 +128,17 @@ fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
         head_oid: "def456".into(),
         ..TreeStanding::detached()
     };
-    let rebasing = commit_menu(true, &detached.clone().standing("REBASE 1/3"), "abc123", "");
+    let rebasing = commit_menu(
+        true,
+        &detached.clone().standing("REBASE 1/3"),
+        "abc123",
+        false,
+    );
     assert_eq!(
         rebasing,
         CommitMenuOffers {
             standing: true,
-            ..commit_menu(true, &detached, "abc123", "")
+            ..commit_menu(true, &detached, "abc123", false)
         },
         "a stopped rebase leaves the tree detached: the rows that need a branch have none to name"
     );
@@ -131,7 +146,7 @@ fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
 
 #[test]
 fn a_stash_row_offers_only_its_own_writes() {
-    let offers = commit_menu(true, &main_at("def456"), "abc123", "stash@{1}");
+    let offers = commit_menu(true, &main_at("def456"), "abc123", true);
     assert_eq!(
         offers,
         CommitMenuOffers {
@@ -141,13 +156,5 @@ fn a_stash_row_offers_only_its_own_writes() {
     );
     // A stash write waits only on the queue — an operation standing does
     // not gate it.
-    assert!(
-        commit_menu(
-            true,
-            &main_at("").standing("REBASING"),
-            "abc123",
-            "stash@{1}"
-        )
-        .stash_write
-    );
+    assert!(commit_menu(true, &main_at("").standing("REBASING"), "abc123", true).stash_write);
 }

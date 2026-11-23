@@ -1,6 +1,7 @@
 //! What a ref's menu reads of the far side: a local branch's upstream, or
 //! the sides a tag's name stands on. One value per kind of row, built by
-//! the model that lists the row and handed to [`super::ref_menu`] whole.
+//! the model that lists the row and handed to [`super::ref_menu`] and
+//! [`super::pull_row`] whole.
 
 use super::RefKind;
 
@@ -8,9 +9,9 @@ use super::RefKind;
 ///
 /// Only a local branch and a tag have a far side its rows read: a remote
 /// branch is a reading itself, and a stash or a worktree has none. A far
-/// side is read on a row of its own kind alone ([`Self::on`]); the rows of
-/// a row's own menu read none, the cards' rows do (`RefBranchMenu` /
-/// `RefTagMenu`).
+/// side is read on a row of its own kind alone ([`Self::on`]): the cards'
+/// rows read it (`RefBranchMenu` / `RefTagMenu`), and of the row's own
+/// menu the `pull` row.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum FarSide {
     /// Nothing read over there: the rows that reach it stay out.
@@ -46,6 +47,9 @@ pub struct BranchFar {
     pub tracked: bool,
     /// The repository has a remote to name an upstream on.
     pub has_remote: bool,
+    /// How many commits the branch has that its upstream lacks, as of the
+    /// last fetch (`session::BranchItem::counts`).
+    pub ahead: u32,
 }
 
 /// Where the remote reading a local branch speaks for stands.

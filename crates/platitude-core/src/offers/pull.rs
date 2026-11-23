@@ -28,7 +28,7 @@
 //! reads: the tree's own comparison with its upstream, and the row's own
 //! branch's.
 
-use super::{RefKind, RefTarget, TreeStanding};
+use super::{FarSide, Leads, Reading, RefKind, RefTarget, RowStanding};
 
 /// What the `pull` row runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -99,11 +99,11 @@ impl PullOffer {
     }
 }
 
-/// The rule. `target`, `open`, `tree` and `held` read as
-/// in [`super::ref_menu`] — the tree's own comparison is
-/// [`TreeStanding::upstream`] and [`TreeStanding::diverged`];
-/// `row_upstream` and `row_ahead` are the row's own branch's upstream and
-/// how many commits it has that the upstream lacks, as of the last fetch.
+/// The rule. The tree's own comparison is
+/// [`super::TreeStanding::upstream`] and [`super::TreeStanding::diverged`];
+/// `far` is the row's own branch's ([`FarSide::Branch`]): whether a remote
+/// reading is listed for it, and how many commits it has that the reading
+/// lacks, as of the last fetch.
 ///
 /// - **`git pull` on the two ends of the tree's own comparison**: the
 ///   branch it is on and the remote-tracking ref that branch is measured
@@ -118,18 +118,12 @@ impl PullOffer {
 ///
 /// Without an upstream git turns the plain pull down (`no tracking
 /// information`). The fast-forward aside needs an upstream on a remote:
-/// `row_upstream` is the remote reading only (`BranchItem.upstream`), so a
-/// branch tracking one here (`branch.<n>.remote = .`) has no row.
-pub fn pull_row(
-    target: RefTarget<'_>,
-    open: bool,
-    tree: &TreeStanding,
-    held: bool,
-    row_upstream: &str,
-    row_ahead: u32,
-) -> Option<PullOffer> {
-    let RefTarget { kind, name } = target;
-    if !open {
+/// the reading is a remote one only ([`Reading`]), so a branch tracking
+/// one here (`branch.<n>.remote = .`) has no row.
+pub fn pull_row(row: &RowStanding<'_>, far: FarSide) -> Option<PullOffer> {
+    let RefTarget { kind, name } = row.target?;
+    let tree = row.tree;
+    if !row.open {
         return None;
     }
     let standing = tree.op_standing();
@@ -151,17 +145,20 @@ pub fn pull_row(
             out,
         });
     }
-    if kind != RefKind::Branch || tree.is_current(name) || row_upstream.is_empty() {
+    let FarSide::Branch(own) = far.on(kind) else {
+        return None;
+    };
+    if tree.is_current(name) || own.reading == Reading::None {
         return None;
     }
     // The holder first: nothing done here lifts it. The operation is
     // finished here, and own commits are taken in from the branch itself,
     // which the reader cannot switch to from here.
-    let out = if held {
+    let out = if row.leads == Leads::Holder {
         Some(PullOut::Held)
     } else if standing {
         Some(PullOut::Standing)
-    } else if row_ahead > 0 {
+    } else if own.ahead > 0 {
         Some(PullOut::OwnCommits)
     } else {
         None
@@ -174,7 +171,8 @@ pub fn pull_row(
 
 #[cfg(test)]
 mod tests {
-    use super::super::testkit::target;
+    use super::super::testkit::{standing, target};
+    use super::super::{BranchFar, TreeStanding};
     use super::*;
 
     /// An idle tree on `main`, tracking `origin/main` and level with it.
@@ -185,21 +183,50 @@ mod tests {
         }
     }
 
-    /// The row on that tree in an open tab; `feat` tracks `origin/feat`.
-    /// The cases bend one input at a time.
-    fn on(kind: RefKind, full: &str) -> Option<PullOffer> {
-        pull_row(
-            target(kind, full),
-            true,
-            &tree(),
-            false,
-            if kind == RefKind::Branch {
-                "origin/feat"
+    /// A local branch's far side: a remote reading listed with `ahead`
+    /// commits of its own on top, or none.
+    fn tracking(ahead: Option<u32>) -> FarSide {
+        FarSide::Branch(BranchFar {
+            reading: if ahead.is_some() {
+                Reading::Together
             } else {
-                ""
+                Reading::None
             },
-            0,
-        )
+            tracked: ahead.is_some(),
+            has_remote: true,
+            ahead: ahead.unwrap_or(0),
+        })
+    }
+
+    /// The row on `tree` in an open tab, leading nowhere else; a branch row
+    /// tracks a reading level with it, any other reads nothing over there.
+    fn pull_on(kind: RefKind, full: &str, tree: &TreeStanding) -> Option<PullOffer> {
+        let far = if kind == RefKind::Branch {
+            tracking(Some(0))
+        } else {
+            FarSide::Unread
+        };
+        pull_row(&standing(Some(target(kind, full)), tree), far)
+    }
+
+    /// The row on the idle tree; the cases bend one input at a time.
+    fn on(kind: RefKind, full: &str) -> Option<PullOffer> {
+        pull_on(kind, full, &tree())
+    }
+
+    /// Branch `full` aside on `tree`: `leads` where another worktree holds
+    /// it, tracking a reading with `ahead` commits of its own, or none.
+    fn aside(
+        full: &str,
+        tree: &TreeStanding,
+        leads: Leads,
+        ahead: Option<u32>,
+    ) -> Option<PullOffer> {
+        let row = RowStanding {
+            leads,
+            ..standing(Some(target(RefKind::Branch, full)), tree)
+        };
+        pull_row(&row, tracking(ahead))
     }
 
     fn runs(offer: Option<PullOffer>) -> Option<PullRuns> {
@@ -226,6 +253,11 @@ mod tests {
             on(RefKind::Branch, "main").map(|offer| offer.words()),
             Some(vec!["here"])
         );
+        assert_eq!(
+            pull_row(&standing(None, &tree()), tracking(Some(0))),
+            None,
+            "a row that names no ref"
+        );
     }
 
     #[test]
@@ -237,58 +269,50 @@ mod tests {
                 out: None
             })
         );
-        let untracked = pull_row(
-            target(RefKind::Branch, "scratch"),
-            true,
-            &tree(),
-            false,
-            "",
-            0,
+        assert_eq!(
+            aside("scratch", &tree(), Leads::Nowhere, None),
+            None,
+            "no upstream is nowhere to pull from"
         );
-        assert_eq!(untracked, None, "no upstream is nowhere to pull from");
+        assert_eq!(
+            pull_row(
+                &standing(Some(target(RefKind::Branch, "feat")), &tree()),
+                FarSide::Unread
+            ),
+            None,
+            "nothing read over there is no upstream to pull from"
+        );
     }
 
     #[test]
     fn a_tree_with_no_upstream_still_pulls_its_other_branches() {
-        let offer = |full: &str, row_upstream: &str| {
-            runs(pull_row(
-                target(RefKind::Branch, full),
-                true,
-                &TreeStanding::on("main"),
-                false,
-                row_upstream,
-                0,
-            ))
-        };
+        let main = TreeStanding::on("main");
         assert_eq!(
-            offer("main", ""),
+            runs(aside("main", &main, Leads::Nowhere, None)),
             None,
             "git turns a plain pull down with no tracking information"
         );
         assert_eq!(
-            offer("main", "origin/main"),
+            runs(aside("main", &main, Leads::Nowhere, Some(0))),
             None,
             "the branch the tree is on is never fast-forwarded, even while the tree's own reading \
              of its upstream has not answered: git refuses to fetch into a checked-out branch"
         );
-        assert_eq!(offer("feat", "origin/feat"), Some(PullRuns::Aside));
+        assert_eq!(
+            runs(aside("feat", &main, Leads::Nowhere, Some(0))),
+            Some(PullRuns::Aside)
+        );
     }
 
     #[test]
     fn detached_there_is_no_tree_end_but_every_branch_is_aside() {
-        let offer = |kind: RefKind, full: &str, row_upstream: &str| {
-            runs(pull_row(
-                target(kind, full),
-                true,
-                &TreeStanding::detached(),
-                false,
-                row_upstream,
-                0,
-            ))
-        };
-        assert_eq!(offer(RefKind::Remote, "origin/main", ""), None);
+        let detached = TreeStanding::detached();
         assert_eq!(
-            offer(RefKind::Branch, "main", "origin/main"),
+            runs(pull_on(RefKind::Remote, "origin/main", &detached)),
+            None
+        );
+        assert_eq!(
+            runs(pull_on(RefKind::Branch, "main", &detached)),
             Some(PullRuns::Aside),
             "nothing is checked out to pull into, and nothing here is touched"
         );
@@ -301,38 +325,25 @@ mod tests {
             (RefKind::Remote, "origin/main"),
             (RefKind::Branch, "feat"),
         ] {
-            let offer = pull_row(target(kind, full), false, &tree(), false, "origin/feat", 0);
-            assert_eq!(offer, None, "{full}");
+            let tree = tree();
+            let row = RowStanding {
+                open: false,
+                ..standing(Some(target(kind, full)), &tree)
+            };
+            assert_eq!(pull_row(&row, tracking(Some(0))), None, "{full}");
         }
     }
 
     #[test]
     fn a_standing_operation_greys_every_row_the_pull_stands_on() {
-        let standing = |kind: RefKind, full: &str, detached: bool, diverged: bool, ahead: u32| {
-            let tree = if detached {
-                TreeStanding::detached().standing("REBASE 1/3")
-            } else {
-                TreeStanding {
-                    diverged,
-                    ..tree().standing("MERGING")
-                }
-            };
-            pull_row(
-                target(kind, full),
-                true,
-                &tree,
-                false,
-                &if kind == RefKind::Branch {
-                    format!("origin/{full}")
-                } else {
-                    String::new()
-                },
-                ahead,
-            )
+        let merging = |diverged: bool| TreeStanding {
+            diverged,
+            ..tree().standing("MERGING")
         };
+        let rebasing = TreeStanding::detached().standing("REBASE 1/3");
         for (kind, full) in [(RefKind::Branch, "main"), (RefKind::Remote, "origin/main")] {
             assert_eq!(
-                standing(kind, full, false, true, 0),
+                pull_on(kind, full, &merging(true)),
                 Some(PullOffer {
                     runs: PullRuns::Here,
                     out: Some(PullOut::Standing)
@@ -341,7 +352,7 @@ mod tests {
             );
         }
         assert_eq!(
-            standing(RefKind::Branch, "feat", false, false, 2),
+            aside("feat", &merging(false), Leads::Nowhere, Some(2)),
             Some(PullOffer {
                 runs: PullRuns::Aside,
                 out: Some(PullOut::Standing)
@@ -349,7 +360,7 @@ mod tests {
             "named over the branch's own commits"
         );
         assert_eq!(
-            standing(RefKind::Branch, "main", true, false, 0),
+            pull_on(RefKind::Branch, "main", &rebasing),
             Some(PullOffer {
                 runs: PullRuns::Aside,
                 out: Some(PullOut::Standing)
@@ -357,12 +368,12 @@ mod tests {
             "a stopped rebase leaves the tree detached, so the branch it replays stands aside"
         );
         assert_eq!(
-            standing(RefKind::Remote, "origin/main", true, false, 0),
+            pull_on(RefKind::Remote, "origin/main", &rebasing),
             None,
             "detached, no remote row is an end of the tree's comparison"
         );
         assert_eq!(
-            standing(RefKind::Branch, "main", false, false, 0).map(|offer| offer.words()),
+            pull_on(RefKind::Branch, "main", &merging(false)).map(|offer| offer.words()),
             Some(vec!["here", "out-standing"])
         );
     }
@@ -374,9 +385,8 @@ mod tests {
             ..tree()
         };
         for (kind, full) in [(RefKind::Branch, "main"), (RefKind::Remote, "origin/main")] {
-            let offer = pull_row(target(kind, full), true, &diverged, false, "", 0);
             assert_eq!(
-                offer,
+                pull_on(kind, full, &diverged),
                 Some(PullOffer {
                     runs: PullRuns::Here,
                     out: Some(PullOut::Diverged)
@@ -384,16 +394,8 @@ mod tests {
                 "{full}"
             );
         }
-        let aside = pull_row(
-            target(RefKind::Branch, "feat"),
-            true,
-            &diverged,
-            false,
-            "origin/feat",
-            0,
-        );
         assert_eq!(
-            aside.and_then(|offer| offer.out),
+            aside("feat", &diverged, Leads::Nowhere, Some(0)).and_then(|offer| offer.out),
             None,
             "the tree's divergence is not another branch's"
         );
@@ -401,60 +403,37 @@ mod tests {
 
     #[test]
     fn a_branch_aside_greys_on_commits_of_its_own_and_on_another_worktree() {
-        let aside = |held: bool, ahead: u32| {
-            pull_row(
-                target(RefKind::Branch, "feat"),
-                true,
-                &tree(),
-                held,
-                "origin/feat",
-                ahead,
-            )
-            .and_then(|offer| offer.out)
+        let out = |leads: Leads, ahead: u32| {
+            aside("feat", &tree(), leads, Some(ahead)).and_then(|offer| offer.out)
         };
         assert_eq!(
-            aside(false, 0),
+            out(Leads::Nowhere, 0),
             None,
             "behind or level: a fast-forward reaches it"
         );
         assert_eq!(
-            aside(false, 2),
+            out(Leads::Nowhere, 2),
             Some(PullOut::OwnCommits),
             "git turns the fetch down as a non-fast-forward (measured)"
         );
         assert_eq!(
-            aside(true, 0),
+            out(Leads::Holder, 0),
             Some(PullOut::Held),
             "git will not fetch into a branch checked out elsewhere"
         );
         assert_eq!(
-            aside(true, 2),
+            out(Leads::Holder, 2),
             Some(PullOut::Held),
             "the holder is named first: switching to it is not on offer from here"
         );
         assert_eq!(
-            pull_row(
-                target(RefKind::Branch, "feat"),
-                true,
-                &tree().standing("MERGING"),
-                true,
-                "origin/feat",
-                0,
-            )
-            .and_then(|offer| offer.out),
+            aside("feat", &tree().standing("MERGING"), Leads::Holder, Some(0))
+                .and_then(|offer| offer.out),
             Some(PullOut::Held),
             "and over a standing operation: finishing it here frees nothing there"
         );
         assert_eq!(
-            pull_row(
-                target(RefKind::Branch, "feat"),
-                true,
-                &tree(),
-                true,
-                "origin/feat",
-                0,
-            )
-            .map(|offer| offer.words()),
+            aside("feat", &tree(), Leads::Holder, Some(0)).map(|offer| offer.words()),
             Some(vec!["aside", "out-held"])
         );
     }

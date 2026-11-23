@@ -124,6 +124,13 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
         tracks("main", "origin/main"),
         tracks("side", "origin/side"),
         tracks("gone", "origin/gone"),
+        RefEntry {
+            counts: crate::AheadBehind {
+                ahead: 2,
+                behind: 0,
+            },
+            ..tracks("mine", "origin/side")
+        },
         branch("plain", oid(1)),
         tracking("origin/main", oid(2)),
         tracking("origin/side", oid(1)),
@@ -137,6 +144,7 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
         reading,
         tracked,
         has_remote: true,
+        ahead: 0,
     };
 
     assert_eq!(snapshot.branch_far("main"), far(Reading::Drifted, true));
@@ -147,6 +155,11 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
         "a gone upstream names no reading and is there to take off"
     );
     assert_eq!(snapshot.branch_far("plain"), far(Reading::None, false));
+    assert_eq!(
+        snapshot.branch_far("mine").ahead,
+        2,
+        "what the branch has that its reading lacks"
+    );
     assert_eq!(
         snapshot.branch_far("never"),
         far(Reading::None, false),

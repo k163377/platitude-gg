@@ -15,9 +15,7 @@
 //! open; `switchAction` for `RepoPage.switchToRef`), and what follows from
 //! the standing state arrives as `WorktreeModel` properties derived at
 //! drain (`movesBlocked` / `leaveUndoes` / `leaveCode` / `opSkipFree`).
-//! QML keeps only the lookups that feed them (`worktreeHolding` /
-//! `localNameFor` / `upstreamOf` / `oidOfName`), the `qsTr` wording and
-//! each row's kind condition.
+//! QML keeps only the lookups that feed them and the `qsTr` wording.
 
 mod far;
 mod message;
@@ -45,8 +43,8 @@ pub enum RefKind {
     Tag,
     Stash,
     /// Another worktree, named by its path. What the row leads to is
-    /// that worktree: `held` in [`ref_menu`] says so while it is not the one
-    /// the tab stands in.
+    /// that worktree ([`Leads::Itself`]) while it is not the one the tab
+    /// stands in.
     Worktree,
 }
 
@@ -88,6 +86,85 @@ impl<'a> RefTarget<'a> {
     /// name is empty.
     pub fn from_words(kind: &str, name: &'a str) -> Option<Self> {
         Self::new(RefKind::from_word(kind)?, name)
+    }
+}
+
+/// A ref's row as its menu stands on it: the row, whether it points at a
+/// commit, whether the tab is open, where the tree stands, and where the
+/// row leads beside it. Built once per stand; the menu's rules read it
+/// whole ([`ref_menu`], [`pull_row`], [`worktree_rows`]).
+///
+/// Whether the tab is open is not the tree's ([`TreeStanding`]), and where
+/// the row leads is not the row's: the worktrees say it.
+#[derive(Debug, Clone, Copy)]
+pub struct RowStanding<'a> {
+    /// The row; `None` on a commit row that draws no name, which has the
+    /// rows of its commit and none of a name.
+    pub target: Option<RefTarget<'a>>,
+    /// The row points at a commit — what anything made on it stands on.
+    pub has_commit: bool,
+    /// The tab-lifecycle gate.
+    pub open: bool,
+    pub tree: &'a TreeStanding,
+    pub leads: Leads,
+}
+
+/// Where a row leads besides the tree the tab stands in: the other
+/// worktree a press on it opens.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Leads {
+    /// Nowhere else: no other worktree has the row's branch out, the tab
+    /// stands in the row's worktree, or the row names neither.
+    #[default]
+    Nowhere,
+    /// Another worktree has the row's branch out — a remote row's through
+    /// the local branch of its name. git refuses switching to it and
+    /// deleting it there (`is already used by worktree at`).
+    Holder,
+    /// The row is a worktree on no branch, and not the one the tab stands
+    /// in.
+    Itself,
+}
+
+impl Leads {
+    /// The word the worktrees' record carries it in (`NavSectionModel`'s
+    /// `leadOf`); empty for [`Self::Nowhere`].
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Nowhere => "",
+            Self::Holder => "holder",
+            Self::Itself => "itself",
+        }
+    }
+
+    /// The lead [`Self::word`] wrote; `None` for any other word.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::Nowhere, Self::Holder, Self::Itself]
+            .into_iter()
+            .find(|leads| leads.word() == word)
+    }
+}
+
+/// Where a row stands on a menu that decides its seat apart from whether it
+/// is live (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Seat {
+    /// No row: what it would act on is not there.
+    #[default]
+    Gone,
+    Live,
+    /// There and greyed, for the reason the card words.
+    Greyed,
+}
+
+impl Seat {
+    /// The word a menu's record carries it in; empty for [`Self::Gone`].
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Gone => "",
+            Self::Live => "live",
+            Self::Greyed => "greyed",
+        }
     }
 }
 
@@ -133,10 +210,13 @@ pub struct RefMenuOffers {
     /// The tag taken off the remote, leaving whatever is here. Only where a
     /// remote was last heard to carry the name: the delete is leased to the
     /// commit that reading shows ([`crate::remote::delete_remote_tag`]), so
-    /// with no reading there is nothing to lease to.
-    pub delete_remote_tag: bool,
-    /// Both at once, for the name that stands on both sides.
-    pub delete_tag_everywhere: bool,
+    /// with no reading there is nothing to lease to. Greyed while the
+    /// deletes over there are held back ([`TagFar::held_back`]): the row
+    /// keeps its seat and says why.
+    pub delete_remote_tag: Seat,
+    /// Both at once, for the name that stands on both sides — greyed as
+    /// [`Self::delete_remote_tag`] is, on a name here.
+    pub delete_tag_everywhere: Seat,
     /// Which remote branch this local one is measured against. Local
     /// branches only, given a remote to ask about; the current branch and
     /// one another worktree holds take it too — this writes
@@ -181,10 +261,10 @@ impl RefMenuOffers {
         if self.push_tag {
             words.push("push-tag");
         }
-        if self.delete_remote_tag {
+        if self.delete_remote_tag == Seat::Live {
             words.push("delete-remote-tag");
         }
-        if self.delete_tag_everywhere {
+        if self.delete_tag_everywhere == Seat::Live {
             words.push("delete-tag-everywhere");
         }
         if self.set_upstream {
@@ -200,23 +280,14 @@ impl RefMenuOffers {
     }
 }
 
-/// The offers themselves.
-///
-/// `target` is the row; `open` is the tab-lifecycle gate; `tree` is where
-/// the worktree stands; `held` says another worktree holds this row's
-/// branch — a remote row's through the local branch of its name — or, on
-/// a worktree's row, that the tab does not stand in it; `far` is what the
-/// row's card reads over there, [`FarSide::Unread`] for the row's own
-/// menu. The `pull` row is [`pull_row`]'s.
-pub fn ref_menu(
-    target: RefTarget<'_>,
-    oid_hex: &str,
-    open: bool,
-    tree: &TreeStanding,
-    held: bool,
-    far: FarSide,
-) -> RefMenuOffers {
-    let RefTarget { kind, name } = target;
+/// The offers themselves: `far` is what the row's card reads over there
+/// ([`FarSide::Unread`] where it reads nothing). Nothing on a row that
+/// names no ref. The `pull` row is [`pull_row`]'s.
+pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
+    let Some(RefTarget { kind, name }) = row.target else {
+        return RefMenuOffers::default();
+    };
+    let tree = row.tree;
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let current = tree.is_current(name);
     let on_current_branch = kind == RefKind::Branch && current;
@@ -232,26 +303,40 @@ pub fn ref_menu(
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     let tag_reaches = tag.is_some_and(|tag| tag.has_remote);
     let tag_held = tag.is_some_and(|tag| tag.held_back != TagDeleteHeld::No);
+    // A hold names the reading it holds back, so it keeps the seat it greys
+    // — on a name here for the pair.
+    let tag_seat = |reaches: bool, held: bool| {
+        if held {
+            Seat::Greyed
+        } else if reaches {
+            Seat::Live
+        } else {
+            Seat::Gone
+        }
+    };
     RefMenuOffers {
-        // A worktree leads to itself — unless the tab already stands
-        // in it, which the caller hands as not held.
-        switch_to: (branchy && !current) || (kind == RefKind::Worktree && held),
-        switch_asks: !held && tree.moves_blocked,
-        branch_here: kind != RefKind::Stash && !oid_hex.is_empty(),
-        integrate_from: open && tree.on_branch() && !current,
+        // A worktree leads to itself — unless the tab already stands in it.
+        switch_to: (branchy && !current) || row.leads == Leads::Itself,
+        // Leading elsewhere asks nothing: the press opens that worktree.
+        switch_asks: row.leads == Leads::Nowhere && tree.moves_blocked,
+        branch_here: kind != RefKind::Stash && row.has_commit,
+        integrate_from: row.open && tree.on_branch() && !current,
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
         delete: kind != RefKind::Worktree
-            && !(kind == RefKind::Branch && (current || held))
+            && !(kind == RefKind::Branch && (current || row.leads == Leads::Holder))
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
         delete_remote: upstream.is_some_and(|upstream| upstream.reading == Reading::Together),
         // Not gated on drift: a remote holding the name elsewhere turns
         // the row into the leased overwrite (デザイン規約 §相手の履歴を置き換える).
         push_tag: tag_reaches && tag_here,
-        delete_remote_tag: tag_reaches && tag_on_remote && !tag_held,
-        delete_tag_everywhere: tag_reaches && tag_on_remote && tag_here && !tag_held,
+        delete_remote_tag: tag_seat(tag_reaches && tag_on_remote, tag_held),
+        delete_tag_everywhere: tag_seat(
+            tag_reaches && tag_on_remote && tag_here,
+            tag_held && tag_here,
+        ),
         set_upstream: upstream.is_some_and(|upstream| upstream.has_remote),
         unset_upstream: upstream.is_some_and(|upstream| upstream.tracked),
         on_current_branch,
@@ -355,16 +440,15 @@ impl CommitMenuOffers {
     }
 }
 
-/// The offers themselves. `oid_hex` is the row's commit; `stash_ref` is the
-/// stash selector (`""` on an ordinary commit) and routes between the two
-/// menus. `open` and `tree` read as in [`ref_menu`].
+/// The offers themselves. `oid_hex` is the row's commit; `stash` routes
+/// between the two menus. `open` and `tree` read as in [`RowStanding`].
 pub fn commit_menu(
     open: bool,
     tree: &TreeStanding,
     oid_hex: &str,
-    stash_ref: &str,
+    stash: bool,
 ) -> CommitMenuOffers {
-    let commit_row = !oid_hex.is_empty() && stash_ref.is_empty();
+    let commit_row = !oid_hex.is_empty() && !stash;
     let on_branch = open && tree.on_branch() && commit_row;
     let elsewhere = !tree.is_head(oid_hex);
     CommitMenuOffers {
@@ -375,7 +459,7 @@ pub fn commit_menu(
         move_branch: on_branch && elsewhere,
         branch_here: open && commit_row,
         standing: tree.op_standing() && commit_row,
-        stash_write: !stash_ref.is_empty(),
+        stash_write: stash,
     }
 }
 
@@ -548,14 +632,9 @@ impl WorktreeOffers {
     }
 }
 
-/// The rule. `target` is the row (`None` on a commit row that draws no
-/// name, and for any row asked by none); `open` and `tree` read as in
-/// [`ref_menu`];
-/// `held` whether another worktree holds the row's branch, a remote row's
-/// through the local branch of its name, as in [`ref_menu`];
-/// `stopped_here` whether a rebase or bisect stopped in this tree holds the
-/// row's branch; `local_exists` whether a remote row's local branch is
-/// there already.
+/// The rule. `stopped_here` is whether a rebase or bisect stopped in this
+/// tree holds the row's branch; `local_listed` whether a remote row's
+/// local branch is there already.
 ///
 /// The branch the tree is on, one a stopped operation here holds and one
 /// another worktree has out are git's to refuse (`is already used by
@@ -564,22 +643,21 @@ impl WorktreeOffers {
 /// local one exists leaves it to that branch's own row: making the
 /// worktree off the remote would mean moving the local one.
 pub fn worktree_rows(
-    target: Option<RefTarget<'_>>,
-    oid_hex: &str,
-    open: bool,
-    tree: &TreeStanding,
-    held: bool,
+    row: &RowStanding<'_>,
     stopped_here: bool,
-    local_exists: bool,
+    local_listed: bool,
 ) -> WorktreeOffers {
-    let kind = target.map(|target| target.kind);
+    let kind = row.target.map(|target| target.kind);
+    let held = row.leads == Leads::Holder;
     let checkout = match kind {
         Some(RefKind::Branch) => Some(WorktreeCheckout::Branch),
-        Some(RefKind::Remote) if !held && !local_exists => Some(WorktreeCheckout::Track),
+        Some(RefKind::Remote) if !held && !local_listed => Some(WorktreeCheckout::Track),
         _ => None,
     }
-    .filter(|_| open);
-    let on_current = target.is_some_and(|target| tree.is_current(target.name));
+    .filter(|_| row.open);
+    let on_current = row
+        .target
+        .is_some_and(|target| row.tree.is_current(target.name));
     let checkout_out = match checkout {
         Some(WorktreeCheckout::Branch) if on_current => Some(WorktreeAddOut::Current),
         Some(WorktreeCheckout::Branch) if held => Some(WorktreeAddOut::Held),
@@ -587,7 +665,7 @@ pub fn worktree_rows(
         _ => None,
     };
     WorktreeOffers {
-        here: open && !oid_hex.is_empty() && kind != Some(RefKind::Stash),
+        here: row.open && row.has_commit && kind != Some(RefKind::Stash),
         checkout,
         checkout_out,
     }

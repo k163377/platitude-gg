@@ -46,8 +46,7 @@ impl MessageEdit {
 ///
 /// `open` is the tab-lifecycle gate, `tree` where the worktree stands —
 /// HEAD asked by its commit: detached has no branch to ask —, `oid_hex`
-/// the commit on screen, and `stash_ref` the reflog selector when that row
-/// is a stash (`""` otherwise).
+/// the commit on screen, and `stash` whether that row is a stash.
 ///
 /// **Only HEAD's own commit** (user decision — ask before changing). The
 /// boxes are a surface a click drops a caret on, so whatever they accept
@@ -71,17 +70,12 @@ impl MessageEdit {
 ///
 /// **Detached still takes typing**: `commit --amend` works on a detached
 /// HEAD, unlike the menu's rewrite rows, which need a branch.
-pub fn message_edit(
-    open: bool,
-    tree: &TreeStanding,
-    oid_hex: &str,
-    stash_ref: &str,
-) -> MessageEdit {
+pub fn message_edit(open: bool, tree: &TreeStanding, oid_hex: &str, stash: bool) -> MessageEdit {
     if !open || oid_hex.is_empty() {
         return MessageEdit::Nothing;
     }
     // A stash can be HEAD's own by hash, so it answers first.
-    if !stash_ref.is_empty() {
+    if stash {
         return MessageEdit::Stash;
     }
     let at_head = tree.is_head(oid_hex);
@@ -102,12 +96,12 @@ mod tests {
     const OLDER: &str = "def456";
 
     /// The same open tab on a tree at `HEAD`, `oid` on screen, no edit stop.
-    fn edit(oid: &str, stash_ref: &str, op_text: &str) -> MessageEdit {
+    fn edit(oid: &str, stash: bool, op_text: &str) -> MessageEdit {
         let tree = TreeStanding {
             head_oid: HEAD.into(),
             ..TreeStanding::on("main")
         };
-        message_edit(true, &tree.standing(op_text), oid, stash_ref)
+        message_edit(true, &tree.standing(op_text), oid, stash)
     }
 
     /// The tree a rebase stopped at `head`: at an `edit` step or not.
@@ -121,30 +115,30 @@ mod tests {
 
     #[test]
     fn heads_own_commit_is_the_one_the_boxes_take() {
-        assert_eq!(edit(HEAD, "", ""), MessageEdit::Amend);
-        assert_eq!(edit(HEAD, "", "").as_str(), "amend");
+        assert_eq!(edit(HEAD, false, ""), MessageEdit::Amend);
+        assert_eq!(edit(HEAD, false, "").as_str(), "amend");
     }
 
     #[test]
     fn a_commit_further_back_is_read_only() {
-        assert_eq!(edit(OLDER, "", ""), MessageEdit::NotHead);
-        assert_eq!(edit(OLDER, "", "").as_str(), "not-head");
+        assert_eq!(edit(OLDER, false, ""), MessageEdit::NotHead);
+        assert_eq!(edit(OLDER, false, "").as_str(), "not-head");
     }
 
     #[test]
     fn a_standing_operation_takes_the_amend_away() {
-        assert_eq!(edit(HEAD, "", "MERGING"), MessageEdit::Standing);
+        assert_eq!(edit(HEAD, false, "MERGING"), MessageEdit::Standing);
     }
 
     #[test]
     fn an_edit_stop_opens_heads_commit_and_nothing_else() {
         let stop = rebasing_at(HEAD, true);
-        assert_eq!(message_edit(true, &stop, HEAD, ""), MessageEdit::Amend);
-        assert_eq!(message_edit(true, &stop, OLDER, ""), MessageEdit::Standing);
+        assert_eq!(message_edit(true, &stop, HEAD, false), MessageEdit::Amend);
         assert_eq!(
-            message_edit(true, &stop, HEAD, "stash@{0}"),
-            MessageEdit::Stash
+            message_edit(true, &stop, OLDER, false),
+            MessageEdit::Standing
         );
+        assert_eq!(message_edit(true, &stop, HEAD, true), MessageEdit::Stash);
     }
 
     /// Binds the second amend: the first moves HEAD off the id the stop
@@ -153,11 +147,11 @@ mod tests {
     #[test]
     fn an_edit_stop_opens_whatever_head_moved_onto() {
         assert_eq!(
-            message_edit(true, &rebasing_at(OLDER, true), OLDER, ""),
+            message_edit(true, &rebasing_at(OLDER, true), OLDER, false),
             MessageEdit::Amend
         );
         assert_eq!(
-            message_edit(true, &rebasing_at(HEAD, false), HEAD, ""),
+            message_edit(true, &rebasing_at(HEAD, false), HEAD, false),
             MessageEdit::Standing
         );
     }
@@ -165,17 +159,17 @@ mod tests {
     // Of the two refusals, the stash's is the one the reader can act on.
     #[test]
     fn a_stash_says_it_is_a_stash_before_anything_else() {
-        assert_eq!(edit(HEAD, "stash@{0}", "MERGING"), MessageEdit::Stash);
-        assert_eq!(edit(OLDER, "stash@{0}", ""), MessageEdit::Stash);
+        assert_eq!(edit(HEAD, true, "MERGING"), MessageEdit::Stash);
+        assert_eq!(edit(OLDER, true, ""), MessageEdit::Stash);
     }
 
     #[test]
     fn an_empty_pane_refuses_without_a_reason() {
-        assert_eq!(edit("", "", ""), MessageEdit::Nothing);
+        assert_eq!(edit("", false, ""), MessageEdit::Nothing);
         assert_eq!(
-            message_edit(false, &TreeStanding::on("main"), HEAD, ""),
+            message_edit(false, &TreeStanding::on("main"), HEAD, false),
             MessageEdit::Nothing
         );
-        assert_eq!(edit("", "", "").as_str(), "");
+        assert_eq!(edit("", false, "").as_str(), "");
     }
 }

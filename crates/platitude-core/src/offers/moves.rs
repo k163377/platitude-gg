@@ -86,8 +86,8 @@ impl<'a> SwitchTarget<'a> {
 
 /// The action itself. `target` is where the press lands, `None` where it
 /// lands nowhere; `tree` where the worktree stands; `held` whether another
-/// worktree holds that local branch; `local_oid` that branch's commit,
-/// empty when no such branch exists.
+/// worktree holds that local branch; `local_listed` whether the listing
+/// has that branch.
 ///
 /// A remote row moves its local branch even where the tree is on it:
 /// landing the current branch on its remote ref is a move.
@@ -95,7 +95,7 @@ pub fn switch_action(
     target: Option<SwitchTarget<'_>>,
     tree: &TreeStanding,
     held: bool,
-    local_oid: &str,
+    local_listed: bool,
 ) -> SwitchAction {
     let Some(SwitchTarget { pressed, local }) = target else {
         return SwitchAction::None;
@@ -113,7 +113,7 @@ pub fn switch_action(
         Pressed::Remote => {
             if held {
                 SwitchAction::OpenHolder
-            } else if local_oid.is_empty() {
+            } else if !local_listed {
                 SwitchAction::Materialize
             } else {
                 SwitchAction::MoveBranch
@@ -124,15 +124,15 @@ pub fn switch_action(
 
 /// Whether a move already sent has reached the screen: HEAD stands on
 /// the branch it was landing on (`tree`), and the ref listing has that
-/// branch (`landing_oid`, its commit). `landing` empty is "none is on its
-/// way", which has landed nothing: no empty name is current.
+/// branch (`landing_listed`). `landing` empty is "none is on its way",
+/// which has landed nothing: no empty name is current.
 ///
 /// **Both halves, because they arrive apart**: status comes back long
 /// before a large ref listing, and a second press read in between still
 /// sees no local branch and sends a second `switch --create`, which git
 /// refuses.
-pub fn move_landed(landing: &str, tree: &TreeStanding, landing_oid: &str) -> bool {
-    tree.is_current(landing) && !landing_oid.is_empty()
+pub fn move_landed(landing: &str, tree: &TreeStanding, landing_listed: bool) -> bool {
+    tree.is_current(landing) && landing_listed
 }
 
 /// Whether a move has to clear the way before it can run. git refuses

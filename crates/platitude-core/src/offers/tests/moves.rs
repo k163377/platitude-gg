@@ -11,42 +11,37 @@ fn switch_lands_where_the_kind_and_the_local_branch_say() {
     use SwitchAction::*;
     let main = TreeStanding::on("main");
     // The press as the page asks it: the chip's word, the local branch,
-    // whether another worktree holds that branch, and its commit where it
-    // is there.
-    let lands = |kind: &str, local: &str, held: bool, local_oid: &str| {
-        switch_action(
-            SwitchTarget::from_words(kind, local),
-            &main,
-            held,
-            local_oid,
-        )
+    // whether another worktree holds that branch, and whether it is
+    // listed.
+    let lands = |kind: &str, local: &str, held: bool, listed: bool| {
+        switch_action(SwitchTarget::from_words(kind, local), &main, held, listed)
     };
-    assert_eq!(lands("branch", "main", false, ""), None);
-    assert_eq!(lands("branch", "feat", false, ""), Switch);
-    assert_eq!(lands("branch", "feat", true, ""), OpenHolder);
-    assert_eq!(lands("remote", "feat", false, ""), Materialize);
-    assert_eq!(lands("remote", "feat", false, "abc123"), MoveBranch);
-    assert_eq!(lands("remote", "feat", true, "abc123"), OpenHolder);
+    assert_eq!(lands("branch", "main", false, true), None);
+    assert_eq!(lands("branch", "feat", false, true), Switch);
+    assert_eq!(lands("branch", "feat", true, true), OpenHolder);
+    assert_eq!(lands("remote", "feat", false, false), Materialize);
+    assert_eq!(lands("remote", "feat", false, true), MoveBranch);
+    assert_eq!(lands("remote", "feat", true, true), OpenHolder);
     // Landing the current branch on its remote ref is the one move that
     // is not a no-op for a remote: git answers what it would cost.
-    assert_eq!(lands("remote", "main", false, "abc123"), MoveBranch);
+    assert_eq!(lands("remote", "main", false, true), MoveBranch);
     // A tag could only detach HEAD, and the two markers name no branch.
-    assert_eq!(lands("tag", "v1.0", false, ""), None);
-    assert_eq!(lands("head", "", false, ""), None);
-    assert_eq!(lands("worktree", "rig", false, ""), None);
+    assert_eq!(lands("tag", "v1.0", false, false), None);
+    assert_eq!(lands("head", "", false, false), None);
+    assert_eq!(lands("worktree", "rig", false, false), None);
     assert_eq!(
         switch_action(
             SwitchTarget::from_words("", ""),
             &TreeStanding::detached(),
             false,
-            ""
+            false
         ),
         None,
         "detached on nothing"
     );
     // A press that names no branch lands on none, whichever row it was on.
-    assert_eq!(lands("branch", "", false, ""), None);
-    assert_eq!(lands("remote", "", false, ""), None);
+    assert_eq!(lands("branch", "", false, false), None);
+    assert_eq!(lands("remote", "", false, false), None);
 }
 
 #[test]
@@ -55,11 +50,11 @@ fn a_move_has_landed_only_once_head_and_the_listing_both_say_so() {
     let main = TreeStanding::on("main");
     // The gap the guard exists for: status has HEAD on the new branch,
     // and the listing has no commit for it yet.
-    assert!(!move_landed("feat", &feat, ""));
-    assert!(!move_landed("feat", &main, "abc123"));
-    assert!(move_landed("feat", &feat, "abc123"));
-    assert!(!move_landed("", &TreeStanding::detached(), ""));
-    assert!(!move_landed("", &main, "abc123"));
+    assert!(!move_landed("feat", &feat, false));
+    assert!(!move_landed("feat", &main, true));
+    assert!(move_landed("feat", &feat, true));
+    assert!(!move_landed("", &TreeStanding::detached(), false));
+    assert!(!move_landed("", &main, true));
 }
 
 #[test]

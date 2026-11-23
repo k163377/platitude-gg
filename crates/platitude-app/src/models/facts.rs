@@ -9,7 +9,7 @@
 
 use std::ops::RangeInclusive;
 
-use platitude_core::offers::{FarSide, TreeStanding};
+use platitude_core::offers::{BranchFar, FarSide, Leads, Reading, RowStanding, TreeStanding};
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -138,19 +138,12 @@ impl GitFacts {
         stopped_here: bool,
         local_exists: bool,
     ) -> Vec<String> {
-        platitude_core::offers::worktree_rows(
-            platitude_core::offers::RefTarget::from_words(&kind, &full),
-            &oid_hex,
-            open,
-            &tree,
-            !held_by_worktree.is_empty(),
-            stopped_here,
-            local_exists,
-        )
-        .words()
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+        let row = row_standing(&kind, &full, &oid_hex, open, &tree, &held_by_worktree);
+        platitude_core::offers::worktree_rows(&row, stopped_here, local_exists)
+            .words()
+            .into_iter()
+            .map(str::to_string)
+            .collect()
     }
 
     /// The remote half of a remote-tracking name (`origin/main`), as the
@@ -251,21 +244,12 @@ impl GitFacts {
         held_by_worktree: String,
         far: Optional<FarSide>,
     ) -> Vec<String> {
-        let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
-            return Vec::new();
-        };
-        platitude_core::offers::ref_menu(
-            target,
-            &oid_hex,
-            open,
-            &tree,
-            !held_by_worktree.is_empty(),
-            far.unwrap_or_default(),
-        )
-        .words()
-        .into_iter()
-        .map(str::to_string)
-        .collect()
+        let row = row_standing(&kind, &full, &oid_hex, open, &tree, &held_by_worktree);
+        platitude_core::offers::ref_menu(&row, far.unwrap_or_default())
+            .words()
+            .into_iter()
+            .map(str::to_string)
+            .collect()
     }
 
     /// The `pull` row of a ref's menu as words — what it runs, then why it
@@ -283,19 +267,20 @@ impl GitFacts {
         row_upstream: String,
         row_ahead: i32,
     ) -> Vec<String> {
-        let Some(target) = platitude_core::offers::RefTarget::from_words(&kind, &full) else {
-            return Vec::new();
-        };
-        platitude_core::offers::pull_row(
-            target,
-            open,
-            &tree,
-            !held_by_worktree.is_empty(),
-            &row_upstream,
-            u32::try_from(row_ahead).unwrap_or(0),
-        )
-        .map(|offer| offer.words().into_iter().map(str::to_string).collect())
-        .unwrap_or_default()
+        let row = row_standing(&kind, &full, "", open, &tree, &held_by_worktree);
+        let own = FarSide::Branch(BranchFar {
+            reading: if row_upstream.is_empty() {
+                Reading::None
+            } else {
+                Reading::Together
+            },
+            tracked: !row_upstream.is_empty(),
+            has_remote: true,
+            ahead: u32::try_from(row_ahead).unwrap_or(0),
+        });
+        platitude_core::offers::pull_row(&row, own)
+            .map(|offer| offer.words().into_iter().map(str::to_string).collect())
+            .unwrap_or_default()
     }
 
     /// What the right-click menu on a commit row may offer, the same way
@@ -310,7 +295,8 @@ impl GitFacts {
         stash_ref: String,
         provisional: bool,
     ) -> Vec<String> {
-        let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, &stash_ref);
+        let offers =
+            platitude_core::offers::commit_menu(open, &tree, &oid_hex, !stash_ref.is_empty());
         let offers = if provisional {
             offers.on_provisional()
         } else {
@@ -336,7 +322,7 @@ impl GitFacts {
         oid_hex: String,
         stash_ref: String,
     ) -> String {
-        platitude_core::offers::message_edit(open, &tree, &oid_hex, &stash_ref)
+        platitude_core::offers::message_edit(open, &tree, &oid_hex, !stash_ref.is_empty())
             .as_str()
             .to_string()
     }
@@ -360,7 +346,7 @@ impl GitFacts {
             platitude_core::offers::SwitchTarget::from_words(&kind, &local),
             &tree,
             !held_by_worktree.is_empty(),
-            &local_oid,
+            !local_oid.is_empty(),
         )
         .as_str()
         .to_string()
@@ -371,7 +357,7 @@ impl GitFacts {
     /// sends one command.
     #[qslot]
     fn move_landed(&self, landing: String, tree: One<TreeStanding>, landing_oid: String) -> bool {
-        platitude_core::offers::move_landed(&landing, &tree, &landing_oid)
+        platitude_core::offers::move_landed(&landing, &tree, !landing_oid.is_empty())
     }
 
     /// Whether `name` is the branch HEAD is on — the name a question draws
@@ -624,6 +610,32 @@ impl GitFacts {
     #[qslot]
     fn stash_label(&self, message: String) -> String {
         platitude_core::stash::label_in(&message).to_string()
+    }
+}
+
+/// The row a ref menu's slots are asked about, as they ask it: a worktree's
+/// row held is the worktree itself, any other row's the worktree holding
+/// its branch.
+fn row_standing<'a>(
+    kind: &'a str,
+    full: &'a str,
+    oid_hex: &str,
+    open: bool,
+    tree: &'a TreeStanding,
+    held_by_worktree: &str,
+) -> RowStanding<'a> {
+    let target = platitude_core::offers::RefTarget::from_words(kind, full);
+    let leads = match (held_by_worktree.is_empty(), kind) {
+        (true, _) => Leads::Nowhere,
+        (false, "worktree") => Leads::Itself,
+        (false, _) => Leads::Holder,
+    };
+    RowStanding {
+        target,
+        has_commit: !oid_hex.is_empty(),
+        open,
+        tree,
+        leads,
     }
 }
 

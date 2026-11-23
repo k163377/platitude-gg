@@ -328,6 +328,7 @@ impl RefsSnapshot {
             reading: branch.map_or(Reading::None, BranchItem::reading),
             tracked: branch.is_some_and(|branch| !branch.upstream_named().is_empty()),
             has_remote: !self.remote_names.is_empty(),
+            ahead: branch.map_or(0, |branch| branch.counts.ahead),
         }
     }
 

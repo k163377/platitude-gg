@@ -903,6 +903,7 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
                 reading: Reading::Drifted,
                 tracked: true,
                 has_remote: true,
+                ahead: 0,
             }),
             counterpart: "origin/reads".to_string(),
             counterpart_oid: oid("b").to_hex(),
@@ -916,6 +917,7 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
                 reading: Reading::None,
                 tracked: true,
                 has_remote: true,
+                ahead: 0,
             }),
             upstream: "origin/lost".to_string(),
             ..BranchUpstream::default()
@@ -968,6 +970,7 @@ fn a_cards_record_is_read_as_its_far_side() {
         reading: Reading::Together,
         tracked: true,
         has_remote: true,
+        ahead: 1,
     };
     let upstream = BranchUpstream {
         far: Some(far),

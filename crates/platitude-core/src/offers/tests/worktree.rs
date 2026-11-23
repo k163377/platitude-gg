@@ -1,22 +1,20 @@
-use super::super::testkit::target;
+use super::super::testkit::{standing, target};
 use super::super::*;
 
-/// A worktree's row on an idle repository on `main`: `elsewhere` where it
-/// is another worktree, not where the tab stands in it.
-fn worktree_row(elsewhere: bool) -> RefMenuOffers {
-    ref_menu(
-        target(RefKind::Worktree, "C:/work/topic"),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        elsewhere,
-        FarSide::Unread,
-    )
+/// A worktree's row on an idle repository on `main`, leading to itself or,
+/// where the tab stands in it, nowhere.
+fn worktree_row(leads: Leads) -> RefMenuOffers {
+    let main = TreeStanding::on("main");
+    let row = RowStanding {
+        leads,
+        ..standing(Some(target(RefKind::Worktree, "C:/work/topic")), &main)
+    };
+    ref_menu(&row, FarSide::Unread)
 }
 
 #[test]
 fn another_worktree_leads_to_itself_and_offers_what_its_commit_does() {
-    let offers = worktree_row(true);
+    let offers = worktree_row(Leads::Itself);
     assert!(offers.switch_to, "the row opens that worktree");
     assert!(!offers.switch_asks, "opening another worktree asks nothing");
     assert!(offers.branch_here);
@@ -28,7 +26,7 @@ fn another_worktree_leads_to_itself_and_offers_what_its_commit_does() {
 
 #[test]
 fn the_worktree_the_tab_stands_in_leads_nowhere() {
-    assert!(!worktree_row(false).switch_to);
+    assert!(!worktree_row(Leads::Nowhere).switch_to);
 }
 
 #[test]
@@ -68,12 +66,9 @@ fn the_kind_word_is_the_chips() {
 /// The two rows that make a worktree, asked of an idle repository on `main`
 /// with no worktree holding anything.
 fn making(kind: Option<RefKind>, full: &str) -> WorktreeOffers {
+    let main = TreeStanding::on("main");
     worktree_rows(
-        kind.map(|kind| target(kind, full)),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        false,
+        &standing(kind.map(|kind| target(kind, full)), &main),
         false,
         false,
     )
@@ -100,12 +95,12 @@ fn a_branch_already_out_greys_its_worktree_add() {
         making(Some(RefKind::Branch), "main").words(),
         vec!["here", "checkout-branch", "out-current"]
     );
+    let main = TreeStanding::on("main");
     let held = worktree_rows(
-        Some(target(RefKind::Branch, "feature/topic-a")),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        true,
+        &RowStanding {
+            leads: Leads::Holder,
+            ..standing(Some(target(RefKind::Branch, "feature/topic-a")), &main)
+        },
         false,
         false,
     );
@@ -122,12 +117,9 @@ fn a_branch_already_out_greys_its_worktree_add() {
 /// holder.
 #[test]
 fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
+    let rebasing = TreeStanding::detached().standing("REBASING");
     let stopped = worktree_rows(
-        Some(target(RefKind::Branch, "feature/clash")),
-        "abc123",
-        true,
-        &TreeStanding::detached().standing("REBASING"),
-        false,
+        &standing(Some(target(RefKind::Branch, "feature/clash")), &rebasing),
         true,
         false,
     );
@@ -140,12 +132,9 @@ fn a_branch_a_stopped_operation_here_holds_greys_its_worktree_add() {
 /// On a detached HEAD every local branch is free.
 #[test]
 fn a_detached_tree_holds_no_branch() {
+    let detached = TreeStanding::detached();
     let offers = worktree_rows(
-        Some(target(RefKind::Branch, "main")),
-        "abc123",
-        true,
-        &TreeStanding::detached(),
-        false,
+        &standing(Some(target(RefKind::Branch, "main")), &detached),
         false,
         false,
     );
@@ -160,12 +149,9 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
         making(Some(RefKind::Remote), "origin/feature/login").words(),
         vec!["here", "checkout-track"]
     );
+    let main = TreeStanding::on("main");
     let local_there = worktree_rows(
-        Some(target(RefKind::Remote, "origin/feature/login")),
-        "abc123",
-        true,
-        &TreeStanding::on("main"),
-        false,
+        &standing(Some(target(RefKind::Remote, "origin/feature/login")), &main),
         false,
         true,
     );
@@ -177,28 +163,29 @@ fn a_remote_branch_makes_its_local_one_only_where_there_is_none() {
 #[test]
 fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
     let main = TreeStanding::on("main");
-    assert!(
-        worktree_rows(None, "abc123", false, &main, false, false, false)
-            .words()
-            .is_empty()
+    let closed = RowStanding {
+        open: false,
+        ..standing(None, &main)
+    };
+    assert_eq!(
+        worktree_rows(&closed, false, false),
+        WorktreeOffers::default()
     );
-    assert!(
-        worktree_rows(None, "", true, &main, false, false, false)
-            .words()
-            .is_empty()
+    let no_commit = RowStanding {
+        has_commit: false,
+        ..standing(None, &main)
+    };
+    assert_eq!(
+        worktree_rows(&no_commit, false, false),
+        WorktreeOffers::default()
     );
-    assert!(
+    assert_eq!(
         worktree_rows(
-            Some(target(RefKind::Stash, "stash@{0}")),
-            "abc123",
-            true,
-            &main,
-            false,
+            &standing(Some(target(RefKind::Stash, "stash@{0}")), &main),
             false,
             false
-        )
-        .words()
-        .is_empty()
+        ),
+        WorktreeOffers::default()
     );
 }
 
