@@ -46,8 +46,9 @@ Item {
             compare(flick.contentY, 1000 - Metrics.dashLandShare * flick.height, "the start is skipped at once")
             verify(send.dashing, "and the landing is drawn")
             compare(send.at, 1000)
-            tryCompare(flick, "contentY", 1000)
-            verify(!send.sending)
+            // The landing's end, then where it left the view: under load the aim was read while the send still ran.
+            tryVerify(() => !send.sending, undefined, "the landing ends")
+            compare(flick.contentY, 1000)
         }
 
         function test_a_far_dash_up_lands_from_below() {
