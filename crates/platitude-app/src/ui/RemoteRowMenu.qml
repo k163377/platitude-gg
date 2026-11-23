@@ -81,7 +81,11 @@ Item {
         remoteRowMenu.standOn()
     }
 
-    onStandsOnChanged: Qt.callLater(remoteRowMenu.follow)
+    onStandsOnChanged: followLater.restart()
+    readonly property TurnLater followLater: TurnLater {
+        id: followLater
+        onTriggered: remoteRowMenu.follow()
+    }
     onTreeAtAskChanged: if (remoteRowMenu.treeAtAsk === null) remoteRowMenu.follow()
 
     AppMenu {

@@ -323,6 +323,11 @@ QtObject {
     readonly property alias openSeat: openRowSeat.seat
     readonly property alias openTipOut: openRowSeat.tipOut
     readonly property alias menuOnOpenRow: openRowSeat.menuOnRow
+    /// `rowsRebuilt` a turn later, once however many sections changed in this one (`NavList`).
+    readonly property TurnLater rowsRebuiltLater: TurnLater {
+        id: rowsRebuiltLater
+        onTriggered: gestures.rowsRebuilt()
+    }
     function openFacts(key, at, row, now, model, name) {
         openRowSeat.openFacts(key, at, row, now, model, name)
     }

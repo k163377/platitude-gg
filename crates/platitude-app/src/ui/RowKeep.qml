@@ -51,6 +51,11 @@ QtObject {
     /// for a row the read took out.
     property int landing: -1
     property Item list: null
+    /// The read's weighing, a turn after its rows are in (`arrived`).
+    readonly property TurnLater settleLater: TurnLater {
+        id: settleLater
+        onTriggered: keep.settle()
+    }
 
     /// Notes the row under the hand — on a row or off them; for a hand the rows do not hear now (inside something hung
     /// off them, under a menu), the row it was last over, where it stands now.
@@ -107,7 +112,7 @@ QtObject {
     function arrived() {
         keep.telling = false
         keep.land()
-        Qt.callLater(keep.settle)
+        settleLater.restart()
     }
     /// Notes where the row stands in its model now (`landing`), while its delegate still stands for it.
     function land() {

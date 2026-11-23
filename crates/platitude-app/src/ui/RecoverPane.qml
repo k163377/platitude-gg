@@ -44,7 +44,7 @@ Rectangle {
     /// else the reader typed, and the rows moving under the hand are theirs (`HandWatch.rowsMoved`: the card goes,
     /// and the row that came under a still hand opens only once the hand has moved).
     function refilter(read) {
-        Qt.callLater(pane.weighPinned)
+        weighLater.restart()
         const line = filterField.text
         // Nothing typed leaves every entry in without asking the rule entry by entry.
         const asked = line.trim() !== ""
@@ -137,7 +137,11 @@ Rectangle {
         }
         pane.pinned = { "key": key, "at": key !== "" ? pane.picked : -1, "row": row }
     }
-    onPickedChanged: Qt.callLater(pane.weighPinned)
+    onPickedChanged: weighLater.restart()
+    readonly property TurnLater weighLater: TurnLater {
+        id: weighLater
+        onTriggered: pane.weighPinned()
+    }
     /// That row's top in the list's content — computed, since the view may not have built it (`GraphHeadPin.rowTop`).
     /// Its place is asked of the whole row: cut by an edge, the row is off it.
     readonly property real pinRowTop: list.originY + pane.pinned.row * Theme.rowHeight

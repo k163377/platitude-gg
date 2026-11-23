@@ -239,6 +239,7 @@ TipAsk 1.0 TipAsk.qml
 TipSeat 1.0 TipSeat.qml
 TopBar 1.0 TopBar.qml
 TreeViewToggle 1.0 TreeViewToggle.qml
+TurnLater 1.0 TurnLater.qml
 ViewMarkButton 1.0 ViewMarkButton.qml
 DiffViewToggle 1.0 DiffViewToggle.qml
 DiffLineCell 1.0 DiffLineCell.qml

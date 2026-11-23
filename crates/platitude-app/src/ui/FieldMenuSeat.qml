@@ -55,11 +55,15 @@ Item {
                 return
             // The release's own request comes after this, inside the same delivery; the turn after it is past.
             seat.rightReleasing = true
-            Qt.callLater(seat.letGo)
+            letGoLater.restart()
         }
     }
     function letGo() {
         seat.rightReleasing = false
+    }
+    readonly property TurnLater letGoLater: TurnLater {
+        id: letGoLater
+        onTriggered: seat.letGo()
     }
     Loader {
         id: menuSeat

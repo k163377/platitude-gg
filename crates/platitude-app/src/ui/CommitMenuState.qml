@@ -26,7 +26,11 @@ QtObject {
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
     /// standing follows it (`follow`).
     property int readRevision: 0
-    onReadRevisionChanged: Qt.callLater(menuState.follow)
+    onReadRevisionChanged: followLater.restart()
+    readonly property TurnLater followLater: TurnLater {
+        id: followLater
+        onTriggered: menuState.follow()
+    }
     required property GraphModel graphModel
     /// Which worktree has a branch checked out — what the `switch` row needs beyond the commit's own rules.
     required property NavSectionModel worktreesModel

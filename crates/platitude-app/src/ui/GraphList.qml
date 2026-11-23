@@ -239,8 +239,8 @@ AppListView {
     /// rebuild — is brought back inside the entry's span here, and so is the view when the span itself moves. **Never
     /// from inside a `contentY` change**: the list is still laying its rows out for that position, and a second write
     /// leaves the position and the rows drawn apart — the view stands still showing rows it is not at and presses seem
-    /// to do nothing; hence `Qt.callLater` (rules-refs/app-ui.md「`contentY` の書き戻しを `onContentYChanged` の中で
-    /// 同期にしない」). Headless: `recover-open`'s `tipShown=` (the picked entry's tip row on screen) and `y=`.
+    /// to do nothing; hence a turn later (`spanLater`; rules-refs/app-ui.md「`contentY` の書き戻しを `onContentYChanged`
+    /// の中で同期にしない」). Headless: `recover-open`'s `tipShown=` (the picked entry's tip row on screen) and `y=`.
     function keepToSpan() {
         if (!graphList.graphModel.provisionalOn || graphList.graphModel.provisionalFirst < 0)
             return
@@ -250,20 +250,24 @@ AppListView {
             graphList.contentY = kept
         }
     }
+    readonly property TurnLater spanLater: TurnLater {
+        id: spanLater
+        onTriggered: graphList.keepToSpan()
+    }
     readonly property int spanFirst: graphList.graphModel.provisionalOn ? graphList.graphModel.provisionalFirst : -1
     readonly property int spanLast: graphList.graphModel.provisionalOn ? graphList.graphModel.provisionalLast : -1
-    onSpanFirstChanged: Qt.callLater(graphList.keepToSpan)
-    onSpanLastChanged: Qt.callLater(graphList.keepToSpan)
+    onSpanFirstChanged: spanLater.restart()
+    onSpanLastChanged: spanLater.restart()
     onContentYChanged: {
         if (graphList.graphModel.provisionalOn)
-            Qt.callLater(graphList.keepToSpan)
+            spanLater.restart()
     }
     // The span is measured against the view's height, and bars rising over the list change that with no move of the
     // view: the discard band itself, standing a layout pass after the pick landed the view (`recover-open 18,short`),
     // a report or a question, the window going down.
     onHeightChanged: {
         if (graphList.graphModel.provisionalOn)
-            Qt.callLater(graphList.keepToSpan)
+            spanLater.restart()
     }
     /// One notch, glided — also a run's way in, since a wheel cannot be injected (verify-ui スキル).
     function sendRows(pixels) {

@@ -205,12 +205,12 @@ Item {
         tabStrip.frontAskId = tabStrip.tabsModel.currentTabId
         tabStrip.frontAskAnswered = false
         tabStrip.frontAsked = true
-        Qt.callLater(tabStrip.answerFrontAsk)
+        frontAskLater.restart()
     }
 
     /// Answers the ask once the strip's front tab is the one asked for, and again while the ask is open.
     ///
-    /// Always a turn late (`Qt.callLater`, which also folds repeats): a tab reports itself in front from
+    /// Always a turn late (`frontAskLater`, which also folds repeats): a tab reports itself in front from
     /// `Component.onCompleted`, before the view lays it out, and read there it still stands at `x: 0`.
     function answerFrontAsk() {
         if (!tabStrip.frontAsked)
@@ -228,6 +228,10 @@ Item {
             tabRun.showTab(tab)
         else
             tabRun.landOn(tab)
+    }
+    readonly property TurnLater frontAskLater: TurnLater {
+        id: frontAskLater
+        onTriggered: tabStrip.answerFrontAsk()
     }
 
     function closeFrontAsk() {
@@ -332,30 +336,30 @@ Item {
     onFrontTabChanged: {
         if (tabStrip.frontTab)
             tabStrip.stood = true
-        Qt.callLater(tabStrip.answerFrontAsk)
+        frontAskLater.restart()
     }
     Connections {
         target: tabStrip.frontAsked ? tabs : null
         function onContentWidthChanged() {
-            Qt.callLater(tabStrip.answerFrontAsk)
+            frontAskLater.restart()
         }
         function onWidthChanged() {
-            Qt.callLater(tabStrip.answerFrontAsk)
+            frontAskLater.restart()
         }
     }
     Connections {
         target: tabStrip.frontAsked ? tabStrip.frontTab : null
         function onXChanged() {
-            Qt.callLater(tabStrip.answerFrontAsk)
+            frontAskLater.restart()
         }
         function onWidthChanged() {
-            Qt.callLater(tabStrip.answerFrontAsk)
+            frontAskLater.restart()
         }
     }
     Connections {
         target: tabStrip.frontAsked ? tabRun.travel : null
         function onStopped() {
-            Qt.callLater(tabStrip.answerFrontAsk)
+            frontAskLater.restart()
         }
     }
 

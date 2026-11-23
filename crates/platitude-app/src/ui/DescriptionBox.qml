@@ -205,12 +205,16 @@ Rectangle {
     // A viewport that grows without scrolling leaves TextEdit drawing only the old height (it rebuilds its nodes only
     // when it moves): the text stops short inside the opened box. Nudging `contentY` and putting it back makes it draw
     // again. No number catches this: judge the grow verbs' PNGs by eye.
-    onHeightChanged: Qt.callLater(box.repaint)
+    onHeightChanged: repaintLater.restart()
     function repaint() {
         const flick = textView.contentItem
         const was = flick.contentY
         flick.contentY = was + 1
         flick.contentY = was
+    }
+    readonly property TurnLater repaintLater: TurnLater {
+        id: repaintLater
+        onTriggered: box.repaint()
     }
 
     // Takes whatever the summary left of the pane's fixed-height block (`MessageEditor`).

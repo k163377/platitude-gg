@@ -95,10 +95,14 @@ ComboBox {
             combo.wanted = combo.textAt(index)
     }
     // Undo the swap's reset once it has finished.
-    onModelChanged: Qt.callLater(() => {
-        if (!combo.pickOnly)
-            combo.editText = combo.wanted
-    })
+    onModelChanged: wantedLater.restart()
+    readonly property TurnLater wantedLater: TurnLater {
+        id: wantedLater
+        onTriggered: {
+            if (!combo.pickOnly)
+                combo.editText = combo.wanted
+        }
+    }
 
     /// The width the list needs for its widest row, whole: the word, the push mark and its step where the row wears
     /// it, the row's air and the card's. Its inputs are arguments, so a binding calling it follows them
@@ -319,7 +323,11 @@ ComboBox {
         input.forceActiveFocus()
         // After the release: a list opened while the input's exclusive grab is still unwinding is taken straight back
         // down a frame later. `pickOnly`'s MouseArea holds the grab itself, so it needs no wait.
-        Qt.callLater(combo.offer)
+        offerLater.restart()
+    }
+    readonly property TurnLater offerLater: TurnLater {
+        id: offerLater
+        onTriggered: combo.offer()
     }
 
     /// A letter typed now would land in the field — for runs, since a photograph cannot answer it.

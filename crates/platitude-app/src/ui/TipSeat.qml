@@ -318,11 +318,15 @@ Item {
     function freeze() {
         seat.readAnchor()
         seat.seatBox()
-        Qt.callLater(seat.settleAnchor)
+        anchorLater.restart()
     }
     function settleAnchor() {
         if (box.visible)
             seat.readAnchor()
+    }
+    readonly property TurnLater anchorLater: TurnLater {
+        id: anchorLater
+        onTriggered: seat.settleAnchor()
     }
     function readAnchor() {
         const ask = machine.target

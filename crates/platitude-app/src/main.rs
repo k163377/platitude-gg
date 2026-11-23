@@ -355,6 +355,7 @@ fn main() {
     qrc::embed!("ui/TipSeat.qml");
     qrc::embed!("ui/TopBar.qml");
     qrc::embed!("ui/TreeViewToggle.qml");
+    qrc::embed!("ui/TurnLater.qml");
     qrc::embed!("ui/ViewMarkButton.qml");
     qrc::embed!("ui/DiffViewToggle.qml");
     qrc::embed!("ui/DiffLineCell.qml");

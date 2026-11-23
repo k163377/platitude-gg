@@ -3244,10 +3244,18 @@ FocusScope {
     function absorbPacedReads() {
         if (repoTab.pacedSeq !== page.seenPacedSeq) {
             page.seenPacedSeq = repoTab.pacedSeq
-            Qt.callLater(page.pollDiff)
+            pollDiffLater.restart()
         }
         if (page.carriedPath !== "" && repoTab.pacedWorktrees.indexOf(page.carriedPath) >= 0)
-            Qt.callLater(page.pollCarried)
+            pollCarriedLater.restart()
+    }
+    readonly property TurnLater pollDiffLater: TurnLater {
+        id: pollDiffLater
+        onTriggered: page.pollDiff()
+    }
+    readonly property TurnLater pollCarriedLater: TurnLater {
+        id: pollCarriedLater
+        onTriggered: page.pollCarried()
     }
     // The badge counting a running replay out, on its own tick: two file reads, no process (デザイン規約
     // §進行中・回数押しの定数). Not on the page's reads, seconds apart: a badge that says it counts would sit still.

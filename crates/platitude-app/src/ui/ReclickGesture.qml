@@ -114,13 +114,13 @@ QtObject {
     /// nothing.
     function take() {
         gesture.taken = true
-        Qt.callLater(gesture.settle)
+        settleLater.restart()
     }
     /// An input happened (`Hand.acted`, or a release the target heard itself): unless a target here takes it before it
     /// is through, it came between this target's clicks.
     function hear() {
         gesture.heard = true
-        Qt.callLater(gesture.settle)
+        settleLater.restart()
     }
     /// Once the input is through: one that no target here took came between this target's clicks.
     function settle() {
@@ -170,5 +170,10 @@ QtObject {
     property Timer renameTimer: Timer {
         interval: Application.styleHints.mouseDoubleClickInterval
         onTriggered: gesture.renameAsked(gesture.armedKey, gesture.armedNames)
+    }
+    // Once the input is through (`take` / `hear`).
+    readonly property TurnLater settleLater: TurnLater {
+        id: settleLater
+        onTriggered: gesture.settle()
     }
 }

@@ -497,21 +497,25 @@ ColumnLayout {
     // weighed as the read lands (`rowKeep`).
     Connections {
         target: wipPane.unstagedModel
-        function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { eolLater.restart() }
         function onRowsArriving() { rowKeep.arriving() }
         function onRowsArrived() { rowKeep.arrived() }
     }
     Connections {
         target: wipPane.stagedModel
-        function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { eolLater.restart() }
         function onRowsArriving() { rowKeep.arriving() }
         function onRowsArrived() { rowKeep.arrived() }
     }
     Connections {
         target: wipPane.conflictsModel
-        function onChanged() { Qt.callLater(wipPane.weighEol) }
+        function onChanged() { eolLater.restart() }
         function onRowsArriving() { rowKeep.arriving() }
         function onRowsArrived() { rowKeep.arrived() }
+    }
+    readonly property TurnLater eolLater: TurnLater {
+        id: eolLater
+        onTriggered: wipPane.weighEol()
     }
     /// The row under the pane's hand, kept where it was through a status read (`RowKeep`): a file written in above
     /// it, the bucket above growing — as far as its bucket's list can scroll.

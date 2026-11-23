@@ -22,11 +22,14 @@ Item {
         target: later.waiting ? later.Window.window : null
         function onAfterAnimating() {
             const at = later.asked
-            Qt.callLater(() => later.answer(at))
+            Qt.callLater(() => later.heard(at))
         }
     }
 
     signal triggered()
+    /// The frame heard for the `restart()` counted `at`, a turn after it. The call handed to `Qt.callLater` only emits
+    /// this, so a page taken down meanwhile hears nothing (`TurnLater`).
+    signal heard(int at)
 
     function restart() {
         later.asked++
@@ -43,4 +46,6 @@ Item {
         later.waiting = false
         later.triggered()
     }
+
+    onHeard: at => later.answer(at)
 }

@@ -45,9 +45,22 @@ ColumnLayout {
     /// Automation: this bucket's whole-bucket button as drawn (`WipBucketHeader.moveAllLive`, `moveAllSays`).
     readonly property bool moveAllLive: bucketHead.moveAllLive
     readonly property bool moveAllSays: bucketHead.moveAllSays
+
+    /// A row's line-ending ask, put off a turn while a read tells its rows (the delegate's `onEolPointed`): the call
+    /// handed to `Qt.callLater` only emits this, so a page taken down meanwhile hears nothing (`TurnLater`).
+    signal eolAsked(string path, bool on)
+
     /// Automation: press this bucket's whole-bucket button where a hand presses it (`WipBucketHeader.moveAll`).
     function moveAll() {
         return bucketHead.moveAll()
+    }
+
+    /// The ask itself (`eolAsked`).
+    function askEol(path, on) {
+        if (on)
+            bucketPane.pane.pointEolIn(bucketPane.section, path)
+        else
+            bucketPane.pane.unpointEolIn(bucketPane.section, path)
     }
 
     /// The built row under the pane's hand, or null: the hand off this list, unheard, or on no row of it.
@@ -82,6 +95,7 @@ ColumnLayout {
         if (bucketPane.paneHand !== null && !bucketPane.kept && bucketPane.holdsHand())
             bucketPane.paneHand.rowsMoved()
     }
+    onEolAsked: (path, on) => bucketPane.askEol(path, on)
 
     WipBucketHeader {
         id: bucketHead
@@ -135,18 +149,15 @@ ColumnLayout {
             // (`WipPane.rowKeep.telling`): a row the read rewrote asks in the middle of the model's notification, and
             // the seat asks the model back (`eolMarked`, the card's `pointEol`) — a call into a model while it notifies
             // takes its borrow twice. Those asks run in the order made, ahead of the read's weighing
-            // (`RowKeep.arrived`: `Qt.callLater` asked again for one function moves it to the queue's end —
+            // (`RowKeep.arrived`: its `TurnLater` asked again moves to the queue's end —
             // `QQmlDelayedCallQueue::addUniquelyAndExecuteLater`). Only while the model tells, not until the weighing:
             // an ask the hand made meanwhile would then run after the weighing and overwrite, stale, the ask that
             // followed it.
             onEolPointed: (path, on) => {
-                const pane = bucketPane.pane
-                const section = bucketPane.section
-                const ask = () => on ? pane.pointEolIn(section, path) : pane.unpointEolIn(section, path)
-                if (pane.rowKeep.telling)
-                    Qt.callLater(ask)
+                if (bucketPane.pane.rowKeep.telling)
+                    Qt.callLater(() => bucketPane.eolAsked(path, on))
                 else
-                    ask()
+                    bucketPane.askEol(path, on)
             }
             onFileClicked: (bucket, path, origPath, modifiers) => {
                 // Any click puts the keyboard here; only a plain one moves the diff (`FileRowWalk`).

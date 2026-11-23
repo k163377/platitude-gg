@@ -32,7 +32,11 @@ Item {
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
     /// standing follows it (`follow`).
     property int readRevision: 0
-    onReadRevisionChanged: Qt.callLater(refRowMenu.follow)
+    onReadRevisionChanged: followLater.restart()
+    readonly property TurnLater followLater: TurnLater {
+        id: followLater
+        onTriggered: refRowMenu.follow()
+    }
     /// Answers the `rebase` row's note off the drawn rows (`rebasePublished`).
     required property GraphModel graphModel
     /// Both read for the branch card (`branchFacts`); `switch` also asks `worktreesModel` who holds the branch.

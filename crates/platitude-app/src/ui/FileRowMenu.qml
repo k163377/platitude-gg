@@ -27,7 +27,11 @@ Item {
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
     /// standing follows it (`follow`).
     property int readRevision: 0
-    onReadRevisionChanged: Qt.callLater(fileRowMenu.follow)
+    onReadRevisionChanged: followLater.restart()
+    readonly property TurnLater followLater: TurnLater {
+        id: followLater
+        onTriggered: fileRowMenu.follow()
+    }
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
 
