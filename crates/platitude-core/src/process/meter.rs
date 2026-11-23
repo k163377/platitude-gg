@@ -107,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_children_of_the_work_are_charged_and_nothing_else() {
-        let executor = GitExecutor::new();
+        let executor = GitExecutor::new(crate::process::path_git());
         let cancel = CancellationToken::new();
         let meter = Arc::new(Meter::default());
         meter
@@ -134,7 +134,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_task_spawned_from_the_work_is_outside_it() {
-        let executor = GitExecutor::new();
+        let executor = GitExecutor::new(crate::process::path_git());
         let meter = Arc::new(Meter::default());
         meter
             .over(async {
@@ -158,7 +158,7 @@ mod tests {
     /// counted once. A budget of nothing tells before git can have ended.
     #[tokio::test]
     async fn a_run_told_silent_is_charged_at_the_telling_and_once() {
-        let executor = GitExecutor::new();
+        let executor = GitExecutor::new(crate::process::path_git());
         let cancel = CancellationToken::new();
         let meter = Arc::new(Meter::default());
         let at_the_telling = std::sync::Mutex::new(None);
@@ -190,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_task_spawned_carried_is_inside_it() {
-        let executor = GitExecutor::new();
+        let executor = GitExecutor::new(crate::process::path_git());
         let meter = Arc::new(Meter::default());
         meter
             .over(async {

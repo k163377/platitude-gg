@@ -64,7 +64,7 @@ mod tests {
 
     #[test]
     fn a_save_runs_without_the_stock_budget_the_reads_keep() {
-        let reads = GitExecutor::new();
+        let reads = GitExecutor::new(platitude_core::process::path_git());
         assert!(reads.stock_timeout().is_some());
         assert_eq!(executor_for(&reads).stock_timeout(), None);
     }

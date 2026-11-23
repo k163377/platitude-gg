@@ -60,7 +60,7 @@ impl CommandObserver for Asked {
 /// passing against a working tree the test never made.
 pub(crate) fn git() -> (GitExecutor, Arc<Asked>) {
     let asked = Arc::new(Asked::default());
-    let exec = GitExecutor::with_program("no-such-git-for-this-test")
+    let exec = GitExecutor::new("no-such-git-for-this-test")
         .observed(Arc::clone(&asked) as Arc<dyn CommandObserver>, Kept::Asked);
     (exec, asked)
 }

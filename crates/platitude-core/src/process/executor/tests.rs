@@ -410,7 +410,7 @@ fn control_characters_are_escaped_and_so_is_what_dollar_quotes_read() {
 #[test]
 fn the_full_form_spells_out_what_is_always_applied() {
     // The program as a bare name: this is about the shape around it.
-    let executor = GitExecutor::with_program("git");
+    let executor = GitExecutor::new("git");
     let full = executor.describe_full(&GitCommand::new().args(["status", "--porcelain=v2"]));
     assert!(full.starts_with("LC_ALL=C "), "{full}");
     assert!(full.contains("GIT_TERMINAL_PROMPT=0"), "{full}");
@@ -423,7 +423,8 @@ fn the_full_form_spells_out_what_is_always_applied() {
 
 #[test]
 fn executor_and_command_environment_are_both_in_the_full_form() {
-    let executor = GitExecutor::new().with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
+    let executor =
+        GitExecutor::new(crate::process::path_git()).with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
     let full = executor.describe_full(
         &GitCommand::new()
             .env("GIT_EDITOR", "pgg-todo-editor")
@@ -468,7 +469,7 @@ impl CommandObserver for Recorder {
 #[tokio::test]
 async fn the_observer_hears_about_a_command_that_never_started() {
     let recorder = Arc::new(Recorder::default());
-    let executor = GitExecutor::with_program("pgg-no-such-program").observed(
+    let executor = GitExecutor::new("pgg-no-such-program").observed(
         Arc::clone(&recorder) as Arc<dyn CommandObserver>,
         Kept::Asked,
     );
@@ -489,7 +490,7 @@ async fn the_observer_hears_about_a_command_that_never_started() {
 #[tokio::test]
 async fn a_token_cancelled_before_the_ask_spawns_nothing() {
     let recorder = Arc::new(Recorder::default());
-    let executor = GitExecutor::with_program("pgg-no-such-program").observed(
+    let executor = GitExecutor::new("pgg-no-such-program").observed(
         Arc::clone(&recorder) as Arc<dyn CommandObserver>,
         Kept::Asked,
     );
@@ -513,7 +514,7 @@ async fn a_token_cancelled_before_the_ask_spawns_nothing() {
 /// environment; every spawn here takes it off before its own layers go on.
 #[test]
 fn a_repository_the_environment_names_is_taken_off_every_spawn() {
-    let executor = GitExecutor::with_program("git").with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
+    let executor = GitExecutor::new("git").with_env([("GIT_CONFIG_NOSYSTEM", "1")]);
     let command = executor.assemble(
         &GitCommand::new()
             .env("GIT_INDEX_FILE", "scratch")

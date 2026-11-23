@@ -183,27 +183,14 @@ impl std::fmt::Debug for GitExecutor {
     }
 }
 
-impl Default for GitExecutor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl GitExecutor {
-    /// Uses `git` as the spawn resolves it from `PATH`
-    /// ([`super::program`]).
-    pub fn new() -> Self {
-        Self::of(OsString::from("git"))
-    }
-
-    /// Uses an explicit git binary, as given.
-    pub fn with_program(program: impl Into<OsString>) -> Self {
-        Self::of(program.into())
-    }
-
-    fn of(program: OsString) -> Self {
+    /// Spawns the git `program` names, as given: a path, or a bare name the
+    /// spawn resolves. Which git a run is on is its caller's to settle
+    /// once — `PATH`'s is [`super::program::path_git`] — so every handle
+    /// names one explicitly.
+    pub fn new(program: impl Into<OsString>) -> Self {
         Self {
-            program: Arc::new(program),
+            program: Arc::new(program.into()),
             env: Arc::new(Vec::new()),
             observer: None,
             kept: Kept::Unasked,
@@ -213,6 +200,13 @@ impl GitExecutor {
             priority: Priority::Interactive,
             live: None,
         }
+    }
+
+    /// The binary every invocation spawns: the name [`Self::new`]
+    /// was given.
+    #[must_use]
+    pub fn program(&self) -> &std::ffi::OsStr {
+        &self.program
     }
 
     /// Lifts the stock time budget from every command that did not set one

@@ -103,10 +103,15 @@ struct Tab {
 /// Application-wide state living on the Qt main thread.
 pub struct Hub {
     runtime: Option<tokio::runtime::Runtime>,
+    /// Every session's git, settled once for the run (`resolve_git`): the
+    /// binary it spawns is the one the settings screen shows as in use
+    /// (`Hub::git_program`).
     executor: GitExecutor,
-    /// Where the binary [`Hub::executor`] spawns is: the path the settings
-    /// named, or what `PATH` resolves `git` to (`resolve_git`).
-    git_program: String,
+    /// The git a bare `git` names in this run (`process::path_git`), walked
+    /// once at install whether or not the settings name another: the run
+    /// falls back to it, and the settings screen measures an emptied box
+    /// against it.
+    path_git: PathBuf,
     /// A different git was chosen, so this run is to be replaced by one on
     /// it. Read by `main` after the window is gone — the only moment a
     /// successor can start without the two fighting over the settings

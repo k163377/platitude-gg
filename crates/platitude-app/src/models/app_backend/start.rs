@@ -165,7 +165,6 @@ impl Default for AppBackend {
                 crate::urlpath::shown_path(&hub.settings().defaults.git_path)
             })
             .unwrap_or_default(),
-            git_path_on_path: Hub::with(|hub| hub.path_program()).unwrap_or_default(),
             git_path_offers_restart: false,
             git_path_names_the_run: false,
             restart_wanted: false,
@@ -175,7 +174,7 @@ impl Default for AppBackend {
             git_path_version: String::new(),
             git_path_error: String::new(),
             // The OS's spelling, out of `PATH` or the settings file.
-            git_path_in_use: Hub::with(|hub| crate::urlpath::shown_path(hub.git_program()))
+            git_path_in_use: Hub::with(|hub| crate::urlpath::shown_path(&hub.git_program()))
                 .unwrap_or_default(),
             avatars: assignments(),
             avatar_error_kind: String::new(),

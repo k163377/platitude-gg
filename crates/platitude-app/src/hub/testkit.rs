@@ -11,14 +11,15 @@ use super::*;
 /// `next_tab_id`: the pictures are held process-wide, so each test numbers
 /// its tabs apart from the others' (`preview_images`).
 pub(super) fn bare(next_tab_id: i32) -> Hub {
+    let path_git = PathBuf::from(platitude_core::process::path_git());
     Hub {
         runtime: Some(
             tokio::runtime::Builder::new_current_thread()
                 .build()
                 .expect("a runtime"),
         ),
-        executor: GitExecutor::new(),
-        git_program: String::new(),
+        executor: GitExecutor::new(&path_git),
+        path_git,
         restart_wanted: false,
         tabs: HashMap::new(),
         next_tab_id,

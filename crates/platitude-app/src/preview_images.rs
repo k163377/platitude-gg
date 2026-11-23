@@ -749,7 +749,7 @@ mod tests {
 
     /// The git the child reads with, kept off this machine's configuration.
     fn executor(dir: &Path) -> GitExecutor {
-        GitExecutor::new().with_env([
+        GitExecutor::new(platitude_core::process::path_git()).with_env([
             ("GIT_CONFIG_GLOBAL", dir.join("no-config").into_os_string()),
             ("GIT_CONFIG_NOSYSTEM", "1".into()),
             (

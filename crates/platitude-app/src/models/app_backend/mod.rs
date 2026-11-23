@@ -159,9 +159,6 @@ pub struct AppBackend {
     git_path_version: String,
     /// git's or the OS's own words for a probe that failed, passed through.
     git_path_error: String,
-    /// Where an empty box points: the git `PATH` resolves
-    /// (`Hub::path_program`), so an emptied box compares as that binary.
-    git_path_on_path: String,
     /// The box holds a git this run is not on, and that git answered. The
     /// one spelling of the rule: the button, its warning and the press's
     /// guard all read it, so they cannot disagree.

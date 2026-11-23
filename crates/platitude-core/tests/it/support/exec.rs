@@ -54,31 +54,45 @@ pub fn isolated_env() -> Vec<(OsString, OsString)> {
     env
 }
 
+/// The git a bare `git` names on this machine (`process::path_git`), walked
+/// once for the suite as the application walks it once for a run: what
+/// every executor here spawns.
+pub fn path_git() -> OsString {
+    static FOUND: std::sync::OnceLock<OsString> = std::sync::OnceLock::new();
+    FOUND.get_or_init(platitude_core::process::path_git).clone()
+}
+
 /// The git binary itself, for probes that measure its own process: PATH's
 /// git asked where its programs live (`git --exec-path` — git's install
 /// puts a copy of itself there), so a launcher first on PATH (Git for
-/// Windows' `cmd\git.exe`) is not what gets measured. PATH's git where
+/// Windows' `cmd\git.exe`) is not what gets measured. [`path_git`] where
 /// that names no file.
 pub fn body_git() -> OsString {
     static FOUND: std::sync::OnceLock<OsString> = std::sync::OnceLock::new();
     FOUND
         .get_or_init(|| {
-            let on_path = platitude_core::process::default_program_path();
+            let asked = path_git();
             let file = if cfg!(windows) { "git.exe" } else { "git" };
-            std::process::Command::new(&on_path)
+            std::process::Command::new(&asked)
                 .arg("--exec-path")
                 .output()
                 .ok()
                 .filter(|out| out.status.success())
                 .map(|out| PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()).join(file))
                 .filter(|body| body.is_file())
-                .map_or(on_path, PathBuf::into_os_string)
+                .map_or(asked, PathBuf::into_os_string)
         })
         .clone()
 }
 
-/// Git executor for integration tests. The raw `GitExecutor::new()` remains
-/// available for tests that intentionally exercise the host configuration.
+/// An executor on [`path_git`] with nothing else set: what the ones here
+/// are built on.
+fn raw() -> GitExecutor {
+    GitExecutor::new(path_git())
+}
+
+/// Git executor for integration tests. One on [`path_git`] alone reads the
+/// host's configuration, for a test that means to.
 /// Without the isolation the host's config leaks in: a permission warning
 /// about `~/.config/git/ignore` lands on stderr, and a nothing-to-commit or
 /// an empty revert reads red.
@@ -93,7 +107,7 @@ pub fn body_git() -> OsString {
 /// the stock budget altogether, so a test waiting on a write is named red
 /// by `Patience` / `bounded`.
 pub fn isolated() -> GitExecutor {
-    GitExecutor::new()
+    raw()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(isolated_env())
 }
@@ -112,7 +126,7 @@ pub fn isolated_with(extra: &[(&str, &str)]) -> GitExecutor {
             .iter()
             .map(|(name, value)| (OsString::from(name), OsString::from(value))),
     );
-    GitExecutor::new()
+    raw()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(env)
 }
@@ -216,7 +230,7 @@ pub fn logged() -> (GitExecutor, Arc<Log>, CancellationToken) {
 /// (`TestRepo::global_config`), for reads and writes that reach outside a
 /// repository: [`isolated`] names no file there.
 pub fn isolated_global(global_config: &Path) -> GitExecutor {
-    GitExecutor::new()
+    raw()
         .with_stock_timeout(super::wait::OVERALL_BUDGET)
         .with_env(vec![
             (

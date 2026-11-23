@@ -70,7 +70,7 @@ fn product_like() -> GitExecutor {
         ("GIT_CONFIG_KEY_0".into(), "gc.auto".into()),
         ("GIT_CONFIG_VALUE_0".into(), "0".into()),
     ];
-    GitExecutor::with_program(crate::support::exec::body_git())
+    GitExecutor::new(crate::support::exec::body_git())
         .with_env(env)
         .without_stock_timeouts()
 }

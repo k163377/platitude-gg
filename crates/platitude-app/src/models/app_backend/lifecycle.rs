@@ -59,27 +59,24 @@ impl AppBackend {
         self.settle_restart_offer();
         self.git_path_changed();
         let feed = Arc::clone(&self.check_feed);
-        // An empty box means the git `PATH` resolves.
-        let wanted = if path.is_empty() {
-            self.git_path_on_path.clone()
-        } else {
-            path.clone()
-        };
-        let in_use = self.git_path_in_use.clone();
         let spawned = Hub::with(|hub| {
             let Some(handle) = hub.runtime_handle() else {
                 return false;
             };
+            // An empty box means the git `PATH` resolves, as the run found it.
+            let wanted = if path.is_empty() {
+                hub.path_git().to_path_buf()
+            } else {
+                std::path::PathBuf::from(&path)
+            };
+            let in_use = std::path::PathBuf::from(hub.executor().program());
             handle.spawn(async move {
                 let cancel = tokio_util::sync::CancellationToken::new();
-                let probe = version::probe(&path, &cancel).await;
+                let probe = version::probe(&wanted, &cancel).await;
                 // Blocking: the compare reads the filesystem, and a path on
                 // a server that is not answering blocks as long as it does.
                 let names_the_run = tokio::task::spawn_blocking(move || {
-                    platitude_core::process::same_program(
-                        std::path::Path::new(&wanted),
-                        std::path::Path::new(&in_use),
-                    )
+                    platitude_core::process::same_program(&wanted, &in_use)
                 })
                 .await
                 .unwrap_or(false);

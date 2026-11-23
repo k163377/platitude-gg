@@ -265,14 +265,12 @@ impl Probe {
 }
 
 /// Asks one git binary for its version, on an executor of its own,
-/// leaving the running one alone. `program` is a path, or empty for
-/// `PATH`'s git — as [`crate::settings::Defaults::git_path`] holds it.
-pub async fn probe(program: &str, cancel: &CancellationToken) -> Probe {
-    let executor = if program.is_empty() {
-        GitExecutor::new()
-    } else {
-        GitExecutor::with_program(program)
-    };
+/// leaving the running one alone. `program` names the binary: where
+/// [`crate::settings::Defaults::git_path`] is empty, the caller passes the
+/// `PATH`'s git it settled ([`crate::process::path_git`]), not the empty
+/// value.
+pub async fn probe(program: impl Into<std::ffi::OsString>, cancel: &CancellationToken) -> Probe {
+    let executor = GitExecutor::new(program);
     match detect(&executor, cancel).await {
         Ok(version) if version.supported() => Probe::Supported(version),
         Ok(version) => Probe::Old(version),

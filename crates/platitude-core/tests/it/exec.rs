@@ -11,12 +11,16 @@ use platitude_core::process::Kept;
 use platitude_core::{GitCommand, GitError, GitExecutor, repo, version};
 use tokio_util::sync::CancellationToken;
 
-/// Settings holds the empty path for "whichever git this machine resolves",
-/// and typed-in paths are checked with this probe, so it must keep that.
+/// Settings holds the empty path for "whichever git this machine
+/// resolves", and the screen probes that git as the run found it.
 #[tokio::test]
-async fn probing_the_empty_path_asks_the_git_on_path() {
+async fn probing_the_git_on_path_answers_its_version() {
     let cancel = CancellationToken::new();
-    let probe = bounded("probe PATH", version::probe("", &cancel)).await;
+    let probe = bounded(
+        "probe PATH's git",
+        version::probe(crate::support::exec::path_git(), &cancel),
+    )
+    .await;
     assert!(probe.answered(), "dev/CI machines must have git: {probe:?}");
     assert!(!probe.version().is_empty(), "{probe:?}");
 }
@@ -47,7 +51,7 @@ async fn probing_something_that_is_not_git_carries_its_own_words() {
     let cancel = CancellationToken::new();
     let probe = bounded(
         "probe a file that is not git",
-        version::probe(&not_git.to_string_lossy(), &cancel),
+        version::probe(&not_git, &cancel),
     )
     .await;
     match probe {
@@ -407,7 +411,7 @@ async fn a_counted_git_runs_until_it_is_reaped_and_no_longer() {
     .expect_err("nothing runs");
     assert!(err.is_cancelled(), "{err:?}");
 
-    let missing = counted(GitExecutor::with_program("pgg-no-such-program"));
+    let missing = counted(GitExecutor::new("pgg-no-such-program"));
     let err = bounded(
         "a program that is not there",
         missing.run(GitCommand::new().arg("version"), &CancellationToken::new()),
