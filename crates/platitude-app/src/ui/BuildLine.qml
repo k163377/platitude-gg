@@ -100,10 +100,10 @@ RowLayout {
         words: buildLine.name + gitWordedRuler.text
     }
 
-    /// A field cut back to its first `chars` characters: their edge as laid out, rounded up as a layout hands it, and
-    /// the mark. Reads `implicitWidth` so a binding through it hears the field's layout (`LineText.edgeAt`).
+    /// A field cut back to its first `chars` characters: their edge as laid out (`LineText.edgeAt`, which a binding
+    /// through this follows), rounded up as a layout hands it, and the mark.
     function cutWidth(field, chars) {
-        return field.implicitWidth > 0 ? Math.ceil(field.edgeAt(chars)) + field.markWidth : 0
+        return Math.ceil(field.edgeAt(chars)) + field.markWidth
     }
 
     // One line: the two fields meet, `/git ` the second's own head.

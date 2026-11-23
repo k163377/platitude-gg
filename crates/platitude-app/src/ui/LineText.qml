@@ -119,10 +119,14 @@ Item {
         return at >= 0 ? elided.substring(0, at) : ""
     }
     /// Where the character at `index` starts in the value as laid out, for a holder that cuts it back to a head of its
-    /// own choosing and sizes the line to that head and the mark (`BuildLine.cutWidth`). A call: the holder reads
-    /// `implicitWidth` beside it to hear a new layout (rules/app-ui.md「メソッドはバインディングが依存を取らない」).
+    /// own choosing and sizes the line to that head and the mark (`BuildLine.cutWidth`). The field's face and `length`
+    /// (notified with its text) are read here so a binding calling this follows them (rules/app-ui.md
+    /// 「メソッドはバインディングが依存を取らない」): such a binding runs as soon as the value it prices moves, before the
+    /// field takes it (`BuildLine.gitWidth` as git's version comes in), and again once the field holds it. Asked only
+    /// at a place the field has — past either end Qt warns at every place.
     function edgeAt(index) {
-        return field.positionToRectangle(index).x
+        const font_ = field.font
+        return field.positionToRectangle(Math.max(0, Math.min(index, field.length))).x
     }
 
     // ---- driven from outside ----------------------------------------

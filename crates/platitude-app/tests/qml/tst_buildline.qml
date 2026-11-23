@@ -28,6 +28,11 @@ Control {
         name: "BuildLine"
         when: windowShown
 
+        /// A line is priced again before its fields hold a new value, and Qt warns at every place a field is asked for
+        /// that it does not have (`LineText.edgeAt`).
+        function init() {
+            failOnWarning(/QTextCursor::setPosition/)
+        }
         /// The two fields, ahead of the rulers among the line's children.
         function nameField() {
             return line.children[0]
@@ -169,6 +174,21 @@ Control {
                 compare(line.nameWidth, swept[room][0], "the commit at " + room + ", reached in one step")
                 compare(line.gitWidth, swept[room][1], "the version at " + room + ", reached in one step")
             }
+        }
+
+        // The version comes after the line stands (git is asked once the window is built), on a room the line is
+        // short of: the line is priced again before its field holds the new version, asks only places the field has,
+        // and settles on what the same room prices with the version in place.
+        function test_g_a_version_that_comes_late_asks_only_places_the_field_has() {
+            build("v0.0.0-a-03f8bc64", "03f8bc64", "2.55.0.windows.3")
+            const room = Math.ceil(line.leastWidth)
+            line.room = room
+            laid("before")
+            const settled = [line.nameWidth, line.gitWidth]
+            line.version = ""
+            line.version = "2.55.0.windows.3"
+            laid("late version")
+            compare([line.nameWidth, line.gitWidth], settled, "the line priced against a field without the version")
         }
 
         // A release has no commit in its name: the word goes, then the version, the name whole throughout.
