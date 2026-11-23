@@ -155,7 +155,9 @@ impl RepoSession {
     /// `session_integration::query` by
     /// `a_global_mark_moved_in_a_terminal_reaches_the_snapshot`.
     pub(super) fn note_push_default(self: &Arc<Self>, seen: &Option<remote::PushDefault>) {
-        let held = self.remotes.peek(|remotes| remotes.push_default.clone());
+        let held = self
+            .remotes
+            .peek(|remotes| remotes.marks.origin.push_default.clone());
         if held.is_some_and(|held| held != *seen) {
             self.remotes.forget();
             self.refresh_refs();

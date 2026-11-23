@@ -254,15 +254,13 @@ impl RepoSession {
             .into_iter()
             .map(|r| (r.name, r.fetch_url))
             .unzip();
-        snapshot.push_default = remotes.push_default;
-        snapshot.checkout_default = remotes.checkout_default;
+        snapshot.marks = remotes.marks;
         // Not the one HEAD is on: the status tick reads and keeps its mark
-        // (`StatusLoaded::push_remote`).
-        snapshot.branch_push_remotes = remotes
+        // (`StatusLoaded::push`).
+        snapshot
+            .marks
             .branch_push_remotes
-            .into_iter()
-            .filter(|mark| head.branch.as_deref() != Some(mark.branch.as_str()))
-            .collect();
+            .retain(|mark| head.branch.as_deref() != Some(mark.branch.as_str()));
         let held = self.published_snapshot();
         // A read that could not tell repeats the last answer, as the status
         // tick's does (`Standing::push_track_of`): a diverged row falling to
@@ -291,7 +289,7 @@ impl RepoSession {
         remotes: &remote::Remotes,
         cancel: &CancellationToken,
     ) -> Option<Vec<(String, remote::PushTrack)>> {
-        if remotes.push_default.is_none() && remotes.branch_push_remotes.is_empty() {
+        if !remotes.marks.marks_any_push() {
             return Some(Vec::new());
         }
         let index = refs::RemoteBranches::index(refs);
@@ -310,7 +308,7 @@ impl RepoSession {
                 };
                 remote::PushRoute::new(
                     upstream,
-                    remotes.marked(local.short.as_str()),
+                    remotes.marks.marked(local.short.as_str()),
                     remotes.list.iter().map(|r| r.name.as_str()),
                 )
                 .goes_elsewhere()

@@ -367,9 +367,7 @@ pub(super) fn join_key(
     // move no ref. Left out, a refresh where only a mark moved reads as
     // the same input, the held snapshot goes out again, and the sidebar
     // keeps the mark on its old row.
-    remotes.push_default.hash(&mut hasher);
-    remotes.checkout_default.hash(&mut hasher);
-    remotes.branch_push_remotes.hash(&mut hasher);
+    remotes.marks.hash(&mut hasher);
     for r in &remotes.list {
         r.name.hash(&mut hasher);
         r.fetch_url.hash(&mut hasher);

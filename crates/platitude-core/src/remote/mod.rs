@@ -31,7 +31,6 @@ pub use self::branch::{
 pub use self::clone::{clone, folder_name_for};
 pub use self::fetch::fetch;
 pub use self::list::{Remote, Remotes, add, list, read, set_url};
-pub(crate) use self::marks::kept_marked;
 pub use self::marks::{
     BranchPushRemote, KeptMarks, OriginMarks, PushDefault, PushMarks, clear_origin, kept_marks,
     mark_origin, push_marks,

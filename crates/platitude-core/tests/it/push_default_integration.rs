@@ -645,6 +645,8 @@ async fn the_refs_read_counts_only_the_branches_a_mark_sends_elsewhere() {
             evs.iter().rev().find_map(|e| match e {
                 SessionEvent::RefsLoaded { snapshot, .. }
                     if snapshot
+                        .marks
+                        .origin
                         .push_default
                         .as_ref()
                         .is_some_and(|mark| mark.remote == marked) =>

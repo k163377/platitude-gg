@@ -73,7 +73,7 @@ impl PushDefault {
 /// a `checkout.defaultRemote` rewritten in the global config shows at the
 /// next write or ref move. Pinned by `push_default_integration::periodic`
 /// (stage 3).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct OriginMarks {
     /// The push's, with the level that set it.
     pub push_default: Option<PushDefault>,
@@ -90,34 +90,43 @@ pub struct BranchPushRemote {
     pub remote: String,
 }
 
-/// Which way `branch`'s push is marked, off marks kept for every branch
-/// ([`KeptMarks`]): its own among `branch_push_remotes` (in branch name
-/// order), then the repository's. The one lookup for both holders of them
-/// (`super::Remotes::marked`, `session::RefsSnapshot::marked`).
-pub(crate) fn kept_marked<'a>(
-    push_default: Option<&'a PushDefault>,
-    branch_push_remotes: &'a [BranchPushRemote],
-    branch: &str,
-) -> super::Marked<'a> {
-    let own = branch_push_remotes
-        .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
-        .ok()
-        .and_then(|at| branch_push_remotes.get(at))
-        .map(|mark| mark.remote.as_str());
-    super::Marked::of(own, push_default.map(|marked| marked.remote.as_str()))
-}
-
-/// The marks the remotes read keeps (`super::Remotes`): the
+/// The marks the remotes read keeps (`super::Remotes::marks`): the
 /// [`OriginMarks`], and every branch's own push mark, in branch name order
 /// — what a menu on a branch the worktree is not on weighs where its push
 /// goes by (`session::RefsSnapshot::branch_push`). The branch the worktree
 /// is on is read fresh on every status tick instead ([`push_marks`]), and
-/// the snapshot holds neither its marks nor its counts; a send reads its
-/// branch's keys again by name.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// the snapshot's copy (`session::RefsSnapshot::marks`) holds neither its
+/// mark nor its counts; a send reads its branch's keys again by name.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct KeptMarks {
     pub origin: OriginMarks,
     pub branch_push_remotes: Vec<BranchPushRemote>,
+}
+
+impl KeptMarks {
+    /// Which way `branch`'s push is marked: its own mark, then the
+    /// repository's.
+    pub fn marked(&self, branch: &str) -> super::Marked<'_> {
+        let own = self
+            .branch_push_remotes
+            .binary_search_by(|mark| mark.branch.as_str().cmp(branch))
+            .ok()
+            .and_then(|at| self.branch_push_remotes.get(at))
+            .map(|mark| mark.remote.as_str());
+        super::Marked::of(
+            own,
+            self.origin
+                .push_default
+                .as_ref()
+                .map(|marked| marked.remote.as_str()),
+        )
+    }
+
+    /// Whether any mark points a push anywhere — the repository's, or a
+    /// branch's own. With none, every push goes where its upstream is.
+    pub fn marks_any_push(&self) -> bool {
+        self.origin.push_default.is_some() || !self.branch_push_remotes.is_empty()
+    }
 }
 
 /// Reads every [`KeptMarks`] key with one `--get-regexp`, and which level

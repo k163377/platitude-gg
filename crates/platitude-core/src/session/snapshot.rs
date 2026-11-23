@@ -47,19 +47,14 @@ pub struct RefsSnapshot {
     pub remote_names: Vec<String>,
     /// Their fetch URLs, in the same order.
     pub remote_urls: Vec<String>,
-    /// Which of them a push goes to when no branch says otherwise, and
-    /// whether this repository's own config says so. `None` where nothing
-    /// is marked — then a branch's upstream decides, else the remote
-    /// called `origin`.
-    pub push_default: Option<crate::remote::PushDefault>,
-    /// The remote `checkout.defaultRemote` names — the other key marking a
-    /// remote as origin ([`crate::remote::OriginMarks`]). `None` where unset.
-    pub checkout_default: Option<String>,
-    /// Every branch's own push mark (`branch.<branch>.pushRemote`) but the
-    /// one HEAD is on — whose mark the status tick reads and keeps — in
-    /// branch name order. A run of its own, as `tag_drifts` is: marks are
-    /// rare.
-    pub branch_push_remotes: Vec<crate::remote::BranchPushRemote>,
+    /// The marks the remotes read kept ([`crate::remote::KeptMarks`]): which
+    /// remote this repository calls origin, by both its keys — the push's
+    /// says where a push goes when no branch says otherwise, `None` where
+    /// unset, and then a branch's upstream decides, else the remote called
+    /// `origin` — and every branch's own push mark but the one HEAD is on,
+    /// whose mark the status tick reads and keeps. The branches' marks are
+    /// a run of their own, as `tag_drifts` is: marks are rare.
+    pub marks: crate::remote::KeptMarks,
     /// The branches a mark sends to another remote than their upstream's,
     /// counted against the tracking ref of where they go
     /// ([`crate::remote::push_tracks`]), in branch name order — but the one
@@ -288,7 +283,7 @@ impl RefsSnapshot {
             (Upstream::of(branch.upstream_gone.as_str(), false), None)
         };
         let remotes = || self.remote_names.iter().map(String::as_str);
-        let route = PushRoute::new(upstream, self.marked(short), remotes());
+        let route = PushRoute::new(upstream, self.marks.marked(short), remotes());
         // Only counts against where the marks send the branch now: a read
         // that could not tell repeats counts taken before a mark moved.
         let track = self
@@ -310,12 +305,6 @@ impl RefsSnapshot {
                 .map(|remote| remote.oid),
             upstream: upstream.remote_branch().unwrap_or_default().to_string(),
         }
-    }
-
-    /// Which way the push of `short`, a branch the worktree is not on, is
-    /// marked: its own mark, then the repository's.
-    pub fn marked(&self, short: &str) -> Marked<'_> {
-        crate::remote::kept_marked(self.push_default.as_ref(), &self.branch_push_remotes, short)
     }
 
     fn branch_named<'a>(sorted: &'a [BranchItem], short: &str) -> Option<&'a BranchItem> {

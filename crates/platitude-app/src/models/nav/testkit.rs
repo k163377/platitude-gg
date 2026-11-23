@@ -123,9 +123,7 @@ pub(super) fn carried(
         head: None,
         remote_names: Vec::new(),
         remote_urls: Vec::new(),
-        push_default: None,
-        checkout_default: None,
-        branch_push_remotes: Vec::new(),
+        marks: platitude_core::remote::KeptMarks::default(),
         push_tracks: Vec::new(),
         renamed: Vec::new(),
     };

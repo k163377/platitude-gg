@@ -439,6 +439,8 @@ async fn a_global_mark_moved_in_a_terminal_reaches_the_snapshot() {
         evs.iter()
             .any(|e| match e {
                 SessionEvent::RefsLoaded { snapshot, .. } => snapshot
+                    .marks
+                    .origin
                     .push_default
                     .as_ref()
                     .is_some_and(|marked| marked.remote == "fork" && !marked.local),

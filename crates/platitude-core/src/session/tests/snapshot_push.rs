@@ -206,7 +206,7 @@ fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
         vec![branch("main", b'1'), against_here("topic", "main", 1, true)],
         &[],
     );
-    at.branch_push_remotes = vec![marked("topic", "origin")];
+    at.marks.branch_push_remotes = vec![marked("topic", "origin")];
     let own = at.branch_push("topic", "origin");
     assert_eq!(
         (own.standing, own.target.as_str()),
@@ -214,8 +214,8 @@ fn a_mark_sends_a_branch_measured_against_one_here_where_it_says() {
         "the branch's own mark"
     );
 
-    at.branch_push_remotes.clear();
-    at.push_default = Some(PushDefault {
+    at.marks.branch_push_remotes.clear();
+    at.marks.origin.push_default = Some(PushDefault {
         remote: "fork".to_string(),
         local: true,
     });
@@ -240,7 +240,7 @@ fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
         ],
         &[("origin/base", b'b'), ("origin/topic", b'f')],
     );
-    at.branch_push_remotes = vec![marked("topic", "origin")];
+    at.marks.branch_push_remotes = vec![marked("topic", "origin")];
     at.push_tracks = vec![(
         "topic".to_string(),
         PushTrack {
@@ -259,7 +259,7 @@ fn a_branch_here_named_like_a_remote_branch_is_still_a_branch_here() {
         "level with origin/topic: nothing to send, however far ahead of the branch here"
     );
 
-    at.branch_push_remotes.clear();
+    at.marks.branch_push_remotes.clear();
     assert_eq!(
         at.branch_push("topic", "origin").standing,
         PushStanding::StaysHere,
@@ -284,7 +284,7 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
             ("fork/counted", b'e'),
         ],
     );
-    at.branch_push_remotes = vec![
+    at.marks.branch_push_remotes = vec![
         marked("counted", "fork"),
         marked("home", "origin"),
         marked("unfetched", "fork"),
@@ -321,8 +321,8 @@ fn a_mark_sends_the_branch_elsewhere_and_its_counts_go_with_it() {
         "a mark on the upstream's own remote leaves the upstream's counts speaking"
     );
 
-    at.branch_push_remotes.clear();
-    at.push_default = Some(PushDefault {
+    at.marks.branch_push_remotes.clear();
+    at.marks.origin.push_default = Some(PushDefault {
         remote: "fork".to_string(),
         local: true,
     });
@@ -342,7 +342,7 @@ fn counts_ahead_of_their_row_stand_with_nothing_to_lease_to() {
         vec![tracking("counted", "origin/counted", 1, 0)],
         &[("origin/counted", b'a')],
     );
-    at.branch_push_remotes = vec![marked("counted", "fork")];
+    at.marks.branch_push_remotes = vec![marked("counted", "fork")];
     at.push_tracks = vec![(
         "counted".to_string(),
         PushTrack {
@@ -369,7 +369,7 @@ fn counts_against_where_a_mark_used_to_send_the_branch_speak_for_nothing() {
         &[("origin/counted", b'a'), ("fork/counted", b'e')],
     );
     at.remote_names.push("mirror".to_string());
-    at.branch_push_remotes = vec![marked("counted", "mirror")];
+    at.marks.branch_push_remotes = vec![marked("counted", "mirror")];
     at.push_tracks = vec![(
         "counted".to_string(),
         PushTrack {

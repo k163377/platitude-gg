@@ -199,19 +199,20 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::RefsLoaded { snapshot, looked } => {
                 if !self.remotes_already_told(&snapshot) {
+                    let origin = &snapshot.marks.origin;
                     self.feeds.tab.push(TabMsg::Remotes {
                         names: snapshot.remote_names.clone(),
                         urls: snapshot.remote_urls.clone(),
-                        push_default: snapshot
+                        push_default: origin
                             .push_default
                             .as_ref()
                             .map(|marked| marked.remote.clone())
                             .unwrap_or_default(),
-                        push_default_local: snapshot
+                        push_default_local: origin
                             .push_default
                             .as_ref()
                             .is_some_and(|marked| marked.local),
-                        checkout_default: snapshot.checkout_default.clone().unwrap_or_default(),
+                        checkout_default: origin.checkout_default.clone().unwrap_or_default(),
                     });
                 }
                 self.feeds.refs_branches.push_coalescing(RefsMsg::Snapshot {

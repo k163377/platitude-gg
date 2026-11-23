@@ -404,9 +404,7 @@ fn a_changed_remote_url_moves_the_join_key() {
             fetch_url: url.to_string(),
             push_url: url.to_string(),
         }],
-        push_default: None,
-        checkout_default: None,
-        branch_push_remotes: Vec::new(),
+        marks: crate::remote::KeptMarks::default(),
     };
     assert_ne!(
         joins::join_key(1, 0, 0, &remotes("https://old.example/repo")),
@@ -420,9 +418,13 @@ fn a_changed_remote_url_moves_the_join_key() {
 fn a_moved_checkout_mark_moves_the_join_key() {
     let remotes = |checkout: Option<&str>| crate::remote::Remotes {
         list: Vec::new(),
-        push_default: None,
-        checkout_default: checkout.map(str::to_string),
-        branch_push_remotes: Vec::new(),
+        marks: crate::remote::KeptMarks {
+            origin: crate::remote::OriginMarks {
+                push_default: None,
+                checkout_default: checkout.map(str::to_string),
+            },
+            branch_push_remotes: Vec::new(),
+        },
     };
     assert_ne!(
         joins::join_key(1, 0, 0, &remotes(None)),
@@ -435,10 +437,13 @@ fn a_moved_checkout_mark_moves_the_join_key() {
 #[test]
 fn a_moved_branch_push_mark_moves_the_join_key() {
     let remotes = |remote: &str| crate::remote::Remotes {
-        branch_push_remotes: vec![crate::remote::BranchPushRemote {
-            branch: "topic".to_string(),
-            remote: remote.to_string(),
-        }],
+        marks: crate::remote::KeptMarks {
+            branch_push_remotes: vec![crate::remote::BranchPushRemote {
+                branch: "topic".to_string(),
+                remote: remote.to_string(),
+            }],
+            ..crate::remote::KeptMarks::default()
+        },
         ..crate::remote::Remotes::default()
     };
     assert_ne!(
