@@ -109,13 +109,18 @@ Item {
     }
 
     /// Books the reading of the row stepped onto. A press is read at once (it must answer inside the interaction
-    /// budget); a step with the key held only pushes the settle back, so a held arrow is read twice — where it set off
-    /// and where it stopped — rather than running a selection's git processes at the repeat rate.
-    ///
-    /// The repeat must say so itself (`held`): every OS's delay before the first repeat (Windows ≥ 250ms, macOS ≥
-    /// 225ms, GNOME 500ms by default) outlasts the settle, so without it a held arrow's second row reads as a press.
+    /// budget), and presses closer together than the settle are read once they stop. A held arrow is read twice —
+    /// where it set off and where it stopped (`keyUp`) — rather than running a selection's git processes at the repeat
+    /// rate. The repeat says so itself (`held`), and the key coming up says where it stopped: no wait stands in for
+    /// either, since how soon and how fast a key repeats is the person's setting.
     function noteStep(held) {
-        if (held || stepTimer.running) {
+        if (held) {
+            walk.keyHeld = true
+            walk.stepPending = true
+            stepTimer.stop()
+            return
+        }
+        if (stepTimer.running) {
             walk.stepPending = true
             stepTimer.restart()
             return
@@ -123,6 +128,27 @@ Item {
         walk.stepPending = false
         walk.landStep()
         stepTimer.restart()
+    }
+    /// The arrow is down and repeating: nothing is read until it comes up.
+    property bool keyHeld: false
+    /// The arrow came up (its own release, not a repeat's), or the keyboard went elsewhere while it was down: a held
+    /// run is read where it stopped. Presses after it are weighed against the settle as after any read.
+    function keyUp() {
+        if (!walk.keyHeld)
+            return
+        walk.keyHeld = false
+        if (walk.stepPending) {
+            walk.stepPending = false
+            walk.landStep()
+        }
+        stepTimer.restart()
+    }
+    property Connections keyWatch: Connections {
+        target: walk.view
+        function onActiveFocusChanged() {
+            if (!walk.view.activeFocus)
+                walk.keyUp()
+        }
     }
     /// A step went by unread; without it the settle behind a single press would read the row twice. While it stands
     /// the highlight is the current row's, not the choice's (`GraphList.stepsUnread`): the choice moves only when a row
@@ -144,9 +170,8 @@ Item {
     function revealNode(row) {
         walk.view.columns.revealLane(walk.graphModel.laneAt(row))
     }
-    /// Automation: a settle stands between the last step and its reading. The hold verb waits for it to expire, as an
-    /// OS's first-repeat delay would, before sending the repeats.
-    readonly property alias settling: stepTimer.running
+    /// Automation: a step is still waiting to be read — behind the settle, or behind a key still held.
+    readonly property bool settling: stepTimer.running || walk.keyHeld
     /// A centering or a row brought into view is still owed to the view (the waits below, `FrameLater`);
     /// `PageSettled` waits on it (`placing`). A reread's own send is placed in the turn it lands and owes nothing.
     /// A new delay that writes the view's `contentY` joins this property, or a run completes before the view moves.

@@ -173,6 +173,10 @@ ColumnLayout {
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)
+        Keys.onReleased: event => {
+            if ((event.key === Qt.Key_Up || event.key === Qt.Key_Down) && !event.isAutoRepeat)
+                fileWalk.keyUp()
+        }
         // The commit pane's row: it opens a diff and has no seat for a mark that stages.
         delegate: FileRowDelegate {
             listWidth: fileList.width

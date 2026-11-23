@@ -139,12 +139,18 @@ Item {
             walk.sides[side].view.focus = false
     }
 
-    /// A press is read at once; a step with the key still down only pushes the settle back — so a held arrow is read
-    /// where it set off and where it stopped (the graph walk's shape, `GraphRowWalk.noteStep`): each read is one
-    /// `git diff`. Read through `landed`, its own signal and not the click's: a click is a toggle (`fileActivated` →
-    /// `RepoPage.toggleDiff`), and the settle's second read would close the diff.
+    /// A press is read at once and presses closer together than the settle once they stop; a held arrow is read where
+    /// it set off and where it stopped, the key coming up (`keyUp`) — the graph walk's shape, `GraphRowWalk.noteStep`:
+    /// each read is one `git diff`. Read through `landed`, its own signal and not the click's: a click is a toggle
+    /// (`fileActivated` → `RepoPage.toggleDiff`), and the settle's second read would close the diff.
     function noteStep(held) {
-        if (held || stepTimer.running) {
+        if (held) {
+            walk.keyHeld = true
+            walk.stepPending = true
+            stepTimer.stop()
+            return
+        }
+        if (stepTimer.running) {
             walk.stepPending = true
             stepTimer.restart()
             return
@@ -153,6 +159,24 @@ Item {
         walk.landStep()
         stepTimer.restart()
     }
+    /// The arrow is down and repeating: nothing is read until it comes up.
+    property bool keyHeld: false
+    /// The arrow came up (its own release, not a repeat's: the lists' `Keys.onReleased`), or the keyboard left the
+    /// lists while it was down: a held run is read where it stopped.
+    function keyUp() {
+        if (!walk.keyHeld)
+            return
+        walk.keyHeld = false
+        if (walk.stepPending) {
+            walk.stepPending = false
+            walk.landStep()
+        }
+        stepTimer.restart()
+    }
+    /// Whether one of the lists has the keyboard — the walk never moves it between them, so a held key comes up in
+    /// the list it went down in, or the keyboard has gone.
+    readonly property bool keysHere: walk.sides.some(side => side.view.activeFocus)
+    onKeysHereChanged: if (!walk.keysHere) walk.keyUp()
     /// A step went by unread — without it the settle behind a single press would read the same file twice.
     property bool stepPending: false
     function landStep() {

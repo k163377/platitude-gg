@@ -391,6 +391,7 @@ Rectangle {
         onActivated: (oidHex, atRow) => graphArea.rowActivated(oidHex, atRow, Qt.NoModifier)
     }
     function stepRow(delta, held) { return rowWalk.stepRow(delta, held) }
+    function stepKeyUp() { rowWalk.keyUp() }
     function menuFromKeys() { return rowWalk.menuFromKeys() }
     function stepLanding(row, wasY) { return rowWalk.stepLanding(row, wasY) }
     /// Automation only: whether a step is still waiting to be read (`GraphRowWalk.settling`).
@@ -514,6 +515,11 @@ Rectangle {
         Keys.onDownPressed: event => {
             graphArea.keyReached()
             event.accepted = graphArea.stepRow(1, event.isAutoRepeat)
+        }
+        // Where a held arrow stopped (`GraphRowWalk.keyUp`): the key's own release, not the ones a repeat brings.
+        Keys.onReleased: event => {
+            if ((event.key === Qt.Key_Up || event.key === Qt.Key_Down) && !event.isAutoRepeat)
+                graphArea.stepKeyUp()
         }
         // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
         Keys.onMenuPressed: event => {

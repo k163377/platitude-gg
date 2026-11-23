@@ -114,6 +114,13 @@ Item {
         }
         asking: false
     }
+    /// Takes the keyboard off the walk's list.
+    Item {
+        id: walkElsewhere
+        y: walkList.height
+        width: 10
+        height: 10
+    }
 
     /// Whether the node on `lane` lies whole in the column as `metrics` stands — what the lane cell draws
     /// (`GraphLaneCell.nodeMidX`).
@@ -289,7 +296,19 @@ Item {
             verify(walk.stepRow(1, true))
             verify(!walkColumns.lanesGliding, "and so does the rest of the run")
             compare(walkColumns.graphX, walkColumns.graphXMax)
+            walk.keyUp()
             tryCompare(walkColumns, "graphX", 0, undefined, "where the run stops, its row's lane 0 comes on")
+        }
+
+        function test_the_keyboard_leaving_the_list_ends_a_held_run_where_it_stopped() {
+            walkList.forceActiveFocus()
+            verify(walk.stepRow(1, false))
+            tryCompare(walkColumns, "graphX", walkColumns.graphXMax, undefined, "the press brings lane 5 on")
+            tryVerify(() => !walkColumns.lanesGliding)
+            verify(walk.stepRow(1, true))
+            walkElsewhere.forceActiveFocus()
+            verify(!walk.keyHeld, "a key that comes up somewhere else still ends the run")
+            tryCompare(walkColumns, "graphX", 0, undefined, "and the run's row's lane 0 comes on")
         }
 
         function test_a_jump_brings_on_the_node_of_the_row_it_lands_on() {

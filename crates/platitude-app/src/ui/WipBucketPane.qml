@@ -105,6 +105,10 @@ ColumnLayout {
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = bucketPane.pane.filesWalk.stepFile(1, event.isAutoRepeat)
+        Keys.onReleased: event => {
+            if ((event.key === Qt.Key_Up || event.key === Qt.Key_Down) && !event.isAutoRepeat)
+                bucketPane.pane.filesWalk.keyUp()
+        }
         // The menu key; Windows' Shift+F10 comes through the window (`Main.keyMenuAsked`).
         Keys.onMenuPressed: event => event.accepted = bucketPane.pane.menuFromKeys()
         // The rows moved under the hand (`HandWatch.rowsMoved`): the reader's wheel and bar, and the keyboard's walk

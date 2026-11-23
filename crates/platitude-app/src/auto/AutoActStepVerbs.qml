@@ -106,9 +106,11 @@ Item {
         }
         return true
     }
-    // The arrow keys, which no headless run can press: the walk enters where `Keys.onDownPressed` does
-    // (`GraphPane.stepRow`) after taking the keyboard as a row click does — a graph nobody pressed hears no arrows
-    // (規約 §矢印で履歴を辿る). The wait is for the selected commit's message, which `-dirty` types over.
+    // The arrow keys, which no run's press can send: QtTest's key events run the event loop before they return
+    // (`QTest::simulateEvent`), which ends the beat the press belongs to (`Awaited.beat`) and refuses the move after
+    // it. The walk enters where `Keys.onDownPressed` does (`GraphPane.stepRow`) after taking the keyboard as a row
+    // click does — a graph nobody pressed hears no arrows (規約 §矢印で履歴を辿る). The wait is for the selected
+    // commit's message, which `-dirty` types over.
     //
     // Read once the settle behind the walk (`keyStepSettleMs`) has landed: a walk that moved the highlight but never
     // the selection must be told apart from one that did, and both frame alike. Two edges, because a walk reads its
@@ -211,12 +213,15 @@ Item {
             op.complete({ "name": "graph_step_report_ready", "when": () => op.walked(), "report": () => op.line() })
         }
     }
-    // The arrow held down: the opening press, then the repeats once its settle has expired, as an OS's first repeat
-    // always arrives after it (`GraphRowWalk.noteStep`). `reads=` is the claim — a held walk reads two rows, its start
-    // and its end — and no picture holds it. `lit=` is the other half: the row the repeats ran to wears the highlight
-    // before it is read (`GraphRowDelegate.selected`, read off the row in the repeats' press — a picture comes after
-    // the read, where the choice has caught up either way). The hand off the key: the selection landed and the card
-    // caught up — the pair `graph_step` waits on.
+    // The arrow held down: the opening press, then the repeats and the key coming up (`GraphRowWalk.noteStep` /
+    // `keyUp`), each where the list's key handlers hand it on (the press, the repeat, the release: the arrows above) —
+    // the handlers themselves are the film's to press (`kd:` / `kr:` / `ku:`, film スキル). The repeats come in the
+    // opening press's settle: no wait between them stands in for the OS's first
+    // repeat, which is the person's setting. `reads=` is the claim — a held walk reads two rows, its start and its
+    // end — and no picture holds it. `lit=` is the other half: the row the repeats ran to wears the highlight before
+    // it is read (`GraphRowDelegate.selected`, read off the row in the repeats' press, before the key comes up — a
+    // picture comes after the read, where the choice has caught up either way). The hand off the key: the selection
+    // landed and the card caught up — the pair `graph_step` waits on.
     PageStage {
         id: graphHoldTimer
         name: "graph_hold"
@@ -264,10 +269,7 @@ Item {
                 return
             }
             if (op.at("opened")) {
-                // The repeats: waited on the settle being gone (app-ui.md §UI 自動化), then all in one beat — the claim
-                // is that a repeat is not read.
-                if (!Awaited.all("graph_hold_settled", { "settled": !graphPane.stepSettling }))
-                    return
+                // The repeats all in one beat — the claim is that a repeat is not read — then the key up.
                 op.input("repeated", () => {
                     let refused = op.witnessed("openRefused")
                     for (let n = 1; n < op.steps; n++) {
@@ -277,6 +279,7 @@ Item {
                     op.witness("refused", refused)
                     const ran = graphPane.view.itemAtIndex(graphPane.view.currentIndex)
                     op.witness("lit", !!ran && ran.selected)
+                    graphPane.stepKeyUp()
                 })
                 return
             }

@@ -123,10 +123,9 @@ QtObject {
     readonly property real findBoxShare: 0.25
     readonly property int hoverBodyRows: 4
     readonly property int detailsAvatar: 40
-    // A held arrow key's steps settle here before the row is read, so a held key reads where it set off and where it
-    // stopped; a press reads at once (`GraphRowWalk.noteStep`, `FileRowWalk.noteStep`). It has to outlast every OS's
-    // key-repeat interval (macOS 15ms / X11 25ms / Windows ≈32ms); the first repeat's delay is longer everywhere, so a
-    // first press has always settled.
+    // Arrow presses closer together than this are one walk, read once they stop; a press after a pause reads at once
+    // (`GraphRowWalk.noteStep`, `FileRowWalk.noteStep`). A held key is not weighed against it — its repeats say so
+    // and its release says where it stopped, whatever pace the person set the OS's repeat to.
     readonly property int keyStepSettleMs: 150
     // How often the repository is read while the page is on screen is the session's, not a constant here: the pace
     // follows how heavy the reads are (`session::pace`).

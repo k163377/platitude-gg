@@ -513,6 +513,10 @@ ColumnLayout {
         keyNavigationEnabled: false
         Keys.onUpPressed: event => event.accepted = fileWalk.stepFile(-1, event.isAutoRepeat)
         Keys.onDownPressed: event => event.accepted = fileWalk.stepFile(1, event.isAutoRepeat)
+        Keys.onReleased: event => {
+            if ((event.key === Qt.Key_Up || event.key === Qt.Key_Down) && !event.isAutoRepeat)
+                fileWalk.keyUp()
+        }
         Keys.onMenuPressed: event => event.accepted = detailsPane.menuFromKeys()
         delegate: FileRowDelegate {
             listWidth: fileList.width
