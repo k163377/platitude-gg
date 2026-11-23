@@ -10,7 +10,7 @@
 //! would be shown going to `origin/base`, counted against it and leased
 //! to origin's `base`, while the send goes to `origin/topic`.
 
-use super::route::PushRoute;
+use super::route::{Marked, PushRoute};
 
 /// What a push of a branch can do, read off the last status (the branch
 /// the worktree is on) or refs listing (any other) and the marked remote.
@@ -147,6 +147,58 @@ pub struct StatusPush {
     /// everywhere else, and where nothing here tracks the branch over
     /// there.
     pub track: Option<PushTrack>,
+}
+
+/// The push of the branch HEAD is on, as the worktree holds it: HEAD's
+/// record beside what the last status read of the branch — what the
+/// toolbar asks about (`WorktreeModel.headPush`). A branch's row is
+/// answered off the refs instead (`session::RefsSnapshot::branch_push`).
+///
+/// Between a move of HEAD and the status behind it, the upstream, its
+/// counts and the destination's are blank: they would be the last
+/// branch's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeadPush {
+    /// The branch HEAD is on; empty detached, and before HEAD is read.
+    pub branch: String,
+    pub detached: bool,
+    /// HEAD names a branch with no commits yet.
+    pub unborn: bool,
+    /// The upstream as the status names it — as the send names it
+    /// ([`super::PushMarks::upstream_name`]) —, empty where none.
+    pub upstream: String,
+    /// The branch's counts against it; none where its ref is not there to
+    /// count against.
+    pub upstream_counts: Option<crate::AheadBehind>,
+    pub status: StatusPush,
+}
+
+impl HeadPush {
+    /// Its route under the repository's mark (`push_default`, `None` where
+    /// unset), the upstream cut against the configured `remotes`.
+    pub fn route<'a>(
+        &'a self,
+        push_default: Option<&'a str>,
+        remotes: impl IntoIterator<Item = &'a str>,
+    ) -> PushRoute<'a> {
+        PushRoute::new(
+            Upstream::of(&self.upstream, self.status.upstream_here),
+            Marked::of(self.status.push_remote.as_deref(), push_default),
+            remotes,
+        )
+    }
+
+    /// What it stands on, along `route` ([`Self::route`]).
+    pub fn standing(&self, route: PushRoute<'_>) -> PushStanding {
+        push_standing(
+            self.unborn,
+            self.detached,
+            &self.branch,
+            route,
+            self.upstream_counts,
+            self.status.track.as_ref(),
+        )
+    }
 }
 
 /// The standing itself: the table of counts, read against the upstream

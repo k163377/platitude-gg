@@ -271,7 +271,7 @@ fn the_counts_are_the_branch_they_were_read_with() {
     model.absorb(vec![head_on("main", NEXT, 2)]);
     assert!(!model.counts_settled, "feature's counts are not main's");
     assert_eq!(model.upstream, "");
-    assert!(!model.upstream_tracked);
+    assert_eq!(model.head_push_now().upstream_counts, None);
     assert_eq!(model.ahead, 0);
 
     model.absorb(vec![status_of(
@@ -298,7 +298,7 @@ fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
         }
         model.absorb(vec![head_on("feature", ROOT, 1), status]);
         (
-            model.upstream_tracked,
+            model.head_push_now().upstream_counts.is_some(),
             model.ahead,
             model.behind,
             model.pull_blocked,
@@ -337,31 +337,29 @@ fn commits_on_both_sides_of_the_upstream_block_the_pull() {
 fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     let mut model = WorktreeModel::default();
     let mut read = status_of("feature", Some("origin/feature"), 0, 1, Vec::new());
+    let track = platitude_core::remote::PushTrack {
+        tracking: "fork/feature".to_string(),
+        counts: platitude_core::AheadBehind {
+            ahead: 1,
+            behind: 2,
+        },
+    };
     if let StateMsg::Status(status) = &mut read {
-        status.push.track = Some(platitude_core::remote::PushTrack {
-            tracking: "fork/feature".to_string(),
-            counts: platitude_core::AheadBehind {
-                ahead: 1,
-                behind: 2,
-            },
-        });
+        status.push = platitude_core::remote::StatusPush {
+            push_remote: Some("fork".to_string()),
+            upstream_here: true,
+            track: Some(track.clone()),
+        };
     }
     model.absorb(vec![head_on("feature", ROOT, 1), read]);
-    let pushes = |model: &WorktreeModel| {
-        (
-            model.push_tracking.clone(),
-            model.push_ahead,
-            model.push_behind,
-        )
-    };
-    assert_eq!(pushes(&model), ("fork/feature".to_string(), 1, 2));
+    let told = model.head_push_now().status;
+    assert_eq!(told.track, Some(track));
+    assert!(told.upstream_here);
 
     model.absorb(vec![head_on("main", NEXT, 2)]);
-    assert_eq!(
-        pushes(&model),
-        (String::new(), 0, 0),
-        "feature's destination is not main's"
-    );
+    let told = model.head_push_now().status;
+    assert_eq!(told.track, None, "feature's destination is not main's");
+    assert!(!told.upstream_here);
 }
 
 #[test]

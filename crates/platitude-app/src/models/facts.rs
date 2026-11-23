@@ -190,53 +190,23 @@ impl GitFacts {
 
     /// What a push of the current branch can do, in the word
     /// `PublishFlow.pushState` branches on. A closed tab is the caller's to
-    /// add: this answers for the repository alone. `upstream_here` is
-    /// whether the upstream is a branch here (`WorktreeModel.upstreamHere`)
-    /// — never read off its name. The `push_*` three are the destination's
-    /// own counts (`WorktreeModel.pushTracking`), read where the push goes
-    /// elsewhere.
+    /// add: this answers for the repository alone.
+    ///
+    /// `head` is the model's own record handed on as it was read
+    /// (`WorktreeModel.headPush`); QML builds none. The repository's mark
+    /// (`RepoTab.pushDefault`, empty for none) and the configured remotes
+    /// are the tab's. The two push slots beside this take them so.
     #[qslot]
-    #[expect(clippy::too_many_arguments)]
     fn push_standing(
         &self,
-        unborn: bool,
-        detached: bool,
-        branch: String,
-        upstream: String,
-        upstream_here: bool,
-        upstream_tracked: bool,
-        ahead: i32,
-        behind: i32,
-        push_remote: String,
+        head: crate::encode::Push,
         push_default: String,
         remote_names: Vec<String>,
-        push_tracking: String,
-        push_ahead: i32,
-        push_behind: i32,
     ) -> String {
-        platitude_core::remote::push_standing(
-            unborn,
-            detached,
-            &branch,
-            route(
-                &upstream,
-                upstream_here,
-                &push_remote,
-                &push_default,
-                &remote_names,
-            ),
-            upstream_tracked.then(|| counts_of(ahead, behind)),
-            // An empty name is the model's word for no destination counted
-            // against (`WorktreeModel.pushTracking`).
-            (!push_tracking.is_empty())
-                .then(|| platitude_core::remote::PushTrack {
-                    tracking: push_tracking,
-                    counts: counts_of(push_ahead, push_behind),
-                })
-                .as_ref(),
-        )
-        .as_str()
-        .to_string()
+        let push_default = marked(&push_default);
+        head.standing(head.route(push_default, names(&remote_names)))
+            .as_str()
+            .to_string()
     }
 
     /// Whether a mark sends the push to another remote than the
@@ -247,48 +217,31 @@ impl GitFacts {
     #[qslot]
     fn push_goes_elsewhere(
         &self,
-        upstream: String,
-        upstream_here: bool,
-        push_remote: String,
+        head: crate::encode::Push,
         push_default: String,
         remote_names: Vec<String>,
     ) -> bool {
-        route(
-            &upstream,
-            upstream_here,
-            &push_remote,
-            &push_default,
-            &remote_names,
-        )
-        .goes_elsewhere()
+        head.route(marked(&push_default), names(&remote_names))
+            .goes_elsewhere()
     }
 
     /// Where the toolbar's push button would send this branch, spelled as
     /// the label shows it; empty where there is no branch or nowhere to
     /// send it. Asked of core because the send (`remote::plan_current_push`)
     /// reads the same table: a second spelling in a binding lets the label
-    /// name another remote than the push goes to.
+    /// name another remote than the push goes to. `default_remote` is where
+    /// a branch that tracks nothing, marked nowhere, goes.
     #[qslot]
-    #[expect(clippy::too_many_arguments)]
     fn push_target(
         &self,
-        branch: String,
-        upstream: String,
-        upstream_here: bool,
-        push_remote: String,
+        head: crate::encode::Push,
         push_default: String,
-        default_remote: String,
         remote_names: Vec<String>,
+        default_remote: String,
     ) -> String {
-        route(
-            &upstream,
-            upstream_here,
-            &push_remote,
-            &push_default,
-            &remote_names,
-        )
-        .target(&branch, &default_remote)
-        .unwrap_or_default()
+        head.route(marked(&push_default), names(&remote_names))
+            .target(&head.branch, &default_remote)
+            .unwrap_or_default()
     }
 
     /// What the right-click menu on a ref may offer, as the words
@@ -704,31 +657,10 @@ fn names(remote_names: &[String]) -> impl Iterator<Item = &str> {
     remote_names.iter().map(String::as_str)
 }
 
-/// The toolbar's push route, off the model's properties: an empty mark is
-/// their word for none.
-fn route<'a>(
-    upstream: &'a str,
-    upstream_here: bool,
-    push_remote: &'a str,
-    push_default: &'a str,
-    remote_names: &'a [String],
-) -> platitude_core::remote::PushRoute<'a> {
-    let set = |mark: &'a str| Some(mark).filter(|mark| !mark.is_empty());
-    platitude_core::remote::PushRoute::new(
-        platitude_core::remote::Upstream::of(upstream, upstream_here),
-        platitude_core::remote::Marked::of(set(push_remote), set(push_default)),
-        names(remote_names),
-    )
-}
-
-/// A pair of counts as QML hands it back: the two `int` properties a model
-/// put out for it. None of them is under zero; one that were counts for
-/// nothing.
-fn counts_of(ahead: i32, behind: i32) -> platitude_core::AheadBehind {
-    platitude_core::AheadBehind {
-        ahead: u32::try_from(ahead).unwrap_or(0),
-        behind: u32::try_from(behind).unwrap_or(0),
-    }
+/// The repository's mark as the tab holds it (`RepoTab.pushDefault`):
+/// empty is its word for none.
+fn marked(push_default: &str) -> Option<&str> {
+    Some(push_default).filter(|mark| !mark.is_empty())
 }
 
 /// The lines of a file QML names by its first and last line numbers,
@@ -769,48 +701,60 @@ qml_register!(GitFacts, "GitFacts", singleton = true);
 
 #[cfg(test)]
 mod tests {
-    use super::{GitFacts, counts_of, file_lines};
+    use super::{GitFacts, file_lines};
+    use platitude_core::remote::{HeadPush, PushTrack, StatusPush};
 
-    /// The bridge's two spellings of "nothing counted" — a flag beside the
-    /// upstream's numbers, an empty name beside the destination's — reach
-    /// the table as none, whatever numbers ride with them.
-    #[test]
-    fn a_flag_down_and_an_empty_name_are_nothing_counted() {
-        let standing = |tracked: bool, counts: (i32, i32), mark: &str, tracking: &str| {
-            GitFacts.push_standing(
-                false,
-                false,
-                "main".to_string(),
-                "origin/main".to_string(),
-                false,
-                tracked,
-                counts.0,
-                counts.1,
-                mark.to_string(),
-                String::new(),
-                vec!["fork".to_string(), "origin".to_string()],
-                tracking.to_string(),
-                1,
-                1,
-            )
-        };
-        assert_eq!(standing(false, (3, 3), "", ""), "publish");
-        assert_eq!(standing(true, (3, 3), "", ""), "diverged");
-        assert_eq!(standing(true, (1, 0), "fork", ""), "elsewhere");
-        assert_eq!(standing(true, (1, 0), "fork", "fork/main"), "diverged");
+    /// `main` one commit ahead of `origin/main`, marked nowhere of its own.
+    fn head(track: Option<PushTrack>) -> crate::encode::Push {
+        crate::encode::Push::new(HeadPush {
+            branch: "main".into(),
+            upstream: "origin/main".into(),
+            upstream_counts: Some(platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 0,
+            }),
+            status: StatusPush {
+                track,
+                ..StatusPush::default()
+            },
+            ..HeadPush::default()
+        })
     }
 
+    /// The tab's empty mark is no mark; one on another remote takes the
+    /// push there, under the branch's own name.
     #[test]
-    fn a_pair_of_counts_comes_back_as_it_went_out() {
-        let pair = |ahead, behind| platitude_core::AheadBehind { ahead, behind };
-        assert_eq!(counts_of(2, 1), pair(2, 1));
-        assert_eq!(counts_of(0, 0), pair(0, 0));
+    fn the_toolbars_push_is_read_off_the_models_record_under_the_tabs_mark() {
+        let remotes = || vec!["fork".to_string(), "origin".to_string()];
         assert_eq!(
-            counts_of(i32::MAX, 0),
-            pair(i32::MAX.unsigned_abs(), 0),
-            "a count drawn at its largest stays a count"
+            GitFacts.push_standing(head(None), String::new(), remotes()),
+            "ready"
         );
-        assert_eq!(counts_of(-1, -7), pair(0, 0), "under zero counts for none");
+        assert_eq!(
+            GitFacts.push_standing(head(None), "fork".into(), remotes()),
+            "elsewhere"
+        );
+        let there = PushTrack {
+            tracking: "fork/main".into(),
+            counts: platitude_core::AheadBehind {
+                ahead: 1,
+                behind: 1,
+            },
+        };
+        assert_eq!(
+            GitFacts.push_standing(head(Some(there)), "fork".into(), remotes()),
+            "diverged"
+        );
+        assert!(GitFacts.push_goes_elsewhere(head(None), "fork".into(), remotes()));
+        assert!(!GitFacts.push_goes_elsewhere(head(None), String::new(), remotes()));
+        assert_eq!(
+            GitFacts.push_target(head(None), "fork".into(), remotes(), "origin".into()),
+            "fork/main"
+        );
+        assert_eq!(
+            GitFacts.push_target(head(None), String::new(), remotes(), "origin".into()),
+            "origin/main"
+        );
     }
 
     #[test]

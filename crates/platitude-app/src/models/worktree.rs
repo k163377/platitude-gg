@@ -76,25 +76,19 @@ pub struct WorktreeModel {
     status_seq: i32,
     /// The branch the last status read HEAD on, for `counts_settled`.
     status_branch: String,
-    /// Whether `upstream` / `ahead` / `behind` (and the push's own
-    /// `push_*` three) are about the branch the record names. Between a
-    /// move of HEAD and the status behind it they are blank and the push
+    /// Whether `upstream` / `ahead` / `behind` (and the push's own counts,
+    /// `head_push`) are about the branch the record names. Between a move
+    /// of HEAD and the status behind it they are blank and the push
     /// standing is closed.
     counts_settled: bool,
     /// What the last status said of its branch's standing, shown through
     /// the ones below only while it is the branch HEAD is on (`settle`).
     status_upstream: String,
-    status_upstream_here: bool,
     status_upstream_counts: Option<platitude_core::AheadBehind>,
     upstream: String,
-    /// `upstream` is a branch here (`branch.<branch>.remote = .`), not a
-    /// remote's — which its short name cannot say: a branch here may be
-    /// called `origin/main` (`StatusMsg::upstream_here`).
-    upstream_here: bool,
-    /// Whether `ahead` / `behind` mean anything: a branch whose upstream has
-    /// no remote-tracking ref yet compares against nothing, and zeroes there
-    /// would read as "already sent".
-    upstream_tracked: bool,
+    /// Zero where the upstream has no ref to count against: a branch whose
+    /// upstream has no remote-tracking ref yet compares against nothing
+    /// (`head_push` says which).
     ahead: i32,
     behind: i32,
     /// Whether the `pull` row is greyed: the two sides have diverged, which
@@ -102,23 +96,10 @@ pub struct WorktreeModel {
     /// (デザイン規約 §取り込んで合流させる). Derived from the counts, so
     /// blank whenever they are.
     pull_blocked: bool,
-    /// This branch's own push mark (`branch.<branch>.pushRemote`), empty
-    /// where none. It beats `RepoTab.pushDefault`, so the toolbar's
-    /// destination and standing both read it; it rides with the status so
-    /// it never pairs with another branch.
-    push_remote: String,
-    /// What the last status said of the branch against where a mark sends
-    /// its push (`StatusMsg::push_track`), shown through the three below
-    /// only while it is the branch HEAD is on (`settle`).
-    status_push_track: Option<platitude_core::remote::PushTrack>,
-    /// The remote branch the push's own counts are against, where a mark
-    /// sends the push to another remote than the upstream's; empty
-    /// everywhere else, and where nothing here tracks the branch over
-    /// there. The toolbar reads these in place of `ahead` / `behind` there
-    /// (`platitude_core::remote::push_standing`).
-    push_tracking: String,
-    push_ahead: i32,
-    push_behind: i32,
+    /// What the last status read of the push of its branch
+    /// (`StatusMsg::push`), shown through `head_push` — its upstream and
+    /// counts only while it is the branch HEAD is on.
+    status_push: platitude_core::remote::StatusPush,
     op_text: String,
     /// The same operation in git's spelling (`cherry-pick`), for the pill
     /// that says the whole command (デザイン規約 §git 用語のコード表記).
@@ -315,19 +296,9 @@ impl WorktreeModel {
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
     qproperty!("countsSettled", Member = counts_settled, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
-    qproperty!("upstreamHere", Member = upstream_here, Notify = changed);
-    qproperty!(
-        "upstreamTracked",
-        Member = upstream_tracked,
-        Notify = changed
-    );
     qproperty!("ahead", Member = ahead, Notify = changed);
     qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("pullBlocked", Member = pull_blocked, Notify = changed);
-    qproperty!("pushRemote", Member = push_remote, Notify = changed);
-    qproperty!("pushTracking", Member = push_tracking, Notify = changed);
-    qproperty!("pushAhead", Member = push_ahead, Notify = changed);
-    qproperty!("pushBehind", Member = push_behind, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
     qproperty!("opCommand", Member = op_command, Notify = changed);
     qproperty!("opAlso", Member = op_also, Notify = changed);
@@ -412,6 +383,14 @@ impl WorktreeModel {
         crate::encode::Standing::new(self.tree_standing())
     }
 
+    // The push of the branch HEAD is on (`remote::HeadPush`), as one value
+    // the toolbar's push slots take (`PublishFlow`); built as it is read.
+    qproperty!("headPush", Read = head_push, Notify = changed);
+
+    fn head_push(&self) -> crate::encode::Push {
+        crate::encode::Push::new(self.head_push_now())
+    }
+
     // Said for every status drained, whether or not a row moved — the one
     // to wait on for "the status was read" (`NavSectionModel.changed` is
     // said only when its rows change) — and where the counts are drawn
@@ -481,6 +460,27 @@ impl WorktreeModel {
         }
     }
 
+    /// The push of the branch HEAD is on: the last status's reading of it,
+    /// its upstream and counts blank until that status is about this
+    /// branch (`counts_settled`). The branch's own mark is the last
+    /// status's whichever branch it read.
+    fn head_push_now(&self) -> platitude_core::remote::HeadPush {
+        let settled = self.counts_settled;
+        let told = &self.status_push;
+        platitude_core::remote::HeadPush {
+            branch: self.branch.clone(),
+            detached: self.detached,
+            unborn: self.unborn,
+            upstream: self.upstream.clone(),
+            upstream_counts: self.status_upstream_counts.filter(|_| settled),
+            status: platitude_core::remote::StatusPush {
+                push_remote: told.push_remote.clone(),
+                upstream_here: settled && told.upstream_here,
+                track: told.track.clone().filter(|_| settled),
+            },
+        }
+    }
+
     /// That, and what the menus' rows draw beside it.
     fn tree_reading(&self) -> crate::encode::TreeReading {
         crate::encode::TreeReading {
@@ -520,19 +520,12 @@ impl WorktreeModel {
         self.status_branch = String::new();
         self.counts_settled = false;
         self.status_upstream = String::new();
-        self.status_upstream_here = false;
         self.status_upstream_counts = None;
         self.upstream = String::new();
-        self.upstream_here = false;
-        self.upstream_tracked = false;
         self.ahead = 0;
         self.behind = 0;
         self.pull_blocked = false;
-        self.push_remote = String::new();
-        self.status_push_track = None;
-        self.push_tracking = String::new();
-        self.push_ahead = 0;
-        self.push_behind = 0;
+        self.status_push = platitude_core::remote::StatusPush::default();
         self.op_text = String::new();
         self.op_command = String::new();
         self.op_also = String::new();
@@ -642,11 +635,6 @@ impl WorktreeModel {
             not_copied,
             stop,
         } = msg;
-        let platitude_core::remote::StatusPush {
-            push_remote,
-            upstream_here,
-            track: push_track,
-        } = push;
         self.side_ours = sides.ours;
         self.loaded = true;
         self.side_theirs = sides.theirs;
@@ -659,10 +647,8 @@ impl WorktreeModel {
         self.status_seq = i32::try_from(head_seq).unwrap_or(i32::MAX);
         self.status_branch = status.branch_head.clone().unwrap_or_default();
         self.status_upstream = status.upstream.clone().unwrap_or_default();
-        self.status_upstream_here = upstream_here;
         self.status_upstream_counts = status.upstream_counts;
-        self.push_remote = push_remote.unwrap_or_default();
-        self.status_push_track = push_track;
+        self.status_push = push;
         self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
         self.op_state = op_state;
         self.op_editing = stop.editing;
@@ -797,30 +783,19 @@ impl WorktreeModel {
         self.counts_settled = self.loaded && self.status_branch == self.branch;
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
-            self.upstream_here = self.status_upstream_here;
-            // The properties are Qt's own: a flag and an empty name for
-            // "nothing to count against", zeroes beside them, and `int`s —
-            // a count past one is drawn as its largest.
+            // The properties are Qt's own: zeroes for "nothing to count
+            // against", and `int`s — a count past one is drawn as its
+            // largest.
             let shown = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
             let upstream = self.status_upstream_counts;
-            self.upstream_tracked = upstream.is_some();
             self.ahead = shown(upstream.map_or(0, |counts| counts.ahead));
             self.behind = shown(upstream.map_or(0, |counts| counts.behind));
             self.pull_blocked = upstream.is_some_and(platitude_core::AheadBehind::is_diverged);
-            let pushed = self.status_push_track.as_ref();
-            self.push_tracking = pushed.map_or_else(String::new, |track| track.tracking.clone());
-            self.push_ahead = shown(pushed.map_or(0, |track| track.counts.ahead));
-            self.push_behind = shown(pushed.map_or(0, |track| track.counts.behind));
         } else {
             self.upstream.clear();
-            self.upstream_here = false;
-            self.upstream_tracked = false;
             self.ahead = 0;
             self.behind = 0;
             self.pull_blocked = false;
-            self.push_tracking.clear();
-            self.push_ahead = 0;
-            self.push_behind = 0;
         }
         let standing = self.tree_standing();
         self.side_ours_current = standing.is_current(&self.side_ours);

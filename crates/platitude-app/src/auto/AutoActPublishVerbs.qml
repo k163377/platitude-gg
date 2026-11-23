@@ -243,7 +243,7 @@ Item {
                 "name": "publish_upstream_asked",
                 "when": () => ({ "bar": graphPane.askCard.settled }),
                 "report": () => "publish upstream=" + worktree.upstream
-                                + " tracked=" + worktree.upstreamTracked
+                                + " tracked=" + worktree.headPush.tracked
                                 + " state=" + page.pushState
                                 + " remote=" + publishFlow.publishRemote
                                 + " branch=" + publishFlow.publishBranch })
@@ -263,7 +263,7 @@ Item {
                 "idle": repoTab.busyCount === 0 }),
             "report": () => "push_target label=" + page.pushTargetLabel
                             + " state=" + page.pushState
-                            + " branch_mark=" + worktree.pushRemote
+                            + " branch_mark=" + worktree.headPush.pushRemote
                             + " repo_mark=" + repoTab.pushDefault
                             + " tracks=" + worktree.upstream })
     }

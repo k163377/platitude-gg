@@ -41,15 +41,13 @@ Item {
     // ---- push ------------------------------------------------------
     /// Where the button would send this branch: the branch's own mark, then the repository's, then the upstream
     /// (デザイン規約 §リモートを書き留める). **The order is core's** (`platitude_core::remote::push_target`), the same the send
-    /// reads — never re-derive it here, or the label and the send part ways. Whether the upstream is a branch here is
-    /// the status's word (`WorktreeModel.upstreamHere`), never read off its name. The branch's own mark rides with the
-    /// status (`WorktreeModel.pushRemote`). Headless: `push-target` — the label is in a tooltip, which no picture can
-    /// judge: read it plain and on `--preset forkmark` / `--preset forkdiverged`.
+    /// reads — never re-derive it here, or the label and the send part ways. The branch's push is the model's record,
+    /// handed on as read (`WorktreeModel.headPush`: whether the upstream is a branch here is the status's word, never
+    /// read off its name, and the branch's own mark rides with the status). Headless: `push-target` — the label is in
+    /// a tooltip, which no picture can judge: read it plain and on `--preset forkmark` / `--preset forkdiverged`.
     readonly property string pushTargetLabel:
-        GitFacts.pushTarget(publishFlow.worktree.branch, publishFlow.worktree.upstream,
-                            publishFlow.worktree.upstreamHere,
-                            publishFlow.worktree.pushRemote, publishFlow.repoTab.pushDefault,
-                            publishFlow.repoTab.defaultRemote, publishFlow.repoTab.remoteNames)
+        GitFacts.pushTarget(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
+                            publishFlow.repoTab.remoteNames, publishFlow.repoTab.defaultRemote)
     /// What the branch can do with its remote (デザイン規約 §リモートへ送る):
     ///
     /// - `closed`        — no branch to send
@@ -69,14 +67,8 @@ Item {
     readonly property string pushState:
         // `closed` too until the counts are about HEAD's branch (`WorktreeModel.countsSettled`).
         publishFlow.repoTab.state !== "open" || !publishFlow.worktree.countsSettled ? "closed"
-        : GitFacts.pushStanding(publishFlow.worktree.unborn,
-                                publishFlow.worktree.detached, publishFlow.worktree.branch,
-                                publishFlow.worktree.upstream, publishFlow.worktree.upstreamHere,
-                                publishFlow.worktree.upstreamTracked,
-                                publishFlow.worktree.ahead, publishFlow.worktree.behind,
-                                publishFlow.worktree.pushRemote, publishFlow.repoTab.pushDefault,
-                                publishFlow.repoTab.remoteNames, publishFlow.worktree.pushTracking,
-                                publishFlow.worktree.pushAhead, publishFlow.worktree.pushBehind)
+        : GitFacts.pushStanding(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
+                                publishFlow.repoTab.remoteNames)
     /// A mark sends the push to another remote than the upstream's — a branch here being on none: the counts that
     /// speak for it are then the destination's own, never the upstream's (デザイン規約 §リモートへ送る; user decision —
     /// ask before changing): git refuses a non-fast-forward against the destination's ref, so read against the
@@ -88,18 +80,18 @@ Item {
     /// `refs/remotes/`, or a `remote.<name>.push` that renames). Headless: `push-target` / `push-hover` / `force-push`
     /// on `--preset forkdiverged`, and `push-target forkmark --preset forkmark` for no tracking ref.
     readonly property bool pushElsewhere:
-        GitFacts.pushGoesElsewhere(publishFlow.worktree.upstream, publishFlow.worktree.upstreamHere,
-                                   publishFlow.worktree.pushRemote,
-                                   publishFlow.repoTab.pushDefault, publishFlow.repoTab.remoteNames)
+        GitFacts.pushGoesElsewhere(publishFlow.worktree.headPush, publishFlow.repoTab.pushDefault,
+                                   publishFlow.repoTab.remoteNames)
     /// The counts the standing reads, for the words that say them (`BandPushButton.tip`), and the remote branch they
     /// are against, which an overwrite leases to — none where the push would stay here, as the branch row's
     /// (`RefsSnapshot::branch_push`).
-    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.worktree.pushAhead
+    readonly property int pushAhead: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushAhead
                                                                : publishFlow.worktree.ahead
-    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.worktree.pushBehind
+    readonly property int pushBehind: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushBehind
                                                                 : publishFlow.worktree.behind
-    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.worktree.pushTracking
-                                         : publishFlow.worktree.upstreamHere || publishFlow.pushState === "stays-here"
+    readonly property string pushMeasured: publishFlow.pushElsewhere ? publishFlow.worktree.headPush.pushTracking
+                                         : publishFlow.worktree.headPush.upstreamHere
+                                           || publishFlow.pushState === "stays-here"
                                            ? ""
                                          : publishFlow.worktree.upstream
     /// Nothing this window asked git for is out — from the press, not from when the queue starts it (`settling` rises
@@ -133,7 +125,9 @@ Item {
         if (publishFlow.pushState === "publish") {
             // A gone branch here names no remote, whatever its name reads like (`startPublishAsk`).
             publishFlow.startPublishAsk(publishFlow.worktree.branch,
-                                        publishFlow.worktree.upstreamHere ? "" : publishFlow.worktree.upstream, "")
+                                        publishFlow.worktree.headPush.upstreamHere ? ""
+                                                                                   : publishFlow.worktree.upstream,
+                                        "")
             return
         }
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "", "")
