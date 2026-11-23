@@ -352,9 +352,10 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for One<T
 /// One record or nothing: the JS object, or `undefined` (an invalid
 /// `QVariant`). The reader tests it for truth and nothing else.
 ///
-/// **A role or a slot's answer, never a property**: a property read
-/// converts to its declared metatype (`handleMetaCallReadProperty`), and
-/// an invalid value ends the process with "Property type mismatch". The
+/// **A role, or a slot's argument or answer — never a property**: a
+/// property read converts to its declared metatype
+/// (`handleMetaCallReadProperty`), and an invalid value ends the process
+/// with "Property type mismatch". The
 /// bridge makes a property of any `PartialEq` type that crosses by value,
 /// so this one is not `PartialEq` — compare what it holds (`*a == *b`).
 /// A property that may hold nothing is a revision property beside a slot

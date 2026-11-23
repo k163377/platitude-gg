@@ -275,7 +275,8 @@ pub(super) const TABLE: &[Verb] = &[
     // The delete table's greyed rows with their tooltip up. The sentences
     // are read by `tests/qml/tst_branchcard.qml`; only `:remote` claims its
     // own here. A window adds the two lookups the rows are told apart by,
-    // one run each: `:remote` that `upstreamDrifted` arrived, `worktrees`
+    // one run each: `:remote` that the drifted reading arrived (the card's
+    // `branchUpstream`), `worktrees`
     // that the worktree holding the branch did. No run on the current branch:
     // `current` is core's own word, so that row stands on no lookup.
     Verb {
