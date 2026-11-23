@@ -9,7 +9,49 @@
 //! `push::tests::the_label_names_the_remote_the_send_uses`, which walks
 //! every arrangement of the keys through both.
 
-use super::standing::{THIS_REPOSITORY, Upstream};
+/// git's name for this repository where a remote's goes — in
+/// `branch.<n>.remote` (the upstream is a branch here) and in a mark alike.
+/// A push there moves a branch here; it sends nothing anywhere.
+pub(super) const THIS_REPOSITORY: &str = ".";
+
+/// What a branch is measured against, as its configuration names it —
+/// the toolbar's from the status tick (`PushMarks::upstream_is_here`), a
+/// row's from the listing (`RefEntry::upstream_is_here`). Net:
+/// `upstream_here_integration`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Upstream<'a> {
+    /// Nothing is configured.
+    #[default]
+    None,
+    /// A remote branch, `<remote>/<branch>` as the remote branches are
+    /// listed — or git's own short name for an upstream fetched outside
+    /// them ([`super::PushMarks::upstream_name`]).
+    Remote(&'a str),
+    /// A branch here (`branch.<n>.remote = .`). Told by configuration,
+    /// never off a name: a branch here may be called `origin/main`.
+    Here,
+}
+
+impl<'a> Upstream<'a> {
+    /// From a name for it (empty where none is configured) and whether
+    /// configuration puts it here.
+    pub fn of(name: &'a str, here: bool) -> Self {
+        match (name.is_empty(), here) {
+            (true, _) => Self::None,
+            (false, true) => Self::Here,
+            (false, false) => Self::Remote(name),
+        }
+    }
+
+    /// The remote branch it is, `None` for a branch here — which names no
+    /// remote whatever its name looks like — and for none.
+    pub fn remote_branch(self) -> Option<&'a str> {
+        match self {
+            Self::Remote(name) => Some(name),
+            Self::Here | Self::None => None,
+        }
+    }
+}
 
 /// Which way the marks point a push, before the upstream is weighed: the
 /// branch's own `branch.<n>.pushRemote` beats the repository's

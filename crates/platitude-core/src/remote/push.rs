@@ -16,8 +16,8 @@ use super::RemoteBranch;
 use super::list::current_branch;
 use super::marks::{PushMarks, push_marks};
 use super::refusal::{Sent, refusal};
-use super::route::Marked;
-use super::standing::{PushTrack, THIS_REPOSITORY};
+use super::route::{Marked, THIS_REPOSITORY};
+use super::standing::PushTrack;
 use crate::oid::Oid;
 
 /// How hard a push may overwrite the remote.
@@ -371,8 +371,7 @@ fn track_of(branch: &str, line: &[u8]) -> Option<PushTrack> {
 mod tests {
     use super::*;
     use crate::remote::marks::PushDefault;
-    use crate::remote::route::{Marked, PushRoute};
-    use crate::remote::standing::Upstream;
+    use crate::remote::route::{Marked, PushRoute, Upstream};
 
     const REMOTES: [&str; 2] = ["fork", "origin"];
 

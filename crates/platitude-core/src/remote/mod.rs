@@ -47,10 +47,10 @@ pub use self::push::mock_push_tracks;
 pub use self::push::{
     PushForce, PushSpec, plan_current_push, plan_push, publish_spec, push, push_track, push_tracks,
 };
-pub use self::route::{Marked, PushRoute};
+pub use self::route::{Marked, PushRoute, Upstream};
 pub use self::standing::{
-    HeadPush, HeadPushFacts, PushReading, PushStanding, PushTrack, StatusPush, Upstream,
-    push_reading, push_standing,
+    HeadPush, HeadPushFacts, PushReading, PushStanding, PushTrack, StatusPush, push_reading,
+    push_standing,
 };
 pub use self::tags::{
     AdvertisedTag, HeldTag, RemoteTag, RemoteTagRef, delete_remote_tag, list_tags,

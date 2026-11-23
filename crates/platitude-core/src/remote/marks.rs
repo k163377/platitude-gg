@@ -293,7 +293,7 @@ impl PushMarks {
     /// name tells: `git status` shortens a branch here called
     /// `origin/main` to just that.
     pub fn upstream_is_here(&self) -> bool {
-        self.tracks.as_deref() == Some(super::standing::THIS_REPOSITORY)
+        self.tracks.as_deref() == Some(super::route::THIS_REPOSITORY)
     }
 
     /// The upstream as the remote branches are listed — `merge` mapped
