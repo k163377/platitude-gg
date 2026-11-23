@@ -175,7 +175,7 @@ impl RepoSession {
                 let held = self.worktree_holders();
                 let joins = RefJoins::new(&refs, &held);
                 let mut snapshot = build_snapshot(&refs, &head, &remote_tags, &joins);
-                self.finish_snapshot(&mut snapshot, &head, remotes, push_tracks, renamed);
+                self.finish_snapshot(&mut snapshot, remotes, push_tracks, renamed);
                 let label_map = build_label_map(&refs, &head, &remote_tags, &joins);
                 self.sink.event(SessionEvent::RefsLoaded {
                     snapshot: self.share_snapshot(snapshot),
@@ -244,7 +244,6 @@ impl RepoSession {
     fn finish_snapshot(
         &self,
         snapshot: &mut RefsSnapshot,
-        head: &HeadState,
         remotes: remote::Remotes,
         push_tracks: Option<Vec<(String, remote::PushTrack)>>,
         renamed: Vec<(crate::Name, crate::Name)>,
@@ -255,12 +254,6 @@ impl RepoSession {
             .map(|r| (r.name, r.fetch_url))
             .unzip();
         snapshot.marks = remotes.marks;
-        // Not the one HEAD is on: the status tick reads and keeps its mark
-        // (`StatusLoaded::push`).
-        snapshot
-            .marks
-            .branch_push_remotes
-            .retain(|mark| head.branch.as_deref() != Some(mark.branch.as_str()));
         let held = self.published_snapshot();
         // A read that could not tell repeats the last answer, as the status
         // tick's does (`Standing::push_of`): a diverged row falling to

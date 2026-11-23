@@ -94,9 +94,9 @@ pub struct BranchPushRemote {
 /// [`OriginMarks`], and every branch's own push mark, in branch name order
 /// — what a menu on a branch the worktree is not on weighs where its push
 /// goes by (`session::RefsSnapshot::branch_push`). The branch the worktree
-/// is on is read fresh on every status tick instead ([`push_marks`]), and
-/// the snapshot's copy (`session::RefsSnapshot::marks`) holds neither its
-/// mark nor its counts; a send reads its branch's keys again by name.
+/// is on has its mark here too, but its push weighs the one every status
+/// tick reads fresh ([`push_marks`]); a send reads its branch's keys again
+/// by name.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct KeptMarks {
     pub origin: OriginMarks,

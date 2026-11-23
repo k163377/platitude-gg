@@ -52,9 +52,12 @@ pub struct RefsSnapshot {
     /// remote this repository calls origin, by both its keys — the push's
     /// says where a push goes when no branch says otherwise, `None` where
     /// unset, and then a branch's upstream decides, else the remote called
-    /// `origin` — and every branch's own push mark but the one HEAD is on,
-    /// whose mark the status tick reads and keeps. The branches' marks are
-    /// a run of their own, as `tag_drifts` is: marks are rare.
+    /// `origin` — and every branch's own push mark. The one HEAD is on is
+    /// among them, as the read found it, and read by nothing here: its
+    /// push is the toolbar's, off the status tick's own read of its marks
+    /// (`Self::head_push`), and its row answers nothing
+    /// (`Self::branch_push`). The branches' marks are a run of their own,
+    /// as `tag_drifts` is: marks are rare.
     pub marks: crate::remote::KeptMarks,
     /// The branches a mark sends to another remote than their upstream's,
     /// counted against the tracking ref of where they go
@@ -280,7 +283,7 @@ impl RefsSnapshot {
     /// tree has it, or as this listing does — answers nothing here (closed,
     /// so the menu keeps no row for it): its push's one door is the toolbar
     /// (デザイン規約 §メニュー「そこにしか入口が無いもの」), off the status
-    /// tick, and this snapshot keeps none of its marks or counts. A branch
+    /// tick, and this snapshot keeps none of its counts. A branch
     /// measured against another branch here (`branch.<n>.remote = .`) that
     /// is listed stands as the toolbar's would (`PushStanding::StaysHere`,
     /// or a mark's destination and its counts); one whose upstream, of
