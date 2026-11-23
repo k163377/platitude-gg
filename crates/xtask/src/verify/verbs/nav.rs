@@ -275,10 +275,13 @@ pub(super) const TABLE: &[Verb] = &[
     // The delete table's greyed rows with their tooltip up. The sentences
     // are read by `tests/qml/tst_branchcard.qml`; only `:remote` claims its
     // own here. A window adds the two lookups the rows are told apart by,
-    // one run each: `:remote` that the drifted reading arrived (the card's
-    // `branchUpstream`), `worktrees`
-    // that the worktree holding the branch did. No run on the current branch:
-    // `current` is core's own word, so that row stands on no lookup.
+    // one run each: `:remote` that the card's record named the reading it
+    // greys on (`branchUpstream`'s `remoteCounterpart`), `worktrees` that
+    // the worktree holding the branch did. `:remote` does not tell a
+    // drifted reading from a far side that never arrived — both grey the
+    // row in the same words —, so the drift is `offers::ref_menu`'s tests'
+    // to judge. No run on the current branch: `current` is core's own
+    // word, so that row stands on no lookup.
     Verb {
         name: "delete-blocked-tip",
         when: &[
