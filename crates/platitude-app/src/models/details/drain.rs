@@ -106,3 +106,67 @@ impl DetailsModel {
         self.message_body = body;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use platitude_core::Oid;
+    use platitude_core::details::CommitDetails;
+
+    use super::DetailsModel;
+
+    /// The card stood on a commit by `author`, committed by `committer`,
+    /// with `message`.
+    fn card_of(author: &str, committer: &str, message: &str) -> DetailsModel {
+        let oid = Oid::from_hex_str(&"1".repeat(40)).expect("a full object name");
+        let mut model = DetailsModel::default();
+        model.take_header(
+            oid.to_hex(),
+            &CommitDetails {
+                oid,
+                parents: Vec::new(),
+                author_name: "Ada".to_string(),
+                author_email: author.to_string(),
+                author_time: 0,
+                committer_name: "Ada".to_string(),
+                committer_email: committer.to_string(),
+                committer_time: 0,
+                co_authors: Vec::new(),
+                message: message.to_string(),
+                files: Vec::new(),
+            },
+        );
+        model
+    }
+
+    /// The message is cut as the commit editor's two fields are
+    /// (`commit::split_message`), so a commit nobody touched does not read
+    /// as edited: a CRLF subject loses its `\r` and an indented one its
+    /// indent, the body its blank lead and its trailing blanks.
+    #[test]
+    fn the_card_cuts_a_message_as_the_editor_does() {
+        let message = "    indented subject\r\n\r\nThe body.   \r\n";
+        let card = card_of("ada@example.com", "ada@example.com", message);
+        assert_eq!(
+            (card.message_subject.as_str(), card.message_body.as_str()),
+            ("indented subject", "The body.")
+        );
+        assert_eq!(
+            (card.message_subject, card.message_body),
+            platitude_core::commit::split_message(message),
+            "the editor's own cut"
+        );
+    }
+
+    /// Two addresses are one person where they fold to one face
+    /// (`avatar::key`): letter case beyond ASCII and the blanks around them
+    /// tell nobody apart; another address does.
+    #[test]
+    fn the_committer_is_told_apart_by_the_key_a_face_is_filed_under() {
+        let differs = |author: &str, committer: &str| {
+            card_of(author, committer, "subject").committer_differs
+        };
+        assert!(!differs("ÄDA@example.com", "äda@example.com"), "case beyond ASCII");
+        assert!(!differs(" ada@example.com", "ada@example.com"), "blanks around");
+        assert!(differs("ada@example.com", "grace@example.com"), "another person");
+    }
+}
