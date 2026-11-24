@@ -74,11 +74,10 @@ impl DetailsModel {
         self.committer_avatar = crate::encode::avatar_code(&details.committer_name);
         self.committer_avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.committer_email)).unwrap_or_default();
-        // The address tells two people apart (as it keys a face,
-        // `platitude_core::avatar`); it arrives already mailmapped.
-        self.committer_differs = !details
-            .committer_email
-            .eq_ignore_ascii_case(&details.author_email);
+        // The address tells two people apart, folded as it keys a face
+        // (`avatar::key`); it arrives already mailmapped.
+        self.committer_differs = platitude_core::avatar::key(&details.committer_email)
+            != platitude_core::avatar::key(&details.author_email);
         self.commit_time_differs = details.committer_time != details.author_time;
         self.committer_time = details.committer_time;
         // Cut as the commit editor's two fields are (`commit::split_message`).

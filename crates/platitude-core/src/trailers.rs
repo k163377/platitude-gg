@@ -165,6 +165,12 @@ pub fn parse_co_authors(field: &str) -> Vec<CoAuthor> {
         .collect()
 }
 
+/// The identity as a box shows it and [`split_identity`] reads it back:
+/// `Name <address>`.
+pub fn spell_identity(name: &str, email: &str) -> String {
+    format!("{name} <{email}>")
+}
+
 /// Splits a typed identity — `Name <address>`, or either half alone —
 /// into `(name, address)`. The address is the last bracketed run (or the
 /// whole text) and counts only with an `@` past its first character; the
@@ -193,6 +199,16 @@ pub fn split_identity(text: &str) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_spelled_identity_reads_back_as_it_went_in() {
+        let spelled = spell_identity("Ada Lovelace", "ada@example.com");
+        assert_eq!(spelled, "Ada Lovelace <ada@example.com>");
+        assert_eq!(
+            split_identity(&spelled),
+            ("Ada Lovelace".to_string(), "ada@example.com".to_string())
+        );
+    }
 
     #[test]
     fn a_typed_identity_splits_into_name_and_address() {

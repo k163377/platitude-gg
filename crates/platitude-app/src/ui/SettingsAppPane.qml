@@ -88,7 +88,7 @@ ColumnLayout {
         pane.authorChoices = pane.curPage
                            ? pane.curPage.pageGraph.authorChoices(pane.prefillName, pane.prefillEmail)
                            : pane.prefillEmail !== ""
-                             ? [pane.prefillName + " <" + pane.prefillEmail + ">"] : []
+                             ? [GitFacts.identityText(pane.prefillName, pane.prefillEmail)] : []
     }
 
     /// The address and name the picker files under, split out of the entry: `Name <address>`, or either half typed
@@ -314,7 +314,7 @@ ColumnLayout {
             avatarWho.editText = ""
             return
         }
-        const who = pane.prefillName + " <" + pane.prefillEmail + ">"
+        const who = GitFacts.identityText(pane.prefillName, pane.prefillEmail)
         avatarWho.wanted = who
         avatarWho.editText = who
         chooseAvatar.forceActiveFocus()

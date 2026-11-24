@@ -489,6 +489,13 @@ impl GitFacts {
         One::new(crate::encode::Identity::typed(&text))
     }
 
+    /// The identity as a box shows it and `identityOf` reads it back
+    /// (`trailers::spell_identity`: `Name <address>`).
+    #[qslot]
+    fn identity_text(&self, name: String, email: String) -> String {
+        platitude_core::trailers::spell_identity(&name, &email)
+    }
+
     /// The key a file row is chosen, walked and opened by in the pane
     /// (`encode::file_key`: `<bucket>:<path>`).
     #[qslot]

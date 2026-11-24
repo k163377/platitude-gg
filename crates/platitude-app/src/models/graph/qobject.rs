@@ -537,26 +537,24 @@ impl GraphModel {
     }
 
     /// The authors of the loaded rows as the settings card lists them —
-    /// `Name <address>`, one per address, sorted; a prefill goes first and
-    /// is not repeated. Read when the card opens, off the rows — no git
-    /// runs.
+    /// `Name <address>` (`trailers::spell_identity`), one per address as
+    /// written, sorted; a prefill goes first and is not repeated. Read when
+    /// the card opens, off the rows — no git runs.
     #[qslot]
     fn author_choices(&self, prefill_name: String, prefill_email: String) -> Vec<String> {
-        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        use platitude_core::trailers::spell_identity;
+        let mut seen = std::collections::HashSet::from([prefill_email.as_str()]);
         let mut listed: Vec<String> = Vec::new();
         for row in &self.rows {
-            if row.author_email.is_empty()
-                || row.author_email == prefill_email
-                || !seen.insert(&row.author_email)
-            {
+            if row.author_email.is_empty() || !seen.insert(row.author_email.as_str()) {
                 continue;
             }
-            listed.push(format!("{} <{}>", row.author, row.author_email));
+            listed.push(spell_identity(&row.author, &row.author_email));
         }
         listed.sort();
         let mut out: Vec<String> = Vec::new();
         if !prefill_email.is_empty() {
-            out.push(format!("{prefill_name} <{prefill_email}>"));
+            out.push(spell_identity(&prefill_name, &prefill_email));
         }
         out.extend(listed);
         out
