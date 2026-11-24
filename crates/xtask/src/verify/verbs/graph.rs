@@ -150,7 +150,10 @@ pub(super) const TABLE: &[Verb] = &[
     // `origin/main` — its graph row's chip (`fetch`) or its left menu row
     // (`fetch-ref`) — as this window's fetch is asked, and that fetch moves
     // it, the menu stays up on where it is now (§hover「外乱で閉じない」),
-    // its `push --delete` still leased to where it stood and greyed.
+    // its `push --delete` still leased to where it stood and greyed. The
+    // left menu opens on `origin/main` while it still stands on HEAD's
+    // commit, so it offers no merge or rebase (`offers::ref_menu`) and
+    // fewer rows wait than on the chip's menu.
     Verb {
         name: "menu-wait",
         when: &[
@@ -160,7 +163,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("fetch-ref"),
-                "menu_wait stage=after same=true held=1/6 open=true waited=true moved=true withdrawn=push--delete",
+                "menu_wait stage=after same=true held=1/4 open=true waited=true moved=true withdrawn=push--delete",
             ),
             (
                 Arg::Is("merge"),
