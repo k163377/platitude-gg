@@ -97,7 +97,9 @@ fn a_branch_a_rebase_here_holds_says_the_stop_and_leads_nowhere() {
         (Leads::Nowhere, "", "rebase")
     );
     assert_eq!(
-        model.row_lead("remote", "origin/main", "main", "").stopped_by,
+        model
+            .row_lead("remote", "origin/main", "main", "")
+            .stopped_by,
         ""
     );
 }

@@ -460,7 +460,11 @@ impl WorktreeModel {
     /// none — the branch's own mark among it — until that status is about
     /// this branch (`HeadPush::of`).
     fn head_push_now(&self) -> platitude_core::remote::HeadPush {
-        let head = if self.detached { "" } else { self.branch.as_str() };
+        let head = if self.detached {
+            ""
+        } else {
+            self.branch.as_str()
+        };
         platitude_core::remote::HeadPush::of(head, self.unborn, &self.status, &self.status_push)
     }
 

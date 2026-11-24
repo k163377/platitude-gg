@@ -162,11 +162,19 @@ mod tests {
     /// tell nobody apart; another address does.
     #[test]
     fn the_committer_is_told_apart_by_the_key_a_face_is_filed_under() {
-        let differs = |author: &str, committer: &str| {
-            card_of(author, committer, "subject").committer_differs
-        };
-        assert!(!differs("ÄDA@example.com", "äda@example.com"), "case beyond ASCII");
-        assert!(!differs(" ada@example.com", "ada@example.com"), "blanks around");
-        assert!(differs("ada@example.com", "grace@example.com"), "another person");
+        let differs =
+            |author: &str, committer: &str| card_of(author, committer, "subject").committer_differs;
+        assert!(
+            !differs("ÄDA@example.com", "äda@example.com"),
+            "case beyond ASCII"
+        );
+        assert!(
+            !differs(" ada@example.com", "ada@example.com"),
+            "blanks around"
+        );
+        assert!(
+            differs("ada@example.com", "grace@example.com"),
+            "another person"
+        );
     }
 }

@@ -744,7 +744,13 @@ impl NavSectionModel {
     /// to `GitFacts.refMenu` / `switchAction`. Asked of the worktrees
     /// section.
     #[qslot]
-    pub(super) fn lead_of(&self, kind: String, full: String, local: String, opened: String) -> One<RowLead> {
+    pub(super) fn lead_of(
+        &self,
+        kind: String,
+        full: String,
+        local: String,
+        opened: String,
+    ) -> One<RowLead> {
         One::new(self.row_lead(&kind, &full, &local, &opened))
     }
 

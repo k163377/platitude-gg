@@ -71,7 +71,10 @@ impl RefMenu {
                 .delete_remote_out
                 .map_or("", |out| out.word())
                 .to_string(),
-            delete_both_out: offers.delete_both_out.map_or("", |out| out.word()).to_string(),
+            delete_both_out: offers
+                .delete_both_out
+                .map_or("", |out| out.word())
+                .to_string(),
             upstream_where: upstream.word().to_string(),
             push_tag: offers.push_tag,
             delete_remote_tag: offers.delete_remote_tag.word().to_string(),
