@@ -93,8 +93,9 @@ ColumnLayout {
 
     /// The address and name the picker files under, split out of the entry: `Name <address>`, or either half typed
     /// alone (`platitude_core::trailers::split_identity`).
-    readonly property string chosenEmail: GitFacts.identityEmailOf(avatarWho.wanted)
-    readonly property string chosenName: GitFacts.identityNameOf(avatarWho.wanted)
+    readonly property var chosen: GitFacts.identityOf(avatarWho.wanted)
+    readonly property string chosenEmail: pane.chosen.email
+    readonly property string chosenName: pane.chosen.name
     /// The one body the button and the box's Enter share, guarded as the button is: a picker opened over nobody
     /// would file against an empty address. Headless `avatar-enter`.
     function openAvatarPicker() {

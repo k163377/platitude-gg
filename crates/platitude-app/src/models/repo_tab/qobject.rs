@@ -618,19 +618,10 @@ impl RepoTab {
         self.keep_draft(subject, body, amending);
     }
 
+    /// What `holdDraft` was last handed, whole.
     #[qslot]
-    fn draft_subject(&self) -> String {
-        self.held_draft().subject
-    }
-
-    #[qslot]
-    fn draft_body(&self) -> String {
-        self.held_draft().body
-    }
-
-    #[qslot]
-    fn draft_amending(&self) -> bool {
-        self.held_draft().amending
+    fn draft(&self) -> crate::encode::One<crate::hub::Draft> {
+        crate::encode::One::new(self.held_draft())
     }
 
     /// Refs, status, the listings and a pass over the other worktrees, with

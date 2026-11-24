@@ -158,7 +158,7 @@ impl GraphModel {
     }
 
     /// Whether the row is one the shown entry would bring back. Read beside
-    /// `provisionalRevision`, for the reason `carriedName` is read beside
+    /// `provisionalRevision`, for the reason `carriedAt` is read beside
     /// `carriedRevision`.
     #[qslot]
     fn provisional_at(&self, row: i32) -> bool {
@@ -361,49 +361,21 @@ impl GraphModel {
         super::item::newest_commit_row(&self.rows).map_or(-1, |i| i as i32)
     }
 
-    /// What another worktree's uncommitted row shows beside its words:
-    /// its six tallies, or none for every other row. By row index, not off
-    /// the view — the view's tallies are this window's own.
+    /// Whose uncommitted row `row` is, where it is not this window's own:
+    /// the worktree's `name` (what the read-only gestures branch on), its
+    /// `path` (what a double-click opens in a tab of its own), whether it is
+    /// the repository's own (`home` — the house its name wears instead of
+    /// the tree, デザイン規約 §ref の種別「名前の印」) and the six `tally`s it
+    /// shows beside its words. By row index, not off the view — the view's
+    /// tallies are this window's own. `undefined` for every other row.
     #[qslot]
-    fn carried_tally(&self, row: i32) -> Optional<Tally> {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.carried.get(&row))
-            .map(|carried| carried.tally.clone())
-            .unwrap_or_default()
-    }
-
-    /// Where the worktree a row is about lives — what a double-click
-    /// on it opens in a tab of its own. Empty for every other row.
-    #[qslot]
-    fn carried_path(&self, row: i32) -> String {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.carried.get(&row))
-            .map(|carried| carried.path.clone())
-            .unwrap_or_default()
-    }
-
-    /// The name of the worktree a row is about, or empty where the
-    /// row is not one of theirs — what the read-only gestures branch on.
-    #[qslot]
-    fn carried_name(&self, row: i32) -> String {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.carried.get(&row))
-            .map(|carried| carried.name.clone())
-            .unwrap_or_default()
-    }
-
-    /// Whether the worktree a row is about is the repository's own — the
-    /// house its name wears instead of the tree (デザイン規約 §ref の種別
-    /// 「名前の印」). False for every other row.
-    #[qslot]
-    fn carried_home(&self, row: i32) -> bool {
-        usize::try_from(row)
-            .ok()
-            .and_then(|row| self.carried.get(&row))
-            .is_some_and(|carried| carried.home)
+    fn carried_at(&self, row: i32) -> Optional<CarriedRow> {
+        Optional::new(
+            usize::try_from(row)
+                .ok()
+                .and_then(|row| self.carried.get(&row))
+                .cloned(),
+        )
     }
 
     /// Which row a worktree's uncommitted work stands on now, or -1

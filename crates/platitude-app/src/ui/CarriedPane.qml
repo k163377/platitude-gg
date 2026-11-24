@@ -27,7 +27,7 @@ ColumnLayout {
     id: carriedPane
 
     /// The worktree's name, as the row says it: its folder's last segment, or the branch the repository's own has out
-    /// (`GraphModel.carriedName`).
+    /// (`GraphModel.carriedAt`'s `name`).
     required property string worktreeName
     /// It is the repository's own worktree: the name wears the house, not the tree (規約 §ref の種別「名前の印」).
     property bool worktreeHome: false

@@ -107,7 +107,7 @@ Item {
     /// (`CommitMenuState.standCarried`).
     property string carriedPath: ""
     property string carriedName: ""
-    /// That worktree is the repository's own, whose name wears the house (`GraphModel.carriedHome`).
+    /// That worktree is the repository's own, whose name wears the house (`GraphModel.carriedAt`'s `home`).
     property bool carriedHome: false
     property bool carriedApplyOffered: false
     /// Where a conflict stands that greys the apply — `here` (git applies nothing over one) or `there` (no telling

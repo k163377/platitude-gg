@@ -268,7 +268,7 @@ Item {
         /// delegate.
         function carriedRow(graph) {
             for (let row = 0; row < graph.rowTotal; row++) {
-                if (graph.carriedName(row) !== "")
+                if (graph.carriedAt(row) !== undefined)
                     return row
             }
             return -1
@@ -292,7 +292,7 @@ Item {
                 // The row's answer is the press's: a double-click it did not take is pressed again.
                 // What stood before it is read first, and kept once the row took it.
                 op.input("asked", () => {
-                    const wanted = page.pageGraph.carriedPath(row)
+                    const wanted = page.pageGraph.carriedAt(row).path
                     const beforeCount = pageRepeater.count
                     const stand = acts.standOf(page)
                     if (item.doubleClick(Qt.NoModifier) !== true)

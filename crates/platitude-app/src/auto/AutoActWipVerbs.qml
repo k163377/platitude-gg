@@ -426,7 +426,8 @@ Item {
             // are the fold (per side both would be two). `cut=`/`tip=`: the band cuts the long name, its hover
             // carries it. `lines=` goes last, past what the table pins (`verify::outcome` matches a substring).
             // The tally is in the order the row draws it.
-            const tally = graphModel.carriedTally(page.selectedRow)
+            const carried = graphModel.carriedAt(page.selectedRow)
+            const tally = carried !== undefined ? carried.tally : undefined
             const counts = tally ? [tally.added, tally.modified, tally.deleted,
                                     tally.renamed, tally.copied, tally.conflicted] : []
             return "carried_read worktree=" + files.carriedName
@@ -663,8 +664,7 @@ Item {
                                 + " here=" + [graphPane.view.wipAdded, graphPane.view.wipModified,
                                               graphPane.view.wipDeleted, graphPane.view.wipRenamed,
                                               graphPane.view.wipCopied, graphPane.view.wipConflicted].join(",")
-                                + " there=" + op.tally(
-                                    graphModel.carriedTally(driver.rowOfWorktree(Harness.autoActArg)))
+                                + " there=" + op.tally(driver.tallyOfWorktree(Harness.autoActArg))
                                 + " conflicts=" + worktree.conflictCount })
         }
     }

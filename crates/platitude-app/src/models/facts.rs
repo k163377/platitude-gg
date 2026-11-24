@@ -481,18 +481,12 @@ impl GitFacts {
             .into_owned()
     }
 
-    /// The address half of a typed identity; `""` where nothing in the
-    /// text reads as one.
+    /// A typed identity in its halves (`trailers::split_identity`): the
+    /// address empty where nothing in the text reads as one, the name
+    /// where nothing stands before an address.
     #[qslot]
-    fn identity_email_of(&self, text: String) -> String {
-        platitude_core::trailers::split_identity(&text).1
-    }
-
-    /// The name half of a typed identity; `""` where nothing stands
-    /// before an address.
-    #[qslot]
-    fn identity_name_of(&self, text: String) -> String {
-        platitude_core::trailers::split_identity(&text).0
+    fn identity_of(&self, text: String) -> One<crate::encode::Identity> {
+        One::new(crate::encode::Identity::typed(&text))
     }
 
     /// The last segment of a path, cut where the platform ends a folder.

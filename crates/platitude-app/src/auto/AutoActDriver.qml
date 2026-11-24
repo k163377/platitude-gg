@@ -103,14 +103,20 @@ Item {
     readonly property bool cardSettled: page.selectedOid !== "" && detailsModel.shaHex === page.selectedOid
 
     /// The graph row another worktree's uncommitted work stands on, or -1 while the graph holds none of it.
-    /// Asked of the model by the worktree's name (`GraphModel.carriedName`): a row off screen has no delegate, and all
+    /// Asked of the model by the worktree's name (`GraphModel.carriedAt`): a row off screen has no delegate, and all
     /// these rows answer to the same all-zero id.
     function rowOfWorktree(name) {
         for (let row = 0; row < graphModel.rowTotal; row++) {
-            if (graphModel.carriedName(row) === name)
+            const carried = graphModel.carriedAt(row)
+            if (carried !== undefined && carried.name === name)
                 return row
         }
         return -1
+    }
+    /// That row's six tallies (`GraphModel.carriedAt`), undefined while the graph holds none of it.
+    function tallyOfWorktree(name) {
+        const carried = graphModel.carriedAt(driver.rowOfWorktree(name))
+        return carried !== undefined ? carried.tally : undefined
     }
     /// That row's delegate, laid out — null while the graph holds none of it or the view has not built the row.
     function carriedItem(name) {

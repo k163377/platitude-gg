@@ -105,7 +105,8 @@ QtObject {
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         menu.carriedPath = path
         menu.carriedName = name
-        menu.carriedHome = menuState.graphModel.carriedHome(menuState.graphModel.carriedRowOf(path))
+        const carried = menuState.graphModel.carriedAt(menuState.graphModel.carriedRowOf(path))
+        menu.carriedHome = carried !== undefined && carried.home
         menuState.standCarried()
         menu.offerCarried()
     }
@@ -116,7 +117,8 @@ QtObject {
     /// write reads the tree afresh when its turn comes (`RepoSession::apply_carried`).
     function standCarried() {
         const menu = menuState.menu
-        const tally = menuState.graphModel.carriedTally(menuState.graphModel.carriedRowOf(menu.carriedPath))
+        const carried = menuState.graphModel.carriedAt(menuState.graphModel.carriedRowOf(menu.carriedPath))
+        const tally = carried !== undefined ? carried.tally : undefined
         menu.carriedApplyOffered = menuState.repoTab.state === "open" && tally !== undefined
         menu.carriedApplyOut = !menu.carriedApplyOffered ? ""
                              : menuState.tree.conflictCount > 0 ? "here"

@@ -40,6 +40,27 @@ impl Record for RemoteBranchAsked {
     }
 }
 
+/// The commit editor's unsent words as the tab holds them while it has no
+/// page (`hub::Draft`), handed back whole: the words and whether they
+/// were an amend's travel together.
+impl Record for crate::hub::Draft {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("subject", &self.subject)
+            .put("body", &self.body)
+            .put("amending", &self.amending)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
+            subject: field(map, "subject")?,
+            body: field(map, "body")?,
+            amending: field(map, "amending")?,
+        })
+    }
+}
+
 mod drain;
 mod ops_config;
 mod ops_conflict;

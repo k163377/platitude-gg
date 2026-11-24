@@ -105,37 +105,27 @@ Item {
     // **Whose uncommitted row this is** — every such row carries the same all-zero id. Empty on every commit and on
     // this window's own row.
     //
-    // **`carriedRevision` is touched on purpose** (here and in `carriedTally`): a slot call is not made again when the
-    // map behind it is rewritten, so without the dependency a row spliced into a rebuilt graph keeps the answer for
-    // whatever stood at its index before.
-    readonly property string carriedName: {
+    // The worktree's row as the model holds it (`GraphModel.carriedAt`), undefined on every other row.
+    // **`carriedRevision` is touched on purpose**: a slot call is not made again when the map behind it is rewritten,
+    // so without the dependency a row spliced into a rebuilt graph keeps the answer for whatever stood at its index
+    // before.
+    readonly property var carriedRow: {
         const view = rowItem.ListView.view
         if (!rowItem.isWip || !view || !view.model)
-            return ""
+            return undefined
         view.model.carriedRevision
-        return view.model.carriedName(rowItem.index)
+        return view.model.carriedAt(rowItem.index)
     }
+    readonly property string carriedName: rowItem.carriedRow !== undefined ? rowItem.carriedRow.name : ""
     /// That worktree is the repository's own: its name wears the house, as its WORKTREES row does
-    /// (規約 §ref の種別「名前の印」). Touches `carriedRevision` for the reason `carriedName` does.
-    readonly property bool carriedHome: {
-        const view = rowItem.ListView.view
-        if (!rowItem.carried || !view || !view.model)
-            return false
-        view.model.carriedRevision
-        return view.model.carriedHome(rowItem.index)
-    }
+    /// (規約 §ref の種別「名前の印」).
+    readonly property bool carriedHome: rowItem.carriedRow !== undefined && rowItem.carriedRow.home
     // A row about a worktree this window is not open on. **It selects like any other row and opens that worktree
     // read-only** (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the
     // worktree's writes are in its own tab, which the double-click opens (デザイン規約 §別の worktree を読む).
     readonly property bool carried: rowItem.carriedName !== ""
-    // Its six tallies (`GraphModel::carried_tally` — `{added, modified, deleted, renamed, copied, conflicted}`), and
-    // nothing on every other row.
-    readonly property var carriedTally: {
-        if (!rowItem.carried)
-            return undefined
-        rowItem.ListView.view.model.carriedRevision
-        return rowItem.ListView.view.model.carriedTally(rowItem.index)
-    }
+    // Its six tallies (`{added, modified, deleted, renamed, copied, conflicted}`), and nothing on every other row.
+    readonly property var carriedTally: rowItem.carriedRow !== undefined ? rowItem.carriedRow.tally : undefined
     // The six counts an uncommitted row shows: another worktree's off its row, this window's off the view.
     readonly property var shownTally: {
         if (rowItem.carriedTally)
@@ -638,7 +628,7 @@ Item {
         // **Another worktree's row opens that worktree in a tab of its own** — the same door as the WORKTREES row
         // (`SidebarRowGestures.activateRow`), and the only place its files can be staged and committed.
         if (rowItem.carried && !rowItem.passedOver) {
-            const path = rowItem.ListView.view.model.carriedPath(rowItem.index)
+            const path = rowItem.carriedRow.path
             if (path !== "")
                 rowItem.ListView.view.carriedOpenRequested(path)
             return true
@@ -695,7 +685,7 @@ Item {
         // (デザイン規約 §別の worktree を読む). Asked of the model by row, as the double-click does — every uncommitted row
         // carries the same all-zero id.
         if (rowItem.carried) {
-            const path = view.model.carriedPath(rowItem.index)
+            const path = rowItem.carriedRow.path
             if (path !== "")
                 view.carriedMenuRequested(path, rowItem.carriedName)
             return

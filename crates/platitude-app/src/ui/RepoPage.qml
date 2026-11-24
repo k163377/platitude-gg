@@ -343,7 +343,8 @@ FocusScope {
     }
     /// Opens the WIP pane on whichever worktree row `row` is — this window's own, or another worktree's.
     function openWipFor(row) {
-        const at = row >= 0 ? graphModel.carriedPath(row) : ""
+        const carried = row >= 0 ? graphModel.carriedAt(row) : undefined
+        const at = carried !== undefined ? carried.path : ""
         // Already the worktree being read: clearing the pane would close the file opened from it under the clicking
         // hand.
         if (at !== "" && at === page.carriedPath) {
@@ -356,10 +357,10 @@ FocusScope {
             wipPane.clearChoice()
         page.showWip()
         if (at !== "")
-            page.standOnWorktree(at, graphModel.carriedName(row), graphModel.carriedHome(row))
+            page.standOnWorktree(at, carried.name, carried.home)
     }
     /// Points the pane at one worktree and reads its files; that worktree's paced reads keep them current while it
-    /// stands (`pollCarried`). `home` is whether it is the repository's own (`GraphModel.carriedHome`).
+    /// stands (`pollCarried`). `home` is whether it is the repository's own (`GraphModel.carriedAt`).
     function standOnWorktree(at, name, home) {
         page.carriedPath = at
         page.carriedName = name
@@ -383,9 +384,9 @@ FocusScope {
         if (row >= 0) {
             // The repository's own worktree goes by the branch it has out, which a switch over there changes under
             // the pane: the bands take the row's name again.
-            const name = graphModel.carriedName(row)
-            if (name !== page.carriedName)
-                page.standOnWorktree(page.carriedPath, name, graphModel.carriedHome(row))
+            const carried = graphModel.carriedAt(row)
+            if (carried.name !== page.carriedName)
+                page.standOnWorktree(page.carriedPath, carried.name, carried.home)
             page.selectedRow = row
             graphPane.setCurrentRow(row)
             return
@@ -3164,18 +3165,17 @@ FocusScope {
     /// message (`absorbOpMessage`) and a popped stash's name (`absorbPopLabel`) find them filled and leave them alone.
     function restoreDraft() {
         // The flag as well as the words: an amend's message under a plain commit button would make a second commit.
-        if (repoTab.draftAmending()) {
+        const draft = repoTab.draft()
+        if (draft.amending) {
             page.amending = true
             wipPane.setAmendChecked(true)
         }
-        const subject = repoTab.draftSubject()
-        const body = repoTab.draftBody()
-        if (subject === "" && body === "")
+        if (draft.subject === "" && draft.body === "")
             return
         // Show the sentence the reader left mid-way; this also holds the default selection off (`trySelectDefault`
         // leaves a worktree page alone).
         page.showWip()
-        wipPane.setMessage(subject, body)
+        wipPane.setMessage(draft.subject, draft.body)
         // `pendingWipSelect` stays down: a dirty tree's row is already at the top, and on a clean tree the flag would
         // stand until the tree got dirty, then jump the reader's view (rules-refs/app-ui.md — the
         // `ListView.highlightFollowsCurrentItem` line).
