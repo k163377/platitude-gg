@@ -16,7 +16,7 @@ import platitude.ui.words
 // `Main` sets to `curPage`). Headless: `diff-escape`'s `hand=true kept=true`.
 //
 // **Not split further** — past the length backstop, exempt on the ledger (rules-refs/structure.md §分割しない判断).
-// Out are `PageLayout`, `CommitMenuState`, `GraphNameVerdict`, the question flows (`LeaveFlow` / `UpstreamFlow` /
+// Out are `PageLayout`, `CommitMenuState`, `NameVerdict`, the question flows (`LeaveFlow` / `UpstreamFlow` /
 // `RenameCarryFlow` / `PublishFlow`), `RowHoverHost`, `SplitBarWatch`, `CommandsOwner`, `GitHubLinks`, `RecoverEntries`
 // and the harness (`PageHarness`). Next out is the discard log (`recover*`, `DiscardModel`): a part handed the page as
 // `PageLayout` is, but an `Item` (its timer, blink and `Connections` go with it), once the page's writes into its state
@@ -1874,8 +1874,8 @@ FocusScope {
         if (row >= 0)
             graphPane.showRowSoon(row)
     }
-    /// What the graph's name box may accept, and why not (`GraphNameVerdict`).
-    readonly property GraphNameVerdict graphNameVerdict: GraphNameVerdict {
+    /// What the graph's name box may accept, and why not (`NameVerdict`).
+    readonly property NameVerdict graphNameVerdict: NameVerdict {
         id: graphNameVerdict
         graphPane: graphPane
         repoTab: repoTab

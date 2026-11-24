@@ -230,7 +230,7 @@ fn main() {
     qrc::embed!("ui/GraphLaneCell.qml");
     qrc::embed!("ui/GraphLanePan.qml");
     qrc::embed!("ui/GraphList.qml");
-    qrc::embed!("ui/GraphNameVerdict.qml");
+    qrc::embed!("ui/NameVerdict.qml");
     qrc::embed!("ui/GraphPane.qml");
     qrc::embed!("ui/GraphRowChips.qml");
     qrc::embed!("ui/GraphRowDelegate.qml");

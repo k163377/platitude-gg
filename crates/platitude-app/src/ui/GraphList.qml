@@ -75,12 +75,12 @@ AppListView {
     // The worktree's folder in that line, which its tip stands the tree mark in front of.
     property string withheldMark: ""
     // Whether the box's text can be accepted, and why not — decided outside the pane
-    // (`GraphNameVerdict.graphNameRefusedWhy`) — and the worktree's folder in that line, which its tip stands the tree
+    // (`NameVerdict.graphNameRefusedWhy`) — and the worktree's folder in that line, which its tip stands the tree
     // mark in front of.
     property bool namingRefused: false
     property string namingRefusedWhy: ""
     property string namingRefusedMark: ""
-    /// …and the branch, tag or remote it names, behind their marks (`GraphNameVerdict.graphNameRefusedMarks`).
+    /// …and the branch, tag or remote it names, behind their marks (`NameVerdict.graphNameRefusedMarks`).
     property var namingRefusedMarks: []
     // The two clicks the rows answer with one gesture (デザイン規約 §グラフ行のダブルクリック). One for the whole graph,
     // shared with the chip's card (via `GraphPane.noteRowClick`): a pooled delegate would drop or misplace the wait,
