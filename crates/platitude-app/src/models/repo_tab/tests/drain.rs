@@ -135,15 +135,15 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
     assert_eq!(tab.push_answer, 0);
     let answer = &tab.write_answers[0];
     assert!(answer.failed);
-    assert_eq!(answer.report.kind, "outdated");
-    assert_eq!(answer.report.remote, "origin");
-    assert_eq!(answer.report.name, "topic");
-    assert_eq!(answer.report.fact, "");
+    assert_eq!(answer.report.as_ref().expect("a report").kind, "outdated");
+    assert_eq!(answer.report.as_ref().expect("a report").remote, "origin");
+    assert_eq!(answer.report.as_ref().expect("a report").name, "topic");
+    assert_eq!(answer.report.as_ref().expect("a report").fact, "");
     assert!(
         !tab.write_refused,
         "the report is the answer's, not the group's"
     );
-    assert_eq!(tab.write_report.kind, "");
+    assert_eq!(tab.write_report, None);
 }
 
 // The reader switched branches and pushed again before the first came back.
@@ -416,7 +416,10 @@ fn a_refusal_with_a_report_turns_no_row() {
     let answer = tab
         .write_answer_at(tab.branch_delete_answer)
         .expect("the plain delete's own answer");
-    assert_eq!(answer.report.kind, "delete-refused");
+    assert_eq!(
+        answer.report.as_ref().expect("a report").kind,
+        "delete-refused"
+    );
 }
 
 // ---- the list, searched by a press's id ------------------------------
@@ -554,14 +557,17 @@ fn a_refused_commit_keeps_its_words_past_the_landing_beside_it() {
     ]);
     let answer = for_the_editor(&tab).expect("the editor's own answer");
     assert!(answer.failed, "a rejected commit keeps the editor's text");
-    assert_eq!(answer.report.kind, "commit-hook");
+    assert_eq!(
+        answer.report.as_ref().expect("a report").kind,
+        "commit-hook"
+    );
     // Reported once: the group is the stash's.
     assert!(!tab.write_refused);
     assert!(
         tab.write_stale_diff,
         "the landing beside it is still the group's own"
     );
-    assert_eq!(tab.write_report.kind, "");
+    assert_eq!(tab.write_report, None);
 }
 
 // The group is emptied per notify, or a refusal already reported would be
@@ -820,14 +826,17 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
         );
         let answer = tab.write_answer_at(at).expect("the answer it points at");
         assert!(answer.failed, "and it is the refusal, not the fetch");
-        assert_eq!(answer.report.kind, "delete-rule");
+        assert_eq!(
+            answer.report.as_ref().expect("a report").kind,
+            "delete-rule"
+        );
         assert_eq!(
             tab.ref_push_target, "origin/topic",
             "named with the row it was sent for"
         );
         // The group is the fetch's, which landed.
         assert!(tab.write_fetched && !tab.write_refused);
-        assert_eq!(tab.write_report.kind, "");
+        assert_eq!(tab.write_report, None);
     }
 }
 

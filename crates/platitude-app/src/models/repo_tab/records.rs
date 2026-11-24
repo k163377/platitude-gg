@@ -4,7 +4,7 @@
 
 use platitude_core::remote::RemoteBranch;
 
-use crate::encode::{Fields, Optional, Record, field};
+use crate::encode::{Fields, Record, field};
 
 /// The name a remote was asked about (`checkRemoteBranch`), and the branch
 /// here whose history the answer weighed it against.
@@ -38,20 +38,13 @@ impl Record for RemoteBranchAsked {
 /// (デザイン規約 §答えの要らない報せ): `kind` (`drain::report_word`) is what both
 /// sentences turn on, `remote` and `name` what it is about, and `fact` the
 /// one thing the second line names beside them (`WriteReport::fact`) —
-/// never anybody's message. Empty `kind` is no report.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// never anybody's message.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reported {
     pub kind: String,
     pub remote: String,
     pub name: String,
     pub fact: String,
-}
-
-impl Reported {
-    /// The report as QML is handed it: none where `kind` is empty.
-    pub(super) fn handed(&self) -> Optional<Self> {
-        Optional::new((!self.kind.is_empty()).then(|| self.clone()))
-    }
 }
 
 impl Record for Reported {

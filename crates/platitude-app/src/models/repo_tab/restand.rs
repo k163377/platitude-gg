@@ -136,12 +136,12 @@ mod tests {
             write_branch_op: true,
             write_tag_op: true,
             write_fetched: true,
-            write_report: Reported {
+            write_report: Some(Reported {
                 kind: "update-rule".into(),
                 remote: "origin".into(),
                 name: "main".into(),
                 fact: "main".into(),
-            },
+            }),
             ..RepoTab::default()
         };
         tab.forget_the_worktree();
@@ -157,14 +157,6 @@ mod tests {
             ],
             [false; 7]
         );
-        assert_eq!(
-            [
-                tab.write_report.kind.as_str(),
-                tab.write_report.remote.as_str(),
-                tab.write_report.name.as_str(),
-                tab.write_report.fact.as_str(),
-            ],
-            [""; 4]
-        );
+        assert_eq!(tab.write_report, None);
     }
 }

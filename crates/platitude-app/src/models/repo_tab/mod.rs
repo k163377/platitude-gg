@@ -478,8 +478,8 @@ pub struct RepoTab {
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).
     ///
-    /// The last answer's ([`Reported`]); empty where it brought none.
-    write_report: Reported,
+    /// The last answer's ([`Reported`]); none where it brought none.
+    write_report: Option<Reported>,
     /// A branch move that would take commits off the branch, waiting to be
     /// asked about, and how many it would take. Nothing has happened yet.
     move_ask_local: String,
@@ -546,9 +546,9 @@ struct WriteAnswer {
     head_seq: u64,
     reads_from: u64,
     /// Who refused it — the far side, a hook, this end — per answer, since
-    /// a drain can bring several. Empty where git's plain refusal is the
+    /// a drain can bring several. None where git's plain refusal is the
     /// command log's news (デザイン規約 §答えの要らない報せ).
-    report: Reported,
+    report: Option<Reported>,
 }
 
 /// How many settled writes' ids the tab keeps for the log's receipts to be

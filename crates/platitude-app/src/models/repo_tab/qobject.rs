@@ -559,7 +559,7 @@ impl RepoTab {
     #[qslot]
     fn write_answer_report(&self, index: i32) -> Optional<Reported> {
         self.write_answer_at(index)
-            .map(|answer| answer.report.handed())
+            .map(|answer| Optional::new(answer.report.clone()))
             .unwrap_or_default()
     }
 
@@ -567,7 +567,7 @@ impl RepoTab {
     /// nobody owned (`RepoPage.absorbLeftoverAnswer`).
     #[qslot]
     fn write_report(&self) -> Optional<Reported> {
-        self.write_report.handed()
+        Optional::new(self.write_report.clone())
     }
 
     #[qslot]

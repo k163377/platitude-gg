@@ -125,7 +125,7 @@ impl Default for RepoTab {
             diff_reread: crate::ops::DiffReread::default(),
             tree_seen: 0,
             tree_emptied: false,
-            write_report: Reported::default(),
+            write_report: None,
             move_ask_local: String::new(),
             move_ask_start: String::new(),
             move_ask_lost: 0,

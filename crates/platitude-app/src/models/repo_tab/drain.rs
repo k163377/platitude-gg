@@ -420,7 +420,7 @@ impl RepoTab {
         // Who said no and what about. It rides the answer below: a drain
         // can bring several, each with its own report.
         let reported = report.is_some();
-        let report = report.map_or_else(Reported::default, |report| Reported {
+        let report = report.map(|report| Reported {
             kind: report_word(report.kind),
             remote: report.remote,
             name: report.name,
@@ -619,7 +619,7 @@ impl RepoTab {
         self.write_branch_op = false;
         self.write_tag_op = false;
         self.write_fetched = false;
-        self.write_report = Reported::default();
+        self.write_report = None;
     }
 }
 

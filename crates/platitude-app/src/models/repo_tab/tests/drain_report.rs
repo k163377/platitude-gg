@@ -23,16 +23,21 @@ fn a_refusal_the_far_side_made_arrives_as_something_to_report() {
         )),
     );
     assert!(tab.write_refused, "nothing happened over there");
-    assert_eq!(tab.write_report.kind, "delete-rule");
-    assert_eq!(tab.write_report.remote, "origin");
-    assert_eq!(tab.write_report.name, "main");
-    assert_eq!(tab.write_report.fact, "");
+    assert_eq!(
+        tab.write_report.as_ref().expect("a report").kind,
+        "delete-rule"
+    );
+    assert_eq!(
+        tab.write_report.as_ref().expect("a report").remote,
+        "origin"
+    );
+    assert_eq!(tab.write_report.as_ref().expect("a report").name, "main");
+    assert_eq!(tab.write_report.as_ref().expect("a report").fact, "");
 
     // And it goes with its answer: a report left standing would come
     // back up under the next write.
     settle(&mut tab, K::Push, "", None);
-    assert_eq!(tab.write_report.kind, "");
-    assert_eq!(tab.write_report.fact, "");
+    assert_eq!(tab.write_report, None);
 }
 
 /// What was asked and what for, as two words: the heading turns on the
@@ -75,7 +80,10 @@ fn a_far_side_refusal_is_named_by_what_was_asked_and_what_for() {
                     kind, "origin", "main",
                 )),
             );
-            assert_eq!(tab.write_report.kind, format!("{asked}-{}", why_word(why)));
+            assert_eq!(
+                tab.write_report.as_ref().expect("a report").kind,
+                format!("{asked}-{}", why_word(why))
+            );
         }
     }
 }
@@ -93,9 +101,15 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
             "main",
         )),
     );
-    assert_eq!(tab.write_report.kind, "outdated");
-    assert_eq!(tab.write_report.remote, "origin");
-    assert_eq!(tab.write_report.name, "main");
+    assert_eq!(
+        tab.write_report.as_ref().expect("a report").kind,
+        "outdated"
+    );
+    assert_eq!(
+        tab.write_report.as_ref().expect("a report").remote,
+        "origin"
+    );
+    assert_eq!(tab.write_report.as_ref().expect("a report").name, "main");
 
     for (kind, named) in [
         (ReportKind::Commit, "commit"),
@@ -109,12 +123,12 @@ fn a_stale_push_and_a_refused_commit_name_themselves_too() {
             "`git commit` exited with code 1",
             Some(platitude_core::WriteReport::local(kind)),
         );
-        assert_eq!(tab.write_report.kind, named);
+        assert_eq!(tab.write_report.as_ref().expect("a report").kind, named);
         assert_eq!(
             (
-                tab.write_report.remote.as_str(),
-                tab.write_report.name.as_str(),
-                tab.write_report.fact.as_str(),
+                tab.write_report.as_ref().expect("a report").remote.as_str(),
+                tab.write_report.as_ref().expect("a report").name.as_str(),
+                tab.write_report.as_ref().expect("a report").fact.as_str(),
             ),
             ("", "", ""),
             "{named}: nothing over a network, no ref, no words"
@@ -145,8 +159,12 @@ fn reach_the_page(reports: Vec<(platitude_core::GitError, &str, &str)>) {
             refused.to_string(),
             refused.report().cloned(),
         );
-        assert_eq!(tab.write_report.kind, named);
-        assert_eq!(tab.write_report.fact, fact, "{named}");
+        assert_eq!(tab.write_report.as_ref().expect("a report").kind, named);
+        assert_eq!(
+            tab.write_report.as_ref().expect("a report").fact,
+            fact,
+            "{named}"
+        );
     }
 }
 
@@ -276,12 +294,12 @@ fn every_withheld_rewrite_reaches_the_page_under_its_own_name() {
             withheld.report().cloned(),
         );
         assert!(tab.write_refused, "{named}: nothing was rewritten");
-        assert_eq!(tab.write_report.kind, named);
+        assert_eq!(tab.write_report.as_ref().expect("a report").kind, named);
         assert_eq!(
             (
-                tab.write_report.remote.as_str(),
-                tab.write_report.name.as_str(),
-                tab.write_report.fact.as_str(),
+                tab.write_report.as_ref().expect("a report").remote.as_str(),
+                tab.write_report.as_ref().expect("a report").name.as_str(),
+                tab.write_report.as_ref().expect("a report").fact.as_str(),
             ),
             ("", "", ""),
             "{named}: nothing over a network, no ref, and nobody else's words to quote"
@@ -318,7 +336,7 @@ fn the_plan_door_names_the_same_refused_history_the_same_way() {
         );
         assert_eq!(
             crate::models::rebase_plan::refusal_kind(refusal),
-            tab.write_report.kind,
+            tab.write_report.as_ref().expect("a report").kind,
             "the two doors have to hand the page one name for one history"
         );
     }
@@ -344,16 +362,19 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
         .write_answer_at(tab.worktree_answer)
         .expect("its own answer");
     assert!(answer.failed);
-    assert_eq!(answer.report.kind, "worktree-not-added");
-    assert_eq!(answer.report.name, "hotfix-patch");
+    assert_eq!(
+        answer.report.as_ref().expect("a report").kind,
+        "worktree-not-added"
+    );
+    assert_eq!(
+        answer.report.as_ref().expect("a report").name,
+        "hotfix-patch"
+    );
     assert_eq!(
         tab.worktree_answer_path, "C:/work/repo.worktrees/hotfix-patch",
         "the folder the press was for"
     );
-    assert_eq!(
-        tab.write_report.kind, "",
-        "nobody else reads it off the group"
-    );
+    assert_eq!(tab.write_report, None, "nobody else reads it off the group");
 
     tab.absorb(vec![no_answer()]);
     assert_eq!(tab.worktree_answer, -1, "told once");
@@ -377,13 +398,13 @@ fn a_renamed_worktree_is_answered_by_name() {
         .write_answer_at(tab.worktree_move_answer)
         .expect("its own answer");
     assert!(answer.failed);
-    assert_eq!(answer.report.kind, "worktree-not-renamed");
-    assert_eq!(answer.report.name, "loose");
-    assert_eq!(tab.worktree_answer, -1, "not the made worktree's answer");
     assert_eq!(
-        tab.write_report.kind, "",
-        "nobody else reads it off the group"
+        answer.report.as_ref().expect("a report").kind,
+        "worktree-not-renamed"
     );
+    assert_eq!(answer.report.as_ref().expect("a report").name, "loose");
+    assert_eq!(tab.worktree_answer, -1, "not the made worktree's answer");
+    assert_eq!(tab.write_report, None, "nobody else reads it off the group");
 }
 
 /// The press writes down whether this tab stands in the worktree it renames
