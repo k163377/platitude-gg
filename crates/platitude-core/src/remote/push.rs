@@ -258,6 +258,10 @@ pub async fn push(
     Err(refusal(command, &out, &sent))
 }
 
+/// What one branch's line of [`push_track`] / [`push_tracks`] holds, in the
+/// order [`track_of`] reads it.
+const TRACK_FIELDS: &str = "%(push)%00%(push:remotename)%00%(push:remoteref)%00%(push:track)";
+
 /// How `branch` stands against the tracking ref of where a mark sends
 /// its push ([`super::PushRoute::goes_elsewhere`]): one `for-each-ref`, git naming
 /// the remote (`%(push:remotename)`), the ref through that remote's fetch
@@ -278,12 +282,8 @@ pub async fn push_track(
 ) -> Result<Option<PushTrack>, GitError> {
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args([
-            "-c",
-            "push.default=current",
-            "for-each-ref",
-            "--format=%(push)%00%(push:remotename)%00%(push:remoteref)%00%(push:track)",
-        ])
+        .args(["-c", "push.default=current", "for-each-ref"])
+        .arg(format!("--format={TRACK_FIELDS}"))
         .arg(format!("refs/heads/{branch}"));
     let out = executor.run(cmd, cancel).await?;
     Ok(parse_push_track(branch, &out.stdout))
@@ -304,13 +304,11 @@ pub async fn push_tracks(
     workdir: &Path,
     cancel: &CancellationToken,
 ) -> Result<Vec<(String, PushTrack)>, GitError> {
-    let cmd = GitCommand::new().cwd(workdir).args([
-        "-c",
-        "push.default=current",
-        "for-each-ref",
-        "--format=%(refname:lstrip=2)%00%(push)%00%(push:remotename)%00%(push:remoteref)%00%(push:track)",
-        "refs/heads",
-    ]);
+    let cmd = GitCommand::new()
+        .cwd(workdir)
+        .args(["-c", "push.default=current", "for-each-ref"])
+        .arg(format!("--format=%(refname:lstrip=2)%00{TRACK_FIELDS}"))
+        .arg("refs/heads");
     let out = executor.run(cmd, cancel).await?;
     Ok(parse_push_tracks(&out.stdout))
 }
