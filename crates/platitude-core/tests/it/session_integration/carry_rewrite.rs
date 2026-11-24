@@ -1,10 +1,10 @@
 //! Rewrites driven through the session — squash, reword, rebase — and the
 //! dirty work they carry across.
 
-use crate::support::TestRepo;
 use crate::support::session::{
     CaptureSink, command_words, install_todo_editor, opened, write_result, write_stopped,
 };
+use crate::support::{TestRepo, oid};
 use platitude_core::OperationKind;
 use platitude_core::sequencer::RebaseStep;
 use platitude_core::session::SessionEvent;
@@ -25,7 +25,7 @@ async fn squash_and_reword_run_through_the_write_queue() {
     // Rewording HEAD takes the amend path: no replay, same parent.
     let parent = repo.git(&["rev-parse", "HEAD~1"]);
     let head = repo.git(&["rev-parse", "HEAD"]);
-    session.reword(head, "reworded head\n".into());
+    session.reword(oid(&head), "reworded head\n".into());
     assert_eq!(write_result(&sink, OperationKind::Reword).await, None);
     assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "reworded head");
     assert_eq!(repo.git(&["rev-parse", "HEAD~1"]), parent);
@@ -332,7 +332,7 @@ async fn a_commit_landing_inside_the_carry_is_refused_rather_than_dropped() {
         vec![RebaseStep::pick(head.clone(), "the plan's only step")],
         platitude_core::integrate::RebaseOptions::default(),
         // The tip the plan was composed against: sound when it was pressed.
-        head.clone(),
+        oid(&head),
     );
     // The sink records before running the hook, so the delivery holding
     // the write answers this.

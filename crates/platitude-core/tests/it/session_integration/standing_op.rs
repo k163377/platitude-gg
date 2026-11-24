@@ -5,10 +5,10 @@
 //! a rebase under a standing merge in the words of a dirty tree, and the
 //! carry's stash would then put the merge down and report a success.
 
-use crate::support::TestRepo;
 use crate::support::session::{
     CaptureSink, command_words, install_todo_editor, opened, write_result,
 };
+use crate::support::{TestRepo, oid};
 use platitude_core::OperationKind;
 use platitude_core::sequencer::{RebaseStep, TodoAction};
 
@@ -95,7 +95,7 @@ async fn a_plan_run_under_a_standing_merge_is_refused_before_anything_is_spawned
         }],
         platitude_core::integrate::RebaseOptions::default(),
         // The very tip the plan was composed against.
-        head.clone(),
+        oid(&head),
     );
     let refusal = write_result(&sink, OperationKind::Rebase)
         .await

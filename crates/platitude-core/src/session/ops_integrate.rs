@@ -108,7 +108,7 @@ impl RepoSession {
     /// `git rebase --interactive` with a plan assembled in the UI. The todo
     /// editor is the helper binary shipped beside the application.
     ///
-    /// `expect_head` (full hex) is the tip the plan was composed against
+    /// `expect_head` is the tip the plan was composed against
     /// (pinned when the plan opens). A tip moved since — a terminal,
     /// another session — is refused with nothing touched, or the todo
     /// would silently drop whatever landed. It travels with the plan
@@ -127,7 +127,7 @@ impl RepoSession {
         upstream: String,
         steps: Vec<sequencer::RebaseStep>,
         options: integrate::RebaseOptions,
-        expect_head: String,
+        expect_head: Oid,
     ) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
@@ -140,6 +140,7 @@ impl RepoSession {
                 }
                 let before = session.tips_before(&exec, &repo, &cancel).await?;
                 let head = session.moving_off(&exec, &repo, &head(), &cancel).await?;
+                let expect_head = expect_head.to_hex();
                 let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
@@ -254,14 +255,14 @@ impl RepoSession {
     /// status that leaves is told as git answers
     /// ([`Self::note_index_committed`]) where one can be — the conditions
     /// are `StatusTold::answered`'s.
-    pub fn reword(self: &Arc<Self>, oid: String, message: String) -> Option<OperationId> {
+    pub fn reword(self: &Arc<Self>, oid: Oid, message: String) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
             OperationKind::Reword,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
                 let head = commit::head_oid(&exec, &repo.workdir, &cancel).await?;
-                if head.to_hex() == oid {
+                if head == oid {
                     let options = CommitOptions {
                         amend: true,
                         ..Default::default()
@@ -274,7 +275,7 @@ impl RepoSession {
                 let plan = sequencer::plan_edit(
                     &exec,
                     &repo.workdir,
-                    &oid,
+                    &oid.to_hex(),
                     sequencer::Edit::Reword(message),
                     &cancel,
                 )

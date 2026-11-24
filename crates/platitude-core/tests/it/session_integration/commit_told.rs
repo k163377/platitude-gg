@@ -9,13 +9,13 @@
 
 use std::sync::Arc;
 
-use crate::support::TestRepo;
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{
     CaptureSink, install_todo_editor, open_with_doors, opened, poll_landed, write_answer,
     write_settled,
 };
 use crate::support::wait::bounded;
+use crate::support::{TestRepo, oid};
 use platitude_core::OperationId;
 use platitude_core::commit::CommitOptions;
 use platitude_core::session::{FollowUp, PassStep, Recording, RepoSession, SessionEvent};
@@ -579,7 +579,7 @@ async fn a_reword_of_head_is_told_as_a_commit_is() {
     quiet(&sink, &session).await;
 
     let id = session
-        .reword(head, "root, reworded".into())
+        .reword(oid(&head), "root, reworded".into())
         .expect("the reword was accepted");
     assert_eq!(write_settled(&sink, id).await, [], "every read landed");
     {
@@ -627,7 +627,7 @@ async fn a_reword_that_replays_tells_nothing_ahead() {
     quiet(&sink, &session).await;
 
     let id = session
-        .reword(first, "root, reworded".into())
+        .reword(oid(&first), "root, reworded".into())
         .expect("the reword was accepted");
     assert_eq!(write_answer(&sink, id).await, None, "the replay landed");
     assert_eq!(write_settled(&sink, id).await, [], "every read landed");

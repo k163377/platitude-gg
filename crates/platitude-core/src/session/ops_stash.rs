@@ -17,14 +17,22 @@ impl RepoSession {
     pub fn rename_stash(
         self: &Arc<Self>,
         selector: String,
-        oid: String,
+        oid: Oid,
         message: String,
     ) -> Option<OperationId> {
         self.write(
             OperationKind::Stash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::rename(&exec, &repo.workdir, &selector, &oid, &message, &cancel).await
+                stash::rename(
+                    &exec,
+                    &repo.workdir,
+                    &selector,
+                    &oid.to_hex(),
+                    &message,
+                    &cancel,
+                )
+                .await
             },
         )
     }

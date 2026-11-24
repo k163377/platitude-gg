@@ -79,7 +79,9 @@ impl RebasePlanModel {
     }
 
     /// Hands the todo to the session as one queued write pinned to the tip
-    /// it was composed against (`RepoSession::rebase_interactive`).
+    /// it was composed against (`RepoSession::rebase_interactive`) — read
+    /// as an object name (`encode::pinned_oid`): a tip that names none
+    /// pins nothing, and nothing is queued.
     pub(super) fn queue_run(
         &self,
         upstream: String,
@@ -87,6 +89,10 @@ impl RebasePlanModel {
         expect: String,
         root: bool,
     ) {
+        let Ok(Some(expect)) = crate::encode::pinned_oid(&expect) else {
+            tracing::warn!(expect, "turned away: the plan's tip names no object");
+            return;
+        };
         let options = platitude_core::integrate::RebaseOptions {
             root,
             ..Default::default()

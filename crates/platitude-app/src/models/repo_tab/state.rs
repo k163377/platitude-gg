@@ -510,10 +510,11 @@ impl RepoTab {
         }
     }
 
-    /// [`Self::ask_pinned`] for a write that takes a name off a remote,
-    /// leased to the object its row showed: with none to lease to — an
-    /// empty pin as much as a malformed one — nothing is asked. Where the
-    /// write is two commands, the first has not run either.
+    /// [`Self::ask_pinned`] for a write pinned to the object its row showed
+    /// — a name taken off a remote leased to it, a commit reworded or a
+    /// stash entry renamed by it: with none to pin to — an empty pin as much
+    /// as a malformed one — nothing is asked. Where the write is two
+    /// commands, the first has not run either.
     pub(super) fn ask_leased(
         &mut self,
         what: &str,
@@ -616,7 +617,7 @@ impl RepoTab {
         if message.is_empty() {
             return;
         }
-        self.ask_session(|s| s.reword(oid, message));
+        self.ask_leased("reword", &oid, |s, oid| s.reword(oid, message));
     }
 
     /// Behind `watchAmend`: says to the session whether an amend is in view,

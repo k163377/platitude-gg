@@ -1058,7 +1058,9 @@ impl RepoTab {
     /// there by the press.
     #[qslot]
     fn rename_stash(&mut self, selector: String, oid: String, message: String) {
-        self.ask_session(|s| s.rename_stash(selector, oid, message));
+        self.ask_leased("stash rename", &oid, |s, oid| {
+            s.rename_stash(selector, oid, message)
+        });
     }
 
     /// `git stash push -u` over the whole worktree, straight off the press
