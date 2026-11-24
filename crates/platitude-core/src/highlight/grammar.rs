@@ -571,7 +571,8 @@ struct Entry {
     /// specific language names. A manifest lists a delta's bases, but for
     /// objc's, which only its file names (`; inherits: c`); a base left
     /// out leaves a language's sample uncoloured
-    /// (`every_grammar_colours_a_sample_of_its_language`).
+    /// (`every_grammar_colours_a_sample_of_its_language`,
+    /// `a_delta_s_sample_is_its_bases_to_paint`).
     ///
     /// Where a crate's query names a node otherwise than デザイン規約
     /// §シンタックスハイライト would (C++'s casts as the template calls they

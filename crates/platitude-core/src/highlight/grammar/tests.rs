@@ -19,10 +19,12 @@ fn every_entry_builds_its_configuration() {
 }
 
 /// A comment and a literal in each language, by [`Entry::name`] —
-/// enough that any query which paints at all paints something here.
+/// enough that any query which paints at all paints something here. A
+/// delta's holds only what its bases paint
+/// (`a_delta_s_sample_is_its_bases_to_paint`).
 const SAMPLES: [(&str, &str); 37] = [
     ("rust", "// note\nfn main() { let s = \"hi\"; }"),
-    ("qml", "// note\nItem { property string s: \"hi\" }"),
+    ("qml", "// note\nItem { function f() { return \"hi\" } }"),
     ("kotlin", "// note\nfun main() { val s = \"hi\" }"),
     ("markdown", "# Title\n\nsome text"),
     ("markdown_inline", "some `code` and a [link](x)"),
@@ -30,7 +32,7 @@ const SAMPLES: [(&str, &str); 37] = [
     ("yaml", "# note\nkey: value"),
     ("json", "{\"key\": \"value\"}"),
     ("javascript", "// note\nconst s = \"hi\";"),
-    ("typescript", "// note\nconst s: string = \"hi\";"),
+    ("typescript", "// note\nconst s = \"hi\";"),
     ("tsx", "// note\nconst a = <div className=\"x\">y</div>;"),
     ("python", "# note\ns = \"hi\""),
     ("java", "// note\nclass A { String s = \"hi\"; }"),
@@ -60,6 +62,38 @@ const SAMPLES: [(&str, &str); 37] = [
     ("xml", "<!-- note -->\n<a b=\"c\"/>"),
 ];
 
+/// The sample the grammar called `name` answers for.
+fn sample_of(name: &str) -> &'static str {
+    SAMPLES
+        .iter()
+        .find(|(sample, _)| *sample == name)
+        .map(|(_, text)| *text)
+        .unwrap_or_else(|| panic!("grammar {name} has no sample to answer for"))
+}
+
+/// Whether `config` paints any of `text` in a colour of its own: a row
+/// may paint plain (`character.special`), so only another colour tells
+/// that the query paints.
+fn paints(config: &HighlightConfiguration, text: &str) -> bool {
+    let mut highlighter = Highlighter::new();
+    // The callback through a closure: as a fn item it answers
+    // `&'static`, which would lend the highlighter itself for
+    // `'static` (`tree::line_spans` does the same).
+    #[expect(
+        clippy::redundant_closure,
+        reason = "the fn item would lend the highlighter for 'static"
+    )]
+    let events = highlighter
+        .highlight(config, text.as_bytes(), None, None, |name| injection(name))
+        .expect("a grammar reads its own language");
+    events.flatten().any(|event| {
+        matches!(
+            event,
+            HighlightEvent::HighlightStart(h) if style(h.0).is_some_and(|c| c != PLAIN)
+        )
+    })
+}
+
 /// A query being accepted is not painting: a delta query (see
 /// [`Entry::highlights`]) is colourless without its bases. Every entry
 /// answers for its own sample, so a language added without its bases
@@ -67,29 +101,44 @@ const SAMPLES: [(&str, &str); 37] = [
 #[test]
 fn every_grammar_colours_a_sample_of_its_language() {
     for entry in &ENTRIES {
-        let (_, sample) = SAMPLES
-            .iter()
-            .find(|(name, _)| *name == entry.name)
-            .unwrap_or_else(|| panic!("grammar {} has no sample to answer for", entry.name));
         let lang = lang_of(entry).expect("the guard above builds every configuration");
-        let mut highlighter = Highlighter::new();
-        // The callback through a closure: as a fn item it answers
-        // `&'static`, which would lend the highlighter itself for
-        // `'static` (`tree::line_spans` does the same).
-        let events = highlighter
-            .highlight(&lang.config, sample.as_bytes(), None, None, |name| {
-                injection(name)
-            })
-            .expect("a grammar reads its own language");
-        // A row may paint plain (`character.special`): only another
-        // colour tells that the query paints.
         assert!(
-            events.flatten().any(|event| matches!(
-                event,
-                HighlightEvent::HighlightStart(h) if style(h.0).is_some_and(|c| c != PLAIN)
-            )),
+            paints(&lang.config, sample_of(entry.name)),
             "grammar {} left its own sample uncoloured",
             entry.name
+        );
+    }
+}
+
+/// A delta's sample is its bases' to paint: built without them, the
+/// entry leaves it uncoloured, so the test above fails for a delta
+/// whose bases are left out.
+#[test]
+fn a_delta_s_sample_is_its_bases_to_paint() {
+    for (name, bases) in [
+        ("qml", 2),
+        ("typescript", 1),
+        ("tsx", 2),
+        ("cpp", 1),
+        ("objc", 1),
+    ] {
+        let entry = ENTRIES
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| panic!("no grammar is called {name}"));
+        let alone = Entry {
+            matches: &[],
+            name: entry.name,
+            language: entry.language,
+            highlights: &entry.highlights[bases..],
+            injections: entry.injections,
+            locals: entry.locals,
+            cell: OnceLock::new(),
+        };
+        let config = configured(&alone).expect("a delta builds without its bases");
+        assert!(
+            !paints(&config, sample_of(name)),
+            "{name}'s sample is painted without its bases"
         );
     }
 }
