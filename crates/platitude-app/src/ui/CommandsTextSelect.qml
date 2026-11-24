@@ -98,12 +98,12 @@ Item {
         const item = pick.view.itemAtIndex(row)
         if (!item)
             return
-        const at = pick.columnAt(item, position)
-        const drawn = at === pick.atClock || at === pick.atCmd || at === pick.atOut
-        const place = drawn ? pick.ruler.unitAt(pick.commandsModel.columnText(row, at), false,
-                                                position.x - pick.columnX(item, at))
+        const column = pick.columnAt(item, position)
+        const drawn = column === pick.atClock || column === pick.atCmd || column === pick.atOut
+        const place = drawn ? pick.ruler.unitAt(pick.commandsModel.columnText(row, column), false,
+                                                position.x - pick.columnX(item, column))
                             : 0
-        pick.commandsModel.selectWord(row, at, place)
+        pick.commandsModel.selectWord(row, column, place)
     }
     /// An empty selection is cleared, so a plain click takes down the previous drag's wash.
     function releaseText() {
@@ -136,14 +136,14 @@ Item {
         if (!item)
             return 0
         const x = position.x
-        const at = pick.columnAt(item, position)
-        if (at === pick.atBelow)
-            return pick.commandsModel.hitAt(row, at, 0)
-        if (at === pick.atGapCmd)
-            return pick.commandsModel.hitAt(row, at, pick.sideOf(x, item.clockEnd, item.cmdX))
-        if (at === pick.atGapOut)
-            return pick.commandsModel.hitAt(row, at, pick.sideOf(x, item.cmdEnd, item.outX))
-        return pick.hit(row, at, x - pick.columnX(item, at))
+        const column = pick.columnAt(item, position)
+        if (column === pick.atBelow)
+            return pick.commandsModel.hitAt(row, column, 0)
+        if (column === pick.atGapCmd)
+            return pick.commandsModel.hitAt(row, column, pick.sideOf(x, item.clockEnd, item.cmdX))
+        if (column === pick.atGapOut)
+            return pick.commandsModel.hitAt(row, column, pick.sideOf(x, item.cmdEnd, item.outX))
+        return pick.hit(row, column, x - pick.columnX(item, column))
     }
     /// Which of a row's columns a point is over: the three it draws, the gaps between them, or the words a failure
     /// carries below its line — the one split a press and a double-click both read.
@@ -158,14 +158,14 @@ Item {
              : pick.atOut
     }
     /// Where one of the three drawn columns starts, in this item's coordinates.
-    function columnX(item, at) {
-        return at === pick.atClock ? item.clockX : at === pick.atCmd ? item.cmdX : item.outX
+    function columnX(item, column) {
+        return column === pick.atClock ? item.clockX : column === pick.atCmd ? item.cmdX : item.outX
     }
     /// One column: pixels to place by the column's layout (`LineRuler`), place to byte by the model. Both are
     /// lookups — treating a column as a width lands mid-line when the drag runs past its end.
-    function hit(row, at, x) {
-        const text = pick.commandsModel.columnText(row, at)
-        return pick.commandsModel.hitAt(row, at, pick.ruler.placeAt(text, false, x))
+    function hit(row, column, x) {
+        const text = pick.commandsModel.columnText(row, column)
+        return pick.commandsModel.hitAt(row, column, pick.ruler.placeAt(text, false, x))
     }
     function sideOf(x, from, to) {
         return x < (from + to) / 2 ? 0 : 1

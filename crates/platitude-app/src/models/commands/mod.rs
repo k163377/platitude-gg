@@ -264,8 +264,8 @@ impl CommandsModel {
     /// The text of one of a row's three columns, for the pane to lay out
     /// (`LineRuler`).
     #[qslot]
-    fn column_text(&self, row: i32, at: i32) -> String {
-        self.column(row, at)
+    fn column_text(&self, row: i32, column: i32) -> String {
+        self.column(row, column)
     }
 
     // A negative row, byte or place names nothing (`text_position`): it
@@ -274,8 +274,8 @@ impl CommandsModel {
     /// Which byte of a row's line a press landed on, given the column and
     /// the place in it the pane measured; pixels stop at the pane.
     #[qslot]
-    fn hit_at(&self, row: i32, at: i32, place: i32) -> i32 {
-        LayoutPosition::new(row, place).map_or(0, |position| self.hit(at, position))
+    fn hit_at(&self, row: i32, column: i32, place: i32) -> i32 {
+        LayoutPosition::new(row, place).map_or(0, |position| self.hit(column, position))
     }
 
     /// A press landed: the selection starts here and holds nothing yet.
@@ -301,14 +301,14 @@ impl CommandsModel {
     }
 
     /// A double-click: the word under the pointer becomes the selection
-    /// (`take_word`). `place` is the place in column `at` of the character
+    /// (`take_word`). `place` is the place in `column` of the character
     /// the pointer is over (`LineRuler.unitAt`), not a boundary.
     #[qslot]
-    fn select_word(&mut self, row: i32, at: i32, place: i32) {
+    fn select_word(&mut self, row: i32, column: i32, place: i32) {
         let Some(position) = LayoutPosition::new(row, place) else {
             return;
         };
-        if self.take_word(at, position) {
+        if self.take_word(column, position) {
             self.changed();
         }
     }

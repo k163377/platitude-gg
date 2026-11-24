@@ -208,10 +208,10 @@ Item {
         if (!first || !second)
             return "commands_word rows=" + model.rowsHeld()
         const middle = item => item.y - hand.view.contentY + item.lineHeight / 2
-        // Three quarters across the character at `place` of column `at` of row `row`.
-        const into = (row, item, at, place) => {
-            hand.ruler.hold(model.columnText(row, at), false)
-            return Qt.point(hand.columnX(item, at) + (hand.ruler.xOf(place) + 3 * hand.ruler.xOf(place + 1)) / 4,
+        // Three quarters across the character at `place` of `column` of row `row`.
+        const into = (row, item, column, place) => {
+            hand.ruler.hold(model.columnText(row, column), false)
+            return Qt.point(hand.columnX(item, column) + (hand.ruler.xOf(place) + 3 * hand.ruler.xOf(place + 1)) / 4,
                             middle(item))
         }
         const doubled = (point, dragTo) => {

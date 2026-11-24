@@ -126,11 +126,11 @@ impl CommandsModel {
     /// The text of one of the three columns a row draws, for the pane's
     /// ruler (`CommandsTextSelect` / `CommandRowDelegate`). A gap has
     /// nothing to lay out, so it answers empty.
-    pub(super) fn column(&self, row: i32, at: i32) -> String {
+    pub(super) fn column(&self, row: i32, column: i32) -> String {
         let Some(line) = usize::try_from(row).ok().and_then(|row| self.line_at(row)) else {
             return String::new();
         };
-        match at {
+        match column {
             AT_CLOCK => line.clock,
             AT_CMD => line.cmd,
             AT_OUT => line.out,
