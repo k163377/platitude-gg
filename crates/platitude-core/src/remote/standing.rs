@@ -153,7 +153,11 @@ pub struct StatusPush {
     /// unset.
     pub push_remote: Option<String>,
     /// The repository's mark, `remote.pushDefault`, as this read found it;
-    /// `None` where unset. What the toolbar weighs the push under
+    /// `None` where unset. Taken as git takes it, whatever it names: `.`
+    /// stands the push here, and a name no remote has is where the toolbar
+    /// says it goes, git refusing the press — the toolbar names where the
+    /// send goes, never the upstream git would pass over (user decision —
+    /// ask before changing). What the toolbar weighs the push under
     /// ([`Self::route`]), not the refs snapshot's copy
     /// (`session::RefsSnapshot::marks`): a moved mark sends the refs out
     /// again (`RepoSession::note_push_default`), and they land before or
