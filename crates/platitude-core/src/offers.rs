@@ -190,7 +190,7 @@ pub struct RefMenuOffers {
     /// (デザイン規約 §ブランチ・コミットへの移動).
     pub branch_here: bool,
     /// merge / rebase with this row as the far side: needs a current
-    /// branch to move, and a row that is not it.
+    /// branch to move, and a row that is neither it nor on its commit.
     pub integrate_from: bool,
     /// An operation stands: [`Self::branch_here`] and
     /// [`Self::integrate_from`] keep their seats, greyed until it is
@@ -369,7 +369,15 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
         // Leading elsewhere asks nothing: the press opens that worktree.
         switch_asks: row.leads == Leads::Nowhere && tree.moves_blocked,
         branch_here: kind != RefKind::Stash && row.commit.is_some(),
-        integrate_from: row.open && tree.on_branch() && !current,
+        // On HEAD's own commit git moves nothing (`Already up to date.` /
+        // `Current branch … is up to date.`), so the row is the commit
+        // menu's: offered only on another commit ([`commit_menu`]).
+        integrate_from: row.open
+            && tree.on_branch()
+            && !current
+            && !row
+                .commit
+                .is_some_and(|commit| tree.is_head(&commit.to_hex())),
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).

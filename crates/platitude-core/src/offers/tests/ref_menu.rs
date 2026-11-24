@@ -1,4 +1,4 @@
-use super::super::testkit::{standing, target};
+use super::super::testkit::{row_commit, standing, target};
 use super::super::*;
 
 /// The rows of `full`'s menu on an idle, open repository on `main` that no
@@ -209,6 +209,37 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
     assert_eq!(offers.delete_out, Some(DeleteOut::Current));
     assert!(!offers.integrate_from, "nothing of itself to bring in");
     assert!(offers.branch_here, "where a branch is most often started");
+}
+
+/// Another row on HEAD's own commit has nothing to bring in either: git
+/// answers `Already up to date.` / `Current branch main is up to date.`
+/// and moves nothing. The graph row's menu on that commit offers neither
+/// (`commit_menu`'s `integrate`), and the ref menu agrees.
+#[test]
+fn a_row_on_heads_commit_offers_no_merge_or_rebase() {
+    let on_head = TreeStanding {
+        head_oid: row_commit().to_hex(),
+        ..TreeStanding::on("main")
+    };
+    for (kind, full) in [
+        (RefKind::Branch, "feat"),
+        (RefKind::Remote, "origin/main"),
+        (RefKind::Tag, "v1"),
+    ] {
+        let offers = ref_menu(
+            &standing(Some(target(kind, full)), &on_head),
+            FarSide::Unread,
+        );
+        assert!(!offers.integrate_from, "{full} is HEAD's commit");
+        assert!(
+            offers.branch_here,
+            "{full}: a new name there is still a move"
+        );
+    }
+    assert!(
+        offers_on(RefKind::Branch, "feat").integrate_from,
+        "on another commit there is something to bring in"
+    );
 }
 
 #[test]
