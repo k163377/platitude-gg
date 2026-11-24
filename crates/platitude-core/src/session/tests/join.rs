@@ -20,7 +20,7 @@ fn tag(name: &str, commit: Oid, annotated: bool) -> RefEntry {
     RefEntry {
         name: crate::Name::from(format!("refs/tags/{name}")),
         short: crate::Name::from(name),
-        kind: RefKind::Tag,
+        kind: RefNamespace::Tag,
         target: commit,
         peeled: annotated.then_some(commit),
         upstream: None,
@@ -34,7 +34,7 @@ fn branch(name: &str, commit: Oid) -> RefEntry {
     RefEntry {
         name: crate::Name::from(format!("refs/heads/{name}")),
         short: crate::Name::from(name),
-        kind: RefKind::LocalBranch,
+        kind: RefNamespace::LocalBranch,
         target: commit,
         peeled: None,
         upstream: None,
@@ -71,7 +71,7 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
     let tracking = |commit: Oid| RefEntry {
         name: crate::Name::from("refs/remotes/origin/main"),
         short: crate::Name::from("origin/main"),
-        kind: RefKind::RemoteBranch,
+        kind: RefNamespace::RemoteBranch,
         target: commit,
         peeled: None,
         upstream: None,
@@ -108,7 +108,7 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
     let tracking = |short: &str, commit: Oid| RefEntry {
         name: crate::Name::from(format!("refs/remotes/{short}")),
         short: crate::Name::from(short),
-        kind: RefKind::RemoteBranch,
+        kind: RefNamespace::RemoteBranch,
         target: commit,
         peeled: None,
         upstream: None,
@@ -178,7 +178,7 @@ fn a_reading_carries_the_branch_that_is_measured_against_it() {
     let tracking = |short: &str| RefEntry {
         name: crate::Name::from(format!("refs/remotes/{short}")),
         short: crate::Name::from(short),
-        kind: RefKind::RemoteBranch,
+        kind: RefNamespace::RemoteBranch,
         target: oid(1),
         peeled: None,
         upstream: None,
@@ -286,7 +286,7 @@ fn the_graph_cloud_on_a_branch_follows_the_fold() {
     let tracking = |remote: &str, commit: Oid| RefEntry {
         name: crate::Name::from(format!("refs/remotes/{remote}/main")),
         short: crate::Name::from(format!("{remote}/main")),
-        kind: RefKind::RemoteBranch,
+        kind: RefNamespace::RemoteBranch,
         target: commit,
         peeled: None,
         upstream: None,
@@ -1013,7 +1013,7 @@ fn refs_join_at_scale() {
     let remote_tags = index_of(
         "origin",
         refs.iter()
-            .filter(|r| r.kind == RefKind::Tag)
+            .filter(|r| r.kind == RefNamespace::Tag)
             .map(|r| AdvertisedTag {
                 name: r.short.clone(),
                 commit: r.commit_oid(),
@@ -1032,9 +1032,9 @@ fn refs_join_at_scale() {
         "refs={} tags={} remote_branches={} | one publish_refs join: {:.1} ms \
          ({} sidebar tags, {} labelled commits)",
         refs.len(),
-        refs.iter().filter(|r| r.kind == RefKind::Tag).count(),
+        refs.iter().filter(|r| r.kind == RefNamespace::Tag).count(),
         refs.iter()
-            .filter(|r| r.kind == RefKind::RemoteBranch)
+            .filter(|r| r.kind == RefNamespace::RemoteBranch)
             .count(),
         started.elapsed().as_secs_f64() * 1000.0,
         snapshot.tags.len(),

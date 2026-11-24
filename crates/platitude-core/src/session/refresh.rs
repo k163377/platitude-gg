@@ -295,7 +295,7 @@ impl RepoSession {
         // read (`RefsSnapshot::branch_push`).
         let elsewhere: std::collections::HashSet<&str> = refs
             .iter()
-            .filter(|entry| entry.kind == RefKind::LocalBranch && !entry.is_head)
+            .filter(|entry| entry.kind == RefNamespace::LocalBranch && !entry.is_head)
             .filter(|local| {
                 let upstream = match index.spoken_for(local) {
                     Some(upstream) => remote::Upstream::Remote(upstream.short.as_str()),

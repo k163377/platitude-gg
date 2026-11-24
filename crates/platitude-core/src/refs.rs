@@ -25,7 +25,7 @@ pub const REFS_FORMAT_ARG: &str = "--format=%(refname)%00%(objecttype)%00%(objec
 const REFS_FIELDS: usize = 8;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RefKind {
+pub enum RefNamespace {
     LocalBranch,
     RemoteBranch,
     Tag,
@@ -37,7 +37,7 @@ pub struct RefEntry {
     pub name: crate::Name,
     /// Display name (`main`, `origin/main`, `v1.0`).
     pub short: crate::Name,
-    pub kind: RefKind,
+    pub kind: RefNamespace,
     /// Direct target of the ref (a tag object for annotated tags).
     pub target: Oid,
     /// Peeled commit for annotated tags.
@@ -114,14 +114,14 @@ fn parse_line(line: &[u8]) -> Result<Option<RefEntry>, RefsParseError> {
     let name: crate::Name = String::from_utf8_lossy(fields[0]).into_owned().into();
 
     let (kind, short) = if let Some(rest) = name.strip_prefix("refs/heads/") {
-        (RefKind::LocalBranch, crate::Name::from(rest))
+        (RefNamespace::LocalBranch, crate::Name::from(rest))
     } else if let Some(rest) = name.strip_prefix("refs/remotes/") {
         if rest.ends_with("/HEAD") {
             return Ok(None);
         }
-        (RefKind::RemoteBranch, crate::Name::from(rest))
+        (RefNamespace::RemoteBranch, crate::Name::from(rest))
     } else if let Some(rest) = name.strip_prefix("refs/tags/") {
-        (RefKind::Tag, crate::Name::from(rest))
+        (RefNamespace::Tag, crate::Name::from(rest))
     } else {
         return Ok(None);
     };
@@ -199,7 +199,7 @@ impl<'a> RemoteBranches<'a> {
     pub fn index(refs: &'a [RefEntry]) -> Self {
         let by_refname = refs
             .iter()
-            .filter(|r| r.kind == RefKind::RemoteBranch)
+            .filter(|r| r.kind == RefNamespace::RemoteBranch)
             .map(|r| (r.name.as_str(), r))
             .collect();
         Self { by_refname }
@@ -241,7 +241,7 @@ impl<'a> RemoteBranches<'a> {
     /// ([`Self::folded_counterpart`]).
     pub fn folded_into_local(&self, refs: &'a [RefEntry]) -> HashSet<&'a str> {
         refs.iter()
-            .filter(|r| r.kind == RefKind::LocalBranch)
+            .filter(|r| r.kind == RefNamespace::LocalBranch)
             .filter_map(|local| self.folded_counterpart(local))
             .map(|remote| remote.name.as_str())
             .collect()

@@ -43,7 +43,7 @@ use crate::process::{CommandEnd, GitCommand, GitExecutor, Kept};
 use crate::publish;
 use crate::reachable;
 use crate::rebase_plan;
-use crate::refs::{self, HeadState, RefEntry, RefKind};
+use crate::refs::{self, HeadState, RefEntry, RefNamespace};
 use crate::remote;
 use crate::repo::RepoInfo;
 use crate::report;

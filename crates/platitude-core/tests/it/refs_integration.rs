@@ -14,7 +14,7 @@ use crate::support::TestRepo;
 use crate::support::exec::{env, logged};
 use platitude_core::Oid;
 use platitude_core::process::CommandEnd;
-use platitude_core::refs::{self, RefKind};
+use platitude_core::refs::{self, RefNamespace};
 
 /// main (upstream: origin/main) + feature (no upstream, same name on
 /// origin) + local-only + annotated & lightweight tags.
@@ -50,22 +50,22 @@ async fn lists_branches_tags_and_remotes() {
 
     let refs = refs::load(&executor, &repo.path, &cancel).await.unwrap();
 
-    let find = |kind: RefKind, short: &str| {
+    let find = |kind: RefNamespace, short: &str| {
         refs.iter()
             .find(|r| r.kind == kind && r.short == short)
             .unwrap_or_else(|| panic!("missing {kind:?} {short}"))
     };
 
-    let main = find(RefKind::LocalBranch, "main");
+    let main = find(RefNamespace::LocalBranch, "main");
     assert!(main.is_head);
     assert_eq!(main.upstream.as_deref(), Some("refs/remotes/origin/main"));
 
-    let annotated = find(RefKind::Tag, "v1.0");
+    let annotated = find(RefNamespace::Tag, "v1.0");
     assert!(
         annotated.peeled.is_some(),
         "annotated tag peels to a commit"
     );
-    let light = find(RefKind::Tag, "light");
+    let light = find(RefNamespace::Tag, "light");
     assert!(light.peeled.is_none(), "lightweight tag needs no peel");
     assert_eq!(
         annotated.commit_oid(),
@@ -76,18 +76,18 @@ async fn lists_branches_tags_and_remotes() {
     let head_sha = Oid::from_hex_str(&repo.git(&["rev-parse", "HEAD"])).unwrap();
     assert_eq!(main.target, head_sha);
 
-    find(RefKind::RemoteBranch, "origin/main");
+    find(RefNamespace::RemoteBranch, "origin/main");
     assert!(
         !refs
             .iter()
-            .any(|r| r.kind == RefKind::RemoteBranch && r.short.ends_with("/HEAD")),
+            .any(|r| r.kind == RefNamespace::RemoteBranch && r.short.ends_with("/HEAD")),
         "origin/HEAD symref must be hidden"
     );
 
     // Remote-state comes from the upstream alone, to agree with git
     // (`RemoteBranches::spoken_for`): git names no upstream for feature/x
     // though `origin/feature/x` is in the listing.
-    find(RefKind::RemoteBranch, "origin/feature/x");
+    find(RefNamespace::RemoteBranch, "origin/feature/x");
     assert_eq!(
         repo.git(&[
             "for-each-ref",
@@ -100,7 +100,7 @@ async fn lists_branches_tags_and_remotes() {
     let remotes = refs::RemoteBranches::index(&refs);
     let with_remote: HashSet<&str> = refs
         .iter()
-        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| r.kind == RefNamespace::LocalBranch)
         .filter(|r| remotes.has_counterpart(r))
         .map(|r| r.name.as_str())
         .collect();
@@ -251,7 +251,7 @@ async fn a_branch_counts_how_far_it_stands_from_its_upstream() {
     let refs = refs::load(&executor, &repo.path, &cancel).await.unwrap();
     let counts = |short: &str| {
         refs.iter()
-            .find(|r| r.kind == RefKind::LocalBranch && r.short == short)
+            .find(|r| r.kind == RefNamespace::LocalBranch && r.short == short)
             .map(|entry| (entry.counts.ahead, entry.counts.behind))
             .unwrap_or_else(|| panic!("missing branch {short}"))
     };

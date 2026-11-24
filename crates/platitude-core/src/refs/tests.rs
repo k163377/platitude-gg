@@ -47,7 +47,7 @@ fn parses_the_three_namespaces() {
     assert_eq!(refs.len(), 3);
 
     let main = &refs[0];
-    assert_eq!(main.kind, RefKind::LocalBranch);
+    assert_eq!(main.kind, RefNamespace::LocalBranch);
     assert_eq!(main.short, "main");
     assert!(main.is_head);
     assert_eq!(main.upstream.as_deref(), Some("refs/remotes/origin/main"));
@@ -55,12 +55,12 @@ fn parses_the_three_namespaces() {
     assert_eq!(main.created_unix, 1_700_000_100);
 
     let remote = &refs[1];
-    assert_eq!(remote.kind, RefKind::RemoteBranch);
+    assert_eq!(remote.kind, RefNamespace::RemoteBranch);
     assert_eq!(remote.short, "origin/main");
     assert!(!remote.is_head);
 
     let tag = &refs[2];
-    assert_eq!(tag.kind, RefKind::Tag);
+    assert_eq!(tag.kind, RefNamespace::Tag);
     assert_eq!(tag.short, "v1.0");
     assert_eq!(tag.target.to_hex(), SHA_T, "annotated tag object");
     assert_eq!(tag.commit_oid().to_hex(), SHA_B, "peeled commit");
@@ -158,7 +158,7 @@ fn a_branch_reads_how_far_it_stands_from_its_upstream() {
     assert_eq!(counts, vec![(2, 0), (0, 1), (1, 1), (0, 0), (0, 0)]);
 }
 
-fn entry(kind: RefKind, name: &str, short: &str, upstream: Option<&str>) -> RefEntry {
+fn entry(kind: RefNamespace, name: &str, short: &str, upstream: Option<&str>) -> RefEntry {
     RefEntry {
         name: crate::Name::from(name),
         short: crate::Name::from(short),
@@ -179,35 +179,35 @@ fn remote_state_comes_from_the_upstream_and_nowhere_else() {
     let refs = vec![
         // upstream configured and alive
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/main",
             "main",
             Some("refs/remotes/origin/main"),
         ),
         // upstream configured but the remote branch is gone
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/dead",
             "dead",
             Some("refs/remotes/origin/dead"),
         ),
         // no upstream, though origin does have a same-named branch
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/feature/x",
             "feature/x",
             None,
         ),
         // truly local
-        entry(RefKind::LocalBranch, "refs/heads/local", "local", None),
+        entry(RefNamespace::LocalBranch, "refs/heads/local", "local", None),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/main",
             "origin/main",
             None,
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/feature/x",
             "origin/feature/x",
             None,
@@ -216,7 +216,7 @@ fn remote_state_comes_from_the_upstream_and_nowhere_else() {
     let remotes = RemoteBranches::index(&refs);
     let with_remote: HashSet<&str> = refs
         .iter()
-        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| r.kind == RefNamespace::LocalBranch)
         .filter(|r| remotes.has_counterpart(r))
         .map(|r| r.name.as_str())
         .collect();
@@ -238,13 +238,13 @@ fn at(mut e: RefEntry, sha: &str) -> RefEntry {
 fn folds_the_upstream_sharing_the_commit() {
     let refs = vec![
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/main",
             "main",
             Some("refs/remotes/origin/main"),
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/main",
             "origin/main",
             None,
@@ -258,14 +258,14 @@ fn folds_the_upstream_sharing_the_commit() {
 fn keeps_an_upstream_left_behind_on_another_commit() {
     let refs = vec![
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/topic",
             "topic",
             Some("refs/remotes/origin/topic"),
         ),
         at(
             entry(
-                RefKind::RemoteBranch,
+                RefNamespace::RemoteBranch,
                 "refs/remotes/origin/topic",
                 "origin/topic",
                 None,
@@ -285,19 +285,19 @@ fn keeps_an_upstream_left_behind_on_another_commit() {
 fn keeps_a_second_remote_that_is_not_the_upstream() {
     let refs = vec![
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/main",
             "main",
             Some("refs/remotes/origin/main"),
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/main",
             "origin/main",
             None,
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/fork/main",
             "fork/main",
             None,
@@ -312,13 +312,13 @@ fn keeps_a_second_remote_that_is_not_the_upstream() {
 fn folds_nothing_without_an_upstream() {
     let alone = vec![
         entry(
-            RefKind::LocalBranch,
+            RefNamespace::LocalBranch,
             "refs/heads/feature/x",
             "feature/x",
             None,
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/feature/x",
             "origin/feature/x",
             None,
@@ -332,15 +332,15 @@ fn folds_nothing_without_an_upstream() {
     );
 
     let several = vec![
-        entry(RefKind::LocalBranch, "refs/heads/main", "main", None),
+        entry(RefNamespace::LocalBranch, "refs/heads/main", "main", None),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/origin/main",
             "origin/main",
             None,
         ),
         entry(
-            RefKind::RemoteBranch,
+            RefNamespace::RemoteBranch,
             "refs/remotes/fork/main",
             "fork/main",
             None,

@@ -23,7 +23,7 @@
 use crate::support::TestRepo;
 use crate::support::exec::env;
 use platitude_core::parse::log::{LOG_FORMAT_ARG, LogParser};
-use platitude_core::refs::{self, RefKind};
+use platitude_core::refs::{self, RefNamespace};
 use platitude_core::{GitCommand, commit, publish, status};
 
 /// Bytes a ref's last component may have, from the measurement above.
@@ -99,12 +99,12 @@ async fn a_ref_whose_last_character_ends_on_the_wall_comes_back_whole() {
         .expect("refs load");
 
     let found =
-        |kind: RefKind, short: &str| listed.iter().any(|r| r.kind == kind && r.short == short);
+        |kind: RefNamespace, short: &str| listed.iter().any(|r| r.kind == kind && r.short == short);
     assert!(
-        found(RefKind::LocalBranch, &branch),
+        found(RefNamespace::LocalBranch, &branch),
         "the branch reads back"
     );
-    assert!(found(RefKind::Tag, &tag), "and so does the tag");
+    assert!(found(RefNamespace::Tag, &tag), "and so does the tag");
 }
 
 /// A branch moved onto another, both on the wall, counted the way the move

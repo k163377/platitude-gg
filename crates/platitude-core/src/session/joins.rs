@@ -63,18 +63,18 @@ impl<'a> RefJoins<'a> {
         let folded = remotes.folded_into_local(refs);
         let tag_commit = refs
             .iter()
-            .filter(|r| r.kind == RefKind::Tag)
+            .filter(|r| r.kind == RefNamespace::Tag)
             .map(|r| (r.short.as_str(), r.commit_oid()))
             .collect();
         let local_commit = refs
             .iter()
-            .filter(|r| r.kind == RefKind::LocalBranch)
+            .filter(|r| r.kind == RefNamespace::LocalBranch)
             .map(|r| (r.name.as_str(), r.commit_oid()))
             .collect();
         // First one wins: two branches can name one reading and a row
         // carries one name. Refname order keeps the pick stable.
         let mut tracked_by: HashMap<&'a str, &'a RefEntry> = HashMap::new();
-        for local in refs.iter().filter(|r| r.kind == RefKind::LocalBranch) {
+        for local in refs.iter().filter(|r| r.kind == RefNamespace::LocalBranch) {
             if let Some(up) = local.upstream.as_deref() {
                 tracked_by.entry(up).or_insert(local);
             }
@@ -148,7 +148,7 @@ impl<'a> RefJoins<'a> {
 
     /// `Some(locked)` while another worktree has this branch out.
     fn holder_of(&self, r: &RefEntry) -> Option<bool> {
-        if r.kind != RefKind::LocalBranch {
+        if r.kind != RefNamespace::LocalBranch {
             return None;
         }
         self.held.branches.get(r.short.as_str()).copied()
@@ -181,18 +181,18 @@ pub(super) fn build_label_map(
     let marks = HeadMarks::of(head);
     let mut pairs: Vec<(Oid, RefLabel)> = Vec::with_capacity(refs.len());
     for r in refs {
-        if r.kind == RefKind::RemoteBranch && joins.folded.contains(r.name.as_str()) {
+        if r.kind == RefNamespace::RemoteBranch && joins.folded.contains(r.name.as_str()) {
             continue;
         }
         let kind = match r.kind {
-            RefKind::LocalBranch => LabelKind::LocalBranch,
-            RefKind::RemoteBranch => LabelKind::RemoteBranch,
-            RefKind::Tag => LabelKind::Tag,
+            RefNamespace::LocalBranch => LabelKind::LocalBranch,
+            RefNamespace::RemoteBranch => LabelKind::RemoteBranch,
+            RefNamespace::Tag => LabelKind::Tag,
         };
         let has_remote = match r.kind {
-            RefKind::LocalBranch => joins.remotes.folded_counterpart(r).is_some(),
-            RefKind::Tag => remote_tags.agrees_at(&r.short, r.commit_oid()),
-            RefKind::RemoteBranch => false,
+            RefNamespace::LocalBranch => joins.remotes.folded_counterpart(r).is_some(),
+            RefNamespace::Tag => remote_tags.agrees_at(&r.short, r.commit_oid()),
+            RefNamespace::RemoteBranch => false,
         };
         pairs.push((
             r.commit_oid(),
@@ -200,8 +200,8 @@ pub(super) fn build_label_map(
                 text: r.short.clone(),
                 kind,
                 has_remote,
-                is_head: r.kind == RefKind::LocalBranch && marks.on_branch(&r.short),
-                here: r.kind != RefKind::RemoteBranch,
+                is_head: r.kind == RefNamespace::LocalBranch && marks.on_branch(&r.short),
+                here: r.kind != RefNamespace::RemoteBranch,
                 remote: String::new(),
                 held_elsewhere: joins.held_elsewhere(r),
                 locked: joins.held_locked(r),
@@ -393,7 +393,7 @@ pub(super) fn build_snapshot(
     };
     for r in refs {
         match r.kind {
-            RefKind::LocalBranch => {
+            RefNamespace::LocalBranch => {
                 // `upstream_drifted` is the same co-location the chips
                 // fold on.
                 let spoken = joins.remotes.spoken_for(r);
@@ -417,7 +417,7 @@ pub(super) fn build_snapshot(
             }
             // The branch measured against this reading, and its counts —
             // the opened row draws them beside it (デザイン規約 §左メニューの所作).
-            RefKind::RemoteBranch => snapshot.remotes.push(BranchItem {
+            RefNamespace::RemoteBranch => snapshot.remotes.push(BranchItem {
                 short: r.short.clone(),
                 full: r.name.clone(),
                 oid: r.commit_oid(),
@@ -441,7 +441,7 @@ pub(super) fn build_snapshot(
                     .map(|local| local.counts)
                     .unwrap_or_default(),
             }),
-            RefKind::Tag => snapshot.tags.push(TagItem {
+            RefNamespace::Tag => snapshot.tags.push(TagItem {
                 short: r.short.clone(),
                 oid: r.commit_oid(),
                 annotated: r.peeled.is_some(),

@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use crate::refs::{RefEntry, RefKind};
+use crate::refs::{RefEntry, RefNamespace};
 use crate::session::{BranchItem, RefsSnapshot};
 
 /// How many renames a snapshot holds, the newest kept, and how many names
@@ -24,7 +24,7 @@ pub(super) fn candidates<'a>(
 ) -> Vec<(&'a str, Vec<&'a str>)> {
     let listed_now: HashSet<&str> = now
         .iter()
-        .filter(|r| r.kind == RefKind::LocalBranch)
+        .filter(|r| r.kind == RefNamespace::LocalBranch)
         .map(|r| r.short.as_str())
         .collect();
     let gone: Vec<&BranchItem> = before
@@ -36,7 +36,9 @@ pub(super) fn candidates<'a>(
     }
     let listed_before: HashSet<&str> = before.iter().map(|b| b.short.as_str()).collect();
     now.iter()
-        .filter(|r| r.kind == RefKind::LocalBranch && !listed_before.contains(r.short.as_str()))
+        .filter(|r| {
+            r.kind == RefNamespace::LocalBranch && !listed_before.contains(r.short.as_str())
+        })
         .filter_map(|r| {
             let olds: Vec<&str> = gone
                 .iter()
@@ -119,7 +121,7 @@ mod tests {
         (old.into(), new.into())
     }
 
-    fn listed(short: &str, at: u8, kind: RefKind) -> RefEntry {
+    fn listed(short: &str, at: u8, kind: RefNamespace) -> RefEntry {
         RefEntry {
             name: format!("refs/heads/{short}").into(),
             short: short.into(),
@@ -141,10 +143,10 @@ mod tests {
             local("left", b'3'),
         ];
         let now = [
-            listed("main", b'1', RefKind::LocalBranch),
-            listed("topic-two", b'2', RefKind::LocalBranch),
-            listed("moved", b'4', RefKind::LocalBranch),
-            listed("origin/topic-two", b'2', RefKind::RemoteBranch),
+            listed("main", b'1', RefNamespace::LocalBranch),
+            listed("topic-two", b'2', RefNamespace::LocalBranch),
+            listed("moved", b'4', RefNamespace::LocalBranch),
+            listed("origin/topic-two", b'2', RefNamespace::RemoteBranch),
         ];
         assert_eq!(
             candidates(&before, &now),
@@ -152,8 +154,8 @@ mod tests {
             "a name on another commit is a branch made, not a rename; a remote one is no branch here"
         );
         let unchanged = [
-            listed("main", b'1', RefKind::LocalBranch),
-            listed("topic", b'2', RefKind::LocalBranch),
+            listed("main", b'1', RefNamespace::LocalBranch),
+            listed("topic", b'2', RefNamespace::LocalBranch),
         ];
         assert!(
             candidates(&before[..2], &unchanged).is_empty(),

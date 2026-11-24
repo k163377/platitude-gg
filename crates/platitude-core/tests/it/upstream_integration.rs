@@ -67,7 +67,7 @@ async fn an_upstream_fetched_outside_the_remote_branches_is_counted_unlisted_and
     assert!(
         listed
             .iter()
-            .all(|entry| entry.kind != platitude_core::refs::RefKind::RemoteBranch),
+            .all(|entry| entry.kind != platitude_core::refs::RefNamespace::RemoteBranch),
         "no remote row for the mirror ref: {listed:#?}"
     );
 

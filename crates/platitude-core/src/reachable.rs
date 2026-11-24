@@ -30,7 +30,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
-use crate::refs::{HeadState, RefEntry, RefKind};
+use crate::refs::{HeadState, RefEntry, RefNamespace};
 
 /// What sits exactly on HEAD's commit besides HEAD's branch, read off the
 /// refresh's listing (annotated tags peeled). No process.
@@ -57,10 +57,12 @@ impl OnTip {
             .filter(|entry| !entry.is_head && entry.commit_oid() == oid)
         {
             match entry.kind {
-                RefKind::LocalBranch if !out_elsewhere(&entry.short) => {
+                RefNamespace::LocalBranch if !out_elsewhere(&entry.short) => {
                     on_tip.branches.push(entry.short.to_string());
                 }
-                RefKind::LocalBranch | RefKind::RemoteBranch | RefKind::Tag => on_tip.kept = true,
+                RefNamespace::LocalBranch | RefNamespace::RemoteBranch | RefNamespace::Tag => {
+                    on_tip.kept = true
+                }
             }
         }
         on_tip
@@ -132,7 +134,7 @@ mod tests {
 
     /// `name` under `refs/`; its short name drops the first part
     /// (`heads/feature/x` is `feature/x`).
-    fn entry(name: &str, kind: RefKind, oid: &str, is_head: bool) -> RefEntry {
+    fn entry(name: &str, kind: RefNamespace, oid: &str, is_head: bool) -> RefEntry {
         RefEntry {
             name: crate::Name::from(format!("refs/{name}")),
             short: crate::Name::from(name.split_once('/').map_or(name, |(_, short)| short)),
@@ -165,15 +167,15 @@ mod tests {
 
     #[test]
     fn the_branch_head_is_on_does_not_hold_its_own_tip() {
-        let refs = vec![entry("heads/main", RefKind::LocalBranch, A, true)];
+        let refs = vec![entry("heads/main", RefNamespace::LocalBranch, A, true)];
         assert_eq!(on_tip(&refs, &head(A)), OnTip::default());
     }
 
     #[test]
     fn a_tag_or_a_remote_on_the_same_commit_is_kept() {
-        for kind in [RefKind::RemoteBranch, RefKind::Tag] {
+        for kind in [RefNamespace::RemoteBranch, RefNamespace::Tag] {
             let refs = vec![
-                entry("heads/main", RefKind::LocalBranch, A, true),
+                entry("heads/main", RefNamespace::LocalBranch, A, true),
                 entry("other", kind, A, false),
             ];
             let found = on_tip(&refs, &head(A));
@@ -185,8 +187,8 @@ mod tests {
     #[test]
     fn a_branch_on_the_same_commit_is_named_for_the_setting_to_decide() {
         let refs = vec![
-            entry("heads/main", RefKind::LocalBranch, A, true),
-            entry("heads/feature/keep", RefKind::LocalBranch, A, false),
+            entry("heads/main", RefNamespace::LocalBranch, A, true),
+            entry("heads/feature/keep", RefNamespace::LocalBranch, A, false),
         ];
         let found = on_tip(&refs, &head(A));
         assert!(!found.kept);
@@ -196,9 +198,9 @@ mod tests {
     #[test]
     fn a_branch_another_worktree_has_out_is_kept() {
         let refs = vec![
-            entry("heads/main", RefKind::LocalBranch, A, true),
-            entry("heads/out", RefKind::LocalBranch, A, false),
-            entry("heads/free", RefKind::LocalBranch, A, false),
+            entry("heads/main", RefNamespace::LocalBranch, A, true),
+            entry("heads/out", RefNamespace::LocalBranch, A, false),
+            entry("heads/free", RefNamespace::LocalBranch, A, false),
         ];
         let found = OnTip::of(&refs, &head(A), |name| name == "out");
         assert!(found.kept, "git leaves a branch another worktree has out");
@@ -208,18 +210,18 @@ mod tests {
     #[test]
     fn a_ref_somewhere_else_holds_nothing() {
         let refs = vec![
-            entry("heads/main", RefKind::LocalBranch, A, true),
-            entry("tags/v1", RefKind::Tag, B, false),
-            entry("heads/old", RefKind::LocalBranch, B, false),
+            entry("heads/main", RefNamespace::LocalBranch, A, true),
+            entry("tags/v1", RefNamespace::Tag, B, false),
+            entry("heads/old", RefNamespace::LocalBranch, B, false),
         ];
         assert_eq!(on_tip(&refs, &head(A)), OnTip::default());
     }
 
     #[test]
     fn an_annotated_tag_counts_by_the_commit_it_peels_to() {
-        let mut tag = entry("tags/v1", RefKind::Tag, B, false);
+        let mut tag = entry("tags/v1", RefNamespace::Tag, B, false);
         tag.peeled = Some(Oid::from_hex_str(A).expect("test oid"));
-        let refs = vec![entry("heads/main", RefKind::LocalBranch, A, true), tag];
+        let refs = vec![entry("heads/main", RefNamespace::LocalBranch, A, true), tag];
         assert!(on_tip(&refs, &head(A)).kept);
     }
 
