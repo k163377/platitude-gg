@@ -173,7 +173,7 @@ impl LogParser {
                 let words = |line: &&str| !line.trim().is_empty();
                 self.cur_body = match (
                     kept.iter().position(words),
-                    kept.iter().rposition(|line| words(line)),
+                    kept.iter().rposition(words),
                 ) {
                     (Some(first), Some(last)) => kept[first..=last].join("\n"),
                     _ => String::new(),
