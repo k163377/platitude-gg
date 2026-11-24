@@ -26,9 +26,13 @@ impl Side {
     /// the buckets: staging from the unstaged heading's and the conflicts
     /// (`git add` marks those resolved), unstaging from the staged one's.
     fn takes_from(self, bucket: &str) -> bool {
+        use crate::encode::Routing;
+        let Some(routing) = Routing::of_word(bucket) else {
+            return false;
+        };
         match self {
-            Side::Stage => matches!(bucket, "unstaged" | "untracked" | "conflicts"),
-            Side::Unstage => bucket == "staged",
+            Side::Stage => routing != Routing::Staged,
+            Side::Unstage => routing == Routing::Staged,
         }
     }
 }

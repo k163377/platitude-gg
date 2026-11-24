@@ -16,6 +16,7 @@ mod menu;
 mod metatype;
 mod push;
 mod remote;
+mod routing;
 mod rows;
 mod select;
 mod text_end;
@@ -41,6 +42,7 @@ pub use markup::{
 pub use mates::{Mates, mates_of};
 pub use menu::{RefMenu, WorktreeMaking};
 pub use push::{Push, PushRecord};
+pub use routing::Routing;
 pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_after, flatten_patches, is_combined, is_new_file,
     is_unmerged_only, mode_change, pair_rows, whole_only_why,

@@ -28,16 +28,11 @@ fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
         tracing::warn!(key, "a chosen row without a bucket");
         return None;
     };
-    let side = match bucket {
-        "unstaged" => DiscardSide::Unstaged,
-        "untracked" => DiscardSide::Untracked,
-        "staged" => DiscardSide::Staged,
-        "conflicts" => return None,
-        other => {
-            tracing::warn!(bucket = other, "a chosen row from an unknown bucket");
-            return None;
-        }
+    let Some(routing) = crate::encode::Routing::of_word(bucket) else {
+        tracing::warn!(bucket, "a chosen row from an unknown bucket");
+        return None;
     };
+    let side = routing.discard_side()?;
     Some((path.to_string(), side))
 }
 

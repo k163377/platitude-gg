@@ -241,13 +241,16 @@ impl Discard {
     /// Not a directory: [`Self::next`] leaves those where they are.
     #[must_use]
     pub fn leaves(&self, bucket: &str, path: &str) -> bool {
-        match bucket {
-            "staged" => self.chose(path, DiscardSide::Staged),
-            "unstaged" => {
+        use crate::encode::Routing;
+        match Routing::of_word(bucket) {
+            Some(Routing::Staged) => self.chose(path, DiscardSide::Staged),
+            Some(Routing::Unstaged) => {
                 self.chose(path, DiscardSide::Unstaged) || self.chose(path, DiscardSide::Staged)
             }
-            "untracked" => self.chose(path, DiscardSide::Untracked) && !path.ends_with('/'),
-            _ => false,
+            Some(Routing::Untracked) => {
+                self.chose(path, DiscardSide::Untracked) && !path.ends_with('/')
+            }
+            Some(Routing::Conflicts) | None => false,
         }
     }
 }

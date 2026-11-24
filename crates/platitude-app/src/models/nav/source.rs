@@ -414,24 +414,29 @@ impl Bucket {
     /// What the row routes diffs and staging by. `Whole` has none of its
     /// own — the side is the entry's ([`Self::routing_of`]).
     pub(super) fn routing(self) -> &'static str {
+        use crate::encode::Routing;
         match self {
-            Self::Conflicts => "conflicts",
-            Self::Unstaged | Self::Whole => "unstaged",
-            Self::Untracked => "untracked",
-            Self::Staged => "staged",
+            Self::Conflicts => Routing::Conflicts,
+            Self::Unstaged | Self::Whole => Routing::Unstaged,
+            Self::Untracked => Routing::Untracked,
+            Self::Staged => Routing::Staged,
         }
+        .word()
     }
 
     /// The same for a `Whole` row: the index where anything is staged,
     /// the worktree otherwise — the nearer answer to what the worktree
     /// has.
     pub(super) fn routing_of(self, item: &platitude_core::status::StatusItem) -> &'static str {
+        use crate::encode::Routing;
         use platitude_core::status::StatusItem;
         match (self, item) {
-            (Self::Whole, StatusItem::Unmerged { .. }) => "conflicts",
-            (Self::Whole, StatusItem::Untracked { .. }) => "untracked",
-            (Self::Whole, StatusItem::Tracked { staged, .. }) if *staged != '.' => "staged",
-            (Self::Whole, StatusItem::Tracked { .. }) => "unstaged",
+            (Self::Whole, StatusItem::Unmerged { .. }) => Routing::Conflicts.word(),
+            (Self::Whole, StatusItem::Untracked { .. }) => Routing::Untracked.word(),
+            (Self::Whole, StatusItem::Tracked { staged, .. }) if *staged != '.' => {
+                Routing::Staged.word()
+            }
+            (Self::Whole, StatusItem::Tracked { .. }) => Routing::Unstaged.word(),
             _ => self.routing(),
         }
     }

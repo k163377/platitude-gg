@@ -16,24 +16,14 @@ pub fn hunk_selection(hunk: i32, line: i32) -> Vec<HunkSelect> {
     }
 }
 
-/// Rebuilds the diff target a worktree selection refers to.
-/// `kind` is the prefix [`diff_key`] uses (`staged` / `unstaged` /
-/// `untracked`); a committed diff is not stageable and yields `None`.
+/// Rebuilds the diff target a worktree selection that parts can be
+/// pressed on refers to ([`super::Routing::diff_target`]): `kind` is the
+/// bucket's word. A committed diff is not stageable, nor a conflicted
+/// file's, and yields `None`.
 pub fn worktree_target(kind: &str, path: &str, orig_path: &str) -> Option<DiffTarget> {
-    let orig = (!orig_path.is_empty()).then(|| orig_path.to_string());
-    match kind {
-        "staged" => Some(DiffTarget::Staged {
-            path: path.to_string(),
-            orig_path: orig,
-        }),
-        "unstaged" => Some(DiffTarget::Unstaged {
-            path: path.to_string(),
-        }),
-        "untracked" => Some(DiffTarget::Untracked {
-            path: path.to_string(),
-        }),
-        _ => None,
-    }
+    super::Routing::of_word(kind)
+        .filter(|routing| *routing != super::Routing::Conflicts)
+        .map(|routing| routing.diff_target(path, orig_path))
 }
 
 pub fn diff_key(target: &DiffTarget) -> String {

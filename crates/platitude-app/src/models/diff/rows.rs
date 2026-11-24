@@ -537,23 +537,14 @@ fn split_item(r: SplitRow) -> DiffLineItem {
     item
 }
 
-/// Which diff a worktree bucket asks for — shared by the click's
-/// request and the tick's re-read, so they cannot address different files
-/// under one name.
+/// Which diff a worktree bucket asks for (`encode::Routing::diff_target`)
+/// — shared by the click's request and the tick's re-read, so they cannot
+/// address different files under one name. A word no bucket goes by reads
+/// the working tree's, as a conflicted file does.
 pub(super) fn bucket_target(bucket: &str, path: &str, orig_path: String) -> DiffTarget {
-    match bucket {
-        "staged" => DiffTarget::Staged {
-            path: path.to_string(),
-            orig_path: crate::encode::optional_text(orig_path),
-        },
-        "untracked" => DiffTarget::Untracked {
-            path: path.to_string(),
-        },
-        // Conflicted files show their working-tree state.
-        _ => DiffTarget::Unstaged {
-            path: path.to_string(),
-        },
-    }
+    crate::encode::Routing::of_word(bucket)
+        .unwrap_or(crate::encode::Routing::Unstaged)
+        .diff_target(path, &orig_path)
 }
 
 /// Every message about the open file, in arrival order; the rest are
