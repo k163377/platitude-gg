@@ -1,36 +1,40 @@
 //! Where a move puts HEAD (`branch::CheckoutTarget`), as the page holds the
-//! move it is about to send (`GitFacts.checkoutTo`) and hands it to
+//! move it is about to send (`GitFacts.switchMove` / `moveOnto`) and hands it to
 //! `RepoTab.checkout` as it was read.
 
 use platitude_core::branch::CheckoutTarget;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
-use super::wire::{Fields, Record, field};
+use super::wire::{Fields, Record, field, optional_record};
 
-/// The move from its words: `branch` lands on `target`, `remote` makes
-/// `local` tracking the remote-tracking ref `target`, `force` moves the
-/// local branch `target` to `start` first. `None` for any other word.
-pub fn checkout_to(
-    kind: &str,
-    target: String,
-    local: String,
-    start: String,
-) -> Option<CheckoutTarget> {
-    Some(match kind {
-        "branch" => CheckoutTarget::Branch { name: target },
-        "remote" => CheckoutTarget::Track {
-            remote_ref: target,
-            local,
-        },
-        "force" => CheckoutTarget::ForceCreate {
-            local: target,
-            start,
-        },
-        _ => return None,
-    })
+/// What a press on a ref adds up to (`offers::switch_action`), as the page
+/// branches on it: the action's word (`holder` / `switch` / `materialize`
+/// / `move`, `""` for none) and, where the move is a plain checkout, the
+/// checkout it sends (`SwitchAction::checkout`) — left out for the others.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SwitchMove {
+    pub action: String,
+    pub checkout: Option<CheckoutTarget>,
 }
 
-/// `kind` (the word above) and `local`, the branch every move lands on,
+impl Record for SwitchMove {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("action", &self.action)
+            .put_record("checkout", self.checkout.as_ref())
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            action: field(map, "action")?,
+            checkout: optional_record(map, "checkout")?,
+        })
+    }
+}
+/// `kind` — `branch` lands on a local branch, `remote` makes `local`
+/// tracking the remote-tracking ref, `force` moves `local` to `start`
+/// first — and `local`, the branch every move lands on,
 /// beside the variant's own parts (`remoteRef`, `start`).
 impl Record for CheckoutTarget {
     fn to_map(&self) -> QVariantMap {
@@ -73,29 +77,47 @@ mod tests {
     use qtbridge::QVariantConvertible;
 
     #[test]
-    fn every_move_round_trips_from_its_words() {
+    fn every_move_round_trips() {
         let moves = [
-            checkout_to("branch", "main".into(), "main".into(), String::new()),
-            checkout_to("remote", "origin/feat".into(), "feat".into(), String::new()),
-            checkout_to("force", "feat".into(), "feat".into(), "origin/feat".into()),
+            CheckoutTarget::Branch {
+                name: "main".into(),
+            },
+            CheckoutTarget::Track {
+                remote_ref: "origin/feat".into(),
+                local: "feat".into(),
+            },
+            CheckoutTarget::ForceCreate {
+                local: "feat".into(),
+                start: "origin/feat".into(),
+            },
         ];
         for asked in moves {
-            let held = Optional::new(asked.clone());
+            let held = Optional::some(asked.clone());
             let back = <Optional<CheckoutTarget> as QVariantConvertible>::try_from_qvariant(
                 &held.to_qvariant(),
             );
-            assert_eq!(back.and_then(|b| b.as_ref().cloned()), asked);
+            assert_eq!(back.and_then(|b| b.as_ref().cloned()), Some(asked));
         }
-        assert_eq!(
-            checkout_to("force", "feat".into(), "x".into(), "origin/feat".into()),
-            Some(CheckoutTarget::ForceCreate {
-                local: "feat".into(),
-                start: "origin/feat".into()
-            })
-        );
-        assert_eq!(
-            checkout_to("tag", "v1".into(), "v1".into(), String::new()),
-            None
-        );
+    }
+
+    /// The checkout rides the action where there is one, and a move that
+    /// sends none reads back with none.
+    #[test]
+    fn a_switch_move_round_trips_with_and_without_its_checkout() {
+        for asked in [
+            SwitchMove {
+                action: "materialize".into(),
+                checkout: Some(CheckoutTarget::Track {
+                    remote_ref: "origin/feat".into(),
+                    local: "feat".into(),
+                }),
+            },
+            SwitchMove {
+                action: "holder".into(),
+                checkout: None,
+            },
+        ] {
+            assert_eq!(SwitchMove::from_map(&asked.to_map()), Some(asked));
+        }
     }
 }

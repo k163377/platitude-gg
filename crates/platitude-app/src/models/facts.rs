@@ -256,30 +256,45 @@ impl GitFacts {
             .to_string()
     }
 
-    /// The move a press on a ref adds up to, in the word
-    /// `RepoPage.switchToRef` branches on: `switch` / `materialize` /
-    /// `move` / `holder`, or `""` — also for any row but a branch's or a
-    /// remote branch's (the chip's own `kind`, which the sidebar's
-    /// `refSwitchRequested` hands on too), and for no local branch to land
-    /// on (`offers::SwitchTarget`). `lead` is the row as `refMenu` takes
-    /// it, `local_listed` whether its local branch is there.
+    /// The move a press on a ref adds up to (`offers::switch_action`):
+    /// the word `RepoPage.switchToRef` branches on — `switch` /
+    /// `materialize` / `move` / `holder`, or `""`, also for any row but a
+    /// branch's or a remote branch's (the chip's own `kind`, which the
+    /// sidebar's `refSwitchRequested` hands on too) and for no local branch
+    /// to land on (`offers::SwitchTarget`) — and the checkout a `switch` or
+    /// a `materialize` sends (`SwitchAction::checkout`). `lead` is the row
+    /// as `refMenu` takes it, `local_listed` whether its local branch is
+    /// there.
     #[qslot]
-    fn switch_action(
+    fn switch_move(
         &self,
         lead: One<RowLead>,
         tree: One<TreeStanding>,
         local_listed: bool,
-    ) -> String {
-        platitude_core::offers::switch_action(
+    ) -> One<crate::encode::SwitchMove> {
+        let action = platitude_core::offers::switch_action(
             platitude_core::offers::SwitchTarget::from_words(&lead.kind, &lead.local),
             &tree,
             lead.leads == platitude_core::offers::Leads::Holder,
             local_listed,
-        )
-        .as_str()
-        .to_string()
+        );
+        One::new(crate::encode::SwitchMove {
+            action: action.as_str().to_string(),
+            checkout: action.checkout(&lead.full, &lead.local),
+        })
     }
 
+    /// The local branch `local` moved to `start` before HEAD lands on it —
+    /// what the question a move that loses commits answers to. Always one:
+    /// a record's slot answers through `Optional`, which asks no default.
+    #[qslot]
+    fn move_onto(
+        &self,
+        local: String,
+        start: String,
+    ) -> Optional<platitude_core::branch::CheckoutTarget> {
+        Optional::some(platitude_core::branch::CheckoutTarget::ForceCreate { local, start })
+    }
     /// Whether the move a press already sent has reached the screen —
     /// `RepoPage` holds the next press until it has, so a double press
     /// sends one command. `landing_listed`: the branch it lands on is
@@ -501,20 +516,6 @@ impl GitFacts {
         platitude_core::trailers::spell_identity(&name, &email)
     }
 
-    /// The move a press is about to send, from its words
-    /// (`encode::checkout_to`): `branch` / `remote` / `force`; `undefined`
-    /// for any other.
-    #[qslot]
-    fn checkout_to(
-        &self,
-        kind: String,
-        target: String,
-        local: String,
-        start: String,
-    ) -> Optional<platitude_core::branch::CheckoutTarget> {
-        Optional::new(crate::encode::checkout_to(&kind, target, local, start))
-    }
-
     /// The key a file row is chosen, walked and opened by in the pane
     /// (`encode::file_key`: `<bucket>:<path>`).
     #[qslot]
@@ -734,9 +735,11 @@ mod tests {
             (true, "locked"),
             "the holder's card, greyed by its lock"
         );
+        let press = GitFacts.switch_move(One::new(lead), tree(), true);
         assert_eq!(
-            GitFacts.switch_action(One::new(lead), tree(), true),
-            "holder"
+            (press.action.as_str(), press.checkout.clone()),
+            ("holder", None),
+            "the press opens the holder and sends no checkout"
         );
     }
 

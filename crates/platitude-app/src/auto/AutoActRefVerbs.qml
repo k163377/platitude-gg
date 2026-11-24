@@ -276,8 +276,7 @@ Item {
                              : act === "delete-tag-both" ? "both-delete" : "")
         } else if (act === "move-branch") {
             // Past the question, for the write it guards.
-            page.switchTo("force", remotesModel.landsOn("remote", arg),
-                          remotesModel.landsOn("remote", arg), arg)
+            page.switchTo(GitFacts.moveOnto(remotesModel.landsOn("remote", arg), arg))
         } else {
             return false
         }

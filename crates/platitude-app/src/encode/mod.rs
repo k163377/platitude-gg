@@ -28,7 +28,7 @@ mod words;
 #[cfg(test)]
 mod tests;
 
-pub use checkout::checkout_to;
+pub use checkout::SwitchMove;
 pub use columns::{Candidates, widest_lines};
 pub use counts::shown_count;
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};

@@ -665,10 +665,9 @@ FocusScope {
     signal commitAnswered(bool landed)
 
     // ---- moving between branches and commits ----------------------
-    // Uncommitted changes come along (デザイン規約 §未コミット変更がある状態での移動). The move about to be sent, as core
-    // reads it (`GitFacts.checkoutTo`: `kind` "branch" / "remote" / "force" — a local branch moved to `start` before
-    // landing on it); every one lands on a branch, `local` (デザイン規約 §ブランチ・コミットへの移動).
-    property var moveTo: undefined
+    // Uncommitted changes come along (デザイン規約 §未コミット変更がある状態での移動). A move is handed about as core reads it
+    // (`CheckoutTarget`, from `GitFacts.switchMove` / `moveOnto`); every one lands on a branch, `local`
+    // (デザイン規約 §ブランチ・コミットへの移動).
 
     // ---- the same chip, pressed again ------------------------------
     /// The branch a move already sent is putting HEAD on; `""` while none is on its way. Meanwhile `switchToRef` sends
@@ -684,21 +683,17 @@ FocusScope {
             page.moveLanding = ""
     }
 
-    function switchTo(kind, target, local, start, leaving) {
-        page.moveTo = GitFacts.checkoutTo(kind, target, local, start === undefined ? "" : start)
+    function switchTo(move, leaving) {
+        if (move === undefined)
+            return
         if (page.standsInTheWay(leaving)) {
-            leaveFlow.startAsk(local, function (leave) { page.switchTo(kind, target, local, start, leave) })
+            leaveFlow.startAsk(move.local, function (leave) { page.switchTo(move, leave) })
             return
         }
-        page.runSwitch(leaving === true)
-    }
-    function runSwitch(leaving) {
         // Marked where the move goes out: the question a blocked move raises comes back through here, and a press
         // held behind a bar has sent nothing yet.
-        if (page.moveTo === undefined)
-            return
-        page.moveLanding = page.moveTo.local
-        repoTab.checkout(page.moveTo, leaving === true)
+        page.moveLanding = move.local
+        repoTab.checkout(move, leaving === true)
     }
 
     // ---- moving out of what stands in a move's way --------------------
@@ -752,7 +747,8 @@ FocusScope {
         // the local branch it lands on — the row read as its menu reads it, through the same part (`RefMenuFacts`).
         const lead = refFacts.leadOf(kind, name, "")
         const local = lead.local
-        const action = GitFacts.switchAction(lead, worktree.standing, refFacts.landsListed(lead))
+        const press = GitFacts.switchMove(lead, worktree.standing, refFacts.landsListed(lead))
+        const action = press.action
         // A branch another worktree holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
         // **the press goes to that worktree** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded
         // rows name the worktree first (`RefRowMenu`'s `Open`), and for the wordless doors (the graph's double-click, a
@@ -774,10 +770,9 @@ FocusScope {
             leaveFlow.startAsk(local, function (leave) { page.switchToRef(kind, name, leave) })
             return true
         }
-        if (action === "switch")
-            page.switchTo("branch", name, name, "", leaving)
-        else if (action === "materialize")
-            page.switchTo("remote", name, local, "", leaving)
+        // `switch` and `materialize` are a checkout core spells (`SwitchAction::checkout`).
+        if (press.checkout !== undefined)
+            page.switchTo(press.checkout, leaving)
         else if (action === "move") {
             // Whether to ask is git's to answer — a branch that only fell behind loses nothing. The question comes back
             // as `moveAskSeq`, the operation still standing for its answer to undo (core asks before it aborts).
@@ -799,7 +794,7 @@ FocusScope {
             Words.losesCommits(local, lost),
             false,
             qsTr("Move"),
-            function () { page.switchTo("force", local, local, remoteRef) },
+            function () { page.switchTo(GitFacts.moveOnto(local, remoteRef)) },
             true, "", null, "", local,
             GitFacts.isCurrent(worktree.standing, local) ? Theme.textLink : Theme.textPrimary, "branch",
             { detail: Words.marksOf(name => Words.losesCommits(name, lost), [[local, "branch"]]) })

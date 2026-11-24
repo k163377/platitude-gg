@@ -901,7 +901,7 @@ impl RepoTab {
     /// `leaving`: the reader has already agreed to undo the operation in
     /// the move's way, which git would otherwise refuse
     /// (デザイン規約 §進行中の操作から出る).
-    /// `target` is the move as the page holds it (`GitFacts.checkoutTo`):
+    /// `target` is the move as the page holds it (`GitFacts.switchMove` / `moveOnto`):
     /// onto a local branch, a new one tracking a remote-tracking ref, or a
     /// local branch moved to a start first — what the branch alone had is
     /// left unreferenced, so the UI asks first.

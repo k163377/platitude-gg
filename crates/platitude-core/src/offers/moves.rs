@@ -44,6 +44,25 @@ impl SwitchAction {
             Self::MoveBranch => "move",
         }
     }
+
+    /// The checkout the move sends for the row `full`, landing on
+    /// `local`: a `switch` onto the branch, or the remote branch's local
+    /// one made off it. None for the others, which send no checkout —
+    /// [`Self::OpenHolder`] opens a worktree, [`Self::MoveBranch`] asks git
+    /// what it costs first, [`Self::None`] moves nothing.
+    pub fn checkout(self, full: &str, local: &str) -> Option<crate::branch::CheckoutTarget> {
+        use crate::branch::CheckoutTarget;
+        match self {
+            Self::Switch => Some(CheckoutTarget::Branch {
+                name: full.to_string(),
+            }),
+            Self::Materialize => Some(CheckoutTarget::Track {
+                remote_ref: full.to_string(),
+                local: local.to_string(),
+            }),
+            Self::None | Self::OpenHolder | Self::MoveBranch => None,
+        }
+    }
 }
 
 /// The branch here a press lands on, and which row was pressed for it:

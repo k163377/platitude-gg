@@ -733,7 +733,7 @@ impl NavSectionModel {
     /// row's path), which its WORKTREE card stands on, empty for none. Read
     /// as a menu opens and as it stands again, or as a press on a ref is
     /// weighed, and handed on whole
-    /// to `GitFacts.refMenu` / `switchAction`. Asked of the worktrees
+    /// to `GitFacts.refMenu` / `switchMove`. Asked of the worktrees
     /// section.
     #[qslot]
     pub(super) fn lead_of(

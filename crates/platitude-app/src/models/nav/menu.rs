@@ -1,7 +1,7 @@
 //! What a ref's menu reads off the sections beside its own row: the row and
 //! where it leads among the worktrees (`RowLead`), and the record its card
 //! stood on handed back whole (`CardRecord`). The rules that read them are
-//! core's (`offers`), asked through `GitFacts.refMenu` / `switchAction`.
+//! core's (`offers`), asked through `GitFacts.refMenu` / `switchMove`.
 
 use platitude_core::offers::{FarSide, Leads};
 use qtbridge::qtbridge_type_lib::QVariantMap;

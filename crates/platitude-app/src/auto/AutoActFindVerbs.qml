@@ -157,7 +157,8 @@ Item {
             // mode only through this verb).
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
-            repoTab.checkout(GitFacts.checkoutTo("branch", "pgg-no-such-branch", "", ""), false)
+            const nowhere = page.refFacts.leadOf("branch", "pgg-no-such-branch", "")
+            repoTab.checkout(GitFacts.switchMove(nowhere, driver.worktree.standing, true).checkout, false)
             if (act === "commands-fail-shut")
                 commandsShutTimer.start()
             else if (act === "commands-escape")
