@@ -504,8 +504,8 @@ Item {
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
-            onDeleteTagEverywhereRequested: (tag, remote, expect) =>
-                refRowMenu.repoTab.deleteTagEverywhere(tag, remote, expect)
+            onDeleteTagEverywhereRequested: (remote, tag, expect) =>
+                refRowMenu.repoTab.deleteTagEverywhere(remote, tag, expect)
         }
         AppMenuSeparator {}
         // The same card the graph row's menu carries, last for the same reason: it leaves the window

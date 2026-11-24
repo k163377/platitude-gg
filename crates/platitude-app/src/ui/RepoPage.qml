@@ -1828,7 +1828,7 @@ FocusScope {
             onDeleteTagRequested: tag => repoTab.deleteTag(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
-            onDeleteTagEverywhereRequested: (tag, remote, expect) => repoTab.deleteTagEverywhere(tag, remote, expect)
+            onDeleteTagEverywhereRequested: (remote, tag, expect) => repoTab.deleteTagEverywhere(remote, tag, expect)
         }
     }
 

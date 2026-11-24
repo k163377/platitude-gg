@@ -1036,7 +1036,7 @@ impl RepoTab {
 
     /// Both copies of a tag, as one queued write, leased as above.
     #[qslot]
-    fn delete_tag_everywhere(&mut self, tag: String, remote: String, expect: String) {
+    fn delete_tag_everywhere(&mut self, remote: String, tag: String, expect: String) {
         self.tag_delete_everywhere(RemoteTag { remote, tag }, expect);
     }
 

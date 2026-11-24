@@ -38,7 +38,7 @@ AppMenu {
     /// deletes is the commit this card showed the tag on, which the delete is leased to (`remote::delete_remote_tag`):
     /// the rows are offered only where the remote's copy stands there too.
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
-    signal deleteTagEverywhereRequested(string tag, string remote, string expect)
+    signal deleteTagEverywhereRequested(string remote, string tag, string expect)
 
     /// The automation's handles into these rows, passed on through `RefRowMenu`.
     readonly property alias tagHereItem: refTagHereItem
@@ -268,7 +268,7 @@ AppMenu {
         premise: [state.refId, state.reach, state.refOid].join("\n")
         onHeld: {
             refBothTagDeleteItem.closeMenu()
-            tagMenu.deleteTagEverywhereRequested(state.refId, state.reach, state.refOid)
+            tagMenu.deleteTagEverywhereRequested(state.reach, state.refId, state.refOid)
         }
     }
 }

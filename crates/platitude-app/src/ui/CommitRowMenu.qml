@@ -148,7 +148,7 @@ Item {
     signal pushTagRequested(string remote, string tag, string lease)
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
-    signal deleteTagEverywhereRequested(string tag, string remote, string expect)
+    signal deleteTagEverywhereRequested(string remote, string tag, string expect)
     /// The WORKTREE card's three, passed straight up (`RefWorktreeMenu`): the box for a new branch in a worktree of
     /// its own, the row's own branch out in one, and `worktree remove`.
     signal worktreeHereRequested(string oidHex)
@@ -629,8 +629,8 @@ Item {
             onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere, expect)
-            onDeleteTagEverywhereRequested: (tag, remote, expect) =>
-                rowMenu.deleteTagEverywhereRequested(tag, remote, expect)
+            onDeleteTagEverywhereRequested: (remote, tag, expect) =>
+                rowMenu.deleteTagEverywhereRequested(remote, tag, expect)
         }
         AppMenuSeparator {}
         // GitHub's pages for this commit and the name the chip draws, last: they leave the window, every card above

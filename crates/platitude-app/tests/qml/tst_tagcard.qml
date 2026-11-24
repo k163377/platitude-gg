@@ -35,7 +35,7 @@ Item {
         onDeleteTagRequested: tag => root.asked = "delete " + tag
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
             root.asked = "delete-remote " + remote + " " + tag + " " + onlyThere + " " + expect
-        onDeleteTagEverywhereRequested: (tag, remote, expect) =>
+        onDeleteTagEverywhereRequested: (remote, tag, expect) =>
             root.asked = "delete-both " + tag + " " + remote + " " + expect
     }
 
