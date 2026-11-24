@@ -782,12 +782,10 @@ impl WorktreeModel {
         if self.counts_settled {
             self.upstream.clone_from(&self.status_upstream);
             // The properties are Qt's own: zeroes for "nothing to count
-            // against", and `int`s — a count past one is drawn as its
-            // largest.
-            let shown = |count: u32| i32::try_from(count).unwrap_or(i32::MAX);
+            // against", and `int`s (`encode::shown_count`).
             let upstream = self.status_upstream_counts;
-            self.ahead = shown(upstream.map_or(0, |counts| counts.ahead));
-            self.behind = shown(upstream.map_or(0, |counts| counts.behind));
+            self.ahead = crate::encode::shown_count(upstream.map_or(0, |counts| counts.ahead));
+            self.behind = crate::encode::shown_count(upstream.map_or(0, |counts| counts.behind));
             self.pull_blocked = upstream.is_some_and(platitude_core::AheadBehind::is_diverged);
         } else {
             self.upstream.clear();

@@ -30,6 +30,7 @@ mod tests;
 
 pub use checkout::checkout_to;
 pub use columns::{Candidates, widest_lines};
+pub use counts::shown_count;
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};
 pub(crate) use far::{put_far, read_far};
 pub use graph::{Lanes, avatar_code, conflict_side_colors, lanes_of, spell_lanes, tail_lanes};

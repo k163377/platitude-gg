@@ -6,14 +6,18 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Record, field};
 
-/// `ahead` / `behind`, in the `int` QML draws them as — saturating, as the
-/// rows' roles carry them.
+/// A count of commits in the `int` QML draws it as: one past the largest
+/// is drawn as the largest.
+pub fn shown_count(commits: u32) -> i32 {
+    i32::try_from(commits).unwrap_or(i32::MAX)
+}
+
+/// `ahead` / `behind`, as [`shown_count`] draws each.
 impl Record for AheadBehind {
     fn to_map(&self) -> QVariantMap {
-        let int = |commits: u32| i32::try_from(commits).unwrap_or(i32::MAX);
         Fields::new()
-            .put("ahead", &int(self.ahead))
-            .put("behind", &int(self.behind))
+            .put("ahead", &shown_count(self.ahead))
+            .put("behind", &shown_count(self.behind))
             .done()
     }
 

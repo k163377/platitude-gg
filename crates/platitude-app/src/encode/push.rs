@@ -7,6 +7,7 @@ use platitude_core::AheadBehind;
 use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, PushTrack, StatusPush};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
+use super::counts::shown_count;
 use super::wire::{Fields, One, Record, field, optional_text};
 
 /// What the toolbar's push slot takes (`NavSectionModel.headPush`).
@@ -49,8 +50,8 @@ impl From<PushFacts> for PushRecord {
             offered: standing.offered(),
             target: facts.target.unwrap_or_default(),
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
-            ahead: shown(facts.counts.ahead),
-            behind: shown(facts.counts.behind),
+            ahead: shown_count(facts.counts.ahead),
+            behind: shown_count(facts.counts.behind),
             upstream: facts.upstream.unwrap_or_default(),
         }
     }
@@ -114,8 +115,8 @@ impl Record for HeadPush {
             .put("upstream", read.upstream.as_deref().unwrap_or_default())
             .put("upstreamHere", &read.status.upstream_here)
             .put("tracked", &read.upstream_counts.is_some())
-            .put("ahead", &shown(counts.ahead))
-            .put("behind", &shown(counts.behind))
+            .put("ahead", &shown_count(counts.ahead))
+            .put("behind", &shown_count(counts.behind))
             .put(
                 "pushRemote",
                 read.status.push_remote.as_deref().unwrap_or_default(),
@@ -132,8 +133,8 @@ impl Record for HeadPush {
                 "pushTracking",
                 track.map_or("", |track| track.tracking.as_str()),
             )
-            .put("pushAhead", &shown(pushed.ahead))
-            .put("pushBehind", &shown(pushed.behind))
+            .put("pushAhead", &shown_count(pushed.ahead))
+            .put("pushBehind", &shown_count(pushed.behind))
             .done()
     }
 
@@ -167,10 +168,6 @@ impl Record for HeadPush {
             },
         }))
     }
-}
-
-fn shown(count: u32) -> i32 {
-    i32::try_from(count).unwrap_or(i32::MAX)
 }
 
 /// A pair of counts as QML hands it back: none of them is under zero; one
@@ -267,7 +264,7 @@ mod tests {
         assert_eq!(counts_of(2, 1), pair(2, 1));
         assert_eq!(counts_of(0, 0), pair(0, 0));
         assert_eq!(
-            counts_of(shown(u32::MAX), 0),
+            counts_of(shown_count(u32::MAX), 0),
             pair(i32::MAX.unsigned_abs(), 0),
             "a count drawn at its largest stays a count"
         );

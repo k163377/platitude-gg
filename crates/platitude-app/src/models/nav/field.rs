@@ -177,18 +177,17 @@ impl NavSectionModel {
             // carries the one made against it (`BranchItem::tracked_by`),
             // drawn by the line naming that branch (`NavRowFacts`).
             Role::Ahead => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.counts.ahead),
+                Entry::Local(branch) | Entry::Remote(branch) => {
+                    crate::encode::shown_count(branch.counts.ahead)
+                }
                 _ => 0,
             }),
             Role::Behind => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => counted(branch.counts.behind),
+                Entry::Local(branch) | Entry::Remote(branch) => {
+                    crate::encode::shown_count(branch.counts.behind)
+                }
                 _ => 0,
             }),
         }
     }
-}
-
-/// A count as the `i32` role table carries it, saturating.
-pub(super) fn counted(commits: u32) -> i32 {
-    i32::try_from(commits).unwrap_or(i32::MAX)
 }
