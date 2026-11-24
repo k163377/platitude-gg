@@ -235,7 +235,7 @@ AppMenu {
         // Whether the row has a seat is core's (`offered`): a local branch the worktree is not on, on an open tab — the
         // one it is on has the toolbar's own button (デザイン規約 §メニュー「そこにしか入口が無いものだけ」) —, where a
         // press reaches or the row stands out saying why: nothing to send (`clean`; user decision —
-        // `BranchPushRow.blockedClean`) or a push that would stay in this repository (デザイン規約 §メニュー「「今できない」行は
+        // `Words.pushClean`) or a push that would stay in this repository (デザイン規約 §メニュー「「今できない」行は
         // 無効で残す」, §リモートへ送る). Its far side is where it goes and the commit over there an overwrite is leased
         // to (`lease`, counted against in every form).
         const push = kind === "branch" && facts.push !== undefined && facts.push.offered ? facts.push : undefined

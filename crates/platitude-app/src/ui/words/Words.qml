@@ -25,6 +25,16 @@ QtObject {
     /// rows say `already pushed` (デザイン規約 §回数押し).
     readonly property string rewritesPushed: qsTr("rewrites pushed commits")
 
+    /// Why a push is out where it would stay in this repository (`remote::PushStanding::StaysHere`): the toolbar's tip
+    /// and a branch's `push` row alike.
+    readonly property string pushStaysHere: qsTr("Cannot push — its upstream is not supported")
+    /// …and where the far side already has every commit (`Clean`; user decision — ask before changing), `to` naming
+    /// where it goes.
+    function pushClean(to) {
+        //: %1 is where the push goes, e.g. origin/feature/login.
+        return qsTr("Nothing to push — %1 is up to date").arg(to)
+    }
+
     /// Starting a branch where the row stands, from the graph row's menu and the sidebar's ref menu
     /// (デザイン規約 §メニュー「入口が違っても同じ操作は同じ文」); the TAG card's `Create tag here…` (`RefTagMenu`) is
     /// worded to match.

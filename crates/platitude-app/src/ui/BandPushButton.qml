@@ -100,7 +100,7 @@ ActionButton {
                      ? qsTr("This branch has not been sent anywhere yet — asks where it goes")
                    // The push would stay in this repository, which is no send (`remote::PushStanding::StaysHere`).
                    : pushButton.mode === "stays-here"
-                     ? qsTr("Cannot push — its upstream is not supported")
+                     ? Words.pushStaysHere
                    // No count: nothing here tracks the branch over there, so the press stays plain and the tip
                    // names the destination only (`remote::PushStanding::Elsewhere`).
                    : pushButton.mode === "elsewhere"
@@ -109,7 +109,7 @@ ActionButton {
                      ? (ahead === 1 ? qsTr("Push %n commit to %1", "", ahead)
                                     : qsTr("Push %n commits to %1", "", ahead)).arg(to)
                    : pushButton.mode === "clean"
-                     ? qsTr("Nothing to push — %1 is up to date").arg(to)
+                     ? Words.pushClean(to)
                    // One sentence for both overwrite standings (`forceShape`). A count says when it is from, in a short
                    // bracket (`as of the last fetch`; 規約 §hover のツールチップ).
                    : pushButton.forceShape

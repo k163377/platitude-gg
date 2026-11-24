@@ -1,5 +1,6 @@
 import QtQuick
 import platitude.ui
+import platitude.ui.words
 
 // The toolbar's push for a branch the worktree is not on, in the toolbar's forms (デザイン規約 §リモートへ送る): a
 // plain click where git would take it; the leased overwrite, held, where the far side has commits this branch
@@ -45,14 +46,6 @@ AppMenuItem {
     readonly property string target: pushRow.seated ? pushRow.push.target : ""
     /// The commit over there an overwrite is leased to; empty for git's own tracking ref.
     readonly property string lease: pushRow.seated ? pushRow.push.lease : ""
-    /// Why the row is out where the push would stay in this repository — the toolbar's words for the same standing
-    /// (`BandPushButton`).
-    readonly property string blockedStaysHere: qsTr("Cannot push — its upstream is not supported")
-    /// …and where the far side already has every commit: the toolbar's words for `clean` (user decision — ask before
-    /// changing).
-    //: %1 is where the push goes, e.g. origin/feature/login.
-    readonly property string blockedClean: qsTr("Nothing to push — %1 is up to date").arg(pushRow.target)
-
     // Off the running press's length, so the chip cannot change under a hand already on the row
     // (`AppMenuItem.armedPresses`, デザイン規約 §回数押し).
     code: pushRow.armedPresses <= 0 ? "push" : "push --force"
@@ -68,8 +61,11 @@ AppMenuItem {
     // Leased to the far side the menu went up on: moved since, the row stops applying and greys where it stands
     // (`RefBranchMenu.state.pushMoved`).
     offered: pushRow.seated && !pushRow.facts.pushMoved
-    blockedReason: pushRow.staysHere ? pushRow.blockedStaysHere
-                 : pushRow.seated && !pushRow.reaches ? pushRow.blockedClean : ""
+    // Out wherever core says no press reaches, in the toolbar's words for the standing (`Words`): the push would stay
+    // here, or — the one other standing with a seat and no reach — the far side has it all. Never by the word alone:
+    // a seat core gives no reach always says why.
+    blockedReason: pushRow.staysHere ? Words.pushStaysHere
+                 : pushRow.seated && !pushRow.reaches ? Words.pushClean(pushRow.target) : ""
     holdPresses: pushRow.overwrites ? Metrics.holdPressesWarned : 0
     // Reaching past this machine is the warning tone (デザイン規約 §状態).
     holdTone: Theme.warning
