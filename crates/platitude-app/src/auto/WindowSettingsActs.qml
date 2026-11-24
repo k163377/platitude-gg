@@ -826,7 +826,7 @@ Item {
                     return { "joined": ready.joined, "ready": ready.ready, "page": ready.page,
                              "picker": acts.appPane.autoAvatarPickerOpen }
                 },
-                "report": () => "avatar_enter who=" + (acts.appPane.chosenEmail !== "")
+                "report": () => "avatar_enter who=" + (acts.appPane.chosen.email !== "")
                                 + " picker=" + acts.appPane.autoAvatarPickerOpen })
         }
     }

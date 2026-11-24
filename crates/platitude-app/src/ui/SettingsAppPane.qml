@@ -94,12 +94,10 @@ ColumnLayout {
     /// The address and name the picker files under, split out of the entry: `Name <address>`, or either half typed
     /// alone (`platitude_core::trailers::split_identity`).
     readonly property var chosen: GitFacts.identityOf(avatarWho.wanted)
-    readonly property string chosenEmail: pane.chosen.email
-    readonly property string chosenName: pane.chosen.name
     /// The one body the button and the box's Enter share, guarded as the button is: a picker opened over nobody
     /// would file against an empty address. Headless `avatar-enter`.
     function openAvatarPicker() {
-        if (pane.chosenEmail === "")
+        if (pane.chosen.email === "")
             return
         avatarPicker.open()
     }
@@ -803,7 +801,7 @@ ColumnLayout {
                 // A plain frame in a form row next to a combo (rules-refs/app-ui.md「肯定側のボタンは枠で名乗り」).
                 frameColor: Theme.borderDefault
                 activeFocusOnTab: true
-                enabled: pane.chosenEmail !== ""
+                enabled: pane.chosen.email !== ""
                 onActivated: pane.openAvatarPicker()
             }
         }
@@ -826,7 +824,7 @@ ColumnLayout {
         // They name the two formats — a category word would be a second name for the avatar (デザイン規約
         // §アバターを与える) — so these words and `avatar::EXTENSIONS` (with what `picture` decodes) change together.
         nameFilters: [qsTr("PNG and JPEG (%1)").arg(AppBackend.avatarPatterns)]
-        onAccepted: AppBackend.assignAvatar(pane.chosenEmail, pane.chosenName, selectedFile.toString())
+        onAccepted: AppBackend.assignAvatar(pane.chosen.email, pane.chosen.name, selectedFile.toString())
     }
     // The rows' removals, kept here: a row is rebuilt with every assignment that lands.
     readonly property AvatarRemovals leaving: AvatarRemovals {
