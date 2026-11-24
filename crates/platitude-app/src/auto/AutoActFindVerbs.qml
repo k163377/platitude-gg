@@ -157,7 +157,7 @@ Item {
             // mode only through this verb).
             if (act === "commands-fail-shut" && arg === "fold")
                 page.foldByHand(true)
-            repoTab.checkoutBranch("pgg-no-such-branch", false)
+            repoTab.checkout(GitFacts.checkoutTo("branch", "pgg-no-such-branch", "", ""), false)
             if (act === "commands-fail-shut")
                 commandsShutTimer.start()
             else if (act === "commands-escape")

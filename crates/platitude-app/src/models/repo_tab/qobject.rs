@@ -901,17 +901,20 @@ impl RepoTab {
     /// `leaving`: the reader has already agreed to undo the operation in
     /// the move's way, which git would otherwise refuse
     /// (デザイン規約 §進行中の操作から出る).
+    /// `target` is the move as the page holds it (`GitFacts.checkoutTo`):
+    /// onto a local branch, a new one tracking a remote-tracking ref, or a
+    /// local branch moved to a start first — what the branch alone had is
+    /// left unreferenced, so the UI asks first.
     #[qslot]
-    fn checkout_branch(&mut self, name: String, leaving: bool) {
-        let target = platitude_core::branch::CheckoutTarget::Branch { name };
-        self.move_head(target, leaving);
-    }
-
-    /// Creates a local branch tracking a remote-tracking ref and switches.
-    #[qslot]
-    fn checkout_remote(&mut self, remote_ref: String, local: String, leaving: bool) {
-        let target = platitude_core::branch::CheckoutTarget::Track { remote_ref, local };
-        self.move_head(target, leaving);
+    fn checkout(
+        &mut self,
+        target: crate::encode::Optional<platitude_core::branch::CheckoutTarget>,
+        leaving: bool,
+    ) {
+        match target.as_ref() {
+            Some(target) => self.move_head(target.clone(), leaving),
+            None => tracing::warn!("a move that goes nowhere"),
+        }
     }
 
     /// Moves an existing local branch to `start` and lands on it, but only
@@ -921,14 +924,6 @@ impl RepoTab {
     #[qslot]
     fn checkout_moving_branch(&mut self, local: String, start: String, leaving: bool) {
         self.ask_session(|s| s.checkout_moving_branch(local, start, leaving));
-    }
-
-    /// Moves an existing local branch to `start` and lands on it. What the
-    /// branch alone had is left unreferenced, so the UI asks first.
-    #[qslot]
-    fn checkout_force_create(&mut self, local: String, start: String, leaving: bool) {
-        let target = platitude_core::branch::CheckoutTarget::ForceCreate { local, start };
-        self.move_head(target, leaving);
     }
 
     /// Moves the current branch to `rev`; `mode` is git's `"soft"` /

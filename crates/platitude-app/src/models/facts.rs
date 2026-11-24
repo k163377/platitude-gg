@@ -504,6 +504,20 @@ impl GitFacts {
         platitude_core::trailers::spell_identity(&name, &email)
     }
 
+    /// The move a press is about to send, from its words
+    /// (`encode::checkout_to`): `branch` / `remote` / `force`; `undefined`
+    /// for any other.
+    #[qslot]
+    fn checkout_to(
+        &self,
+        kind: String,
+        target: String,
+        local: String,
+        start: String,
+    ) -> Optional<platitude_core::branch::CheckoutTarget> {
+        Optional::new(crate::encode::checkout_to(&kind, target, local, start))
+    }
+
     /// The key a file row is chosen, walked and opened by in the pane
     /// (`encode::file_key`: `<bucket>:<path>`).
     #[qslot]

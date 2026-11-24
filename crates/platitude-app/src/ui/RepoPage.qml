@@ -667,12 +667,10 @@ FocusScope {
     signal commitAnswered(bool landed)
 
     // ---- moving between branches and commits ----------------------
-    // Uncommitted changes come along (デザイン規約 §未コミット変更がある状態での移動). `moveKind` is "branch" / "remote" / "force" (a local
-    // branch moved to `moveStart` before landing on it); every one lands on a branch (デザイン規約 §ブランチ・コミットへの移動).
-    property string moveKind: ""
-    property string moveTarget: ""
-    property string moveLocal: ""
-    property string moveStart: ""
+    // Uncommitted changes come along (デザイン規約 §未コミット変更がある状態での移動). The move about to be sent, as core
+    // reads it (`GitFacts.checkoutTo`: `kind` "branch" / "remote" / "force" — a local branch moved to `start` before
+    // landing on it); every one lands on a branch, `local` (デザイン規約 §ブランチ・コミットへの移動).
+    property var moveTo: undefined
 
     // ---- the same chip, pressed again ------------------------------
     /// The branch a move already sent is putting HEAD on; `""` while none is on its way. Meanwhile `switchToRef` sends
@@ -689,10 +687,7 @@ FocusScope {
     }
 
     function switchTo(kind, target, local, start, leaving) {
-        page.moveKind = kind
-        page.moveTarget = target
-        page.moveLocal = local
-        page.moveStart = start === undefined ? "" : start
+        page.moveTo = GitFacts.checkoutTo(kind, target, local, start === undefined ? "" : start)
         if (page.standsInTheWay(leaving)) {
             leaveFlow.startAsk(local, function (leave) { page.switchTo(kind, target, local, start, leave) })
             return
@@ -702,13 +697,10 @@ FocusScope {
     function runSwitch(leaving) {
         // Marked where the move goes out: the question a blocked move raises comes back through here, and a press
         // held behind a bar has sent nothing yet.
-        page.moveLanding = page.moveLocal
-        if (page.moveKind === "branch")
-            repoTab.checkoutBranch(page.moveTarget, leaving === true)
-        else if (page.moveKind === "remote")
-            repoTab.checkoutRemote(page.moveTarget, page.moveLocal, leaving === true)
-        else if (page.moveKind === "force")
-            repoTab.checkoutForceCreate(page.moveTarget, page.moveStart, leaving === true)
+        if (page.moveTo === undefined)
+            return
+        page.moveLanding = page.moveTo.local
+        repoTab.checkout(page.moveTo, leaving === true)
     }
 
     // ---- moving out of what stands in a move's way --------------------

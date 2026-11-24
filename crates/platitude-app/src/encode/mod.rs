@@ -2,6 +2,7 @@
 //! shapes `wire` defines — nothing crosses the bridge as a string to be
 //! taken apart.
 
+mod checkout;
 mod columns;
 mod counts;
 mod discards;
@@ -27,6 +28,7 @@ mod words;
 #[cfg(test)]
 mod tests;
 
+pub use checkout::checkout_to;
 pub use columns::{Candidates, widest_lines};
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};
 pub(crate) use far::{put_far, read_far};
