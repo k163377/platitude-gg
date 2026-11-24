@@ -43,6 +43,20 @@ impl<'a> Upstream<'a> {
         }
     }
 
+    /// A local branch's upstream as the refs listing reads it: a branch
+    /// here where configuration says so, there or gone; the remote branch
+    /// it speaks for where the listing has one (`listed`, empty for none);
+    /// else the name it was configured for and lost (`gone`, empty for
+    /// none). One reading for the refs read that weighs which branches to
+    /// count (`RepoSession::read_push_tracks`) and a row's push
+    /// (`RefsSnapshot::branch_push`).
+    pub fn of_listing(listed: &'a str, here: bool, gone: &'a str) -> Self {
+        if here {
+            return Self::Here;
+        }
+        Self::of(if listed.is_empty() { gone } else { listed }, false)
+    }
+
     /// The remote branch it is, `None` for a branch here — which names no
     /// remote whatever its name looks like — and for none.
     pub fn remote_branch(self) -> Option<&'a str> {
@@ -245,6 +259,26 @@ mod tests {
         assert!(!route(Upstream::Here, Marked::Unmarked).goes_elsewhere());
         assert!(!route(Upstream::Remote("origin/main"), Marked::Here).goes_elsewhere());
         assert!(!route(Upstream::Remote("origin/main"), Marked::Unmarked).goes_elsewhere());
+    }
+
+    /// Configuration's "here" wins over any name; a listed remote branch
+    /// over the name the branch lost; nothing configured is none.
+    #[test]
+    fn the_listing_reads_one_upstream_per_branch() {
+        assert_eq!(Upstream::of_listing("", true, "main"), Upstream::Here);
+        assert_eq!(
+            Upstream::of_listing("origin/main", true, ""),
+            Upstream::Here
+        );
+        assert_eq!(
+            Upstream::of_listing("origin/main", false, ""),
+            Upstream::Remote("origin/main")
+        );
+        assert_eq!(
+            Upstream::of_listing("", false, "origin/gone"),
+            Upstream::Remote("origin/gone")
+        );
+        assert_eq!(Upstream::of_listing("", false, ""), Upstream::None);
     }
 
     /// The destination's own counts are asked for only where they speak:

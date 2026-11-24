@@ -286,28 +286,31 @@ impl RepoSession {
             return Some(Vec::new());
         }
         let index = refs::RemoteBranches::index(refs);
-        // A branch with an upstream: with none, the push asks where it goes
-        // and nothing is counted. One measured against a branch here goes
-        // to a remote by a mark alone. Not the one HEAD is on, which the
-        // status tick counts. A listed upstream is there to count against,
-        // and a branch here is taken to be: a gone one costs this read a
-        // branch it did not need, and is weighed as gone where the row is
-        // read (`RefsSnapshot::branch_push`).
+        // A branch with an upstream to count against, read as a row reads
+        // it (`Upstream::of_listing`): with none, the push asks where it
+        // goes and nothing is counted — so a lost name is not asked for.
+        // One measured against a branch here goes to a remote by a mark
+        // alone. Not the one HEAD is on, which the status tick counts. A
+        // listed upstream is there to count against, and a branch here is
+        // taken to be: a gone one costs this read a branch it did not
+        // need, and is weighed as gone where the row is read
+        // (`RefsSnapshot::branch_push`).
         let elsewhere: std::collections::HashSet<&str> = refs
             .iter()
             .filter(|entry| entry.kind == RefNamespace::LocalBranch && !entry.is_head)
             .filter(|local| {
-                let upstream = match index.spoken_for(local) {
-                    Some(upstream) => remote::Upstream::Remote(upstream.short.as_str()),
-                    None if local.upstream_is_here() => remote::Upstream::Here,
-                    None => return false,
-                };
+                let listed = index.spoken_for(local);
+                let here = local.upstream_is_here();
                 remote::PushRoute::new(
-                    upstream,
+                    remote::Upstream::of_listing(
+                        listed.map_or("", |up| up.short.as_str()),
+                        here,
+                        "",
+                    ),
                     remotes.marks.marked(local.short.as_str()),
                     remotes.list.iter().map(|r| r.name.as_str()),
                 )
-                .counts_elsewhere(true)
+                .counts_elsewhere(listed.is_some() || here)
             })
             .map(|local| local.short.as_str())
             .collect();

@@ -312,17 +312,17 @@ impl RefsSnapshot {
         // (`status`), offers the push: the two doors part in that
         // configuration, which gets no mechanism of its own (user decision
         // — ask before changing).
-        let listed = Some(branch.counts);
-        let (upstream, upstream_counts) = if branch.upstream_here {
-            (
-                Upstream::Here,
-                listed.filter(|_| branch.upstream_oid.is_some()),
-            )
-        } else if !branch.upstream.is_empty() {
-            (Upstream::Remote(branch.upstream.as_str()), listed)
+        let upstream = Upstream::of_listing(
+            &branch.upstream,
+            branch.upstream_here,
+            &branch.upstream_gone,
+        );
+        let counted = if branch.upstream_here {
+            branch.upstream_oid.is_some()
         } else {
-            (Upstream::of(branch.upstream_gone.as_str(), false), None)
+            !branch.upstream.is_empty()
         };
+        let upstream_counts = Some(branch.counts).filter(|_| counted);
         let route = PushRoute::new(
             upstream,
             self.marks.marked(short),
