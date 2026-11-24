@@ -646,15 +646,15 @@ impl GraphModel {
     }
 
     /// The lane colour of the row a ref sits on, as a graph palette index;
-    /// -1 when no loaded row carries that name. A conflicted file's diff
-    /// paints each side in its branch's graph colour.
-    fn colour_of_ref(&self, name: &str) -> i32 {
+    /// nothing when no loaded row carries that name. A conflicted file's
+    /// diff paints each side in its branch's graph colour.
+    fn colour_of_ref(&self, name: &str) -> Option<i32> {
         if name.is_empty() {
-            return -1;
+            return None;
         }
         self.rows
             .iter()
             .find(|r| r.labels.iter().any(|chip| chip.name == name))
-            .map_or(-1, |r| r.node_color)
+            .map(|r| r.node_color)
     }
 }

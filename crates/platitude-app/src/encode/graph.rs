@@ -107,7 +107,7 @@ pub fn avatar_code(author: &str) -> i32 {
 }
 
 /// The palette indices a conflict's two sides are drawn with, given what
-/// the graph could lend (`-1` = nothing) and each side's name.
+/// the graph could lend (nothing where it has none) and each side's name.
 ///
 /// The two always come out apart: the graph's answer is kept where it has
 /// one, a side without takes a stable colour off its name, and on a clash
@@ -118,14 +118,12 @@ pub fn avatar_code(author: &str) -> i32 {
 /// already in place. Off the name rather than at random: the same
 /// conflict opened again must not change colour. A side with no name
 /// still gets one — the band says which of the two, the legend names it.
-pub fn conflict_side_colors(ours: (i32, &str), theirs: (i32, &str)) -> (i32, i32) {
+pub fn conflict_side_colors(ours: (Option<i32>, &str), theirs: (Option<i32>, &str)) -> (i32, i32) {
     let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap_or(8);
-    let borrowed_or_named = |(color, name): (i32, &str)| -> i32 {
-        if (0..size).contains(&color) {
-            color
-        } else {
-            (fnv1a(name) % size.unsigned_abs()) as i32
-        }
+    let borrowed_or_named = |(color, name): (Option<i32>, &str)| -> i32 {
+        color
+            .filter(|color| (0..size).contains(color))
+            .unwrap_or_else(|| (fnv1a(name) % size.unsigned_abs()) as i32)
     };
     let ours = borrowed_or_named(ours);
     let mut theirs = borrowed_or_named(theirs);
@@ -259,15 +257,21 @@ mod tests {
 
     #[test]
     fn conflict_sides_keep_the_colours_the_graph_lent_them() {
-        assert_eq!(conflict_side_colors((3, "main"), (5, "topic")), (3, 5));
+        assert_eq!(
+            conflict_side_colors((Some(3), "main"), (Some(5), "topic")),
+            (3, 5)
+        );
     }
 
     #[test]
     fn conflict_sides_that_landed_together_move_theirs_on() {
-        assert_eq!(conflict_side_colors((3, "main"), (3, "topic")), (3, 4));
+        assert_eq!(
+            conflict_side_colors((Some(3), "main"), (Some(3), "topic")),
+            (3, 4)
+        );
         let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
         assert_eq!(
-            conflict_side_colors((size - 1, "main"), (size - 1, "topic")),
+            conflict_side_colors((Some(size - 1), "main"), (Some(size - 1), "topic")),
             (size - 1, 0)
         );
     }
@@ -276,24 +280,24 @@ mod tests {
     fn a_side_the_graph_has_no_colour_for_takes_one_off_its_name() {
         // Outside the walk's window, or named something no chip carries
         // (`main~3`, which is what a rebase onto an older commit reports).
-        let (ours, theirs) = conflict_side_colors((-1, "main~3"), (5, "topic"));
+        let (ours, theirs) = conflict_side_colors((None, "main~3"), (Some(5), "topic"));
         assert_eq!(theirs, 5, "the side that had one keeps it");
         assert_ne!(ours, theirs);
         let size = i32::try_from(platitude_core::graph::GRAPH_PALETTE_SIZE).unwrap();
         assert!((0..size).contains(&ours));
         assert_eq!(
-            conflict_side_colors((-1, "main~3"), (5, "topic")),
+            conflict_side_colors((None, "main~3"), (Some(5), "topic")),
             (ours, 5)
         );
     }
 
     #[test]
     fn two_colourless_sides_still_come_out_apart() {
-        let (a, b) = conflict_side_colors((-1, "main"), (-1, "topic"));
+        let (a, b) = conflict_side_colors((None, "main"), (None, "topic"));
         assert_ne!(a, b);
-        let (a, b) = conflict_side_colors((-1, ""), (-1, ""));
+        let (a, b) = conflict_side_colors((None, ""), (None, ""));
         assert_ne!(a, b);
-        let (a, b) = conflict_side_colors((99, "main"), (-7, "main"));
+        let (a, b) = conflict_side_colors((Some(99), "main"), (Some(-7), "main"));
         assert_ne!(a, b);
     }
 }

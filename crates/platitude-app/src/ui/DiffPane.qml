@@ -29,8 +29,8 @@ Rectangle {
     property bool sideTheirsCurrent: false
     /// Each side's colour as an index into `Theme.graphLane` — the branch's own lane colour where it has one, and
     /// always two different ones (`encode::conflict_side_colors`).
-    property int sideColorOurs: -1
-    property int sideColorTheirs: -1
+    required property int sideColorOurs
+    required property int sideColorTheirs
     // A write is running: staging buttons disable.
     property bool busy: false
     /// Whether a discard of this file leaves something the discard record does not keep — before the first commit,
@@ -75,7 +75,7 @@ Rectangle {
     readonly property bool combined: diffPane.diffModel.isCombined
     /// Whether the two sides are told apart by colour — always, on a conflicted file: where the graph has no two
     /// colours to lend, `encode::conflict_side_colors` completes the pair.
-    readonly property bool sidesTold: diffPane.combined && diffPane.sideColorOurs >= 0 && diffPane.sideColorTheirs >= 0
+    readonly property bool sidesTold: diffPane.combined
     function sideColor(side) {
         const index = side === "ours" ? diffPane.sideColorOurs : diffPane.sideColorTheirs
         return Theme.graphLane[index % Theme.graphLane.length]
