@@ -84,6 +84,7 @@ QML が行を読むたびに組む値と、QML から読み戻す値(§メモリ
 | 予算を置かない読み | 2 万行の全書き換えで 1.2s |
 | `DiffColoured` を行と一緒に送る案 | 6,000 行の Rust で 951ms(同じテキストを「何も言えない名前」で読ませると 3ms)= 操作応答の 100ms の外 |
 | `models::diff` の行の作り直し | 6,000 行で 2ms(色が届いた時に全行を組み直せる根拠) |
+| `highlight::grammar::patterns`(highlights の規則を文字で切り分ける) | 境目を tree-sitter に訊く(`Query::new`)と文法に対してクエリを組むので、構成と同じ桁かかる: Haskell の初回の構成は、切り分けが無ければ 123ms、境目を訊くと 234ms で、うち 106ms がその `Query::new`(release、テストの 1 プロセス)。初めて開いた Haskell の diff はその分だけ色が遅れ、行の後に届く |
 
 ## 操作パネルのブランチのカード(`OpsBranchMenu`)
 

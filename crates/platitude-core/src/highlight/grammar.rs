@@ -14,7 +14,7 @@
 
 use std::sync::OnceLock;
 
-use tree_sitter::{Language, Query};
+use tree_sitter::Language;
 use tree_sitter_highlight::HighlightConfiguration;
 
 use super::Rgb;
@@ -419,65 +419,112 @@ impl Highlights {
     }
 
     /// The file's patterns in the order tree-sitter-highlight paints as
-    /// the file means, or `None` for a file the language refuses.
-    fn read(&self, language: &Language) -> Option<String> {
+    /// the file means, the ones left out gone.
+    fn read(&self) -> String {
         if matches!(self.order, Order::LastWins) && self.without.is_empty() {
-            return Some(self.query.to_owned());
+            return self.query.to_owned();
         }
-        let query = Query::new(language, self.query).ok()?;
-        let mut patterns = Vec::with_capacity(query.pattern_count());
-        for i in 0..query.pattern_count() {
-            let pattern = pattern_text(
-                self.query
-                    .get(query.start_byte_for_pattern(i)..query.end_byte_for_pattern(i))?,
-            );
-            if !self.without.iter().any(|left| same_pattern(pattern, left)) {
-                patterns.push(pattern);
-            }
-        }
+        let mut patterns: Vec<&str> = patterns(self.query)
+            .into_iter()
+            .filter(|pattern| !self.without.iter().any(|left| same_pattern(pattern, left)))
+            .collect();
         match self.order {
             Order::LastWins => {}
             Order::FirstWins => patterns.reverse(),
             Order::CatchAllsAfter => patterns.sort_by_key(|pattern| !is_catch_all(pattern)),
         }
-        Some(patterns.join("\n"))
+        patterns.join("\n")
     }
 }
 
-/// A pattern's own text out of its span, which tree-sitter runs on over
-/// the spacing and comments after it, up to where the next pattern begins.
-fn pattern_text(span: &str) -> &str {
-    let mut end = 0;
-    let mut chars = span.char_indices();
+/// A query's patterns, each as written, split off its top level as
+/// tree-sitter splits it: a node, a bracketed alternation, a string or
+/// `_`, with the quantifier and captures after it; the comments and
+/// spacing between patterns belong to none. Read off the text, for
+/// asking tree-sitter compiles the query against its grammar, which costs
+/// as much again as building the configuration
+/// (ci/baseline/code-costs-windows-x64.md §着色);
+/// `a_query_splits_into_the_patterns_tree_sitter_reads` holds the two
+/// readings together.
+fn patterns(query: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    // The pattern being read: where it starts, and where its last
+    // character so far ends.
+    let mut current: Option<(usize, usize)> = None;
+    let mut depth = 0usize;
+    let mut chars = query.char_indices().peekable();
     while let Some((at, c)) = chars.next() {
         match c {
-            ';' => {
-                for (_, c) in chars.by_ref() {
-                    if c == '\n' {
-                        break;
-                    }
-                }
-            }
+            ';' => while chars.next_if(|&(_, c)| c != '\n').is_some() {},
             '"' => {
-                end = at + 1;
-                while let Some((at, c)) = chars.next() {
-                    end = at + 1;
+                let mut end = at + 1;
+                while let Some((inside, c)) = chars.next() {
+                    end = inside + c.len_utf8();
                     match c {
                         '\\' => {
-                            if let Some((at, escaped)) = chars.next() {
-                                end = at + escaped.len_utf8();
+                            if let Some((escaped, c)) = chars.next() {
+                                end = escaped + c.len_utf8();
                             }
                         }
                         '"' => break,
-                        _ => end = at + c.len_utf8(),
+                        _ => {}
                     }
                 }
+                if depth == 0 {
+                    out.extend(
+                        current
+                            .replace((at, end))
+                            .and_then(|(s, e)| query.get(s..e)),
+                    );
+                }
             }
-            c if c.is_whitespace() => {}
-            c => end = at + c.len_utf8(),
+            '(' | '[' => {
+                if depth == 0 {
+                    out.extend(
+                        current
+                            .replace((at, at + 1))
+                            .and_then(|(s, e)| query.get(s..e)),
+                    );
+                }
+                depth += 1;
+            }
+            ')' | ']' => {
+                depth = depth.saturating_sub(1);
+                if let (0, Some((_, end))) = (depth, current.as_mut()) {
+                    *end = at + 1;
+                }
+            }
+            _ if depth > 0 || c.is_whitespace() => {}
+            '@' | '*' | '+' | '?' => {
+                let mut end = at + 1;
+                if c == '@' {
+                    while let Some((name, c)) =
+                        chars.next_if(|&(_, c)| c.is_alphanumeric() || "_-.?!".contains(c))
+                    {
+                        end = name + c.len_utf8();
+                    }
+                }
+                if let Some((_, last)) = current.as_mut() {
+                    *last = end;
+                }
+            }
+            // `_`, the wildcard: a node of its own.
+            _ => {
+                let mut end = at + c.len_utf8();
+                while let Some((word, c)) = chars.next_if(|&(_, c)| c.is_alphanumeric() || c == '_')
+                {
+                    end = word + c.len_utf8();
+                }
+                out.extend(
+                    current
+                        .replace((at, end))
+                        .and_then(|(s, e)| query.get(s..e)),
+                );
+            }
         }
     }
-    span.get(..end).unwrap_or(span)
+    out.extend(current.and_then(|(s, e)| query.get(s..e)));
+    out
 }
 
 /// Whether two pattern texts are one pattern, spacing aside.
@@ -542,7 +589,7 @@ struct Entry {
 /// refuses — that language then reads through the fallback lexer.
 fn configured(entry: &Entry) -> Option<HighlightConfiguration> {
     let language = (entry.language)();
-    let highlights = highlights_of(entry, &language)?;
+    let highlights = highlights_of(entry);
     let injections = with_regex_matches(&entry.injections.join("\n"));
     let locals = with_regex_matches(&entry.locals.join("\n"));
     let mut config =
@@ -569,12 +616,9 @@ fn configured(entry: &Entry) -> Option<HighlightConfiguration> {
 
 /// An entry's highlights files, each read in its order, as one query in
 /// the vocabulary `CAPTURES` speaks.
-fn highlights_of(entry: &Entry, language: &Language) -> Option<String> {
-    let mut files = Vec::with_capacity(entry.highlights.len());
-    for file in entry.highlights {
-        files.push(file.read(language)?);
-    }
-    Some(with_regex_matches(&current_names(&files.join("\n"))))
+fn highlights_of(entry: &Entry) -> String {
+    let files: Vec<String> = entry.highlights.iter().map(Highlights::read).collect();
+    with_regex_matches(&current_names(&files.join("\n")))
 }
 
 macro_rules! entry {

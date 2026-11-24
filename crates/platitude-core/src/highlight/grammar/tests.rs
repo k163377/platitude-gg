@@ -1,5 +1,6 @@
 //! `grammar`'s tests, split out for length alone (structure.md §分割).
 
+use tree_sitter::Query;
 use tree_sitter_highlight::{HighlightEvent, Highlighter};
 
 use super::*;
@@ -163,8 +164,7 @@ fn every_capture_name_has_a_row_or_reads_as_its_surroundings() {
     let mut used = Vec::new();
     for entry in &ENTRIES {
         let language = (entry.language)();
-        let highlights = highlights_of(entry, &language).expect("every entry builds");
-        let query = Query::new(&language, &highlights).expect("every entry builds");
+        let query = Query::new(&language, &highlights_of(entry)).expect("every entry builds");
         for name in query.capture_names() {
             if no_colour(name) {
                 continue;
@@ -266,9 +266,8 @@ fn a_layered_language_keeps_what_its_own_query_names() {
 /// for the later pattern; a pattern left out is gone.
 #[test]
 fn a_highlights_file_reads_in_the_order_it_was_written_for() {
-    let language: Language = tree_sitter_rust::LANGUAGE.into();
     let file = "(use_list (self) @keyword)\n(self) @variable.builtin\n(identifier) @variable";
-    let read = |highlights: Highlights| highlights.read(&language).expect("rust reads it");
+    let read = |highlights: Highlights| highlights.read();
     assert_eq!(
         read(first_wins(file)),
         "(identifier) @variable\n(self) @variable.builtin\n(use_list (self) @keyword)"
@@ -318,16 +317,11 @@ fn a_trailing_catch_all_backs_the_patterns_before_it() {
 #[test]
 fn every_left_out_pattern_is_in_its_file() {
     for entry in &ENTRIES {
-        let language = (entry.language)();
         for file in entry.highlights {
-            let query = Query::new(&language, file.query).expect("the entry builds");
             for left in file.without {
-                let found = (0..query.pattern_count())
-                    .filter(|&i| {
-                        let span = &file.query
-                            [query.start_byte_for_pattern(i)..query.end_byte_for_pattern(i)];
-                        same_pattern(pattern_text(span), left)
-                    })
+                let found = patterns(file.query)
+                    .into_iter()
+                    .filter(|pattern| same_pattern(pattern, left))
                     .count();
                 assert_eq!(
                     found, 1,
@@ -337,6 +331,81 @@ fn every_left_out_pattern_is_in_its_file() {
             }
         }
     }
+}
+
+/// The patterns tree-sitter reads in `query`, each without the spacing
+/// and comments its span runs on over, up to the next pattern.
+fn tree_sitter_s_patterns<'q>(language: &Language, query: &'q str) -> Vec<&'q str> {
+    let compiled = Query::new(language, query).expect("the query builds");
+    (0..compiled.pattern_count())
+        .map(|i| {
+            let span = &query[compiled.start_byte_for_pattern(i)..compiled.end_byte_for_pattern(i)];
+            without_trailing_comments(span)
+        })
+        .collect()
+}
+
+/// `span` up to its last character that is neither spacing nor in a
+/// comment.
+fn without_trailing_comments(span: &str) -> &str {
+    let mut end = 0;
+    let mut chars = span.char_indices();
+    while let Some((at, c)) = chars.next() {
+        match c {
+            ';' => {
+                for (_, c) in chars.by_ref() {
+                    if c == '\n' {
+                        break;
+                    }
+                }
+            }
+            '"' => {
+                end = at + 1;
+                while let Some((at, c)) = chars.next() {
+                    end = at + c.len_utf8();
+                    match c {
+                        '\\' => {
+                            if let Some((at, escaped)) = chars.next() {
+                                end = at + escaped.len_utf8();
+                            }
+                        }
+                        '"' => break,
+                        _ => {}
+                    }
+                }
+            }
+            c if c.is_whitespace() => {}
+            c => end = at + c.len_utf8(),
+        }
+    }
+    &span[..end]
+}
+
+/// Every highlights file splits into the patterns tree-sitter reads
+/// in it, and a query of every shape the splitting meets does too.
+#[test]
+fn a_query_splits_into_the_patterns_tree_sitter_reads() {
+    for entry in &ENTRIES {
+        let language = (entry.language)();
+        for file in entry.highlights {
+            assert_eq!(
+                patterns(file.query),
+                tree_sitter_s_patterns(&language, file.query),
+                "{}",
+                entry.name
+            );
+        }
+    }
+    let shapes = "; a comment with \"quotes\" and (parens)\n\
+                  \"(\" @punctuation.bracket\n\
+                  [\")\" \";\"] @punctuation ; and one after\n\
+                  (line_comment)+ @comment\n\
+                  (_) @x.y-z\n\
+                  ((identifier) @constant (#match? @constant \"^[A-Z(]\"))\n\
+                  (call_expression function: (identifier) @function)";
+    let rust: Language = tree_sitter_rust::LANGUAGE.into();
+    assert_eq!(patterns(shapes), tree_sitter_s_patterns(&rust, shapes));
+    assert_eq!(patterns(shapes).len(), 6);
 }
 
 /// Haskell's names take the colours of what they are: a function its
