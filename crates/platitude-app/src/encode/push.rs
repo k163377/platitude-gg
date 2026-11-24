@@ -266,11 +266,17 @@ mod tests {
     /// "nothing", and reads back whole.
     #[test]
     fn a_push_answer_carries_cores_rules_and_reads_back_whole() {
+        // Every standing: in the ones where a plain press sends without asking
+        // (`Elsewhere` / `Ready`) the two flags part, so a swap shows.
         for standing in [
             PushStanding::Closed,
+            PushStanding::Unborn,
             PushStanding::Publish,
             PushStanding::StaysHere,
+            PushStanding::Elsewhere,
+            PushStanding::Ready,
             PushStanding::Clean,
+            PushStanding::Behind,
             PushStanding::Diverged,
         ] {
             let record = PushRecord::from(PushFacts {
