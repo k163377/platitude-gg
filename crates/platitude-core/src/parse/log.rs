@@ -171,10 +171,7 @@ impl LogParser {
                 // left off: an indent opening the body stays (デザイン規約
                 // §リポジトリの文は原文で描く).
                 let words = |line: &&str| !line.trim().is_empty();
-                self.cur_body = match (
-                    kept.iter().position(words),
-                    kept.iter().rposition(words),
-                ) {
+                self.cur_body = match (kept.iter().position(words), kept.iter().rposition(words)) {
                     (Some(first), Some(last)) => kept[first..=last].join("\n"),
                     _ => String::new(),
                 };
