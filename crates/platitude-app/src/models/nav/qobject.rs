@@ -305,7 +305,11 @@ impl NavSectionModel {
     /// remote has.
     #[qslot]
     pub(super) fn has_remote_branch(&self, remote: String, name: String) -> bool {
-        !self.oid_of_name(format!("{remote}/{name}")).is_empty()
+        let far = platitude_core::remote::RemoteBranch {
+            remote,
+            branch: name,
+        };
+        !self.oid_of_name(far.to_string()).is_empty()
     }
 
     /// Why git would not take `name` for a new branch or tag beside the

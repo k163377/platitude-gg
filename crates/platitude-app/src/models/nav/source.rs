@@ -75,6 +75,17 @@ impl Source {
         }
     }
 
+    /// The configured remotes the refs read found, which a remote row's
+    /// name is cut by; none for the sections no refs read fills.
+    pub(super) fn remote_names(&self) -> &[String] {
+        match self {
+            Self::Locals(snapshot) | Self::Remotes(snapshot) | Self::Tags(snapshot) => {
+                &snapshot.remote_names
+            }
+            _ => &[],
+        }
+    }
+
     /// The branch row named `short`, by binary search over the
     /// name-ordered section (`RefsSnapshot::local_named`).
     pub(super) fn branch_named(&self, short: &str) -> Option<&platitude_core::session::BranchItem> {
@@ -487,9 +498,12 @@ fn leaf_of(path: &str) -> &str {
     crate::urlpath::path_leaf(path)
 }
 /// A remote branch is looked up without its remote prefix, so
-/// `origin/main` matches a PR on `main`.
-pub(super) fn pr_key(short: &str) -> &str {
-    short.split_once('/').map_or(short, |(_, rest)| rest)
+/// `origin/main` matches a PR on `main` — cut as the writes cut the row
+/// (`refs::split_remote_ref_or_first_slash`): `my/fork/main` is `main` on
+/// remote `my/fork`.
+pub(super) fn pr_key<'a>(short: &'a str, remotes: &'a [String]) -> &'a str {
+    platitude_core::refs::split_remote_ref_or_first_slash(short, remotes.iter().map(String::as_str))
+        .map_or(short, |(_, branch)| branch)
 }
 
 /// The letters git reports for one file row. A mode-only change keeps

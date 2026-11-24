@@ -315,24 +315,19 @@ impl NavSectionModel {
         }
     }
 
+    /// The branch half of `remote_ref`, cut at the configured remote that
+    /// owns it (`refs::split_remote_ref`); the whole name where none does —
+    /// not the first slash the writes fall back on.
     pub(super) fn local_name_of(&self, remote_ref: &str) -> String {
         let Source::Remotes(snapshot) = &self.all else {
             return remote_ref.to_string();
         };
-        snapshot
-            .remote_names
-            .iter()
-            .filter_map(|remote| {
-                remote_ref
-                    .strip_prefix(remote.as_str())
-                    .and_then(|rest| rest.strip_prefix('/'))
-                    .filter(|rest| !rest.is_empty())
-            })
-            // A remote may itself contain `/`; the shortest remainder is
-            // the longest configured remote prefix.
-            .min_by_key(|rest| rest.len())
-            .unwrap_or(remote_ref)
-            .to_string()
+        platitude_core::refs::split_remote_ref(
+            remote_ref,
+            snapshot.remote_names.iter().map(String::as_str),
+        )
+        .map_or(remote_ref, |(_, branch)| branch)
+        .to_string()
     }
 
     /// What the row identified by one field answers for another, over the

@@ -88,7 +88,9 @@ impl NavSectionModel {
             Role::OnlyRemote => Value::Flag(matches!(of, Entry::Tag(tag) if !tag.here)),
             Role::HasPr => Value::Flag(match of {
                 Entry::Local(branch) => crate::encode::pr_set().contains(branch.short.as_str()),
-                Entry::Remote(branch) => crate::encode::pr_set().contains(pr_key(&branch.short)),
+                Entry::Remote(branch) => {
+                    crate::encode::pr_set().contains(pr_key(&branch.short, self.all.remote_names()))
+                }
                 Entry::Worktree { entry, .. } => entry
                     .branch
                     .as_deref()
