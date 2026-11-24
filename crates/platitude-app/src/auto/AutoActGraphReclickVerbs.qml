@@ -538,7 +538,7 @@ Item {
                    + " where=" + repoTab.repoPath
         }
         function stood() {
-            return repoTab.repoPath.toLowerCase() === listHeldTimer.witnessed("wanted").toLowerCase()
+            return GitFacts.samePath(repoTab.repoPath, listHeldTimer.witnessed("wanted"))
         }
         onTriggered: {
             const op = listHeldTimer

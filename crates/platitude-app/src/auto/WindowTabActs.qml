@@ -22,10 +22,10 @@ Item {
     required property Item gate
 
     /// Whether `page` is reading the worktree at `path`, asked of the session's own answer (`RepoTab.repoPath`).
-    /// Case-folded as `nav/drain.rs` does: `git worktree list` and `rev-parse --show-toplevel` can spell one folder
-    /// in different letter case on Windows.
+    /// Folded as the product folds a path (`GitFacts.samePath`): `git worktree list` and `rev-parse --show-toplevel`
+    /// can spell one folder in different letter case and separators on Windows.
     function standsIn(page, path) {
-        return path !== "" && page.pageTab.repoPath.toLowerCase() === path.toLowerCase()
+        return GitFacts.samePath(path, page.pageTab.repoPath)
     }
 
     /// The page before the switch and its graph's counters — the half no picture holds: standing the tab elsewhere
@@ -505,7 +505,7 @@ Item {
             const trees = page.pageSidebar.worktreesModel
             for (let row = 0; row < trees.shown(); row++) {
                 const full = trees.fullAt(row)
-                if (full !== "" && full.toLowerCase() === worktree.toLowerCase()) {
+                if (GitFacts.samePath(full, worktree)) {
                     page.pageSidebar.activateRow("worktree", trees.nameAt(row), full, trees.headOfWorktree(full))
                     return true
                 }
@@ -723,7 +723,7 @@ Item {
                 "report": () => {
                     const tip = Tips.box
                     return "worktree_tip tip=" + tip.visible
-                           + " worktree=" + (tip.text.toLowerCase() === op.witnessed("wanted").toLowerCase())
+                           + " worktree=" + GitFacts.samePath(tip.text, op.witnessed("wanted"))
                            + " native=" + tip.text.includes("\\")
                            + " said=" + tip.text
                 } })

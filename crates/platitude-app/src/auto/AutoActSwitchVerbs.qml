@@ -484,7 +484,7 @@ Item {
         property string wanted: ""
         function stood() {
             return switchHeldTimer.wanted !== ""
-                && repoTab.repoPath.toLowerCase() === switchHeldTimer.wanted.toLowerCase()
+                && GitFacts.samePath(repoTab.repoPath, switchHeldTimer.wanted)
         }
         onTriggered: switchHeldTimer.complete({
             "name": "switch_held_ended",
