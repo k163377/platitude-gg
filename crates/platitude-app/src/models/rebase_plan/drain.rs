@@ -68,7 +68,7 @@ impl RebasePlanModel {
                 // its published count from the same read — so the rewrite
                 // warning counts exactly what the run touches.
                 self.publish_range = preview.range;
-                self.pushed_count = i32::try_from(preview.published).unwrap_or(i32::MAX);
+                self.pushed_count = crate::encode::shown_count(preview.published);
                 let onto = preview.onto.unwrap_or_default();
                 self.onto_subject = onto.subject;
                 self.onto_author = onto.author_name.clone();

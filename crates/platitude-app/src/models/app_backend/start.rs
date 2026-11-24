@@ -151,7 +151,7 @@ impl Default for AppBackend {
             pace_max_secs: platitude_core::session::PACE_MAX_SECS as i32,
             initial_commits: Hub::with(|hub| hub.settings().defaults.initial_commits)
                 .unwrap_or(Some(platitude_core::session::DEFAULT_LOG_LIMIT))
-                .map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX)),
+                .map_or(0, crate::encode::shown_count),
             initial_commits_min: platitude_core::session::MIN_LOG_LIMIT as i32,
             initial_commits_default: platitude_core::session::DEFAULT_LOG_LIMIT as i32,
             // Spelled for the screen where it comes in: a file written by

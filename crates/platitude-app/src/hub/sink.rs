@@ -433,7 +433,7 @@ impl SessionSink for BridgeSink {
                 self.feeds.tab.push(TabMsg::MoveNeedsAsk {
                     local,
                     start,
-                    lost: i32::try_from(lost).unwrap_or(i32::MAX),
+                    lost: crate::encode::shown_count(lost),
                 })
             }
             SessionEvent::DiscardsChanged { restored } => {
@@ -461,7 +461,7 @@ impl SessionSink for BridgeSink {
                     local,
                     state: state.as_str().to_string(),
                     tip: crate::encode::oid_text(tip),
-                    theirs: i32::try_from(theirs).unwrap_or(i32::MAX),
+                    theirs: crate::encode::shown_count(theirs),
                 });
             }
             SessionEvent::BranchDeleteChecked { branch, merged } => {
@@ -522,7 +522,7 @@ impl SessionSink for BridgeSink {
             SessionEvent::PlanPublished { range, published } => {
                 self.feeds.plan.push(PlanMsg::Published {
                     range,
-                    published: i32::try_from(published).unwrap_or(i32::MAX),
+                    published: crate::encode::shown_count(published),
                 });
             }
             SessionEvent::HeadReachChecked { reached_elsewhere } => {

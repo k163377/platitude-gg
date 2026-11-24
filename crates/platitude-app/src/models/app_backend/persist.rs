@@ -27,7 +27,7 @@ impl AppBackend {
             count => Some(platitude_core::session::log_limit(count)),
         };
         // Saturating: `settings.toml` can hold a count past `i32`.
-        let commits = asked.map_or(0, |count| i32::try_from(count).unwrap_or(i32::MAX));
+        let commits = asked.map_or(0, crate::encode::shown_count);
         if self.initial_commits == commits {
             return;
         }
