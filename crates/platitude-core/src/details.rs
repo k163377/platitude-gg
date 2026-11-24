@@ -72,7 +72,8 @@ pub struct CommitDetails {
     pub committer_time: i64,
     /// `Co-authored-by` trailers, in the order the message lists them.
     pub co_authors: Vec<CoAuthor>,
-    /// Full message (subject + body).
+    /// Full message (subject + body) as recorded, short of its last
+    /// line's ending.
     pub message: String,
     /// Changed files vs the first parent (creation diff for root commits).
     pub files: Vec<FileChange>,
@@ -145,11 +146,16 @@ fn parse_details(bytes: &[u8]) -> Option<CommitDetails> {
     for hex in fields[1].split(|b| *b == b' ').filter(|s| !s.is_empty()) {
         parents.push(Oid::from_hex(hex).ok()?);
     }
-    // %B is last: trim the `-z` NUL and the newline `show` appends.
-    let mut message = text(9);
-    while message.ends_with(['\0', '\n']) {
-        message.pop();
-    }
+    // %B is last, ended by the `-z` NUL alone (measured, 2.55). The last
+    // line's own ending is no line of the message; blank lines before it
+    // are (デザイン規約 §リポジトリの文は原文で描く).
+    let raw = text(9);
+    let raw = raw.strip_suffix('\0').unwrap_or(&raw);
+    let message = raw
+        .strip_suffix("\r\n")
+        .or_else(|| raw.strip_suffix('\n'))
+        .unwrap_or(raw)
+        .to_string();
 
     Some(CommitDetails {
         oid,
@@ -615,6 +621,21 @@ mod tests {
         let d = parse_details(record).unwrap();
         assert_eq!(d.message, "subject\n\nM\tsrc/main.rs");
         assert_eq!(parse_name_status(files).unwrap().len(), 1);
+    }
+
+    /// Only the last line's ending goes: blank lines before it are the
+    /// message's, whichever line ending it was written with.
+    #[test]
+    fn a_message_keeps_its_own_blank_lines_at_the_end() {
+        for (written, kept) in [
+            ("subject\n\nbody\n\n\n", "subject\n\nbody\n\n"),
+            ("subject\r\n\r\nbody\r\n", "subject\r\n\r\nbody"),
+            ("no ending", "no ending"),
+        ] {
+            let bytes = combined(written, b"");
+            let (record, _) = split_record(&bytes).unwrap();
+            assert_eq!(parse_details(record).unwrap().message, kept, "{written:?}");
+        }
     }
 
     #[test]

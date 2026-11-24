@@ -232,6 +232,23 @@ ColumnLayout {
         target: block
         function onSubjectTextChanged() { detailsPane.noteTyping() }
         function onBodyTextChanged() { detailsPane.noteTyping() }
+        function onWritingChanged() {
+            if (block.writing)
+                detailsPane.startWriting()
+        }
+    }
+    /// A caret came into an editable card: the boxes take the cut a save writes (`details.editSubject` / `editBody`,
+    /// `commit::split_message`) in place of the message shown as recorded (デザイン規約 §リポジトリの文は原文で描く),
+    /// so writing starts from what a save keeps. Where the two differ, the difference is the edit's and the save row
+    /// stays for it, nothing typed (user decision — ask before changing). Only over the commit's own message as it
+    /// rests: a plan's draft is in that cut already, and typed or saved words are the reader's.
+    function startWriting() {
+        const details = detailsPane.details
+        if (detailsPane.boxFromPlan || detailsPane.boxMoved || detailsPane.baseSubject !== details.messageSubject
+                || detailsPane.baseBody !== details.messageBody)
+            return
+        if (block.subjectText !== details.editSubject || block.bodyText !== details.editBody)
+            block.setTexts(details.editSubject, details.editBody)
     }
     /// The plan's hold moved without the commit moving, which `syncMessage`'s guard misses (a row left `reword` —
     /// `RebasePlanModel::set_action` — or the draft for the row up arrived). A dropped draft left resting reads as

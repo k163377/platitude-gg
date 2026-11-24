@@ -43,6 +43,23 @@ pub fn join_message(subject: &str, body: &str) -> String {
     format!("{subject}\n\n{body}")
 }
 
+/// A recorded message as a reader is shown it, in the two fields: the
+/// first line, and the rest from past the blank lines that part it from
+/// the first (git's `%b`) — each as written, a subject's indent and a
+/// body's own blanks and blank lines kept (デザイン規約
+/// §リポジトリの文は原文で描く). Line endings are only line breaks:
+/// `\r\n` and a lone `\r` read as `\n`, all a text box keeps of them. A
+/// field a caret comes into takes [`split_message`]'s cut instead, the
+/// one a save writes.
+pub fn shown_message(message: &str) -> (String, String) {
+    let message = message.replace("\r\n", "\n").replace('\r', "\n");
+    let (subject, rest) = message.split_once('\n').unwrap_or((&message, ""));
+    (
+        subject.to_string(),
+        rest.trim_start_matches('\n').to_string(),
+    )
+}
+
 /// Splits a commit message back into the editor's two fields: the first
 /// line, and the rest without the separating blank line.
 pub fn split_message(message: &str) -> (String, String) {
@@ -452,6 +469,37 @@ mod tests {
         );
         assert_eq!(
             split_message("subject\nrun-on"),
+            ("subject".to_string(), "run-on".to_string())
+        );
+    }
+
+    #[test]
+    fn a_message_is_shown_as_written_but_for_its_line_endings() {
+        let shown = shown_message;
+        assert_eq!(
+            shown("    indented subject\n\n\n  The body.   \n\nlast"),
+            (
+                "    indented subject".to_string(),
+                "  The body.   \n\nlast".to_string()
+            ),
+            "the indent, the blanks and the body's own blank line stay"
+        );
+        assert_eq!(
+            shown("subject\r\n\r\nbody\r\nmore"),
+            ("subject".to_string(), "body\nmore".to_string()),
+            "CRLF is a line break"
+        );
+        assert_eq!(
+            shown("subject\r\rbody"),
+            ("subject".to_string(), "body".to_string()),
+            "so is a lone CR"
+        );
+        assert_eq!(
+            shown("subject only"),
+            ("subject only".to_string(), String::new())
+        );
+        assert_eq!(
+            shown("subject\nrun-on"),
             ("subject".to_string(), "run-on".to_string())
         );
     }

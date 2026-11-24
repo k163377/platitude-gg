@@ -48,6 +48,8 @@ impl DetailsModel {
     qproperty!("committerTime", Member = committer_time, Notify = changed);
     qproperty!("messageSubject", Member = message_subject, Notify = changed);
     qproperty!("messageBody", Member = message_body, Notify = changed);
+    qproperty!("editSubject", Member = edit_subject, Notify = changed);
+    qproperty!("editBody", Member = edit_body, Notify = changed);
     qproperty!("selectionCount", Member = selection_count, Notify = changed);
     qproperty!("comparing", Member = comparing, Notify = changed);
     qproperty!(

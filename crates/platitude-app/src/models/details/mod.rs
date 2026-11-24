@@ -83,8 +83,14 @@ pub struct DetailsModel {
     committer_differs: bool,
     commit_time_differs: bool,
     committer_time: i64,
+    /// The message as recorded (`commit::shown_message`): what the card
+    /// shows.
     message_subject: String,
     message_body: String,
+    /// The same message as a save writes it (`commit::split_message`):
+    /// what an editable card's fields take as a caret comes in.
+    edit_subject: String,
+    edit_body: String,
     /// How many commits the choice holds, and whether the file list is
     /// the two-commit comparison rather than what the set changed
     /// (デザイン規約 §複数のコミットを選ぶ). 0 / false while one commit is read.
@@ -142,6 +148,8 @@ impl Default for DetailsModel {
             committer_time: 0,
             message_subject: String::new(),
             message_body: String::new(),
+            edit_subject: String::new(),
+            edit_body: String::new(),
             selection_count: 0,
             comparing: false,
             selection_loaded: false,
@@ -206,6 +214,8 @@ impl DetailsModel {
         self.committer_time = 0;
         self.message_subject.clear();
         self.message_body.clear();
+        self.edit_subject.clear();
+        self.edit_body.clear();
     }
 
     /// Puts the pane back on one commit, whatever choice it was holding.

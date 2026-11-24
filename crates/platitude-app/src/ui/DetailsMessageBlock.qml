@@ -79,6 +79,8 @@ Flickable {
     readonly property alias signatureTipShown: authorRow.signatureTipShown
     readonly property alias subjectText: msgEditor.subjectText
     readonly property alias bodyText: msgEditor.bodyText
+    /// Someone is writing: a caret in either box of an editable card (`DetailsPane.startWriting`, the save row).
+    readonly property bool writing: block.editable && msgEditor.anyFocused
     readonly property alias summaryTipShown: msgEditor.summaryTipShown
     readonly property alias descriptionColor: msgEditor.descriptionColor
     readonly property alias descriptionFocused: msgEditor.descriptionFocused
@@ -204,7 +206,7 @@ Flickable {
                 id: saveRow
                 Layout.fillWidth: true
                 dirty: block.messageDirty
-                editing: block.editable && msgEditor.anyFocused
+                editing: block.writing
                 intoPlan: block.intoPlan
                 published: block.published
                 busy: block.busy

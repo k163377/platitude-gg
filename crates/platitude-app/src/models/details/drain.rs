@@ -70,8 +70,8 @@ impl DetailsModel {
     }
 
     /// What the card says of the commit `hex` above its files: who wrote
-    /// and committed it, when, and its message cut as the editor's two
-    /// fields are.
+    /// and committed it, when, and its message — as recorded, and as a
+    /// save would write it.
     pub(super) fn take_header(
         &mut self,
         hex: String,
@@ -100,10 +100,12 @@ impl DetailsModel {
             != platitude_core::avatar::key(&details.author_email);
         self.commit_time_differs = details.committer_time != details.author_time;
         self.committer_time = details.committer_time;
-        // Cut as the commit editor's two fields are (`commit::split_message`).
-        let (subject, body) = platitude_core::commit::split_message(&details.message);
-        self.message_subject = subject;
-        self.message_body = body;
+        // Shown as recorded; an editable card's fields take the cut a save
+        // writes as a caret comes in (`DetailsPane.startWriting`).
+        (self.message_subject, self.message_body) =
+            platitude_core::commit::shown_message(&details.message);
+        (self.edit_subject, self.edit_body) =
+            platitude_core::commit::split_message(&details.message);
     }
 }
 
@@ -138,20 +140,21 @@ mod tests {
         model
     }
 
-    /// The message is cut as the commit editor's two fields are
-    /// (`commit::split_message`), so a commit nobody touched does not read
-    /// as edited: a CRLF subject loses its `\r` and an indented one its
-    /// indent, the body its blank lead and its trailing blanks.
+    /// The card shows the message as recorded — the subject's indent and
+    /// the body's blanks stay, a CRLF is only a line break
+    /// (`commit::shown_message`) — and holds beside it the cut a save
+    /// writes (`commit::split_message`), which the fields take as a caret
+    /// comes in.
     #[test]
-    fn the_card_cuts_a_message_as_the_editor_does() {
-        let message = "    indented subject\r\n\r\nThe body.   \r\n";
+    fn the_card_shows_a_message_as_recorded_and_holds_the_cut_a_save_writes() {
+        let message = "    indented subject\r\n\r\nThe body.   \r\nmore";
         let card = card_of("ada@example.com", "ada@example.com", message);
         assert_eq!(
             (card.message_subject.as_str(), card.message_body.as_str()),
-            ("indented subject", "The body.")
+            ("    indented subject", "The body.   \nmore")
         );
         assert_eq!(
-            (card.message_subject, card.message_body),
+            (card.edit_subject, card.edit_body),
             platitude_core::commit::split_message(message),
             "the editor's own cut"
         );
