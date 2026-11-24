@@ -145,7 +145,7 @@ Item {
     signal forceDeleteRequested(string branch)
     signal deleteRemoteRequested(string remoteRef, string expect)
     signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
-    signal pushTagRequested(string remote, string tag, string lease)
+    signal pushTagRequested(string remote, string tag, string expect)
     signal deleteTagRequested(string tag)
     signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
     signal deleteTagEverywhereRequested(string remote, string tag, string expect)
@@ -625,7 +625,7 @@ Item {
             canBranchHere: rowMenu.canBranchHere
             makeWhy: rowMenu.startWhy
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
-            onPushTagRequested: (remote, tag, lease) => rowMenu.pushTagRequested(remote, tag, lease)
+            onPushTagRequested: (remote, tag, expect) => rowMenu.pushTagRequested(remote, tag, expect)
             onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere, expect)

@@ -69,12 +69,12 @@ impl RepoTab {
     /// (`ops::PushOut`): what git said is about that branch's standing, so a
     /// refusal is remembered for the branch whichever door sent it
     /// (デザイン規約 §リモートへ送る).
-    pub(super) fn named_push(&mut self, branch: String, force: String, lease_expect: String) {
+    pub(super) fn named_push(&mut self, branch: String, force: String, expect: String) {
         let fallback = self.default_remote.clone();
         let named = branch.clone();
         let asked = self.ask_pinned(
             "push",
-            Self::push_force(&force, &lease_expect),
+            Self::push_force(&force, &expect),
             |s, force| s.push_named(named, fallback, force),
         );
         self.push_out.asked(asked, branch);
@@ -83,11 +83,11 @@ impl RepoTab {
     /// The toolbar's push of the checked-out branch, `default_remote` where
     /// it tracks nothing yet, written down under the branch the button
     /// shows.
-    pub(super) fn current_push(&mut self, branch: String, force: String, lease_expect: String) {
+    pub(super) fn current_push(&mut self, branch: String, force: String, expect: String) {
         let fallback = self.default_remote.clone();
         let asked = self.ask_pinned(
             "push",
-            Self::push_force(&force, &lease_expect),
+            Self::push_force(&force, &expect),
             |s, force| s.push_current(fallback, force),
         );
         self.push_out.asked(asked, branch);
@@ -104,10 +104,10 @@ impl RepoTab {
         self.push_out.asked(asked, branch);
     }
 
-    /// One tag sent to one remote; an empty `lease_expect` sends it plain
+    /// One tag sent to one remote; an empty `expect` sends it plain
     /// (`remote::push_tag`).
-    pub(super) fn tag_push(&mut self, target: RemoteTag, lease_expect: String) {
-        self.ask_pinned("push tag", Self::lease_pin(&lease_expect), |s, expect| {
+    pub(super) fn tag_push(&mut self, target: RemoteTag, expect: String) {
+        self.ask_pinned("push tag", Self::lease_pin(&expect), |s, expect| {
             s.push_tag(target, expect)
         });
     }

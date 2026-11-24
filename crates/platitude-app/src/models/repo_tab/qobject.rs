@@ -1008,12 +1008,12 @@ impl RepoTab {
         self.ask_session(|s| s.create_tag(name, commit));
     }
 
-    /// Sends one tag to one remote. `lease_expect` pins a leased
+    /// Sends one tag to one remote. `expect` pins a leased
     /// overwrite to the commit that remote was last seen holding the name
     /// on; empty sends it plain.
     #[qslot]
-    fn push_tag(&mut self, remote: String, tag: String, lease_expect: String) {
-        self.tag_push(RemoteTag { remote, tag }, lease_expect);
+    fn push_tag(&mut self, remote: String, tag: String, expect: String) {
+        self.tag_push(RemoteTag { remote, tag }, expect);
     }
 
     /// Replaces a tag on a remote with one under a new name. git has no
@@ -1224,13 +1224,13 @@ impl RepoTab {
 
     /// Pushes the checked-out branch to wherever it tracks, or to the
     /// default remote when it tracks nothing yet. `force` is `""` /
-    /// `"lease"` / `"force"`; `lease_expect` pins the remote commit the
+    /// `"lease"` / `"force"`; `expect` pins the remote commit the
     /// user saw, and left empty the lease is git's own
     /// (`RepoTab::push_force`). `branch` is what the button shows, recorded
     /// with the press's id so the answer comes back to it (`ops::PushOut`).
     #[qslot]
-    fn push_current(&mut self, branch: String, force: String, lease_expect: String) {
-        self.current_push(branch, force, lease_expect);
+    fn push_current(&mut self, branch: String, force: String, expect: String) {
+        self.current_push(branch, force, expect);
     }
 
     /// The first push of `branch` — the one the question named, checked
@@ -1315,11 +1315,11 @@ impl RepoTab {
 
     /// The push of a branch row's menu: `branch`, checked out or not, to
     /// wherever its marks and upstream send it. `force` is `""` /
-    /// `"lease"`; `lease_expect` pins the remote commit the row showed,
+    /// `"lease"`; `expect` pins the remote commit the row showed,
     /// and left empty the lease is git's own (`RepoTab::push_force`).
     #[qslot]
-    fn push_named(&mut self, branch: String, force: String, lease_expect: String) {
-        self.named_push(branch, force, lease_expect)
+    fn push_named(&mut self, branch: String, force: String, expect: String) {
+        self.named_push(branch, force, expect)
     }
 
     /// Points `branch` at a branch of its own name on the remote the row

@@ -31,7 +31,7 @@ AppMenu {
 
     /// Opens the name box, which the page owns.
     signal tagHereRequested(string oidHex)
-    signal pushTagRequested(string remote, string tag, string lease)
+    signal pushTagRequested(string remote, string tag, string expect)
     signal deleteTagRequested(string tag)
     /// `onlyThere`: the name was only on the remote, so its sidebar row goes too instead of losing the badge — the
     /// write cannot tell from a remote and a name (デザイン規約 §消す操作は先に画面から消す). `expect` on both remote

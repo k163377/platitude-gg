@@ -1824,7 +1824,7 @@ FocusScope {
             onDeleteRemoteRequested: (remoteRef, expect) => repoTab.deleteRemoteBranch(remoteRef, expect)
             onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
                 repoTab.deleteBranchEverywhere(branch, remoteRef, forced, expect)
-            onPushTagRequested: (remote, tag, lease) => repoTab.pushTag(remote, tag, lease)
+            onPushTagRequested: (remote, tag, expect) => repoTab.pushTag(remote, tag, expect)
             onDeleteTagRequested: tag => repoTab.deleteTag(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)

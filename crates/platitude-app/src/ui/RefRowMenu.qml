@@ -500,7 +500,7 @@ Item {
             canBranchHere: refRowMenu.canBranchHere
             makeWhy: refRowMenu.startWhy
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
-            onPushTagRequested: (remote, tag, lease) => refRowMenu.repoTab.pushTag(remote, tag, lease)
+            onPushTagRequested: (remote, tag, expect) => refRowMenu.repoTab.pushTag(remote, tag, expect)
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)
             onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
                 refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)

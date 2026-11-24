@@ -31,7 +31,7 @@ Item {
         id: card
         canBranchHere: true
         onTagHereRequested: oidHex => root.asked = "tag-here " + oidHex
-        onPushTagRequested: (remote, tag, lease) => root.asked = "push " + remote + " " + tag + " " + lease
+        onPushTagRequested: (remote, tag, expect) => root.asked = "push " + remote + " " + tag + " " + expect
         onDeleteTagRequested: tag => root.asked = "delete " + tag
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
             root.asked = "delete-remote " + remote + " " + tag + " " + onlyThere + " " + expect

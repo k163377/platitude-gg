@@ -446,7 +446,7 @@ impl RepoTab {
                 || self.head_author_email != self.author_email);
     }
 
-    /// Decodes the push-force pair QML sends. `lease_expect` is read for
+    /// Decodes the push-force pair QML sends. `expect` is read for
     /// `"lease"` alone: the object its door showed pins the lease, and with
     /// none on screen the lease is git's own, to its remote-tracking ref
     /// (`PushForce::WithTrackingLease`). A pin that names no object is
@@ -454,11 +454,11 @@ impl RepoTab {
     /// none.
     pub(super) fn push_force(
         force: &str,
-        lease_expect: &str,
+        expect: &str,
     ) -> Result<platitude_core::remote::PushForce, platitude_core::oid::OidParseError> {
         use platitude_core::remote::PushForce;
         Ok(match force {
-            "lease" => match Self::lease_pin(lease_expect)? {
+            "lease" => match Self::lease_pin(expect)? {
                 Some(expect) => PushForce::WithLease { expect },
                 None => PushForce::WithTrackingLease,
             },

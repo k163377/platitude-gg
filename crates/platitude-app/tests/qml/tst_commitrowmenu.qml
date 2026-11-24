@@ -105,7 +105,7 @@ Item {
         onRebaseRequested: ref => root.asked = "rebase " + ref
         onPullRequested: branch => root.asked = branch === "" ? "pull" : "pull " + branch
         onResetRequested: mode => root.asked = "reset " + mode
-        onPushTagRequested: (remote, tag, lease) => root.asked = "push " + remote + " " + tag + " " + lease
+        onPushTagRequested: (remote, tag, expect) => root.asked = "push " + remote + " " + tag + " " + expect
         onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
             root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
