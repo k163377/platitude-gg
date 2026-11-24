@@ -128,7 +128,7 @@ impl RepoTab {
         // Keyed like every outgoing tag write (`ops_delete::remote_tag_delete`),
         // on the name that goes, so the page reports this press's answer.
         let row = old.to_string();
-        let asked = self.ask_leased("replace tag", &expect, |s, expect| {
+        let asked = self.ask_on_object("replace tag", &expect, |s, expect| {
             s.replace_remote_tag(old, to, expect)
         });
         self.ref_push_asked(&row, asked);
@@ -137,7 +137,7 @@ impl RepoTab {
     /// The same for a branch, keyed on the remote row that goes.
     pub(super) fn remote_branch_replace(&mut self, old: TrackedBranch, to: String, expect: String) {
         let row = old.short().to_string();
-        let asked = self.ask_leased("replace branch", &expect, |s, expect| {
+        let asked = self.ask_on_object("replace branch", &expect, |s, expect| {
             s.replace_remote_branch(old, to, expect)
         });
         self.ref_push_asked(&row, asked);

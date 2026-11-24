@@ -5,7 +5,7 @@
 //! under the id it got back, so every row that moves has an answer
 //! coming — a leased delete with no object to lease to is turned away
 //! before the session, gets no id and moves no row
-//! (`RepoTab::ask_leased`). What the waiting means is `ops::StandIn`'s
+//! (`RepoTab::ask_on_object`). What the waiting means is `ops::StandIn`'s
 //! (tested in `ops::tests::stand_in`); this file is the wiring.
 //!
 //! The write slots themselves are the signal (`deleteBranch`,
@@ -68,7 +68,7 @@ impl RepoTab {
     /// the delete is leased to (`remote::delete_remote_branch`).
     pub(super) fn remote_branch_delete(&mut self, target: TrackedBranch, expect: String) {
         let row = target.short().to_string();
-        let asked = self.ask_leased("delete remote branch", &expect, |s, expect| {
+        let asked = self.ask_on_object("delete remote branch", &expect, |s, expect| {
             s.delete_remote_branch(target, expect)
         });
         self.ref_push_asked(&row, asked);
@@ -93,7 +93,7 @@ impl RepoTab {
         expect: String,
     ) {
         let row = target.short().to_string();
-        let asked = self.ask_leased("delete branch everywhere", &expect, |s, expect| {
+        let asked = self.ask_on_object("delete branch everywhere", &expect, |s, expect| {
             s.delete_branch_everywhere(branch.clone(), target, force, expect)
         });
         self.ref_push_asked(&row, asked);
@@ -117,7 +117,7 @@ impl RepoTab {
     pub(super) fn remote_tag_delete(&mut self, target: RemoteTag, row_goes: bool, expect: String) {
         let row = target.to_string();
         let tag = target.tag.clone();
-        let asked = self.ask_leased("delete remote tag", &expect, |s, expect| {
+        let asked = self.ask_on_object("delete remote tag", &expect, |s, expect| {
             s.delete_remote_tag(target, expect)
         });
         self.ref_push_asked(&row, asked);
@@ -131,7 +131,7 @@ impl RepoTab {
     pub(super) fn tag_delete_everywhere(&mut self, target: RemoteTag, expect: String) {
         let row = target.to_string();
         let tag = target.tag.clone();
-        let asked = self.ask_leased("delete tag everywhere", &expect, |s, expect| {
+        let asked = self.ask_on_object("delete tag everywhere", &expect, |s, expect| {
             s.delete_tag_everywhere(target, expect)
         });
         self.ref_push_asked(&row, asked);

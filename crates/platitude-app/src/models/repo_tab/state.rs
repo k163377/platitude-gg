@@ -441,7 +441,7 @@ impl RepoTab {
     /// `"lease"` alone: the object its door showed pins the lease, and with
     /// none on screen the lease is git's own, to its remote-tracking ref
     /// (`PushForce::WithTrackingLease`). A pin that names no object is
-    /// turned away ([`Self::lease_turned_away`]); the other two words carry
+    /// turned away ([`Self::pin_turned_away`]); the other two words carry
     /// none.
     pub(super) fn push_force(
         force: &str,
@@ -458,21 +458,22 @@ impl RepoTab {
         })
     }
 
-    /// A write turned away before the session over a lease that names no
-    /// object: nothing goes to git. Said to the watch as the door says a
+    /// A write turned away before the session over a pin that names no
+    /// object — a lease's, or the commit or entry a write is made on:
+    /// nothing goes to git. Said to the watch as the door says a
     /// write it turns down ([`Self::ask_session`]) — a waiting reader must
     /// not expect an answer — and answered as that door answers, with no
     /// id. The rows that hand the pin over are the models' own
     /// (`Oid::to_hex`), so this is the belt under them.
-    pub(super) fn lease_turned_away(&mut self, what: &str) -> Option<u64> {
-        tracing::warn!(what, "turned away: its lease names no object");
+    pub(super) fn pin_turned_away(&mut self, what: &str) -> Option<u64> {
+        tracing::warn!(what, "turned away: its pin names no object");
         self.write_watch.asked(None);
         None
     }
 
-    /// [`Self::ask_session`] for a write behind a lease's pin as QML handed
-    /// it back: asked with what the pin decodes to, and turned away where
-    /// it names no object ([`Self::lease_turned_away`]) — the one door of
+    /// [`Self::ask_session`] for a write behind a pin as QML handed it
+    /// back: asked with what the pin decodes to, and turned away where
+    /// it names no object ([`Self::pin_turned_away`]) — the one door of
     /// every such write.
     pub(super) fn ask_pinned<T>(
         &mut self,
@@ -485,25 +486,25 @@ impl RepoTab {
     ) -> Option<u64> {
         match pin {
             Ok(pin) => self.ask_session(|s| f(s, pin)),
-            Err(_) => self.lease_turned_away(what),
+            Err(_) => self.pin_turned_away(what),
         }
     }
 
-    /// [`Self::ask_pinned`] for a write pinned to the object its row showed
-    /// — a name taken off a remote leased to it, a commit reworded or a
+    /// [`Self::ask_pinned`] for a write made on the object its row showed
+    /// — a name taken off a remote leased to it, a commit rewritten or a
     /// stash entry renamed by it: with none to pin to — an empty pin as much
     /// as a malformed one — nothing is asked. Where the write is two
     /// commands, the first has not run either.
-    pub(super) fn ask_leased(
+    pub(super) fn ask_on_object(
         &mut self,
         what: &str,
-        expect: &str,
+        object: &str,
         f: impl FnOnce(
             &Arc<platitude_core::session::RepoSession>,
             platitude_core::Oid,
         ) -> Option<platitude_core::OperationId>,
     ) -> Option<u64> {
-        let pin = crate::encode::pinned_oid(expect)
+        let pin = crate::encode::pinned_oid(object)
             .and_then(|pin| pin.ok_or(platitude_core::oid::OidParseError));
         self.ask_pinned(what, pin, f)
     }
@@ -596,7 +597,7 @@ impl RepoTab {
         if message.is_empty() {
             return;
         }
-        self.ask_leased("reword", &oid, |s, oid| s.reword(oid, message));
+        self.ask_on_object("reword", &oid, |s, oid| s.reword(oid, message));
     }
 
     /// Behind `watchAmend`: says to the session whether an amend is in view,
@@ -704,7 +705,7 @@ mod tests {
     fn a_lease_that_names_no_object_tells_the_watch_the_write_was_turned_away() {
         let mut tab = RepoTab::default();
         assert!(tab.write_watch.arm("probe").is_none());
-        assert_eq!(tab.lease_turned_away("probe"), None);
+        assert_eq!(tab.pin_turned_away("probe"), None);
         assert_eq!(tab.write_watch.stage(), "turned-down");
     }
 

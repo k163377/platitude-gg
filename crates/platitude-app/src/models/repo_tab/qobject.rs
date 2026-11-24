@@ -1041,7 +1041,7 @@ impl RepoTab {
     /// there by the press.
     #[qslot]
     fn rename_stash(&mut self, selector: String, oid: String, message: String) {
-        self.ask_leased("stash rename", &oid, |s, oid| {
+        self.ask_on_object("stash rename", &oid, |s, oid| {
             s.rename_stash(selector, oid, message)
         });
     }
@@ -1378,13 +1378,13 @@ impl RepoTab {
     /// Folds a commit into its parent (one-commit interactive rebase).
     #[qslot]
     fn squash_into_parent(&mut self, oid: String) {
-        self.ask_leased("squash", &oid, |s, oid| s.squash_into_parent(oid));
+        self.ask_on_object("squash", &oid, |s, oid| s.squash_into_parent(oid));
     }
 
     /// Leaves one commit out of the history, replaying what came after it.
     #[qslot]
     fn drop_commit(&mut self, oid: String) {
-        self.ask_leased("drop", &oid, |s, oid| s.drop_commit(oid));
+        self.ask_on_object("drop", &oid, |s, oid| s.drop_commit(oid));
     }
 
     /// Replaces one commit's message (`reword_from_fields`).
