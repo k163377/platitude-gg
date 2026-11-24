@@ -17,10 +17,22 @@ impl AvatarUrls {
         Hub::with(|hub| hub.avatar_urls()).unwrap_or_default()
     }
 
-    /// The URL for an address, or empty. The address is expected to have
-    /// come through `avatar::key` already.
+    /// The URL for an address as written, or empty — looked up by the key a
+    /// face is filed under (`avatar::key`). An address already in that form,
+    /// the usual one, is looked up as it stands: a row-building pass asks
+    /// once per row.
     pub fn url_of(&self, email: &str) -> String {
-        self.by_email.get(email).cloned().unwrap_or_default()
+        if self.by_email.is_empty() {
+            return String::new();
+        }
+        let keyed =
+            email.trim().len() == email.len() && email.chars().all(|c| c.to_lowercase().eq([c]));
+        let hit = if keyed {
+            self.by_email.get(email)
+        } else {
+            self.by_email.get(&platitude_core::avatar::key(email))
+        };
+        hit.cloned().unwrap_or_default()
     }
 }
 
@@ -234,5 +246,23 @@ impl Hub {
             // stays the last good one.
             Err(error) => tracing::warn!(%error, "state not saved"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AvatarUrls;
+
+    /// A row's address comes as written; its face is filed under the key
+    /// (`avatar::key`), so every spelling of the one address finds it.
+    #[test]
+    fn a_face_is_found_by_any_spelling_of_its_address() {
+        let urls = AvatarUrls {
+            by_email: [("äda@example.com".to_string(), "file:///a.png".to_string())].into(),
+        };
+        for spelling in ["äda@example.com", "ÄDA@Example.COM", " äda@example.com "] {
+            assert_eq!(urls.url_of(spelling), "file:///a.png", "{spelling:?}");
+        }
+        assert_eq!(urls.url_of("grace@example.com"), "");
     }
 }

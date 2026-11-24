@@ -133,9 +133,11 @@ impl LogParser {
                 self.cur_author = self.pool.intern(&name);
             }
             3 => {
-                // Folded by the one function that decides the key, so a
-                // picture filed from the settings and a log row agree.
-                let email = crate::avatar::key(&String::from_utf8_lossy(token));
+                // As written: who is the same person is `avatar::key`'s to
+                // say where a face is looked up or people are told apart,
+                // and the address is drawn as git hands it over (デザイン規約
+                // §リポジトリの文は原文で描く).
+                let email = String::from_utf8_lossy(token);
                 self.cur_author_email = self.pool.intern(&email);
             }
             4 => {

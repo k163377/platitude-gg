@@ -192,25 +192,31 @@ fn the_author_fields_are_the_mailmap_spellings() {
 }
 
 #[test]
-fn the_address_is_lowercased_and_interned() {
-    // The key a picture is filed under must not depend on case.
+fn the_address_is_kept_as_written_and_interned() {
+    // Who is the same person is `avatar::key`'s, where a face is looked up.
     let mut bytes = record_with_email(A, "", "Alice", "Alice@Example.COM", "1", "one");
-    bytes.extend(record_with_email(
-        B,
-        A,
-        "Alice",
-        "alice@example.com",
-        "2",
-        "two",
-    ));
+    for (oid, parent, time) in [(B, A, "2"), (C, B, "3")] {
+        bytes.extend(record_with_email(
+            oid,
+            parent,
+            "Alice",
+            "alice@example.com",
+            time,
+            "more",
+        ));
+    }
     let (commits, parser) = parse_all(&bytes, 3);
     assert_eq!(
         parser.pool().get(commits[0].author_email),
+        "Alice@Example.COM"
+    );
+    assert_eq!(
+        parser.pool().get(commits[1].author_email),
         "alice@example.com"
     );
     assert_eq!(
-        commits[0].author_email, commits[1].author_email,
-        "one address, one pool entry"
+        commits[1].author_email, commits[2].author_email,
+        "one spelling, one pool entry"
     );
 }
 

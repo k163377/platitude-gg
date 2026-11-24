@@ -56,7 +56,7 @@ mod periodic {
         repo.git(&["commit", "-m", "add mailmap"]);
 
         // `%ae` is raw even under a mailmap: git keeps the commit's spelling,
-        // and lowercasing is the parser's (unit-pinned).
+        // and folding it is the face's key's (`avatar::key`).
         let raw = repo.git(&["log", "--format=%ae", "-1", "HEAD^"]);
         assert_eq!(raw, "OTHER@Example.COM", "git keeps the spelling");
 
@@ -77,7 +77,7 @@ mod periodic {
             emails.iter().all(|e| *e == "test@example.com"),
             "and under the one address: {emails:?}"
         );
-        // One pool entry: the key an avatar is filed under.
+        // One pool entry: the mailmap's one spelling.
         assert_eq!(commits[0].author_email, commits[1].author_email);
     }
 }

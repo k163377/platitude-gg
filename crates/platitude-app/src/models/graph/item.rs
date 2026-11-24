@@ -17,8 +17,9 @@ use super::*;
 pub struct GraphRowItem {
     pub(super) oid_hex: String,
     pub(super) author: String,
-    /// The address the picture is filed under (mailmapped and folded by
-    /// the log parser), kept so re-reading the assignments needs no git.
+    /// The address as git hands it over (mailmapped), kept so re-reading
+    /// the assignments needs no git; a face is looked up by its key
+    /// (`AvatarUrls::url_of`).
     pub(super) author_email: String,
     pub(super) author_time: i64,
     pub(super) subject: String,
@@ -303,10 +304,75 @@ impl Record for ChosenRow {
     }
 }
 
+/// The authors of `rows` as the settings card lists them — `Name <address>`
+/// (`trailers::spell_identity`) as the newest of their rows writes it, one per
+/// person (`avatar::key`, the key a face is filed under, so picking either of
+/// a person's spellings files the same face), sorted; a prefill goes first as
+/// written, and its person is not repeated (デザイン規約
+/// §リポジトリの文は原文で描く).
+pub(super) fn author_choices(
+    rows: &[GraphRowItem],
+    prefill_name: &str,
+    prefill_email: &str,
+) -> Vec<String> {
+    use platitude_core::avatar::key;
+    use platitude_core::trailers::spell_identity;
+    let mut people = std::collections::HashSet::from([key(prefill_email)]);
+    // A person's key is worked out once per spelling, not once per row.
+    let mut spellings = std::collections::HashSet::new();
+    let mut listed: Vec<String> = Vec::new();
+    for row in rows {
+        let email = row.author_email.as_str();
+        if email.is_empty() || !spellings.insert(email) || !people.insert(key(email)) {
+            continue;
+        }
+        listed.push(spell_identity(&row.author, email));
+    }
+    listed.sort();
+    let mut out: Vec<String> = Vec::new();
+    if !prefill_email.is_empty() {
+        out.push(spell_identity(prefill_name, prefill_email));
+    }
+    out.extend(listed);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use qtbridge::QVariantConvertible;
+
+    /// A person is listed once, under the newest spelling of their rows,
+    /// and the one a prefill brings stands for them as it is written.
+    #[test]
+    fn the_author_choices_list_a_person_once_as_written() {
+        let row = |author: &str, email: &str| GraphRowItem {
+            author: author.into(),
+            author_email: email.into(),
+            ..GraphRowItem::default()
+        };
+        let rows = [
+            row("Taro Yamada", "taro.yamada@example.com"),
+            row("Taro Yamada", "Taro.Yamada@Example.com"),
+            row("Ada", "Ada@Example.com"),
+            row("Ada", "ada@example.com"),
+            row("Nobody", ""),
+        ];
+        assert_eq!(
+            author_choices(&rows, "Taro Yamada", "Taro.Yamada@Example.com"),
+            [
+                "Taro Yamada <Taro.Yamada@Example.com>",
+                "Ada <Ada@Example.com>"
+            ]
+        );
+        assert_eq!(
+            author_choices(&rows, "", ""),
+            [
+                "Ada <Ada@Example.com>",
+                "Taro Yamada <taro.yamada@example.com>"
+            ]
+        );
+    }
 
     fn commit(oid_hex: &str) -> GraphRowItem {
         GraphRowItem {
