@@ -358,10 +358,11 @@ pub struct RepoTab {
     /// Derived from `remote_names` on arrival, for bindings.
     remote_count: i32,
     default_remote: String,
-    /// `remote.pushDefault` (empty where unset), and whether it is this
-    /// repository's own to clear. The key itself, for the sidebar's badge
-    /// and the dialog's box; `default_remote` is the resolved destination
-    /// (falls back to `origin`).
+    /// The remote `remote.pushDefault` names, empty where it is unset or
+    /// names no remote listed here (git would take such a name for a URL),
+    /// and whether the key is this repository's own to clear — for the
+    /// sidebar's badge and the dialog's box; `default_remote` is the
+    /// resolved destination (falls back to `origin`).
     push_default: String,
     push_default_local: bool,
     /// The remote both keys `Mark as origin` writes name
