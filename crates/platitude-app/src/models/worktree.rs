@@ -74,17 +74,14 @@ pub struct WorktreeModel {
     /// claims about the counts — only a status numbered at or above a
     /// write's answer has counted that write's tree.
     status_seq: i32,
-    /// The branch the last status read HEAD on, for `counts_settled`.
-    status_branch: String,
     /// Whether `upstream` / `ahead` / `behind` (and the push reading,
     /// `head_push`, both marks among it) are about the branch the record
-    /// names. Between a move of HEAD and the status behind it they are
-    /// blank and the push stands closed, naming no destination.
+    /// names — the last status (`status`) read HEAD on it. Between a move of
+    /// HEAD and the status behind it they are blank and the push stands
+    /// closed, naming no destination.
     counts_settled: bool,
-    /// What the last status said of its branch's standing, shown through
-    /// the ones below only while it is the branch HEAD is on (`settle`).
-    status_upstream: String,
-    status_upstream_counts: Option<platitude_core::AheadBehind>,
+    /// What the last status said of its branch's standing, shown only while
+    /// it is the branch HEAD is on (`settle`).
     upstream: String,
     /// Zero where the upstream has no ref to count against: a branch whose
     /// upstream has no remote-tracking ref yet compares against nothing
@@ -461,22 +458,10 @@ impl WorktreeModel {
 
     /// The push of the branch HEAD is on: the last status's reading of it,
     /// none — the branch's own mark among it — until that status is about
-    /// this branch (`counts_settled`).
+    /// this branch (`HeadPush::of`).
     fn head_push_now(&self) -> platitude_core::remote::HeadPush {
-        use platitude_core::remote::{HeadBranch, HeadPush};
-        if self.detached || self.branch.is_empty() {
-            return HeadPush::Detached;
-        }
-        if !self.counts_settled {
-            return HeadPush::Moving(self.branch.clone());
-        }
-        HeadPush::Read(HeadBranch {
-            name: self.branch.clone(),
-            unborn: self.unborn,
-            upstream: Some(self.upstream.clone()).filter(|upstream| !upstream.is_empty()),
-            upstream_counts: self.status_upstream_counts,
-            status: self.status_push.clone(),
-        })
+        let head = if self.detached { "" } else { self.branch.as_str() };
+        platitude_core::remote::HeadPush::of(head, self.unborn, &self.status, &self.status_push)
     }
 
     /// That, and what the menus' rows draw beside it.
@@ -515,10 +500,7 @@ impl WorktreeModel {
         self.head_reached_elsewhere = false;
         self.head_reach_known = false;
         self.status_seq = 0;
-        self.status_branch = String::new();
         self.counts_settled = false;
-        self.status_upstream = String::new();
-        self.status_upstream_counts = None;
         self.upstream = String::new();
         self.ahead = 0;
         self.behind = 0;
@@ -643,9 +625,6 @@ impl WorktreeModel {
         // this one (`StateMsg::Head`). Kept: which report and branch the
         // counts were read with (`settle`).
         self.status_seq = i32::try_from(head_seq).unwrap_or(i32::MAX);
-        self.status_branch = status.branch_head.clone().unwrap_or_default();
-        self.status_upstream = status.upstream.clone().unwrap_or_default();
-        self.status_upstream_counts = status.upstream_counts;
         self.status_push = push;
         self.wip_row_stands = platitude_core::graph::wip_row_stands(&status, &op_state);
         self.op_state = op_state;
@@ -778,12 +757,13 @@ impl WorktreeModel {
         if self.head_published_oid != self.head_oid {
             self.head_published = false;
         }
-        self.counts_settled = self.loaded && self.status_branch == self.branch;
+        self.counts_settled =
+            self.loaded && self.status.branch_head.as_deref().unwrap_or_default() == self.branch;
         if self.counts_settled {
-            self.upstream.clone_from(&self.status_upstream);
+            self.upstream = self.status.upstream.clone().unwrap_or_default();
             // The properties are Qt's own: zeroes for "nothing to count
             // against", and `int`s (`encode::shown_count`).
-            let upstream = self.status_upstream_counts;
+            let upstream = self.status.upstream_counts;
             self.ahead = crate::encode::shown_count(upstream.map_or(0, |counts| counts.ahead));
             self.behind = crate::encode::shown_count(upstream.map_or(0, |counts| counts.behind));
             self.pull_blocked = upstream.is_some_and(platitude_core::AheadBehind::is_diverged);

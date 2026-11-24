@@ -218,6 +218,33 @@ pub enum HeadPush {
 }
 
 impl HeadPush {
+    /// The push of `head`, the branch HEAD is on (empty where HEAD is on
+    /// none), as the last status `status` and the push reading taken with it
+    /// (`push`, `StatusLoaded::push`) say it — read only where that status is
+    /// about `head`, moving until it is. `unborn`: `head` has no commit yet.
+    /// What the app holds (`WorktreeModel.headPush`) and what a test reads
+    /// the toolbar off are both this.
+    pub fn of(
+        head: &str,
+        unborn: bool,
+        status: &crate::status::WorktreeStatus,
+        push: &StatusPush,
+    ) -> Self {
+        if head.is_empty() {
+            return Self::Detached;
+        }
+        if status.branch_head.as_deref() != Some(head) {
+            return Self::Moving(head.to_string());
+        }
+        Self::Read(HeadBranch {
+            name: head.to_string(),
+            unborn,
+            upstream: status.upstream.clone(),
+            upstream_counts: status.upstream_counts,
+            status: push.clone(),
+        })
+    }
+
     /// The branch HEAD is on as the last status read it; none where HEAD
     /// is on no branch, or the status is still another branch's.
     pub fn read(&self) -> Option<&HeadBranch> {
@@ -477,6 +504,35 @@ mod tests {
     use crate::remote::Marked;
 
     const REMOTES: [&str; 3] = ["origin", "my", "my/fork"];
+
+    /// HEAD's push is read off a status about HEAD's branch alone: the last
+    /// branch's status leaves it moving, and HEAD on no branch has none.
+    #[test]
+    fn heads_push_is_read_only_off_a_status_about_its_branch() {
+        let status = crate::status::WorktreeStatus {
+            branch_head: Some("main".into()),
+            upstream: Some("origin/main".into()),
+            upstream_counts: Some(crate::AheadBehind {
+                ahead: 1,
+                behind: 0,
+            }),
+            ..crate::status::WorktreeStatus::default()
+        };
+        let push = StatusPush::default();
+        assert_eq!(
+            HeadPush::of("main", false, &status, &push),
+            HeadPush::Read(HeadBranch {
+                name: "main".into(),
+                unborn: false,
+                upstream: Some("origin/main".into()),
+                upstream_counts: status.upstream_counts,
+                status: push.clone(),
+            })
+        );
+        let moved = HeadPush::of("topic", false, &status, &push);
+        assert!(!moved.settled() && moved.read().is_none(), "{moved:?}");
+        assert_eq!(HeadPush::of("", false, &status, &push), HeadPush::Detached);
+    }
 
     /// The route the branch's own mark and the repository's give, empty
     /// standing for a key that is not set.

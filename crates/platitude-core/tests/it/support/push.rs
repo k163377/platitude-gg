@@ -6,7 +6,7 @@
 //! doors answer, never a reading put together by hand.
 
 use platitude_core::offers::TreeStanding;
-use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, StatusPush};
+use platitude_core::remote::{HeadPush, PushFacts, StatusPush};
 use platitude_core::session::{RefsSnapshot, SessionEvent};
 use platitude_core::status::WorktreeStatus;
 
@@ -16,18 +16,15 @@ use super::session::CaptureSink;
 pub const FALLBACK: &str = "origin";
 
 /// The push of the branch HEAD is on as the app holds it after `status`
-/// (`WorktreeModel.headPush`): settled on the branch that status names.
+/// (`WorktreeModel.headPush`, `HeadPush::of`): HEAD on the branch that
+/// status names, unborn where it names no commit.
 pub fn head_of(status: &WorktreeStatus, push: &StatusPush) -> HeadPush {
-    match &status.branch_head {
-        None => HeadPush::Detached,
-        Some(name) => HeadPush::Read(HeadBranch {
-            name: name.clone(),
-            unborn: false,
-            upstream: status.upstream.clone(),
-            upstream_counts: status.upstream_counts,
-            status: push.clone(),
-        }),
-    }
+    HeadPush::of(
+        status.branch_head.as_deref().unwrap_or_default(),
+        status.branch_oid.is_none(),
+        status,
+        push,
+    )
 }
 
 /// The toolbar's answer, on an open tab, off one status and one refs
