@@ -15,12 +15,18 @@ fn step(oid: &str, action: &str) -> PlanStepItem {
     }
 }
 
+/// The tip the plan below was composed against.
+fn tip() -> platitude_core::Oid {
+    platitude_core::Oid::from_hex_str("a9771664a8219f845abfd8ce6f5d7af521247539")
+        .expect("an object name")
+}
+
 /// An open plan, newest first, asking to leave `b` out.
 fn standing() -> RebasePlanModel {
     let mut model = RebasePlanModel {
         active: true,
         onto_oid: "base".to_string(),
-        expect_head: "c".to_string(),
+        expect_head: Some(tip()),
         ..RebasePlanModel::default()
     };
     model.steps = vec![step("c", "pick"), step("b", "drop"), step("a", "pick")];
@@ -52,11 +58,24 @@ fn a_run_is_taken_as_the_plan_stood_at_the_press() {
         Some(Answer::Run {
             upstream: "base".to_string(),
             steps: pressed,
-            expect: "c".to_string(),
+            expect: tip(),
             root: false,
         })
     );
     assert!(!model.locked);
+}
+
+/// A plan with no tip to pin takes no run: one taken would be given to
+/// nothing, and the plan put away over a write never queued.
+#[test]
+fn a_plan_with_no_tip_to_pin_takes_no_run() {
+    let mut model = RebasePlanModel {
+        expect_head: None,
+        ..standing()
+    };
+    assert_eq!(model.accept(true), 0);
+    assert!(!model.locked, "the plan stays open to edits");
+    assert_ne!(model.accept(false), 0, "and can still be put away");
 }
 
 #[test]

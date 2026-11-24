@@ -82,10 +82,10 @@ pub struct RebasePlanModel {
     /// the plan's head (`RebasePlanPane`; the id is the fallback, and the
     /// base row's id column stands either way). Empty when none.
     pub(super) onto_ref: String,
-    /// The branch tip the plan was composed against (= the newest row).
-    /// The run pins it, and a tip that moves under the open plan closes
-    /// it (`note_head`).
-    pub(super) expect_head: String,
+    /// The branch tip the plan was composed against (= the newest row),
+    /// none while no plan with rows stands. The run pins it, and a tip
+    /// that moves under the open plan closes it (`note_head`).
+    pub(super) expect_head: Option<platitude_core::Oid>,
     /// The range the plan replays, as core spelled it — what
     /// `refreshPushed` asks the pushed count of again. Empty while no
     /// plan stands.

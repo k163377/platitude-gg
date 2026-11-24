@@ -17,7 +17,7 @@ impl RebasePlanModel {
     qproperty!("ontoAvatar", Member = onto_avatar, Notify = changed);
     qproperty!("ontoAvatarUrl", Member = onto_avatar_url, Notify = changed);
     qproperty!("ontoRef", Member = onto_ref, Notify = changed);
-    qproperty!("expectHead", Member = expect_head, Notify = changed);
+    qproperty!("expectHead", Read = expect_head_text, Notify = changed);
     qproperty!("pushedCount", Member = pushed_count, Notify = changed);
     qproperty!("dirty", Member = dirty, Notify = changed);
     qproperty!("locked", Member = locked, Notify = changed);
@@ -39,6 +39,10 @@ impl RebasePlanModel {
 
     #[qsignal]
     pub(super) fn changed(&mut self);
+
+    fn expect_head_text(&self) -> String {
+        crate::encode::oid_text(self.expect_head)
+    }
 
     /// The plan could not be opened, before anything was touched:
     /// `across-merge` (the range holds one), `off-branch` (the click was
@@ -283,12 +287,12 @@ impl RebasePlanModel {
         if self.locked || !self.active || !self.dirty {
             return;
         }
-        self.queue_run(
-            self.onto_oid.clone(),
-            self.todo_steps(),
-            self.expect_head.clone(),
-            self.root,
-        );
+        // A plan with no tip to pin runs nothing, and stays as it was.
+        let Some(expect) = self.expect_head else {
+            tracing::warn!("turned away: the plan has no tip to pin");
+            return;
+        };
+        self.queue_run(self.onto_oid.clone(), self.todo_steps(), expect, self.root);
         self.close();
         self.plan_ran();
     }
@@ -360,10 +364,11 @@ impl RebasePlanModel {
     /// after the open carrying the older oid. Reads are single-flight, so
     /// only one such stale report can land — a second disagreement is fresh.
     fn note_head(&mut self, oid_hex: &str) {
-        if !self.active || oid_hex.is_empty() {
+        let reported = crate::encode::oid_arg(oid_hex);
+        if !self.active || reported.is_none() {
             return;
         }
-        if oid_hex == self.expect_head {
+        if reported == self.expect_head {
             self.head_suspect = false;
             return;
         }

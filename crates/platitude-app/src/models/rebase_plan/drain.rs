@@ -63,8 +63,7 @@ impl RebasePlanModel {
                 self.expect_head = self
                     .steps
                     .first()
-                    .map(|s| s.oid_hex.clone())
-                    .unwrap_or_default();
+                    .and_then(|s| crate::encode::oid_arg(&s.oid_hex));
                 // The range the rebase replays, spelled once by core, and
                 // its published count from the same read — so the rewrite
                 // warning counts exactly what the run touches.

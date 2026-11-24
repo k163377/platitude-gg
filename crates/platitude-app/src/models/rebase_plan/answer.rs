@@ -20,7 +20,7 @@ pub(super) enum Answer {
     Run {
         upstream: String,
         steps: Vec<RebaseStep>,
-        expect: String,
+        expect: platitude_core::Oid,
         root: bool,
     },
     /// The draft put away.
@@ -32,16 +32,19 @@ impl RebasePlanModel {
     /// edit, no other answer and no other plan until it is given or the
     /// plan is put away. The ticket to give it with, or 0 where there is
     /// nothing to take — no plan, one being replaced, an answer already
-    /// standing, or a run of a plan that asks nothing.
+    /// standing, or a run of a plan that asks nothing or has no tip to pin.
     pub(super) fn accept(&mut self, run: bool) -> i32 {
-        if self.locked || !self.active || self.loading || (run && !self.dirty) {
+        if self.locked || !self.active || self.loading {
             return 0;
         }
         let answer = if run {
+            let (true, Some(expect)) = (self.dirty, self.expect_head) else {
+                return 0;
+            };
             Answer::Run {
                 upstream: self.onto_oid.clone(),
                 steps: self.todo_steps(),
-                expect: self.expect_head.clone(),
+                expect,
                 root: self.root,
             }
         } else {
@@ -79,20 +82,14 @@ impl RebasePlanModel {
     }
 
     /// Hands the todo to the session as one queued write pinned to the tip
-    /// it was composed against (`RepoSession::rebase_interactive`) — read
-    /// as an object name (`encode::pinned_oid`): a tip that names none
-    /// pins nothing, and nothing is queued.
+    /// it was composed against (`RepoSession::rebase_interactive`).
     pub(super) fn queue_run(
         &self,
         upstream: String,
         steps: Vec<RebaseStep>,
-        expect: String,
+        expect: platitude_core::Oid,
         root: bool,
     ) {
-        let Ok(Some(expect)) = crate::encode::pinned_oid(&expect) else {
-            tracing::warn!(expect, "turned away: the plan's tip names no object");
-            return;
-        };
         let options = platitude_core::integrate::RebaseOptions {
             root,
             ..Default::default()
