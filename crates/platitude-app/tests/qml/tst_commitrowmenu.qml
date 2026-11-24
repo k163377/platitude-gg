@@ -106,7 +106,7 @@ Item {
         onPullRequested: branch => root.asked = branch === "" ? "pull" : "pull " + branch
         onResetRequested: mode => root.asked = "reset " + mode
         onPushTagRequested: (remote, tag, expect) => root.asked = "push " + remote + " " + tag + " " + expect
-        onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
+        onDeleteRemoteTagRequested: (remote, tag, rowGoes, expect) =>
             root.asked = "delete-remote-tag " + remote + " " + tag + " " + expect
         onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
         onWorktreeHereRequested: oidHex => root.asked = "worktree-here " + oidHex

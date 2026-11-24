@@ -503,8 +503,8 @@ Item {
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, expect) => refRowMenu.repoTab.pushTag(remote, tag, expect)
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
-                refRowMenu.repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
+            onDeleteRemoteTagRequested: (remote, tag, rowGoes, expect) =>
+                refRowMenu.repoTab.deleteRemoteTag(remote, tag, rowGoes, expect)
             onDeleteTagEverywhereRequested: (remote, tag, expect) =>
                 refRowMenu.repoTab.deleteTagEverywhere(remote, tag, expect)
         }

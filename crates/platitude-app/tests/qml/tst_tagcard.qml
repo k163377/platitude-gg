@@ -33,8 +33,8 @@ Item {
         onTagHereRequested: oidHex => root.asked = "tag-here " + oidHex
         onPushTagRequested: (remote, tag, expect) => root.asked = "push " + remote + " " + tag + " " + expect
         onDeleteTagRequested: tag => root.asked = "delete " + tag
-        onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
-            root.asked = "delete-remote " + remote + " " + tag + " " + onlyThere + " " + expect
+        onDeleteRemoteTagRequested: (remote, tag, rowGoes, expect) =>
+            root.asked = "delete-remote " + remote + " " + tag + " " + rowGoes + " " + expect
         onDeleteTagEverywhereRequested: (remote, tag, expect) =>
             root.asked = "delete-both " + tag + " " + remote + " " + expect
     }
@@ -43,7 +43,7 @@ Item {
     /// carries: the deletes reach it, and a drift holds them back. `over` replaces any of the record's fields, or
     /// `tagAt`. `again`: why the menu stands again with the card up (`RefTagMenu.standOn`'s — `follow` / `wait`), none
     /// as it is raised.
-    function standOn(menu, drift, onlyThere, over, again) {
+    function standOn(menu, drift, rowGoes, over, again) {
         root.asked = ""
         const tag = {
             "pushRemote": "origin",
@@ -51,7 +51,7 @@ Item {
             "reach": "origin",
             "heldBack": drift !== "" ? "drift" : "",
             "carriers": "origin",
-            "rowGoes": onlyThere
+            "rowGoes": rowGoes
         }
         const facts = { "card": tag, "menu": menu, "tagAt": "abc123" }
         for (const key in (over || {})) {

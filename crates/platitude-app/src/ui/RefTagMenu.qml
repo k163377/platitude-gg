@@ -33,11 +33,11 @@ AppMenu {
     signal tagHereRequested(string oidHex)
     signal pushTagRequested(string remote, string tag, string expect)
     signal deleteTagRequested(string tag)
-    /// `onlyThere`: the name was only on the remote, so its sidebar row goes too instead of losing the badge — the
+    /// `rowGoes`: the name was only on the remote, so its sidebar row goes too instead of losing the badge — the
     /// write cannot tell from a remote and a name (デザイン規約 §消す操作は先に画面から消す). `expect` on both remote
     /// deletes is the commit this card showed the tag on, which the delete is leased to (`remote::delete_remote_tag`):
     /// the rows are offered only where the remote's copy stands there too.
-    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
+    signal deleteRemoteTagRequested(string remote, string tag, bool rowGoes, string expect)
     signal deleteTagEverywhereRequested(string remote, string tag, string expect)
 
     /// The automation's handles into these rows, passed on through `RefRowMenu`.
@@ -80,7 +80,7 @@ AppMenu {
         property string deleteRemoteTag: ""
         property string deleteTagEverywhere: ""
         /// Whether deleting from `reach` leaves the name nowhere (`deleteRemoteTagRequested`).
-        property bool tagOnlyThere: false
+        property bool rowGoes: false
         /// Why those rows stand greyed, in words (`Words.differsFrom` / `Words.severalRemotesHave`).
         readonly property string heldWhy: state.heldBack === "unnamed" ? Words.severalRemotesHave(state.tagCarriers)
                                         : state.heldBack === "drift" ? Words.differsFrom(state.reach) : ""
@@ -131,10 +131,10 @@ AppMenu {
             state.canDelete = false
             state.deleteRemoteTag = ""
             state.deleteTagEverywhere = ""
-            state.tagOnlyThere = false
+            state.rowGoes = false
             return
         }
-        state.tagOnlyThere = card.rowGoes
+        state.rowGoes = card.rowGoes
         // Which rows have a seat, and which of those grey, is core's answer (offers::ref_menu).
         const menu = facts.menu
         state.canPushTag = menu.pushTag
@@ -249,10 +249,10 @@ AppMenu {
         holdPresses: Metrics.holdPressesWarned
         // Warning: only a name goes, and the commit stays (デザイン規約 §タグを作る・送る).
         holdTone: Theme.warning
-        premise: [state.reach, state.refId, state.refOid, state.tagOnlyThere].join("\n")
+        premise: [state.reach, state.refId, state.refOid, state.rowGoes].join("\n")
         onHeld: {
             refRemoteTagDeleteItem.closeMenu()
-            tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.tagOnlyThere, state.refOid)
+            tagMenu.deleteRemoteTagRequested(state.reach, state.refId, state.rowGoes, state.refOid)
         }
     }
     // Two commands, so words and no chip (§git 用語のコード表記 の 1:1 規則).

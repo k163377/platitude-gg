@@ -1813,8 +1813,8 @@ FocusScope {
                 repoTab.deleteBranchEverywhere(branch, remoteRef, forced, expect)
             onPushTagRequested: (remote, tag, expect) => repoTab.pushTag(remote, tag, expect)
             onDeleteTagRequested: tag => repoTab.deleteTag(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
-                repoTab.deleteRemoteTag(remote, tag, onlyThere, expect)
+            onDeleteRemoteTagRequested: (remote, tag, rowGoes, expect) =>
+                repoTab.deleteRemoteTag(remote, tag, rowGoes, expect)
             onDeleteTagEverywhereRequested: (remote, tag, expect) => repoTab.deleteTagEverywhere(remote, tag, expect)
         }
     }

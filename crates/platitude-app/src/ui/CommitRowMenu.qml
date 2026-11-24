@@ -147,7 +147,7 @@ Item {
     signal deleteEverywhereRequested(string branch, string remoteRef, bool forced, string expect)
     signal pushTagRequested(string remote, string tag, string expect)
     signal deleteTagRequested(string tag)
-    signal deleteRemoteTagRequested(string remote, string tag, bool onlyThere, string expect)
+    signal deleteRemoteTagRequested(string remote, string tag, bool rowGoes, string expect)
     signal deleteTagEverywhereRequested(string remote, string tag, string expect)
     /// The WORKTREE card's three, passed straight up (`RefWorktreeMenu`): the box for a new branch in a worktree of
     /// its own, the row's own branch out in one, and `worktree remove`.
@@ -627,8 +627,8 @@ Item {
             onTagHereRequested: oidHex => rowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, expect) => rowMenu.pushTagRequested(remote, tag, expect)
             onDeleteTagRequested: tag => rowMenu.deleteTagRequested(tag)
-            onDeleteRemoteTagRequested: (remote, tag, onlyThere, expect) =>
-                rowMenu.deleteRemoteTagRequested(remote, tag, onlyThere, expect)
+            onDeleteRemoteTagRequested: (remote, tag, rowGoes, expect) =>
+                rowMenu.deleteRemoteTagRequested(remote, tag, rowGoes, expect)
             onDeleteTagEverywhereRequested: (remote, tag, expect) =>
                 rowMenu.deleteTagEverywhereRequested(remote, tag, expect)
         }
