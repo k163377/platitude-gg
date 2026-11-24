@@ -18,8 +18,6 @@ QtObject {
     required property GraphModel graphModel
     /// Where each remote's branches stand, and which a remote has by name.
     required property NavSectionModel remotesModel
-    /// A local branch's upstream, the name it has on the remote it tracks.
-    required property NavSectionModel branchesModel
     /// Which remotes carry a tag, and whether their reading agrees.
     required property NavSectionModel tagsModel
 
@@ -58,8 +56,9 @@ QtObject {
     /// has that name — a branch under the name it has there (`GitFacts.githubBranchName`: a local branch's upstream
     /// may be called otherwise), a tag where that remote's reading agrees. `kind` is `branch` / `remote` / `tag`, or
     /// anything else for no ref. Every link but a remote branch's leads with the window's own remote
-    /// (`RepoTab.defaultRemote`); a remote branch's with its own remote.
-    function ofRef(oidHex, kind, name) {
+    /// (`RepoTab.defaultRemote`); a remote branch's with its own remote. `card` is the record the menu's card stands on
+    /// (`RefMenuFacts.stand`), whose `remoteCounterpart` is the branch's upstream as that menu read it.
+    function ofRef(oidHex, kind, name, card) {
         const hubs = links.remotes()
         if (hubs.length === 0)
             return []
@@ -75,7 +74,7 @@ QtObject {
             }))
         }]
         if (kind === "branch" || kind === "remote") {
-            const upstream = kind === "branch" ? links.branchesModel.upstreamOf(name) : ""
+            const upstream = kind === "branch" ? card.remoteCounterpart : ""
             const holders = []
             for (let i = 0; i < hubs.length; i++) {
                 const there = GitFacts.githubBranchName(kind, name, upstream, hubs[i].remote, names)

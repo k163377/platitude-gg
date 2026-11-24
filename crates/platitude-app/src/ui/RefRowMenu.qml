@@ -209,10 +209,10 @@ Item {
         for (let i = 0; i < refRowMenu.levels.length; i++)
             refRowMenu.levels[i].releaseShape()
         refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree.reading
-        refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
+        const facts = refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
         // The same links the graph row's menu offers on the commit the ref points at and its name; only as the menu
         // opens, as there (`CommitRowMenu.standGithub`).
-        githubMenu.standOn(refRowMenu.githubLinks.ofRef(oidHex, kind, full))
+        githubMenu.standOn(refRowMenu.githubLinks.ofRef(oidHex, kind, full, facts.card))
         return refMenu.offer()
     }
 
@@ -282,7 +282,7 @@ Item {
 
     /// Reads everything the rows stand on off `tree` and stands them on it: `offerOn` without raising the menu.
     /// `again`: why the menu stands again (`standAgain`), which the BRANCH and TAG cards read
-    /// (`RefBranchMenu.standOn`); empty as it is raised.
+    /// (`RefBranchMenu.standOn`); empty as it is raised. Answers what it stood on (`RefMenuFacts.stand`).
     function standOn(kind, name, full, oidHex, worktreePath, aim, again) {
         refRowMenu.kind = kind
         refRowMenu.refName = name
@@ -316,6 +316,7 @@ Item {
         refRowMenu.rebasePublished =
             refRowMenu.integrateOffered && !refRowMenu.opStanding
             && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.tree.headOid)
+        return facts
     }
 
     // Closes itself (rules-refs/app-ui.md「メニューを閉じるのは自分」).

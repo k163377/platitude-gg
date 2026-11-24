@@ -134,7 +134,7 @@ QtObject {
             return
         }
         menuState.menu.standGithub(
-            menuState.githubLinks.ofRef(oidHex, menuState.menu.targetKind, menuState.menu.targetName))
+            menuState.githubLinks.ofRef(oidHex, menuState.menu.targetKind, menuState.menu.targetName, facts.card))
         menuState.menu.offerCommit(facts)
     }
 

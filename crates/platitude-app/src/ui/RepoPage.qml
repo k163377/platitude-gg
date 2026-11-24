@@ -1727,7 +1727,6 @@ FocusScope {
         repoTab: repoTab
         graphModel: graphModel
         remotesModel: remotesModel
-        branchesModel: branchesModel
         tagsModel: tagsModel
     }
 
