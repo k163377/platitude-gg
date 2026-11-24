@@ -40,11 +40,9 @@ AppMenuItem {
     // moved since, the row stops applying and greys where it stands (`RefBranchMenu.state.remoteMoved`).
     offered: deleteRow.branchRow
              || (deleteRow.heldRow && deleteRow.facts.canDelete && !deleteRow.facts.remoteMoved)
-    blockedReason: !deleteRow.branchRow || deleteRow.facts.canDelete ? ""
-                 : deleteRow.facts.onCurrentBranch ? deleteRow.card.deleteBlockedOnCurrent
-                 : deleteRow.card.blockedByWorktree
-    // Asked of the sentence this row shows, not of the state: a row blocked for another reason names no worktree.
-    reasonMarkWord: deleteRow.blockedReason === deleteRow.card.blockedByWorktree ? deleteRow.facts.holderLeaf : ""
+    blockedReason: deleteRow.branchRow ? deleteRow.card.deleteWhy(deleteRow.facts.deleteOut) : ""
+    // Asked of the reason this row shows: a row blocked for another reason names no worktree.
+    reasonMarkWord: deleteRow.branchRow && deleteRow.facts.deleteOut === "held" ? deleteRow.facts.holderLeaf : ""
     reasonMarkKind: deleteRow.facts.holderHome ? "home" : "tree"
     // The plain delete is a delete too: two presses, in the plain ink (デザイン規約 §回数押し). `--delete` loses nothing
     // — the second press only rules out a mistaken first —; something is lost only where git refuses, so only there,

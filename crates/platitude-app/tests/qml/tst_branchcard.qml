@@ -20,16 +20,26 @@ Item {
     /// What a press asked for, last one wins: the card and its rows run nothing themselves.
     property string asked: ""
 
-    /// The rows on offer, named in words — data, not a rule —, turned into the record `GitFacts.refMenu` answers by
-    /// `menuOf`.
-    readonly property var free: ["switch", "branch-here", "integrate", "delete", "delete-remote", "set-upstream",
-                                 "unset-upstream"]
-    /// The branch the worktree is on: no move, no delete, and the rows say so.
-    readonly property var current: ["branch-here", "integrate", "set-upstream", "unset-upstream", "current"]
-    /// One another worktree holds: `switch` stays and leads there without asking, the delete goes.
-    readonly property var held: ["switch", "branch-here", "integrate", "set-upstream", "unset-upstream"]
+    /// The part of core's answer (`GitFacts.refMenu` — `encode::RefMenu`) the BRANCH card reads, for a branch nothing
+    /// holds whose reading stands beside it, with `fields` over it — data, the answers `offers::tests::ref_menu` pins.
+    function menuOf(fields) {
+        return Object.assign({ "delete": true, "deleteRemote": true, "setUpstream": true, "unsetUpstream": true,
+                               "deleteOut": "", "deleteRemoteOut": "", "deleteBothOut": "", "upstreamWhere": "remote" },
+                             fields)
+    }
+    readonly property var free: root.menuOf({})
+    /// The branch the worktree is on: no delete here, and the rows say so — the local half's reason first.
+    readonly property var current: root.menuOf({ "delete": false, "deleteOut": "current", "deleteBothOut": "current" })
+    /// One another worktree holds: the delete goes, saying where it is out.
+    readonly property var held: root.menuOf({ "delete": false, "deleteOut": "held", "deleteBothOut": "held" })
     /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
-    readonly property var drifted: ["switch", "branch-here", "integrate", "delete", "set-upstream", "unset-upstream"]
+    readonly property var drifted: root.menuOf({ "deleteRemote": false, "deleteRemoteOut": "drifted",
+                                                 "deleteBothOut": "drifted" })
+    /// A branch with no reading: only what reaches nowhere.
+    readonly property var unread: root.menuOf({ "deleteRemote": false, "unsetUpstream": false })
+    /// A row with no branch table: nothing the card offers.
+    readonly property var none: root.menuOf({ "delete": false, "deleteRemote": false, "setUpstream": false,
+                                              "unsetUpstream": false })
 
     /// The level above the card, holding the rows the card lends it and the card itself, as `RefRowMenu` and
     /// `CommitRowMenu` hold them.
@@ -67,20 +77,14 @@ Item {
         }
     }
 
-    /// The record `GitFacts.refMenu` answers (`encode::RefMenu`) where `words` are on offer and the upstream stands
-    /// `upstreamWhere`: the part of it the BRANCH card reads.
-    function menuOf(words, upstreamWhere) {
-        return { "delete": words.includes("delete"), "deleteRemote": words.includes("delete-remote"),
-                 "setUpstream": words.includes("set-upstream"), "unsetUpstream": words.includes("unset-upstream"),
-                 "current": words.includes("current"), "upstreamWhere": upstreamWhere }
-    }
-    /// `merged` is what the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on
+    /// `offers` is core's answer (`menuOf`), with the upstream standing `upstreamWhere`. `merged` is what the drawn
+    /// rows already say (`yes` / `no`, empty when only git can answer). The row stands on
     /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
     /// (`NavSectionModel.branchPush`), none by default. `again`: why the menu stands again with the card up
     /// (`RefBranchMenu.standOn`'s — `follow` / `wait`), none as it is raised; the row on `oid` (`abc123` unless named).
     function standOn(fields, again, oid) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
-                      "heldByWorktree": "", "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
+                      "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                       "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
                       "remoteCounterpartOid": "def456", "open": true, "merged": "yes",
                       "offers": root.free, "push": undefined }
@@ -88,10 +92,10 @@ Item {
             all[key] = fields[key]
         root.asked = ""
         branchCard.standOn(all.kind, all.name, all.full, oid === undefined ? "abc123" : oid, {
-            "lead": { "path": all.heldByWorktree, "called": all.holderLeaf, "home": false },
+            "lead": { "called": all.holderLeaf, "home": false },
             "card": { "remoteCounterpart": all.remoteCounterpart, "remoteCounterpartOid": all.remoteCounterpartOid,
                       "upstream": all.upstream },
-            "menu": root.menuOf(all.offers, all.upstreamWhere),
+            "menu": Object.assign({}, all.offers, { "upstreamWhere": all.upstreamWhere }),
             "open": all.open,
             "merged": all.merged,
             "push": all.push
@@ -157,7 +161,7 @@ Item {
                 },
                 {
                     tag: "held by another worktree",
-                    fields: { offers: root.held, heldByWorktree: "C:/worktrees/topic", holderLeaf: "topic" },
+                    fields: { offers: root.held, holderLeaf: "topic" },
                     reason: "Checked out in another worktree — topic",
                     // The one reason naming something outside this repository, so the tip gets a word for the tree
                     // mark (デザイン規約 §ref の種別).
@@ -265,7 +269,7 @@ Item {
             root.standOn({ offers: root.current })
             verify(row.offered, "the branch the tree is on takes it like any other setting")
 
-            root.standOn({ remoteCounterpart: "", upstream: "", offers: ["switch", "delete", "set-upstream"] })
+            root.standOn({ remoteCounterpart: "", upstream: "", offers: root.unread })
             verify(!row.offered, "nothing to take off")
         }
 
@@ -297,7 +301,7 @@ Item {
             branchCard.upstreamItem.triggered()
             compare(root.asked, "upstream feature/topic-a  true", "opens at the default, and the gone one can go")
 
-            root.standOn({ remoteCounterpart: "", upstream: "", offers: ["switch", "delete", "set-upstream"] })
+            root.standOn({ remoteCounterpart: "", upstream: "", offers: root.unread })
             branchCard.upstreamItem.triggered()
             compare(root.asked, "upstream feature/topic-a  false", "nothing for it to take off")
         }
@@ -306,7 +310,7 @@ Item {
         /// machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", offers: ["switch", "branch-here", "integrate", "delete"] })
+                           remoteCounterpart: "", offers: root.unread })
             verify(deleteRow.offered)
             compare(deleteRow.code, "push --delete")
             verify(deleteRow.holdPresses > 0)
@@ -352,7 +356,7 @@ Item {
                 { tag: "core gives it none", fields: { push: root.pushing("closed") } },
                 { tag: "a remote-tracking row sends nothing",
                   fields: { kind: "remote", name: "origin/main", full: "origin/main", remoteCounterpart: "",
-                            offers: ["delete"], push: root.pushing("ready") } },
+                            offers: root.unread, push: root.pushing("ready") } },
             ]
         }
 
@@ -429,7 +433,7 @@ Item {
         }
 
         function test_a_row_that_names_no_branch_has_no_card() {
-            root.standOn({ kind: "tag", name: "v1.0", full: "v1.0", offers: [] })
+            root.standOn({ kind: "tag", name: "v1.0", full: "v1.0", offers: root.none })
             verify(!branchCard.applies)
         }
 
@@ -591,7 +595,7 @@ Item {
         /// menu stays up (デザイン規約 §hover「外乱で閉じない」) and the row keeps that commit and greys.
         function test_a_remote_branch_that_moved_keeps_its_delete_leased_and_greys_it() {
             const remote = { kind: "remote", name: "origin/main", full: "origin/main",
-                             remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] }
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread }
             root.standOn(remote)
             level.holdShape()
             root.standOn(remote, "follow", "abc999")
@@ -645,7 +649,7 @@ Item {
         /// is asked again: the command may have merged the branch.
         function test_a_wait_that_ends_holds_the_leases_and_asks_git_again() {
             const remote = { kind: "remote", name: "origin/main", full: "origin/main",
-                             remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] }
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread }
             root.standOn(remote)
             level.holdShape()
             root.standOn(remote, "wait", "abc999")
@@ -679,7 +683,7 @@ Item {
             root.standOn({})
             branchCard.holdShape()
             root.standOn({ remoteCounterpart: "", remoteCounterpartOid: "", upstream: "", upstreamWhere: "",
-                           offers: ["switch", "delete", "set-upstream"] }, "follow")
+                           offers: root.unread }, "follow")
             const unset = branchCard.unsetUpstreamItem
             verify(unset.withdrawn, "greyed where it stands")
             compare(unset.sentence, "", "the sentence names nothing now")
@@ -763,7 +767,7 @@ Item {
 
             // A remote row's own delete goes to the reading it names, leased to the commit the row stands on.
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", remoteCounterpartOid: "", offers: ["delete"] })
+                           remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread })
             deleteRow.held()
             compare(root.asked, "delete-remote origin/main abc123")
         }

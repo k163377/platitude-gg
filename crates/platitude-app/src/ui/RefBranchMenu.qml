@@ -133,8 +133,12 @@ AppMenu {
         /// they no longer say what a press would take, and grey asking for the menu to be opened again (`standOn`'s
         /// `again`).
         property bool remoteMoved: false
-        property string heldByWorktree: ""
-        /// The name that worktree goes by, read at the entrance (`RefRowMenu.heldLeaf`).
+        /// Why each row of the delete table is greyed — the plain delete, the reading's, the pair's — as core words it
+        /// (`offers::DeleteOut`: `current` / `held` / `drifted` / `unread`); empty while live (`deleteWhy`).
+        property string deleteOut: ""
+        property string deleteRemoteOut: ""
+        property string deleteBothOut: ""
+        /// The name the worktree holding this branch goes by, read at the entrance (`RefRowMenu.heldLeaf`).
         property string holderLeaf: ""
         /// That worktree is the repository's own: its name wears the house (デザイン規約 §ref の種別).
         property bool holderHome: false
@@ -142,7 +146,6 @@ AppMenu {
         property bool canDeleteRemote: false
         property bool canSetUpstream: false
         property bool canUnsetUpstream: false
-        property bool onCurrentBranch: false
         /// The plain delete's merged check off the rows: whether answered, and whether the tip is reachable from the
         /// branch's reference point. Merged until answered, so a card still waiting on git wears the plain row.
         property bool deleteAnswered: false
@@ -202,14 +205,15 @@ AppMenu {
             state.remoteCounterpartOid = ""
             state.readingNow = ""
             state.remoteMoved = false
-            state.heldByWorktree = ""
+            state.deleteOut = ""
+            state.deleteRemoteOut = ""
+            state.deleteBothOut = ""
             state.holderLeaf = ""
             state.holderHome = false
             state.canDelete = false
             state.canDeleteRemote = false
             state.canSetUpstream = false
             state.canUnsetUpstream = false
-            state.onCurrentBranch = false
             state.deleteAnswered = false
             state.deleteMerged = true
             state.deleteAsked = false
@@ -221,7 +225,6 @@ AppMenu {
         const menu = facts.menu
         const card = facts.card
         const canDelete = menu.delete
-        const onCurrentBranch = menu.current
         // A remote branch's own delete is leased to the commit its row stood on (`BranchDeleteRow`); a local branch's
         // remote rows to its reading as it was, name and commit (`BranchRemoteDeleteRow` / `BranchBothDeleteRow`).
         const ownLease = sameRef && kind === "remote"
@@ -249,7 +252,9 @@ AppMenu {
         state.refName = name
         state.refId = full
         state.refOid = ownLease ? state.refOid : oidHex
-        state.heldByWorktree = facts.lead.path
+        state.deleteOut = menu.deleteOut
+        state.deleteRemoteOut = menu.deleteRemoteOut
+        state.deleteBothOut = menu.deleteBothOut
         state.holderLeaf = facts.lead.called
         state.holderHome = facts.lead.home
         state.upstream = card.upstream
@@ -262,7 +267,6 @@ AppMenu {
         state.canDeleteRemote = menu.deleteRemote
         state.canSetUpstream = menu.setUpstream
         state.canUnsetUpstream = menu.unsetUpstream
-        state.onCurrentBranch = onCurrentBranch
         state.pushMoved = pushMoved
         state.push = pushMoved ? state.push : push
         state.deleteMerged = drawn ? facts.merged === "yes" : keeps ? state.deleteMerged : true
@@ -298,11 +302,19 @@ AppMenu {
             branchCard.forceDeleteBranch = branchCard.refusedDelete
     }
 
-    /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効). Here because both
-    /// the local row and its pair say them.
+    /// Why the delete table's rows are out — worn as the rows' `blockedReason` (デザイン規約 §無効). Here because all
+    /// three rows say them.
     readonly property string deleteBlockedOnCurrent:
         qsTr("Switch away first — this is the branch you are on")
     readonly property string blockedByWorktree: Words.checkedOutElsewhere(state.holderLeaf)
+    /// The sentence a row of the table greys with for core's word `out` (`state.deleteOut` and its pair); empty for
+    /// none. A reading not read says what a drifted one does, as it did before the two were told apart.
+    function deleteWhy(out) {
+        return out === "current" ? branchCard.deleteBlockedOnCurrent
+             : out === "held" ? branchCard.blockedByWorktree
+             : out === "drifted" || out === "unread" ? Words.differsFrom(state.remoteCounterpart)
+             : ""
+    }
 
     titleKind: "branch"
     titleTint: Theme.accent

@@ -23,8 +23,7 @@ AppMenuItem {
     // applying and greys where it stands (`RefBranchMenu.state.remoteMoved`).
     offered: remoteDeleteRow.facts.kind === "branch" && remoteDeleteRow.facts.remoteCounterpart !== ""
              && !remoteDeleteRow.facts.remoteMoved
-    blockedReason: remoteDeleteRow.facts.canDeleteRemote ? ""
-                 : Words.differsFrom(remoteDeleteRow.facts.remoteCounterpart)
+    blockedReason: remoteDeleteRow.card.deleteWhy(remoteDeleteRow.facts.deleteRemoteOut)
     reasonMarks: Words.listMarks(remoteDeleteRow.blockedReason, remoteDeleteRow.facts.remoteCounterpart, "remote")
     holdPresses: Metrics.holdPressesWarned
     holdTone: Theme.warning

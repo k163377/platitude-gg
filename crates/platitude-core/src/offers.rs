@@ -230,9 +230,45 @@ pub struct RefMenuOffers {
     /// branch and one another worktree holds take it, and it needs no
     /// remote — an upstream may be a branch here.
     pub unset_upstream: bool,
-    /// The row is the branch HEAD is on — what the delete rows' refusal
-    /// names first.
-    pub on_current_branch: bool,
+    /// Why a local branch's everyday delete is greyed ([`DeleteOut::Current`]
+    /// / [`DeleteOut::Held`]); `None` where it is live, and on every other
+    /// row.
+    pub delete_out: Option<DeleteOut>,
+    /// Why the delete of a local branch's remote reading is greyed
+    /// ([`DeleteOut::Drifted`] / [`DeleteOut::Unread`]); `None` where it is
+    /// live or there is no reading, and on every other row.
+    pub delete_remote_out: Option<DeleteOut>,
+    /// Why the pair's delete is greyed: the local half's reason first, since
+    /// it runs first.
+    pub delete_both_out: Option<DeleteOut>,
+}
+
+/// Why a row of a local branch's delete table stands greyed (デザイン規約
+/// §左メニューの所作 の削除の表).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeleteOut {
+    /// The branch the tree is on: git deletes no branch HEAD names.
+    Current,
+    /// Another worktree has it out (`cannot delete branch … used by
+    /// worktree at …`).
+    Held,
+    /// The remote reading stands on another commit than the branch: the
+    /// delete over there would take commits this row does not show.
+    Drifted,
+    /// What is over there has not been read for this row.
+    Unread,
+}
+
+impl DeleteOut {
+    /// The word a menu's record carries it in (`encode::RefMenu`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Current => "current",
+            Self::Held => "held",
+            Self::Drifted => "drifted",
+            Self::Unread => "unread",
+        }
+    }
 }
 
 /// Where the upstream a local branch is configured with stands, which is
@@ -288,7 +324,6 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
     let tree = row.tree;
     let branchy = matches!(kind, RefKind::Branch | RefKind::Remote);
     let current = tree.is_current(name);
-    let on_current_branch = kind == RefKind::Branch && current;
     let (upstream, tag) = match far.on(kind) {
         FarSide::Unread => (None, None),
         FarSide::Branch(upstream) => (Some(upstream), None),
@@ -301,6 +336,21 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
     let tag_reaches = tag.as_ref().is_some_and(TagFar::has_remote);
     let tag_held = tag.is_some_and(|tag| tag.held_back != TagDeleteHeld::No);
+    // A local branch's delete table: the plain delete greys on the branch
+    // HEAD names and on one another worktree has out, the reading's on a
+    // reading apart from it or not read.
+    let delete_out = match kind {
+        RefKind::Branch if current => Some(DeleteOut::Current),
+        RefKind::Branch if row.leads == Leads::Holder => Some(DeleteOut::Held),
+        _ => None,
+    };
+    let delete_remote_out = match (kind, upstream) {
+        (RefKind::Branch, None) => Some(DeleteOut::Unread),
+        (RefKind::Branch, Some(upstream)) if upstream.reading == Reading::Drifted => {
+            Some(DeleteOut::Drifted)
+        }
+        _ => None,
+    };
     // A hold names the reading it holds back, so it keeps the seat it greys
     // — on a name here for the pair.
     let tag_seat = |reaches: bool, held: bool| {
@@ -337,7 +387,9 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
         ),
         set_upstream: upstream.is_some_and(|upstream| upstream.has_remote),
         unset_upstream: upstream.is_some_and(|upstream| upstream.tracked),
-        on_current_branch,
+        delete_out,
+        delete_remote_out,
+        delete_both_out: delete_out.or(delete_remote_out),
     }
 }
 

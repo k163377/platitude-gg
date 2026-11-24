@@ -30,16 +30,12 @@ AppMenuItem {
     // Its remote half is leased as the table's second row is, and stops applying with it (`remoteMoved`).
     offered: bothDeleteRow.facts.kind === "branch" && bothDeleteRow.facts.remoteCounterpart !== ""
              && !bothDeleteRow.facts.remoteMoved
-    // The local half's reasons first: it runs first.
-    blockedReason: bothDeleteRow.facts.canDelete && bothDeleteRow.facts.canDeleteRemote ? ""
-                 : bothDeleteRow.facts.onCurrentBranch ? bothDeleteRow.card.deleteBlockedOnCurrent
-                 : bothDeleteRow.facts.heldByWorktree !== "" ? bothDeleteRow.card.blockedByWorktree
-                 : Words.differsFrom(bothDeleteRow.facts.remoteCounterpart)
-    // As on the local row.
-    reasonMarkWord: bothDeleteRow.blockedReason === bothDeleteRow.card.blockedByWorktree
-                    ? bothDeleteRow.facts.holderLeaf : ""
+    // The local half's reasons first, since it runs first — core's order (`offers::RefMenuOffers::delete_both_out`).
+    blockedReason: bothDeleteRow.card.deleteWhy(bothDeleteRow.facts.deleteBothOut)
+    // As on the local row and the reading's.
+    reasonMarkWord: bothDeleteRow.facts.deleteBothOut === "held" ? bothDeleteRow.facts.holderLeaf : ""
     reasonMarkKind: bothDeleteRow.facts.holderHome ? "home" : "tree"
-    reasonMarks: bothDeleteRow.blockedReason === Words.differsFrom(bothDeleteRow.facts.remoteCounterpart)
+    reasonMarks: bothDeleteRow.facts.deleteBothOut === "drifted" || bothDeleteRow.facts.deleteBothOut === "unread"
                  ? Words.listMarks(bothDeleteRow.blockedReason, bothDeleteRow.facts.remoteCounterpart, "remote") : []
     holdPresses: Metrics.holdPressesWarned
     // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard

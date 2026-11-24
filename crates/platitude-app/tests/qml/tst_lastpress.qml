@@ -48,7 +48,7 @@ Item {
                       "upstream": "origin/" + name },
             // The part of `GitFacts.refMenu`'s answer the card reads (`encode::RefMenu`).
             "menu": { "delete": true, "deleteRemote": true, "setUpstream": true, "unsetUpstream": false,
-                      "current": false, "upstreamWhere": "remote" },
+                      "deleteOut": "", "deleteRemoteOut": "", "deleteBothOut": "", "upstreamWhere": "remote" },
             "open": true,
             "merged": ""
         })

@@ -25,7 +25,12 @@ pub struct RefMenu {
     pub delete_remote: bool,
     pub set_upstream: bool,
     pub unset_upstream: bool,
-    pub current: bool,
+    /// Why each row of a local branch's delete table is greyed — the plain
+    /// delete, the reading's, the pair's — (`DeleteOut::word`); empty while
+    /// live.
+    pub delete_out: String,
+    pub delete_remote_out: String,
+    pub delete_both_out: String,
     /// Where the branch's upstream stands — the colour its name wears.
     pub upstream_where: String,
     pub push_tag: bool,
@@ -61,7 +66,12 @@ impl RefMenu {
             delete_remote: offers.delete_remote,
             set_upstream: offers.set_upstream,
             unset_upstream: offers.unset_upstream,
-            current: offers.on_current_branch,
+            delete_out: offers.delete_out.map_or("", |out| out.word()).to_string(),
+            delete_remote_out: offers
+                .delete_remote_out
+                .map_or("", |out| out.word())
+                .to_string(),
+            delete_both_out: offers.delete_both_out.map_or("", |out| out.word()).to_string(),
             upstream_where: upstream.word().to_string(),
             push_tag: offers.push_tag,
             delete_remote_tag: offers.delete_remote_tag.word().to_string(),
@@ -90,7 +100,9 @@ impl Record for RefMenu {
             .put("deleteRemote", &self.delete_remote)
             .put("setUpstream", &self.set_upstream)
             .put("unsetUpstream", &self.unset_upstream)
-            .put("current", &self.current)
+            .put("deleteOut", &self.delete_out)
+            .put("deleteRemoteOut", &self.delete_remote_out)
+            .put("deleteBothOut", &self.delete_both_out)
             .put("upstreamWhere", &self.upstream_where)
             .put("pushTag", &self.push_tag)
             .put("deleteRemoteTag", &self.delete_remote_tag)
@@ -114,7 +126,9 @@ impl Record for RefMenu {
             delete_remote: field(map, "deleteRemote")?,
             set_upstream: field(map, "setUpstream")?,
             unset_upstream: field(map, "unsetUpstream")?,
-            current: field(map, "current")?,
+            delete_out: field(map, "deleteOut")?,
+            delete_remote_out: field(map, "deleteRemoteOut")?,
+            delete_both_out: field(map, "deleteBothOut")?,
             upstream_where: field(map, "upstreamWhere")?,
             push_tag: field(map, "pushTag")?,
             delete_remote_tag: field(map, "deleteRemoteTag")?,
@@ -239,7 +253,7 @@ impl Record for CommitMenu {
 mod tests {
     use super::*;
     use platitude_core::offers::{
-        PullOut, PullRuns, RemoveOut, Seat, WorktreeAddOut, WorktreeCheckout,
+        DeleteOut, PullOut, PullRuns, RemoveOut, Seat, WorktreeAddOut, WorktreeCheckout,
     };
 
     #[test]
@@ -247,6 +261,8 @@ mod tests {
         let menu = RefMenu::new(
             RefMenuOffers {
                 switch_to: true,
+                delete_remote_out: Some(DeleteOut::Drifted),
+                delete_both_out: Some(DeleteOut::Drifted),
                 delete_remote_tag: Seat::Greyed,
                 delete_tag_everywhere: Seat::Live,
                 ..RefMenuOffers::default()
@@ -278,6 +294,14 @@ mod tests {
         assert_eq!(
             (menu.remove_worktree, menu.remove_out.as_str()),
             (true, "locked")
+        );
+        assert_eq!(
+            (
+                menu.delete_out.as_str(),
+                menu.delete_remote_out.as_str(),
+                menu.delete_both_out.as_str()
+            ),
+            ("", "drifted", "drifted")
         );
         let none = RefMenu::new(
             RefMenuOffers::default(),

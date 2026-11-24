@@ -60,7 +60,9 @@ fn a_branch_someone_else_is_not_on_offers_everything() {
             delete_tag_everywhere: Seat::Gone,
             set_upstream: true,
             unset_upstream: true,
-            on_current_branch: false,
+            delete_out: None,
+            delete_remote_out: None,
+            delete_both_out: None,
         }
     );
 }
@@ -204,7 +206,7 @@ fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
     let offers = offers_on(RefKind::Branch, "main");
     assert!(!offers.switch_to, "the branch the tree is on is not a move");
     assert!(!offers.delete, "git refuses deleting the branch HEAD is on");
-    assert!(offers.on_current_branch);
+    assert_eq!(offers.delete_out, Some(DeleteOut::Current));
     assert!(!offers.integrate_from, "nothing of itself to bring in");
     assert!(offers.branch_here, "where a branch is most often started");
 }
@@ -227,6 +229,12 @@ fn a_branch_out_in_another_worktree_keeps_switch_and_asks_nothing() {
         "it leads somewhere instead of asking, and the row's words say where"
     );
     assert!(!offers.delete, "git refuses the delete too (measured)");
+    assert_eq!(offers.delete_out, Some(DeleteOut::Held));
+    assert_eq!(
+        offers.delete_both_out,
+        Some(DeleteOut::Held),
+        "the local half's reason, though nothing over there was read"
+    );
 }
 
 #[test]
@@ -284,6 +292,11 @@ fn a_remote_rows_delete_ignores_who_holds_the_local_branch() {
         !offers.switch_asks,
         "the move lands on the held branch, which is a road to that worktree and not a question"
     );
+    assert_eq!(
+        (offers.delete_out, offers.delete_both_out),
+        (None, None),
+        "a remote row has no delete table"
+    );
 }
 
 /// A drifted branch and its remote reading stand on two rows, and only the
@@ -294,6 +307,19 @@ fn a_drifted_reading_keeps_the_local_delete_and_loses_the_remote_one() {
     let drifted = reading(RefKind::Branch, "feat", upstream(Reading::Drifted));
     assert!(drifted.delete, "the branch itself is standing right here");
     assert!(!drifted.delete_remote);
+    assert_eq!(
+        (
+            drifted.delete_out,
+            drifted.delete_remote_out,
+            drifted.delete_both_out
+        ),
+        (None, Some(DeleteOut::Drifted), Some(DeleteOut::Drifted))
+    );
+    assert_eq!(
+        offers_on(RefKind::Branch, "feat").delete_remote_out,
+        Some(DeleteOut::Unread),
+        "a reading not read is told apart from one that drifted"
+    );
     assert!(
         drifted.set_upstream,
         "which reading it is measured against is what answers a drift"

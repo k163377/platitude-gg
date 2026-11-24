@@ -22,7 +22,8 @@ Item {
     function menuOf(fields) {
         const all = { "switch": false, "switchAsks": false, "branchHere": false, "integrate": false, "standing": false,
                       "delete": false, "deleteRemote": false, "setUpstream": false, "unsetUpstream": false,
-                      "current": false, "upstreamWhere": "", "pushTag": false, "deleteRemoteTag": "",
+                      "deleteOut": "", "deleteRemoteOut": "", "deleteBothOut": "", "upstreamWhere": "",
+                      "pushTag": false, "deleteRemoteTag": "",
                       "deleteTagEverywhere": "", "pullRuns": "", "pullOut": "",
                       "making": { "here": false, "checkout": "", "out": "" }, "removeWorktree": false,
                       "removeOut": "" }
