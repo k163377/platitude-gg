@@ -374,6 +374,11 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for One<T
 /// One record or nothing: the JS object, or `undefined` (an invalid
 /// `QVariant`). The reader tests it for truth and nothing else.
 ///
+/// Or one number or nothing (`Optional<i32>`): where something stands
+/// that may stand nowhere and is no Qt index — those keep Qt's -1
+/// (rules-refs app-ui). Its reader asks `=== undefined`, since 0 is a
+/// number and falsy (`RepoTab.commitAnswer()`).
+///
 /// **A role, or a slot's argument or answer — never a property**: a
 /// property read converts to its declared metatype
 /// (`handleMetaCallReadProperty`), and an invalid value ends the process
@@ -445,6 +450,38 @@ impl<T: Record> QMetaTypeCompatible for Optional<T> {
                 record = std::any::type_name::<T>(),
                 "a record handed back from QML did not read"
             );
+            Self::none()
+        })
+    }
+}
+
+impl QVariantConvertible for Optional<i32> {
+    fn to_qvariant(&self) -> QVariant {
+        self.value
+            .as_ref()
+            .map_or_else(QVariant::default, QVariantConvertible::to_qvariant)
+    }
+
+    /// An invalid value is "nothing", not a refusal.
+    fn try_from_qvariant(value: &QVariant) -> Option<Self> {
+        if !value.is_valid() {
+            return Some(Self::none());
+        }
+        i32::try_from_qvariant(value).map(Self::some)
+    }
+}
+
+impl QMetaTypeCompatible for Optional<i32> {
+    type CompatibleType = VariantWire;
+
+    fn to_compatible(&self) -> VariantWire {
+        VariantWire(QVariantConvertible::to_qvariant(self))
+    }
+
+    #[expect(unsafe_code, reason = "as for `Listed`")]
+    unsafe fn from_compatible(wire: &VariantWire) -> Self {
+        QVariantConvertible::try_from_qvariant(&wire.0).unwrap_or_else(|| {
+            tracing::warn!("a number handed back from QML did not read");
             Self::none()
         })
     }
@@ -618,6 +655,18 @@ mod tests {
         );
     }
 
+    /// Nought is a number standing somewhere, not the nothing beside it.
+    #[test]
+    fn an_optional_number_round_trips_with_nought_apart_from_none() {
+        for value in [Some(0), Some(7), Some(-3), None] {
+            let wired = Optional::new(value);
+            assert_eq!(wired.to_qvariant().is_valid(), value.is_some());
+            let back = Optional::<i32>::try_from_qvariant(&wired.to_qvariant()).map(|o| o.value);
+            assert_eq!(back, Some(value));
+            assert_eq!(*through_a_slot(&wired), value);
+        }
+    }
+
     #[test]
     fn a_missing_field_is_a_refusal_and_not_a_default() {
         let short = Fields::new().put("word", "x").done();
@@ -655,6 +704,7 @@ mod tests {
             assert!(Is::<Listed<Probe>>::PROPERTY);
             assert!(Is::<One<Probe>>::PROPERTY);
             assert!(!Is::<Optional<Probe>>::PROPERTY);
+            assert!(!Is::<Optional<i32>>::PROPERTY);
         }
     }
 

@@ -179,6 +179,11 @@ impl WireProbe {
     }
 
     #[qslot]
+    fn echo_number(&self, value: Optional<i32>) -> Optional<i32> {
+        value
+    }
+
+    #[qslot]
     fn echo_nest(&self, value: One<Nest>) -> One<Nest> {
         value
     }
@@ -351,6 +356,10 @@ QtObject {
         say("slot-optional-null-none", probe.echoOptional(null) === undefined, probe.echoOptional(null))
         say("slot-optional-missing-field-none", probe.echoOptional({ word: "short" }) === undefined,
             probe.echoOptional({ word: "short" }))
+        // Nought stands somewhere: a number or nothing is asked `=== undefined`, never for truth.
+        say("slot-number-nought", probe.echoNumber(0) === 0, probe.echoNumber(0))
+        say("slot-number-some", probe.echoNumber(7) === 7, probe.echoNumber(7))
+        say("slot-number-undefined", probe.echoNumber(undefined) === undefined, probe.echoNumber(undefined))
 
         const nest = probe.echoNest({ name: "outer", inner: pair, one: sample("in", 7, true) })
         say("slot-nested", nest.name === "outer" && nest.inner.length === 2
@@ -384,7 +393,7 @@ QtObject {
 "#;
 
 /// How many lines [`CHECKS`] says.
-const CHECKED: usize = 31;
+const CHECKED: usize = 34;
 
 /// One write of `VALUE` to `PROPERTY`, said before and after: what the
 /// write threw, if anything, and what the object holds once it is done.
