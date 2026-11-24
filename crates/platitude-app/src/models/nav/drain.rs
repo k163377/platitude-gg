@@ -80,7 +80,7 @@ impl NavSectionModel {
         {
             let current = crate::hub::from_session(self.tab_id, |s| s.workdir())
                 .flatten()
-                .map(|p| p.to_string_lossy().replace('\\', "/").to_lowercase())
+                .map(|p| platitude_core::session::same_path_key(&p.to_string_lossy()))
                 .unwrap_or_default();
             worktrees_arrived = true;
             // The same stamp, for the listing a removed worktree waits on.
@@ -267,7 +267,7 @@ impl NavSectionModel {
     ) -> bool {
         let home = list
             .iter()
-            .find(|w| w.main && w.path.replace('\\', "/").to_lowercase() != current)
+            .find(|w| w.main && platitude_core::session::same_path_key(&w.path) != current)
             .and_then(|w| {
                 w.branch
                     .clone()

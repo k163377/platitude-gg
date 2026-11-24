@@ -457,7 +457,7 @@ pub(super) enum Entry<'a> {
     Worktree {
         entry: &'a platitude_core::worktrees::WorktreeEntry,
         /// The worktree this window is showing, spelled the way
-        /// `path` is compared (forward slashes, lower case).
+        /// `path` is compared (`session::same_path_key`).
         current: &'a str,
     },
     File {

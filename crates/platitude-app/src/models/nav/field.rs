@@ -74,7 +74,7 @@ impl NavSectionModel {
                 Entry::Remote(_) => false,
                 // The worktree this window shows.
                 Entry::Worktree { entry, current } => {
-                    entry.path.replace('\\', "/").to_lowercase() == current
+                    platitude_core::session::same_path_key(&entry.path) == current
                 }
                 Entry::Tag(_) | Entry::Stash(_) | Entry::File { .. } => false,
             }),
