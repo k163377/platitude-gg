@@ -32,7 +32,7 @@ pub use moves::{
     skip_is_free, switch_action,
 };
 pub use pull::{PullOffer, PullOut, PullRuns, pull_row};
-pub use tree::TreeStanding;
+pub use tree::{TreeStanding, is_current_branch};
 
 /// The kind of ref a menu row stands on, in the words the chip records
 /// carry (`branch` / `remote` / `tag` / `stash`), and `worktree` for a

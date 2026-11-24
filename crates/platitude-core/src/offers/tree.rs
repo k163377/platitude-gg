@@ -47,10 +47,9 @@ impl TreeStanding {
         !self.op_text.is_empty()
     }
 
-    /// Whether `name` is the branch HEAD is on. While HEAD is on none, no
-    /// name is.
+    /// Whether `name` is the branch HEAD is on ([`is_current_branch`]).
     pub fn is_current(&self, name: &str) -> bool {
-        !self.branch.is_empty() && name == self.branch
+        is_current_branch(&self.branch, name)
     }
 
     /// Whether `oid_hex` is the commit HEAD is on. Before the first commit,
@@ -58,6 +57,13 @@ impl TreeStanding {
     pub fn is_head(&self, oid_hex: &str) -> bool {
         !self.head_oid.is_empty() && oid_hex == self.head_oid
     }
+}
+
+/// Whether `name` is `head`, the branch HEAD is on — empty while HEAD is on
+/// none, when no name is. The one rule for a reader that holds HEAD's
+/// branch alone (the sidebar's rows) and for [`TreeStanding::is_current`].
+pub fn is_current_branch(head: &str, name: &str) -> bool {
+    !head.is_empty() && name == head
 }
 
 /// The trees the cases bend one field of at a time.

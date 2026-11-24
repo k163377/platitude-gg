@@ -9,7 +9,7 @@ import platitude.ui.face
 // repository, and `Discard` only puts the draft away (デザイン規約 §履歴を合流させる).
 //
 // The page holds down what could move the history meanwhile; what it cannot hold (another session, a terminal) is
-// answered by the model dropping the plan when the tip moves (`RebasePlanModel.noteHead`) and by core re-pinning the
+// answered by the model dropping the plan when the tip moves (`RebasePlanModel.noteStanding`) and by core re-pinning the
 // tip at run time.
 //
 // Modeless: it takes the graph's seat only, and the details pane on the right stays live. **It takes the seat at the

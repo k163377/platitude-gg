@@ -69,7 +69,7 @@ impl NavSectionModel {
                 // By the record's `head_name`, not the snapshot's own
                 // marker (why: `head_name`).
                 Entry::Local(branch) => {
-                    !self.head_name.is_empty() && branch.short.as_str() == self.head_name
+                    platitude_core::offers::is_current_branch(&self.head_name, &branch.short)
                 }
                 Entry::Remote(_) => false,
                 // The worktree this window shows.

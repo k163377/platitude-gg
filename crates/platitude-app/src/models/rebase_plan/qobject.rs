@@ -337,6 +337,16 @@ impl RebasePlanModel {
         }
     }
 
+    /// Where the worktree stands as the status now reads it
+    /// (`WorktreeModel.standing`), handed on whole by the page on every
+    /// report while a plan stands: the operation standing first, then the
+    /// tip — either moving puts the plan away.
+    #[qslot]
+    fn note_standing(&mut self, tree: crate::encode::Standing) {
+        self.note_op(&tree.op_text);
+        self.note_head(&tree.head_oid);
+    }
+
     /// The branch tip as the status now reads it, fed in by the page on
     /// every report. A tip other than `expect_head` puts the plan away
     /// (core checks again at run time), told on the notice bar
@@ -346,8 +356,7 @@ impl RebasePlanModel {
     /// Two strikes: a status read that began before a tip move can land
     /// after the open carrying the older oid. Reads are single-flight, so
     /// only one such stale report can land — a second disagreement is fresh.
-    #[qslot]
-    fn note_head(&mut self, oid_hex: String) {
+    fn note_head(&mut self, oid_hex: &str) {
         if !self.active || oid_hex.is_empty() {
             return;
         }
@@ -364,7 +373,7 @@ impl RebasePlanModel {
     }
 
     /// The operation the status now reads as standing (`worktree.opText`,
-    /// empty = none); one under an open plan puts it away. `noteHead`
+    /// empty = none); one under an open plan puts it away. `note_head`
     /// alone misses it — a merge stopped on a conflict leaves HEAD where it
     /// was — and core refusing the run does not take the button away.
     ///
@@ -374,8 +383,7 @@ impl RebasePlanModel {
     /// Doubles core's own refusal (`RepoSession::rebase_interactive`) on
     /// purpose: the screen's part is to offer only a button that can be
     /// pressed, so the plan falls closed while an operation stands.
-    #[qslot]
-    fn note_op(&mut self, op_text: String) {
+    fn note_op(&mut self, op_text: &str) {
         if !self.active || op_text.is_empty() {
             return;
         }

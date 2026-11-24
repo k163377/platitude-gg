@@ -834,7 +834,7 @@ FocusScope {
     // ---- the interactive-rebase plan ---------------------------------
     // Composing runs nothing; the run is one queued write pinned to the tip the plan opened on. The page holds what
     // could move the history from inside this window (`planShown`); a terminal or another session is answered by the
-    // model putting the plan away when the tip moves (`noteHead` below).
+    // model putting the plan away when the tip moves (`noteStanding` below).
     /// A plan stands with its rows: **the one answer** for everything that needs a draft (the right pane's boxes, the
     /// run bar) — a second spelling would disagree while `planLoadHeld` holds the opening face.
     readonly property bool planActive: planModel.active && !page.planLoadHeld
@@ -937,9 +937,7 @@ FocusScope {
         function onChanged() {
             if (!page.planActive)
                 return
-            planModel.noteOp(worktree.opText)
-            if (page.planActive)
-                planModel.noteHead(worktree.headOid)
+            planModel.noteStanding(worktree.standing)
         }
     }
 
