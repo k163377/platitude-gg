@@ -27,7 +27,7 @@ impl GraphModel {
         let parsed: Vec<(Oid, String, String)> = tips
             .into_iter()
             .zip(looks.into_iter().chain(std::iter::repeat(String::new())))
-            .filter_map(|(hex, look)| Oid::from_hex_str(&hex).ok().map(|oid| (oid, hex, look)))
+            .filter_map(|(hex, look)| crate::encode::oid_arg(&hex).map(|oid| (oid, hex, look)))
             .collect();
         let Some((_, first, _)) = parsed.first() else {
             self.hide_provisional();
@@ -38,7 +38,7 @@ impl GraphModel {
             tips: parsed.iter().map(|(oid, _, _)| *oid).collect(),
             lost: lost
                 .iter()
-                .filter_map(|hex| Oid::from_hex_str(hex).ok())
+                .filter_map(|hex| crate::encode::oid_arg(hex))
                 .collect(),
             stashlike: parsed
                 .iter()
@@ -169,7 +169,7 @@ impl GraphModel {
 /// `<tip> <base> <commit>` read back: the copy `tip`, drawn on `commit`
 /// where its base was made.
 fn stands_of(line: &str) -> Option<(Oid, platitude_core::discards::Stands)> {
-    let mut ids = line.split(' ').map(|hex| Oid::from_hex_str(hex).ok());
+    let mut ids = line.split(' ').map(crate::encode::oid_arg);
     let (Some(Some(tip)), Some(Some(made)), Some(Some(on))) = (ids.next(), ids.next(), ids.next())
     else {
         return None;

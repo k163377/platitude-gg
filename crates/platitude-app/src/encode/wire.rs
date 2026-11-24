@@ -443,6 +443,26 @@ pub(crate) fn optional_text(text: String) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+/// An object name a `#[qslot]` is handed back: the hex a model spelled
+/// it in (`Oid::to_hex`), read once here. `Ok(None)` for an empty one — a
+/// row with no object, a lease left to git — and `Err` for text that names
+/// no object — a blank included, and anything git would read as a
+/// revision —, which the caller turns away rather than pass on.
+pub(crate) fn pinned_oid(
+    hex: &str,
+) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
+    if hex.is_empty() {
+        return Ok(None);
+    }
+    platitude_core::Oid::from_hex_str(hex).map(Some)
+}
+
+/// [`pinned_oid`] where an empty name and a malformed one alike are no
+/// object: the slot answers as for a row that has none.
+pub(crate) fn oid_arg(hex: &str) -> Option<platitude_core::Oid> {
+    pinned_oid(hex).ok().flatten()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,5 +676,23 @@ mod tests {
         assert_eq!(ListWire::get_qmetatype().name(), "QVariantList");
         assert_eq!(MapWire::get_qmetatype().name(), "QVariantMap");
         assert_eq!(VariantWire::get_qmetatype().name(), "QVariant");
+    }
+
+    /// An object name comes back as the model spelled it; empty is no
+    /// object, and a blank or a name git would read as a revision (a
+    /// branch, an abbreviation) is none either.
+    #[test]
+    fn an_object_name_is_read_whole_or_not_at_all() {
+        let hex = "0123456789abcdef0123456789abcdef01234567";
+        let oid = platitude_core::Oid::from_hex_str(hex).expect("an id");
+        assert_eq!(pinned_oid(hex), Ok(Some(oid)));
+        assert!(pinned_oid(&format!(" {hex}")).is_err());
+        assert!(pinned_oid(" ").is_err());
+        assert_eq!(pinned_oid(""), Ok(None));
+        assert!(pinned_oid("main").is_err());
+        assert!(pinned_oid(&hex[..12]).is_err());
+        assert_eq!(oid_arg(hex), Some(oid));
+        assert_eq!(oid_arg(""), None);
+        assert_eq!(oid_arg("main"), None);
     }
 }

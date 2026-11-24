@@ -45,7 +45,9 @@ pub use rows::{
 pub use select::{diff_key, hunk_selection, worktree_target};
 pub use text_end::{Ended, TextEnd};
 pub use tree::{Reading, Standing, TreeReading};
-pub(crate) use wire::{Fields, Listed, One, Optional, Record, field, optional_text};
+pub(crate) use wire::{
+    Fields, Listed, One, Optional, Record, field, oid_arg, optional_text, pinned_oid,
+};
 // `EndingWords` is not re-exported: no caller names it, and in this private
 // module a `pub use` nobody names is an unused import.
 pub use words::{ending_words, human_size, rename_source};

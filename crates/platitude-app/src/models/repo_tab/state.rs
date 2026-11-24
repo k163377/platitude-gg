@@ -476,10 +476,7 @@ impl RepoTab {
     pub(super) fn lease_pin(
         expect: &str,
     ) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
-        if expect.is_empty() {
-            return Ok(None);
-        }
-        platitude_core::Oid::from_hex_str(expect).map(Some)
+        crate::encode::pinned_oid(expect)
     }
 
     /// A write turned away before the session over a lease that names no
@@ -526,7 +523,9 @@ impl RepoTab {
             platitude_core::Oid,
         ) -> Option<platitude_core::OperationId>,
     ) -> Option<u64> {
-        self.ask_pinned(what, platitude_core::Oid::from_hex_str(expect), f)
+        let pin = crate::encode::pinned_oid(expect)
+            .and_then(|pin| pin.ok_or(platitude_core::oid::OidParseError));
+        self.ask_pinned(what, pin, f)
     }
 
     /// A remote row as a press on it is carried ([`TrackedBranch::listed`]),

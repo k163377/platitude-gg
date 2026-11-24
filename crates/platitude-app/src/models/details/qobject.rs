@@ -87,7 +87,7 @@ impl DetailsModel {
 
     #[qslot]
     fn request(&mut self, oid_hex: String) {
-        let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
+        let Some(oid) = crate::encode::oid_arg(&oid_hex) else {
             tracing::warn!(oid_hex, "invalid oid in details request");
             return;
         };
@@ -110,7 +110,7 @@ impl DetailsModel {
     fn request_selection(&mut self, ids: Vec<String>, compare: bool) {
         let mut oids = Vec::new();
         for hex in ids.iter().filter(|h| !h.is_empty()) {
-            let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
+            let Some(oid) = crate::encode::oid_arg(hex) else {
                 tracing::warn!(hex, "invalid oid in a selection request");
                 return;
             };

@@ -320,7 +320,7 @@ impl GitFacts {
     /// A commit's page in that repository; `""` for an id that is none.
     #[qslot]
     fn github_commit_link(&self, repo: String, oid: String) -> String {
-        platitude_core::Oid::from_hex_str(oid.trim())
+        crate::encode::oid_arg(&oid)
             .map(|oid| platitude_core::web_link::commit(&repo, &oid))
             .unwrap_or_default()
     }
@@ -340,11 +340,8 @@ impl GitFacts {
     /// ids.
     #[qslot]
     fn github_compare_link(&self, repo: String, from: String, to: String) -> String {
-        match (
-            platitude_core::Oid::from_hex_str(from.trim()),
-            platitude_core::Oid::from_hex_str(to.trim()),
-        ) {
-            (Ok(from), Ok(to)) => platitude_core::web_link::compare(&repo, &from, &to),
+        match (crate::encode::oid_arg(&from), crate::encode::oid_arg(&to)) {
+            (Some(from), Some(to)) => platitude_core::web_link::compare(&repo, &from, &to),
             _ => String::new(),
         }
     }
@@ -352,7 +349,7 @@ impl GitFacts {
     /// `path` as it stands in commit `oid`; `""` for an id that is none.
     #[qslot]
     fn github_file_link(&self, repo: String, oid: String, path: String) -> String {
-        platitude_core::Oid::from_hex_str(oid.trim())
+        crate::encode::oid_arg(&oid)
             .map(|oid| platitude_core::web_link::file(&repo, &oid, &path))
             .unwrap_or_default()
     }
@@ -368,10 +365,8 @@ impl GitFacts {
         first: i32,
         last: i32,
     ) -> String {
-        let (Ok(oid), Some(lines)) = (
-            platitude_core::Oid::from_hex_str(oid.trim()),
-            file_lines(first, last),
-        ) else {
+        let (Some(oid), Some(lines)) = (crate::encode::oid_arg(&oid), file_lines(first, last))
+        else {
             return String::new();
         };
         platitude_core::web_link::lines(&repo, &oid, &path, lines)
@@ -402,7 +397,7 @@ impl GitFacts {
         to: String,
     ) -> Optional<LinkAt> {
         use platitude_core::web_link::{DiffOf, side_at};
-        let id = |hex: &str| platitude_core::Oid::from_hex_str(hex.trim()).ok();
+        let id = crate::encode::oid_arg;
         let diff = if comparing {
             id(&from)
                 .zip(id(&to))

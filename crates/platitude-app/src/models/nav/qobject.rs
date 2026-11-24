@@ -603,7 +603,7 @@ impl NavSectionModel {
         if name.is_empty() || self.section != "tags" {
             return false;
         }
-        let Ok(commit) = platitude_core::Oid::from_hex_str(oid.trim()) else {
+        let Some(commit) = crate::encode::oid_arg(&oid) else {
             return false;
         };
         self.all.tag_apart_at(&name, commit, &against)
@@ -688,7 +688,7 @@ impl NavSectionModel {
         if name.is_empty() || self.section != "tags" {
             return String::new();
         }
-        let Ok(commit) = platitude_core::Oid::from_hex_str(oid.trim()) else {
+        let Some(commit) = crate::encode::oid_arg(&oid) else {
             return String::new();
         };
         self.all.tag_aim_at(&name, commit)

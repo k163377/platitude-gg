@@ -2,7 +2,6 @@ use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Instant;
 
-use platitude_core::Oid;
 use platitude_core::details::DiffTarget;
 use platitude_core::eol;
 use platitude_core::parse::diff::{DiffLineLocation, FilePatch};

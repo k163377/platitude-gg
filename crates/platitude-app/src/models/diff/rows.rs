@@ -574,6 +574,7 @@ pub(crate) fn wanted(msgs: Vec<DiffMsg>, key: &str) -> Vec<DiffMsg> {
 mod tests {
     use super::*;
     use crate::models::notify::runs_of;
+    use platitude_core::Oid;
     use platitude_core::parse::diff::parse_patch;
     use platitude_core::preview::PictureBlob;
 

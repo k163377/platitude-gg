@@ -146,7 +146,7 @@ impl RepoTab {
     /// The commit asked about is written down first, so an answer for a
     /// selection already left can be dropped (`signature_wanted`).
     pub(super) fn look_up_signature(&mut self, oid_hex: String) {
-        let Ok(oid) = platitude_core::oid::Oid::from_hex_str(oid_hex.trim()) else {
+        let Some(oid) = crate::encode::oid_arg(&oid_hex) else {
             tracing::warn!(oid_hex, "invalid oid in signature check");
             return;
         };

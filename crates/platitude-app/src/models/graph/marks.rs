@@ -182,7 +182,7 @@ impl GraphModel {
 
     /// The same for an id given as hex; `None` for a string that is no id.
     pub(super) fn row_of_hex(&self, oid_hex: &str) -> Option<usize> {
-        let oid = Oid::from_hex_str(oid_hex).ok()?;
+        let oid = crate::encode::oid_arg(oid_hex)?;
         self.row_at(&oid)
     }
 

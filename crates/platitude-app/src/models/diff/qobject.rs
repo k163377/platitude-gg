@@ -190,10 +190,10 @@ impl DiffModel {
         path: String,
         orig_path: String,
     ) {
-        let Ok(oid) = Oid::from_hex_str(oid_hex.trim()) else {
+        let Some(oid) = crate::encode::oid_arg(&oid_hex) else {
             return;
         };
-        let parent = Oid::from_hex_str(parent_hex.trim()).ok();
+        let parent = crate::encode::oid_arg(&parent_hex);
         let target = DiffTarget::Commit {
             oid,
             parent,
@@ -213,9 +213,9 @@ impl DiffModel {
         path: String,
         orig_path: String,
     ) {
-        let (Ok(from), Ok(to)) = (
-            Oid::from_hex_str(from_hex.trim()),
-            Oid::from_hex_str(to_hex.trim()),
+        let (Some(from), Some(to)) = (
+            crate::encode::oid_arg(&from_hex),
+            crate::encode::oid_arg(&to_hex),
         ) else {
             return;
         };
@@ -235,7 +235,7 @@ impl DiffModel {
     fn request_choice_file(&mut self, ids: Vec<String>, path: String, orig_path: String) {
         let mut oids = Vec::new();
         for hex in ids.iter().filter(|h| !h.is_empty()) {
-            let Ok(oid) = Oid::from_hex_str(hex.trim()) else {
+            let Some(oid) = crate::encode::oid_arg(hex) else {
                 return;
             };
             oids.push(oid);
