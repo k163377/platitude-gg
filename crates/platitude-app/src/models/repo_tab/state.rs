@@ -449,25 +449,13 @@ impl RepoTab {
     ) -> Result<platitude_core::remote::PushForce, platitude_core::oid::OidParseError> {
         use platitude_core::remote::PushForce;
         Ok(match force {
-            "lease" => match Self::lease_pin(expect)? {
+            "lease" => match crate::encode::pinned_oid(expect)? {
                 Some(expect) => PushForce::WithLease { expect },
                 None => PushForce::WithTrackingLease,
             },
             "force" => PushForce::Force,
             _ => PushForce::None,
         })
-    }
-
-    /// The object a lease is pinned to, off the hex QML hands back: none
-    /// for an empty one — the write then goes as it does unpinned — and
-    /// otherwise an object name in full, or the press is turned away
-    /// ([`Self::lease_turned_away`]). Never passed on as written: git reads
-    /// a lease's second half as a revision, so a ref's name there would pin
-    /// to wherever that ref stands as the push runs.
-    pub(super) fn lease_pin(
-        expect: &str,
-    ) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
-        crate::encode::pinned_oid(expect)
     }
 
     /// A write turned away before the session over a lease that names no
@@ -709,21 +697,6 @@ mod tests {
     use platitude_core::remote::PushForce;
 
     const SHA1: &str = "a9771664a8219f845abfd8ce6f5d7af521247539";
-
-    /// Only an object name in full pins a lease: what git would read as a
-    /// revision is turned away, never handed on.
-    #[test]
-    fn a_lease_is_pinned_to_an_object_name_in_full_or_to_nothing() {
-        let sha256 = "0".repeat(63) + "1";
-        assert_eq!(RepoTab::lease_pin(""), Ok(None), "no pin");
-        for name in [SHA1, sha256.as_str()] {
-            let pin = RepoTab::lease_pin(name).expect("an object name");
-            assert_eq!(pin.map(|oid| oid.to_hex()).as_deref(), Some(name));
-        }
-        for revision in ["HEAD", "origin/main", &SHA1[..39], "a977166", " "] {
-            assert!(RepoTab::lease_pin(revision).is_err(), "{revision:?}");
-        }
-    }
 
     /// A write turned away over its lease says so to the watch: an armed
     /// run is not left waiting for an answer nothing will bring.

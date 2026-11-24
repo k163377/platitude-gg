@@ -450,7 +450,9 @@ pub(crate) fn optional_text<S: AsRef<str>>(text: S) -> Option<S> {
 /// it in (`Oid::to_hex`), read once here. `Ok(None)` for an empty one — a
 /// row with no object, a lease left to git — and `Err` for text that names
 /// no object — a blank included, and anything git would read as a
-/// revision —, which the caller turns away rather than pass on.
+/// revision —, which the caller turns away rather than pass on: git reads
+/// a lease's second half as a revision, so a ref's name there would pin
+/// to wherever that ref stands as the push runs.
 pub(crate) fn pinned_oid(
     hex: &str,
 ) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
@@ -704,8 +706,12 @@ mod tests {
         assert!(pinned_oid(&format!(" {hex}")).is_err());
         assert!(pinned_oid(" ").is_err());
         assert_eq!(pinned_oid(""), Ok(None));
-        assert!(pinned_oid("main").is_err());
-        assert!(pinned_oid(&hex[..12]).is_err());
+        let sha256 = "0".repeat(63) + "1";
+        let pin = pinned_oid(&sha256).expect("an object name");
+        assert_eq!(pin.map(|oid| oid.to_hex()), Some(sha256));
+        for revision in ["main", "HEAD", "origin/main", &hex[..39], &hex[..12]] {
+            assert!(pinned_oid(revision).is_err(), "{revision:?}");
+        }
         assert_eq!(oid_arg(hex), Some(oid));
         assert_eq!(oid_arg(""), None);
         assert_eq!(oid_arg("main"), None);

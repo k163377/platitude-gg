@@ -94,18 +94,22 @@ impl RepoTab {
     /// fast-forward only (`remote::publish_spec`).
     pub(super) fn branch_publish(&mut self, branch: String, target: RemoteBranch, expect: String) {
         let published = branch.clone();
-        let asked = self.ask_pinned("publish", Self::lease_pin(&expect), |s, expect| {
-            s.publish(published, target, expect)
-        });
+        let asked = self.ask_pinned(
+            "publish",
+            crate::encode::pinned_oid(&expect),
+            |s, expect| s.publish(published, target, expect),
+        );
         self.push_out.asked(asked, branch);
     }
 
     /// One tag sent to one remote; an empty `expect` sends it plain
     /// (`remote::push_tag`).
     pub(super) fn tag_push(&mut self, target: RemoteTag, expect: String) {
-        self.ask_pinned("push tag", Self::lease_pin(&expect), |s, expect| {
-            s.push_tag(target, expect)
-        });
+        self.ask_pinned(
+            "push tag",
+            crate::encode::pinned_oid(&expect),
+            |s, expect| s.push_tag(target, expect),
+        );
     }
 
     /// Points `branch` at the remote branch and sends it there; the answer
