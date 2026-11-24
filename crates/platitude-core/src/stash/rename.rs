@@ -4,6 +4,7 @@
 //! the work stays, only the old label goes.
 
 use super::*;
+use crate::oid::Oid;
 
 /// Renames a stash entry: the label the list shows. git has none, so the
 /// entry's commit is rewritten with the new message and nothing else
@@ -30,7 +31,7 @@ pub async fn rename(
     executor: &GitExecutor,
     workdir: &Path,
     selector: &str,
-    oid: &str,
+    oid: Oid,
     message: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
@@ -42,9 +43,9 @@ pub async fn rename(
             let Some(moved) = super::load(executor, workdir, cancel)
                 .await?
                 .into_iter()
-                .find(|listed| listed.oid.to_hex() == oid)
+                .find(|listed| listed.oid == oid)
             else {
-                return Err(crate::report::stash_gone(oid));
+                return Err(crate::report::stash_gone(&oid.to_hex()));
             };
             let entry = read_entry(executor, workdir, &moved.name, cancel)
                 .await
@@ -100,7 +101,7 @@ pub async fn rename(
         .answers_by_code(1)
         .args(["rev-parse", "--verify", "--quiet", &shifted]);
     let found = executor.run_unchecked(at, cancel).await?;
-    if found.stdout_utf8().trim() != entry.oid {
+    if Oid::from_hex_str(found.stdout_utf8().trim()).ok() != Some(entry.oid) {
         // Half done: the list moved, so which entry to drop cannot be
         // worked out (デザイン規約 §答えの要らない報せ / §状態).
         return Err(crate::report::half_renamed_list_moved(selector));
@@ -118,7 +119,7 @@ fn shift_selector(selector: &str) -> Option<String> {
 }
 
 struct StashCommit {
-    oid: String,
+    oid: Oid,
     tree: String,
     parents: Vec<String>,
     author_name: String,
@@ -147,13 +148,14 @@ async fn read_entry(
     let out = executor.run(cmd, cancel).await?;
     let text = out.stdout_utf8();
     let fields: Vec<&str> = text.trim_end_matches('\n').split('\0').collect();
+    let unread = || GitError::Rejected {
+        message: format!("could not read {selector}"),
+    };
     let [oid, tree, parents, an, ae, ad, cn, ce, cd] = fields.as_slice() else {
-        return Err(GitError::Rejected {
-            message: format!("could not read {selector}"),
-        });
+        return Err(unread());
     };
     Ok(StashCommit {
-        oid: (*oid).to_string(),
+        oid: Oid::from_hex_str(oid).map_err(|_| unread())?,
         tree: (*tree).to_string(),
         parents: parents.split_whitespace().map(str::to_string).collect(),
         author_name: (*an).to_string(),

@@ -24,15 +24,7 @@ impl RepoSession {
             OperationKind::Stash,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                stash::rename(
-                    &exec,
-                    &repo.workdir,
-                    &selector,
-                    &oid.to_hex(),
-                    &message,
-                    &cancel,
-                )
-                .await
+                stash::rename(&exec, &repo.workdir, &selector, oid, &message, &cancel).await
             },
         )
     }

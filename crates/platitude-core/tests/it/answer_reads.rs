@@ -125,9 +125,16 @@ async fn renaming_a_stash_probes_by_code() {
     let oid = repo.git(&["rev-parse", "stash@{0}"]);
     let (exec, log, cancel) = logged();
 
-    stash::rename(&exec, &repo.path, "stash@{0}", &oid, "after", &cancel)
-        .await
-        .expect("rename");
+    stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        crate::support::oid(&oid),
+        "after",
+        &cancel,
+    )
+    .await
+    .expect("rename");
 
     assert_answered(
         &log.ends_of(&["rev-parse", "--verify"]),

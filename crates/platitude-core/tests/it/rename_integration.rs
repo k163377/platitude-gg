@@ -3,8 +3,8 @@
 // Test scaffolding may panic; `allow-*-in-tests` only covers `#[test]` fns.
 #![allow(clippy::panic, clippy::expect_used, clippy::unwrap_used)]
 
-use crate::support::TestRepo;
 use crate::support::exec::env;
+use crate::support::{TestRepo, oid};
 use platitude_core::ReportKind;
 use platitude_core::{branch, stash, tag};
 
@@ -53,7 +53,7 @@ async fn renaming_a_stash_keeps_its_contents_and_says_so_everywhere() {
         &exec,
         &repo.path,
         "stash@{0}",
-        &oid,
+        crate::support::oid(&oid),
         "the login refactor",
         &cancel,
     )
@@ -93,9 +93,16 @@ async fn a_stash_pushed_since_the_selection_is_not_the_one_renamed() {
     repo.git(&["stash", "push", "-m", "pushed since"]);
     let (exec, cancel) = env();
 
-    stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect("the chosen entry is still there to rename");
+    stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect("the chosen entry is still there to rename");
 
     let list = repo.git(&["stash", "list", "--format=%gs"]);
     assert_eq!(
@@ -118,9 +125,16 @@ async fn a_stash_dropped_above_the_selection_is_renamed_where_it_stands_now() {
     repo.git(&["stash", "drop", "stash@{0}"]);
     let (exec, cancel) = env();
 
-    stash::rename(&exec, &repo.path, "stash@{1}", &chosen, "renamed", &cancel)
-        .await
-        .expect("the chosen entry is still there to rename");
+    stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{1}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect("the chosen entry is still there to rename");
 
     assert_eq!(repo.git(&["stash", "list", "--format=%gs"]), "renamed");
 }
@@ -139,9 +153,16 @@ async fn a_stash_gone_since_the_selection_is_turned_down() {
     repo.git(&["stash", "drop", "stash@{0}"]);
     let (exec, cancel) = env();
 
-    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect_err("there is nothing left to rename");
+    let err = stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect_err("there is nothing left to rename");
 
     assert_eq!(
         err.report().map(|report| report.kind),
@@ -167,9 +188,16 @@ async fn a_stash_another_git_holds_the_lock_of_is_reported_as_locked() {
     std::fs::write(&lock, "").expect("lock");
     let (exec, cancel) = env();
 
-    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect_err("git will not write a ref another process has locked");
+    let err = stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect_err("git will not write a ref another process has locked");
     std::fs::remove_file(&lock).expect("unlock");
     assert_eq!(
         err.report().map(|report| report.kind),
@@ -198,9 +226,16 @@ async fn a_stash_whose_old_entry_would_not_go_is_half_renamed() {
     );
     let (exec, cancel) = env();
 
-    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect_err("the old entry stays");
+    let err = stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect_err("the old entry stays");
     std::fs::remove_file(repo.path.join(".git/logs/refs/stash.lock")).expect("unlock");
     assert_eq!(
         err.report().map(|report| report.kind),
@@ -246,9 +281,16 @@ async fn a_reftable_stores_lock_is_reported_as_a_lock_where_git_names_it() {
     let tag = tag::rename(&exec, &repo.path, "v1.0", "v1.1", &cancel)
         .await
         .expect_err("the store is locked");
-    let stashed = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect_err("the store is locked");
+    let stashed = stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect_err("the store is locked");
     std::fs::remove_file(&lock).expect("unlock");
     assert!(
         !branch.to_string().contains("lock"),
@@ -278,9 +320,16 @@ async fn a_reftable_stash_whose_old_entry_would_not_go_is_half_renamed_by_git() 
     );
     let (exec, cancel) = env();
 
-    let err = stash::rename(&exec, &repo.path, "stash@{0}", &chosen, "renamed", &cancel)
-        .await
-        .expect_err("the old entry stays");
+    let err = stash::rename(
+        &exec,
+        &repo.path,
+        "stash@{0}",
+        oid(&chosen),
+        "renamed",
+        &cancel,
+    )
+    .await
+    .expect_err("the old entry stays");
     std::fs::remove_file(repo.path.join(".git/reftable/tables.list.lock")).expect("unlock");
     assert!(
         !err.to_string().contains("lock"),
