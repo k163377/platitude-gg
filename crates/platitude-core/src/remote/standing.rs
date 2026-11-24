@@ -405,9 +405,9 @@ impl PushFacts {
 struct PushReading<'a> {
     standing: PushStanding,
     /// The remote branch the counts are against: none where the push stays
-    /// here; where a mark sends it elsewhere, its tracking ref there; else
-    /// the upstream, when it is a remote's and fetched. What an overwrite
-    /// leases to.
+    /// here or asks where it goes (a gone upstream); where a mark sends it
+    /// elsewhere, its tracking ref there; else the upstream, when it is a
+    /// remote's and fetched. What an overwrite leases to.
     measured: Option<&'a str>,
     /// [`PushFacts::counts`].
     counts: crate::AheadBehind,
@@ -427,7 +427,10 @@ fn push_reading<'a>(
     let push_track = push_track
         .filter(|track| matches!(route.marked(), Marked::Remote(remote) if remote == track.remote));
     let standing = push_standing(route, upstream_counts, push_track);
-    let elsewhere = route.goes_elsewhere();
+    // The one question both the reads and the standing ask: a gone
+    // upstream asks where the push goes, so the destination's ref and
+    // counts speak for nothing then, whatever a mark reaches.
+    let elsewhere = route.counts_elsewhere(upstream_counts.is_some());
     let measured = match route.upstream() {
         _ if standing == PushStanding::StaysHere => None,
         _ if elsewhere => push_track.map(|track| track.tracking.as_str()),
@@ -448,8 +451,8 @@ fn push_reading<'a>(
 
 /// The standing itself, for a branch with commits under its name: the
 /// table of counts, read against the upstream (`upstream_counts`), or
-/// against `push_track` where the push goes elsewhere
-/// ([`PushRoute::goes_elsewhere`]). `upstream_counts` is none where the
+/// against `push_track` where the destination's own counts speak
+/// ([`PushRoute::counts_elsewhere`]). `upstream_counts` is none where the
 /// upstream's ref is not there to count against — git's `[gone]`, which
 /// asks where the branch goes whichever kind the upstream was.
 fn push_standing(
@@ -464,7 +467,7 @@ fn push_standing(
     if route.stays_here() {
         return PushStanding::StaysHere;
     }
-    if route.goes_elsewhere() {
+    if route.counts_elsewhere(true) {
         return marked_standing(push_track);
     }
     counted(counts)
@@ -990,6 +993,19 @@ mod tests {
             read(route(Upstream::Here, "", ""), Some(counts(2, 0)), None),
             (PushStanding::StaysHere, None, counts(2, 0)),
             "a branch here is no remote branch, whatever is counted against it"
+        );
+        // A branch here that is gone, marked to a remote that tracks the
+        // branch: the push asks where it goes, so nothing it was not read
+        // against speaks — not the destination's ref, not its counts.
+        assert_eq!(
+            read(route(Upstream::Here, "my", ""), None, Some(&there)),
+            (PushStanding::Publish, None, counts(0, 0)),
+            "a gone upstream asks where the push goes, whatever a mark reaches"
+        );
+        assert_eq!(
+            read(route(upstream, "", "my"), None, Some(&there)),
+            (PushStanding::Publish, None, counts(0, 0)),
+            "a gone remote upstream alike"
         );
     }
 
