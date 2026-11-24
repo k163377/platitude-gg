@@ -1,0 +1,28 @@
+--- a/src/highlight.rs
++++ b/src/highlight.rs
+@@ -794,7 +794,9 @@
+ 
+     // First, sort scope boundaries by their byte offset in the document. At a
+     // given position, emit scope endings before scope beginnings. Finally, emit
+-    // scope boundaries from deeper layers first.
++    // scope endings from deeper layers first and scope beginnings from
++    // shallower layers first, so that of two captures that begin at one byte
++    // the outer one opens first.
+     fn sort_key(&mut self) -> Option<(usize, bool, isize)> {
+         let depth = -(self.depth as isize);
+         let next_start = self
+@@ -805,12 +807,12 @@
+         match (next_start, next_end) {
+             (Some(start), Some(end)) => {
+                 if start < end {
+-                    Some((start, true, depth))
++                    Some((start, true, -depth))
+                 } else {
+                     Some((end, false, depth))
+                 }
+             }
+-            (Some(i), None) => Some((i, true, depth)),
++            (Some(i), None) => Some((i, true, -depth)),
+             (None, Some(j)) => Some((j, false, depth)),
+             _ => None,
+         }

@@ -48,6 +48,13 @@ opt-level = 0
 [profile.shipped]
 inherits = "release"
 
+# tree-sitter-highlight 0.27.2 with one change to the order of the layers'
+# events, until a release nests a host capture outside an injected one that
+# starts at its byte: what changed, why, and when to go back are in
+# vendor/tree-sitter-highlight/PLATITUDE-MODIFIED.md.
+[patch.crates-io]
+tree-sitter-highlight = { path = "vendor/tree-sitter-highlight" }
+
 [workspace.lints.rust]
 unsafe_code = "warn"
 

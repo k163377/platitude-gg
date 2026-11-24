@@ -458,6 +458,23 @@ fn an_interpolated_name_reads_as_itself() {
     ]);
 }
 
+/// A host's capture and an injected language's that begin at one byte
+/// nest host outside: a heading that opens with inline code or a link
+/// keeps its colour past it
+/// (vendor/tree-sitter-highlight/PLATITUDE-MODIFIED.md).
+#[test]
+fn an_injected_capture_at_a_host_capture_s_first_byte_nests_inside_it() {
+    assert_colours(&[
+        ("markdown", "# `code` rest\n", "rest", KEYWORD),
+        (
+            "markdown",
+            "## [1.2.0](https://example.com) (2024)\n",
+            "2024",
+            KEYWORD,
+        ),
+    ]);
+}
+
 /// A pattern whose predicate tree-sitter-highlight does not evaluate
 /// claims nothing, rather than every node of its shape: objc's
 /// `#has-ancestor?` property would otherwise take every identifier.
