@@ -310,7 +310,10 @@ fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
             model.pull_blocked,
         )
     };
-    assert_eq!(read(None), (false, platitude_core::AheadBehind::default(), false));
+    assert_eq!(
+        read(None),
+        (false, platitude_core::AheadBehind::default(), false)
+    );
     let both = platitude_core::AheadBehind {
         ahead: 1,
         behind: 2,
@@ -331,7 +334,11 @@ fn commits_on_both_sides_of_the_upstream_block_the_pull() {
                 Some(platitude_core::AheadBehind { ahead, behind });
         }
         model.absorb(vec![head_on("feature", ROOT, 1), status]);
-        (model.upstream_counts.ahead, model.upstream_counts.behind, model.pull_blocked)
+        (
+            model.upstream_counts.ahead,
+            model.upstream_counts.behind,
+            model.pull_blocked,
+        )
     };
     assert_eq!(read(2, 1), (2, 1, true));
     assert_eq!(read(2, 0), (2, 0, false));
