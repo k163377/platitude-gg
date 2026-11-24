@@ -57,6 +57,26 @@ impl DetailsModel {
                 "details request round trip"
             );
         }
+        self.take_header(hex, &details);
+        self.loading = false;
+        self.take_files(&details.files);
+        self.changed();
+        if let Some(t0) = asked {
+            tracing::info!(
+                elapsed_ms = t0.elapsed().as_millis() as u64,
+                "details rows applied"
+            );
+        }
+    }
+
+    /// What the card says of the commit `hex` above its files: who wrote
+    /// and committed it, when, and its message cut as the editor's two
+    /// fields are.
+    pub(super) fn take_header(
+        &mut self,
+        hex: String,
+        details: &platitude_core::details::CommitDetails,
+    ) {
         self.sha_hex = hex;
         self.sha8 = details.oid.short_hex(8);
         self.parent_hexes = details.parents.iter().map(Oid::to_hex).collect();
@@ -84,14 +104,5 @@ impl DetailsModel {
         let (subject, body) = platitude_core::commit::split_message(&details.message);
         self.message_subject = subject;
         self.message_body = body;
-        self.loading = false;
-        self.take_files(&details.files);
-        self.changed();
-        if let Some(t0) = asked {
-            tracing::info!(
-                elapsed_ms = t0.elapsed().as_millis() as u64,
-                "details rows applied"
-            );
-        }
     }
 }
