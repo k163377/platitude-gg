@@ -1471,8 +1471,7 @@ FocusScope {
     /// dropped stash has no chip: it is a graph row, not a name on one, which the session lays out again without
     /// (`session::leaving`).
     function syncGone() {
-        graphModel.setGone(page.goneBranch, page.goneRemote, page.goneTag, page.goneWorktreeChip,
-                           page.goneWorktreeBranch)
+        graphModel.setGone(repoTab.goneRows)
     }
     onGoneBranchChanged: {
         branchesModel.setHidden(page.goneBranch)

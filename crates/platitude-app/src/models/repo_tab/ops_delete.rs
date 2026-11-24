@@ -42,7 +42,7 @@ impl RepoTab {
     }
 
     /// Copies the card's picture out of its owner, as [`Self::stand_in`]
-    /// does for `gone_*`. Says whether any of it moved.
+    /// does for `gone`. Says whether any of it moved.
     pub(super) fn read_branch_delete_out(&mut self) -> bool {
         let landed = self.branch_delete_out.landed().to_string();
         let refused = self.branch_delete_out.refused().to_string();
@@ -199,28 +199,15 @@ impl RepoTab {
         }
     }
 
-    /// Moves this tab's stand-in on and copies its picture into the
-    /// `gone_*`, saying whether they moved. The copy keeps bindings out of
-    /// the hub's borrow (rules/app-ui.md §Qt Bridges・QML の不変条件).
+    /// Moves this tab's stand-in on and copies its picture into `gone`,
+    /// saying whether it moved. The copy keeps bindings out of the hub's
+    /// borrow (rules/app-ui.md §Qt Bridges・QML の不変条件).
     fn stand_in(&mut self, f: impl FnOnce(&mut StandIn)) -> bool {
         let rows = crate::hub::stand_in(self.tab_id, f);
-        if rows.branch == self.gone_branch
-            && rows.remote == self.gone_remote
-            && rows.tag == self.gone_tag
-            && rows.stash == self.gone_stash
-            && rows.worktree == self.gone_worktree
-            && rows.worktree_chip == self.gone_worktree_chip
-            && rows.worktree_branch == self.gone_worktree_branch
-        {
+        if rows == self.gone {
             return false;
         }
-        self.gone_branch = rows.branch;
-        self.gone_remote = rows.remote;
-        self.gone_tag = rows.tag;
-        self.gone_stash = rows.stash;
-        self.gone_worktree = rows.worktree;
-        self.gone_worktree_chip = rows.worktree_chip;
-        self.gone_worktree_branch = rows.worktree_branch;
+        self.gone = rows;
         true
     }
 }

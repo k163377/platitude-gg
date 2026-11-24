@@ -111,21 +111,50 @@ impl RepoTab {
     // The rows a delete has taken off the screen, one name per list
     // (デザイン規約 §消す操作は先に画面から消す); when they go and come back
     // is `ops::StandIn`'s.
-    qproperty!("goneBranch", Member = gone_branch, Notify = changed);
-    qproperty!("goneRemote", Member = gone_remote, Notify = changed);
-    qproperty!("goneTag", Member = gone_tag, Notify = changed);
-    qproperty!("goneStash", Member = gone_stash, Notify = changed);
-    qproperty!("goneWorktree", Member = gone_worktree, Notify = changed);
+    // Each list reads its own; the graph's chips are keyed off the whole
+    // (`goneRows`, `GraphModel.setGone`). The worktree going is drawn as its
+    // chip's name where it is on no branch, as the branch it has out where
+    // it is on one (`ops::Row::WorktreeChip` / `WorktreeBranch`).
+    qproperty!("goneBranch", Read = gone_branch, Notify = changed);
+    fn gone_branch(&self) -> &String {
+        &self.gone.branch
+    }
+    qproperty!("goneRemote", Read = gone_remote, Notify = changed);
+    fn gone_remote(&self) -> &String {
+        &self.gone.remote
+    }
+    qproperty!("goneTag", Read = gone_tag, Notify = changed);
+    fn gone_tag(&self) -> &String {
+        &self.gone.tag
+    }
+    qproperty!("goneStash", Read = gone_stash, Notify = changed);
+    fn gone_stash(&self) -> &String {
+        &self.gone.stash
+    }
+    qproperty!("goneWorktree", Read = gone_worktree, Notify = changed);
+    fn gone_worktree(&self) -> &String {
+        &self.gone.worktree
+    }
     qproperty!(
         "goneWorktreeChip",
-        Member = gone_worktree_chip,
+        Read = gone_worktree_chip,
         Notify = changed
     );
+    fn gone_worktree_chip(&self) -> &String {
+        &self.gone.worktree_chip
+    }
     qproperty!(
         "goneWorktreeBranch",
-        Member = gone_worktree_branch,
+        Read = gone_worktree_branch,
         Notify = changed
     );
+    fn gone_worktree_branch(&self) -> &String {
+        &self.gone.worktree_branch
+    }
+    qproperty!("goneRows", Read = gone_rows, Notify = changed);
+    fn gone_rows(&self) -> crate::encode::One<crate::ops::Rows> {
+        crate::encode::One::new(self.gone.clone())
+    }
     // The file rows a stage moved ahead of git (デザイン規約 §バケツごとの
     // 一覧と、ペインの分け方): `stagingSeq` moves whenever they or what they
     // hold back move; when they go back is `ops::StageAhead`'s.

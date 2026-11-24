@@ -245,18 +245,9 @@ pub struct RepoTab {
     /// sidebar and the graph draw without (デザイン規約 §消す操作は先に画面から消す).
     ///
     /// A copy: `ops::StandIn` decides, held by the hub per tab so a write
-    /// outlives the page; kept here so a binding reads a plain member
-    /// (`ops_delete`).
-    gone_branch: String,
-    gone_remote: String,
-    gone_tag: String,
-    gone_stash: String,
-    gone_worktree: String,
-    /// What the graph and the branches list draw of the worktree going: its
-    /// chip's name where it is on no branch, the branch it has out where it
-    /// is on one (`ops::Row::WorktreeChip` / `WorktreeBranch`).
-    gone_worktree_chip: String,
-    gone_worktree_branch: String,
+    /// outlives the page; kept here so a binding reads it outside the hub's
+    /// borrow (`ops_delete`).
+    gone: crate::ops::Rows,
     /// Moves whenever the file rows a stage or unstage moved ahead of git
     /// move, or what they hold back does (`ops::StageAhead`, held by the hub
     /// per tab): the page has the lists and the counts draw again on it

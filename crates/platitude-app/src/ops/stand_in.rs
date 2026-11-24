@@ -60,6 +60,35 @@ pub struct Rows {
     pub worktree_branch: String,
 }
 
+/// What `RepoTab.goneRows` hands the graph (`GraphModel.setGone`), under the
+/// fields' own names.
+impl crate::encode::Record for Rows {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        crate::encode::Fields::new()
+            .put("branch", &self.branch)
+            .put("remote", &self.remote)
+            .put("tag", &self.tag)
+            .put("stash", &self.stash)
+            .put("worktree", &self.worktree)
+            .put("worktreeChip", &self.worktree_chip)
+            .put("worktreeBranch", &self.worktree_branch)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        use crate::encode::field;
+        Some(Self {
+            branch: field(map, "branch")?,
+            remote: field(map, "remote")?,
+            tag: field(map, "tag")?,
+            stash: field(map, "stash")?,
+            worktree: field(map, "worktree")?,
+            worktree_chip: field(map, "worktreeChip")?,
+            worktree_branch: field(map, "worktreeBranch")?,
+        })
+    }
+}
+
 impl Rows {
     /// Shows one row as gone. An empty name stands nothing in: it is what a
     /// list is told when it is to put everything back.

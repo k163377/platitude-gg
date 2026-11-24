@@ -186,22 +186,21 @@ impl GraphModel {
         usize::try_from(row).map_or(self.provisional_on, |row| self.provisional_menu_shut(row))
     }
 
-    /// Names the refs whose chips to leave undrawn, at most one per kind
-    /// (a delete touches at most one of each), and for a worktree going its
-    /// chip (`worktree`, the folder's name) or the branch whose mark it is
-    /// (`held`); empty ones put theirs back, as a refused delete does. The
-    /// keys are built here — what a chip answers to is not the page's
-    /// business.
+    /// The rows a delete has taken off the screen (`RepoTab.goneRows`),
+    /// handed on whole: the refs whose chips to leave undrawn, at most one
+    /// per kind (a delete touches at most one of each), and for a worktree
+    /// going its chip (the folder's name) or the branch whose mark it is;
+    /// empty ones put theirs back, as a refused delete does. The keys are
+    /// built here — what a chip answers to is not the page's business.
     #[qslot]
-    fn set_gone(
-        &mut self,
-        branch: String,
-        remote: String,
-        tag: String,
-        worktree: String,
-        held: String,
-    ) {
-        let keys = crate::encode::gone_keys(&branch, &remote, &tag, &worktree, &held);
+    fn set_gone(&mut self, rows: crate::encode::One<crate::ops::Rows>) {
+        let keys = crate::encode::gone_keys(
+            &rows.branch,
+            &rows.remote,
+            &rows.tag,
+            &rows.worktree_chip,
+            &rows.worktree_branch,
+        );
         if self.gone_chips == keys {
             return;
         }
