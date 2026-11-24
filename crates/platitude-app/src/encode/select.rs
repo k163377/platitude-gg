@@ -78,5 +78,10 @@ mod tests {
             })
         );
         assert_eq!(worktree_target("commit", "f.txt", ""), None);
+        assert_eq!(
+            worktree_target("conflicts", "f.txt", ""),
+            None,
+            "a conflicted file's parts are not pressed"
+        );
     }
 }

@@ -644,8 +644,10 @@ mod tests {
     use super::{GitFacts, file_lines};
 
     use crate::encode::{One, Optional};
-    use crate::models::nav::{BranchUpstream, CardRecord, NewWorktree, RowLead, WorktreeRow};
-    use platitude_core::offers::{BranchFar, Leads, Reading, TreeStanding};
+    use crate::models::nav::{
+        BranchUpstream, CardRecord, NewWorktree, RowLead, TagMenu, WorktreeRow,
+    };
+    use platitude_core::offers::{BranchFar, Leads, Reading, TagFar, TreeStanding};
 
     fn tree() -> One<TreeStanding> {
         One::new(TreeStanding {
@@ -771,6 +773,61 @@ mod tests {
         );
     }
 
+    /// A tag's row reads its card's record as its far side; a closed tab
+    /// offers nothing that sends; an operation stopped in this tree greys
+    /// a new worktree on the branch it holds.
+    #[test]
+    fn a_ref_menu_reads_a_tag_card_a_closed_tab_and_a_stopped_tree() {
+        let commit = || "ab".repeat(20);
+        let tag_pushes = |push_remote: &str| {
+            let lead = RowLead {
+                kind: "tag".into(),
+                full: "v1".into(),
+                ..RowLead::default()
+            };
+            let card = Optional::some(CardRecord::Tag(TagMenu {
+                far: TagFar {
+                    push_remote: push_remote.into(),
+                    ..TagFar::default()
+                },
+                ..TagMenu::default()
+            }));
+            GitFacts
+                .ref_menu(commit(), true, tree(), One::new(lead), card, false)
+                .push_tag
+        };
+        assert!(tag_pushes("origin"), "a remote to send the tag to");
+        assert!(!tag_pushes(""), "no remote: no push row");
+
+        // Out nowhere, with a place to make a worktree for it.
+        let topic = RowLead {
+            kind: "branch".into(),
+            full: "topic".into(),
+            local: "topic".into(),
+            placed: true,
+            place: held_topic().place,
+            ..RowLead::default()
+        };
+        let menu = |open: bool, lead: RowLead| {
+            (*GitFacts.ref_menu(commit(), open, tree(), One::new(lead), topic_card(), true)).clone()
+        };
+        let open = menu(true, topic.clone());
+        assert_eq!((open.integrate, open.making.here), (true, true));
+        let closed = menu(false, topic.clone());
+        assert!(
+            !closed.integrate && !closed.making.here,
+            "nothing is sent from a closed tab"
+        );
+        let stopped = menu(
+            true,
+            RowLead {
+                stopped_by: "rebase".into(),
+                ..topic
+            },
+        );
+        assert_eq!(stopped.making.out, "stopped");
+    }
+
     /// The same row with no worktree card, no place to make one and no
     /// card record: nothing to make, take away or read over there.
     #[test]
@@ -807,6 +864,28 @@ mod tests {
             "nowhere to make one, and no worktree to take away"
         );
     }
+
+    /// A remote branch's name is cut by the remote that owns it, the
+    /// longest winning; with none owning it, at the first slash; and a name
+    /// no slash divides is all branch, on no remote.
+    #[test]
+    fn a_remote_branchs_name_is_cut_by_its_owner_then_the_first_slash() {
+        let remotes = || vec!["origin".to_string(), "my/fork".to_string()];
+        let cut = |full: &str| {
+            let far = GitFacts.remote_branch_of(full.to_string(), remotes());
+            (far.remote.clone(), far.branch.clone())
+        };
+        let pair = |remote: &str, branch: &str| (remote.to_string(), branch.to_string());
+        assert_eq!(cut("my/fork/feature/x"), pair("my/fork", "feature/x"));
+        assert_eq!(cut("origin/main"), pair("origin", "main"));
+        assert_eq!(
+            cut("gone/feature/x"),
+            pair("gone", "feature/x"),
+            "no owner: the first slash"
+        );
+        assert_eq!(cut("main"), pair("", "main"), "no slash: no remote");
+    }
+
     #[test]
     fn the_lines_named_start_at_line_one_and_run_forward() {
         assert_eq!(file_lines(7, 7), Some(7..=7));
