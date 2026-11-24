@@ -5,9 +5,10 @@
 use super::*;
 
 impl RepoSession {
-    /// Re-reads the author identity and signing configuration. The task
-    /// answers once the configuration has published (the write queue waits
-    /// on it after an identity write) with the read that did not land,
+    /// Re-reads the author identity and signing configuration — as the
+    /// repository opens, and after the window writes an identity outside
+    /// any session (`hub::Tabs::refresh_authors`). The task answers once
+    /// the configuration has published with the read that did not land,
     /// empty where it did. `None` where no repository is open.
     ///
     /// A follow read whose askers wait (`session::asks`): one read at a
@@ -38,34 +39,6 @@ impl RepoSession {
                 })
                 .await
         }))
-    }
-
-    /// Records `user.name` / `user.email`.
-    pub fn set_identity(
-        self: &Arc<Self>,
-        values: identity::IdentityValues,
-        scope: identity::ConfigScope,
-    ) -> Option<OperationId> {
-        self.write(
-            OperationKind::Identity,
-            AfterWrite::Author,
-            move |exec, repo, cancel| async move {
-                let written =
-                    identity::set_identity(&exec, &repo.workdir, &values, scope, &cancel).await?;
-                if written.is_saved() {
-                    return Ok(());
-                }
-                // Half an identity reads as a whole one everywhere, so a
-                // write that did not take fails even when git raised nothing.
-                Err(GitError::Rejected {
-                    message: if written.message.is_empty() {
-                        "git still reports a different identity".to_string()
-                    } else {
-                        written.message
-                    },
-                })
-            },
-        )
     }
 
     /// Reads HEAD's message and author so an amend can start from them —

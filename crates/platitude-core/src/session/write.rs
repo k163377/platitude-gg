@@ -558,7 +558,7 @@ impl RepoSession {
     /// A fetch, a delete and a worktree taken away reach neither.
     fn forget_what_it_reached(&self, after: AfterWrite) {
         match after {
-            AfterWrite::Tree | AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
+            AfterWrite::Tree | AfterWrite::Snapshots | AfterWrite::Graph => {
                 self.forget_derived();
             }
             AfterWrite::Config => self.remotes.forget(),
@@ -627,9 +627,6 @@ impl RepoSession {
         // config write change none of it.
         if owed.reach && !refs_moved {
             self.settle_head_reach();
-        }
-        if owed.author {
-            self.read_author_behind(burst, &mut failed).await;
         }
         (failed, walked_from)
     }
@@ -796,30 +793,6 @@ impl RepoSession {
         self.settle_graph_with(reads).await.landed()
     }
 
-    /// The author configuration read again behind `burst`, the reads of it
-    /// that did not land noted.
-    async fn read_author_behind(self: &Arc<Self>, burst: &Burst, failed: &mut Vec<FollowUp>) {
-        let Some(task) = self.refresh_author() else {
-            return;
-        };
-        match task.await {
-            Ok(more) => {
-                for read in more {
-                    note_failed(failed, read);
-                }
-            }
-            // The task unwound: nothing it was to publish did.
-            Err(error) => {
-                tracing::warn!(
-                    writes = ?burst.writes,
-                    %error,
-                    "the author read behind the writes did not finish"
-                );
-                note_failed(failed, FollowUp::Author);
-            }
-        }
-    }
-
     /// The refs, and the tree only where they moved — the series a write
     /// that cannot reach the index or the tree reads (`AfterWrite::Refs`).
     async fn read_refs_then_tree(self: &Arc<Self>) -> (Reread, Reread) {
@@ -890,8 +863,6 @@ struct ReadsOwed {
     behind_a_fetch: bool,
     /// Whether anything else holds HEAD's tip is asked again.
     reach: bool,
-    /// The author configuration is read again.
-    author: bool,
 }
 
 impl ReadsOwed {
@@ -914,9 +885,7 @@ impl ReadsOwed {
             }
             AfterWrite::Refs => (TreeRead::WhereRefsMoved, true, Listings::None),
             AfterWrite::Worktrees => (TreeRead::WhereRefsMoved, true, Listings::Worktrees),
-            AfterWrite::Snapshots | AfterWrite::Graph | AfterWrite::Author => {
-                (TreeRead::Always, true, Listings::Both)
-            }
+            AfterWrite::Snapshots | AfterWrite::Graph => (TreeRead::Always, true, Listings::Both),
         };
         self.tree = self.tree.max(tree);
         self.refs |= refs;
@@ -927,7 +896,6 @@ impl ReadsOwed {
             after,
             AfterWrite::Tree | AfterWrite::Refs | AfterWrite::Config
         );
-        self.author |= after == AfterWrite::Author;
     }
 }
 
@@ -1169,14 +1137,13 @@ mod tests {
             (worktrees.tree, worktrees.refs, worktrees.listings),
             (TreeRead::WhereRefsMoved, true, Listings::Worktrees)
         );
-        for after in [AfterWrite::Snapshots, AfterWrite::Graph, AfterWrite::Author] {
+        for after in [AfterWrite::Snapshots, AfterWrite::Graph] {
             let owed = left(after);
             assert_eq!(
                 (owed.tree, owed.refs, owed.listings, owed.reach),
                 (TreeRead::Always, true, Listings::Both, true),
                 "{after:?}"
             );
-            assert_eq!(owed.author, after == AfterWrite::Author);
         }
         assert_ne!(
             left(AfterWrite::Tree),

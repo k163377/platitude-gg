@@ -11,7 +11,6 @@ use crate::support::session::{
 };
 use crate::support::wait::bounded;
 use platitude_core::commit::CommitOptions;
-use platitude_core::identity::{ConfigScope, IdentityValues};
 use platitude_core::session::{FollowUp, PassStep, RepoSession, SessionEvent};
 use platitude_core::{OperationId, OperationKind};
 
@@ -264,13 +263,11 @@ async fn a_write_is_not_settled_until_the_reads_its_listings_asked_for_have_land
         held.recv().expect("the test lets the pass go");
     });
 
-    // A write that moves nothing the graph draws: the tree and the refs
-    // read the same, so the only walk behind it is the listing's.
+    // A write that moves nothing the graph draws — `merge.tool`, read
+    // again with both listings (`AfterWrite::Snapshots`): the tree and the
+    // refs read the same, so the only walk behind it is the listing's.
     let id = session
-        .set_identity(
-            IdentityValues::new("Spike", "spike@example.com"),
-            ConfigScope::Local,
-        )
+        .set_merge_tool("vimdiff".to_string())
         .expect("the session is open");
     bounded("the listing's walk reached the door", at_the_door)
         .await

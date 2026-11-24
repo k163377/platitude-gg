@@ -87,7 +87,6 @@ pub enum OperationKind {
     Resolve,
     Mergetool,
     Config,
-    Identity,
     /// `git worktree remove`: another worktree taken off the disk.
     Worktree,
     /// Something the discard log lists, brought back (`discards::restore`):
@@ -137,7 +136,6 @@ impl OperationKind {
             Self::Resolve => "resolve",
             Self::Mergetool => "mergetool",
             Self::Config => "config",
-            Self::Identity => "identity",
             Self::Worktree => "worktree",
             Self::Restore => "restore",
             Self::AutoFetch => "auto-fetch",
@@ -190,7 +188,6 @@ impl OperationKind {
             | Self::Resolve
             | Self::Mergetool
             | Self::Config
-            | Self::Identity
             | Self::Worktree
             | Self::Restore => Lane::Local,
         }
@@ -236,7 +233,6 @@ impl OperationKind {
             | Self::Resolve
             | Self::Mergetool
             | Self::Config
-            | Self::Identity
             | Self::Worktree
             | Self::Restore => true,
         }
@@ -327,7 +323,6 @@ impl OperationKind {
             | Self::Resolve
             | Self::Mergetool
             | Self::Config
-            | Self::Identity
             | Self::Worktree
             | Self::Restore
             | Self::DeleteBranchEverywhere
@@ -401,7 +396,6 @@ mod tests {
             OperationKind::FastForward,
             OperationKind::Config,
             OperationKind::Mergetool,
-            OperationKind::Identity,
             OperationKind::Worktree,
             OperationKind::Restore,
             OperationKind::Remote,
@@ -453,7 +447,6 @@ mod tests {
             OperationKind::Resolve,
             OperationKind::Mergetool,
             OperationKind::Config,
-            OperationKind::Identity,
             OperationKind::Worktree,
             OperationKind::Restore,
             OperationKind::DeleteBranchEverywhere,
@@ -510,7 +503,6 @@ mod tests {
             OperationKind::Revert,
             OperationKind::Resolve,
             OperationKind::Mergetool,
-            OperationKind::Identity,
             OperationKind::Worktree,
             OperationKind::Restore,
             OperationKind::Remote,

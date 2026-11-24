@@ -243,7 +243,8 @@ pub enum FollowUp {
     Graph,
     Stashes,
     Worktrees,
-    /// The author identity, after an identity write.
+    /// The author identity and signing configuration
+    /// (`RepoSession::refresh_author`).
     Author,
 }
 
@@ -307,8 +308,6 @@ pub enum AfterWrite {
     Snapshots,
     /// History or refs moved, so the graph has to be rebuilt too.
     Graph,
-    /// Snapshots plus the author configuration (an identity write).
-    Author,
 }
 
 /// Receives session events; implementations must be non-blocking.
