@@ -70,9 +70,8 @@ impl GraphModel {
         // A tally is a count of files; one past `i32` is not a working
         // tree anybody has.
         let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
-        // Filed by the index the delegate asks with. All six written even
-        // when zero: none at all is what says a row is not another worktree's
-        // (`carried_tally`).
+        // Filed by the index the delegate asks with; a row with no entry is
+        // not another worktree's (`carried_at` answers `undefined`).
         if let Some(carried) = carried {
             let k = &carried.kinds;
             self.carried.insert(

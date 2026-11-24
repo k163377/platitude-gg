@@ -11,9 +11,10 @@ use super::wire::{Fields, field};
 /// [`FarSide`]'s fields, written into the record that carries it — flat,
 /// beside the record's own, as [`super::TreeReading`] carries the
 /// standing: `far` says which (`branch` / `tag`, empty for none), and the
-/// rest are its parts. The TAG card reads all three of a tag's: `pushRemote`
-/// for where its pushes go, `heldBack` (`drift` / `unnamed`) for the words
-/// its greyed rows say, and `sides` for whether the copy here exists.
+/// rest are its parts. The TAG card reads two of a tag's: `pushRemote` for
+/// where its pushes go, and `heldBack` (`drift` / `unnamed`) for the words
+/// its greyed rows say; `sides` — whether the copy here exists — is core's
+/// alone, read back through [`read_far`] (`offers::ref_menu`).
 pub(crate) fn put_far(fields: Fields, far: &FarSide) -> Fields {
     match far {
         FarSide::Unread => fields.put("far", ""),

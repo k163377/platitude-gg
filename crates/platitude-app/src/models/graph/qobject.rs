@@ -438,12 +438,13 @@ impl GraphModel {
     }
 
     /// Whether rebasing HEAD onto this commit would rewrite one a remote
-    /// already has — the `rewrites pushed commits` note the ref menu's
-    /// `rebase` row wears. `<ref>..HEAD` is a set no single mark answers,
-    /// so it is walked off the rows' order and marks; git would answer
-    /// after the card is up (デザイン規約 §行が読む答えはどこから来るか).
-    /// `head` comes from the asker off the one record
-    /// (`WorktreeModel.headOid`), the HEAD the rest of the card is about.
+    /// already has — the `rewrites pushed commits` note the `rebase` row of
+    /// both menus wears (`RefRowMenu`, `CommitMenuState`). `<ref>..HEAD` is
+    /// a set no single mark answers, so it is walked off the rows' order and
+    /// marks; git would answer after the card is up (デザイン規約
+    /// §行が読む答えはどこから来るか). `head` is the HEAD of the reading the
+    /// menu stands on (its `tree.headOid`), the HEAD the rest of the card is
+    /// about.
     #[qslot]
     fn rebase_rewrites_published(&self, onto_oid_hex: String, head_oid_hex: String) -> bool {
         let (Some(onto), Some(head)) = (

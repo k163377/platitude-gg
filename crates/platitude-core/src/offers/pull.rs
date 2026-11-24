@@ -54,7 +54,8 @@ pub enum PullOut {
     /// The tree's branch and its upstream have both moved: merging and
     /// rebasing are the reader's to choose between, and git's settings do
     /// not get to choose for them (user decision — ask before changing).
-    /// Told by `WorktreeModel.pullBlocked`: ahead and behind both non-zero.
+    /// Told by the tree's standing ([`super::TreeStanding::diverged`]): ahead
+    /// and behind both non-zero.
     Diverged,
     /// The row's branch has commits its upstream lacks, so no fast-forward
     /// reaches it — git would answer `[rejected] (non-fast-forward)` — and
@@ -63,7 +64,8 @@ pub enum PullOut {
     /// them in: switch to it and use its row (a diverged one there says
     /// where next). Its tip says what cannot happen, then why, naming the
     /// upstream (user decision — ask before changing; `Words.pullOwnCommits`).
-    /// Told by `NavSectionModel.countsOf`'s `ahead` being non-zero.
+    /// Told by the row's far side ([`super::BranchFar::ahead`], the record
+    /// its BRANCH card stood on) being non-zero.
     OwnCommits,
     /// Another worktree has the row's branch out, and git will not fetch
     /// into a branch checked out anywhere. Where to go is the `Open` row

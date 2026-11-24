@@ -531,8 +531,9 @@ impl NavSectionModel {
     /// The commit this branch's configured upstream stands on, hex — the
     /// reference point `branch --delete` measures the tip against
     /// (`BranchItem::upstream_oid`); empty where there is none, and git
-    /// then measures against HEAD. Handed to `GraphModel.branchDeleteMerged`
-    /// as the menu opens.
+    /// then measures against HEAD. Where a press on an opened row's
+    /// upstream line goes (`NavFacts`, `RowHoverHost`); a menu reads the
+    /// same off its BRANCH card's record (`upstreamOid`).
     #[qslot]
     fn upstream_oid_of(&self, name: String) -> String {
         self.all
@@ -640,7 +641,7 @@ impl NavSectionModel {
     /// What a menu's `push` row on this branch stands on, read as the menu
     /// opens and as it stands again (`RefsSnapshot::branch_push`): the
     /// toolbar's reading for a branch the worktree is not on — `tree` is
-    /// where it stands, handed on as `GitFacts.refMenuOffers` takes it —
+    /// where it stands, handed on as `GitFacts.refMenu` takes it —
     /// on a tab that is `open`. `fallback` is where a branch marked nowhere
     /// and tracking nothing goes (`RepoTab.defaultRemote`). Asked of the
     /// branches section.

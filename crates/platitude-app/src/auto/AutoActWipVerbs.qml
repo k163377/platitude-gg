@@ -601,7 +601,7 @@ Item {
         name: "carried_menu"
         order: ["up", "armed", "pressed"]
         property bool applying: false
-        /// The six tallies a row draws, in the order it draws them (`GraphModel::carried_tally`).
+        /// The six tallies a row draws, in the order it draws them (`GraphModel.carriedAt`'s `tally`).
         function tally(counts) {
             return counts ? [counts.added, counts.modified, counts.deleted,
                              counts.renamed, counts.copied, counts.conflicted].join(",") : ""

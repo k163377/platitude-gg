@@ -19,7 +19,7 @@
 //! here.
 //!
 //! The one step left is a redesign, in either of two directions: the
-//! write answers reach QML one field per slot (the fifteen
+//! write answers reach QML one field per slot (the twelve
 //! `writeAnswer*`), which could become one record per answer; and the tab
 //! answers for several subjects — the write queue and its answers, the
 //! remotes and their questions, the identity and signatures, the commit
