@@ -749,10 +749,10 @@ FocusScope {
                 || page.doorsHeldWhy !== "")
             return false
         // Which move the lookups add up to is core's rule (offers::switch_action); a remote row's holder is asked of
-        // the local branch it lands on — the row read as its menu reads it (`NavSectionModel.leadOf`).
-        const local = remotesModel.landsOn(kind, name)
-        const lead = worktreesModel.leadOf(kind, name, local)
-        const action = GitFacts.switchAction(lead, worktree.standing, branchesModel.oidOfName(local) !== "")
+        // the local branch it lands on — the row read as its menu reads it, through the same part (`RefMenuFacts`).
+        const lead = refFacts.leadOf(kind, name, "")
+        const local = lead.local
+        const action = GitFacts.switchAction(lead, worktree.standing, refFacts.landsListed(lead))
         // A branch another worktree holds is the one refusal no stash or put-down can clear (offers::SwitchAction), so
         // **the press goes to that worktree** (`openRepositoryPathRequested`). Unasked — it writes nothing; the worded
         // rows name the worktree first (`RefRowMenu`'s `Open`), and for the wordless doors (the graph's double-click, a
@@ -2717,6 +2717,15 @@ FocusScope {
     // ---- the record of what was thrown away (`platitude_core::discards`) ----
     DiscardModel {
         id: discardModel
+    }
+    /// What a press on a ref weighs, read as the ref's menu reads it (`switchToRef`) — the menus carry their own.
+    readonly property RefMenuFacts refFacts: RefMenuFacts {
+        repoTab: repoTab
+        graphModel: graphModel
+        worktreesModel: worktreesModel
+        branchesModel: branchesModel
+        remotesModel: remotesModel
+        tagsModel: tagsModel
     }
     /// The discard log's words (`RecoverEntries`) — its times included, which the band over the graph writes too.
     readonly property RecoverEntries recoverWords: RecoverEntries {
