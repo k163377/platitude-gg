@@ -1,7 +1,6 @@
 import QtQuick
 import platitude
 import platitude.ui
-import platitude.ui.words
 
 // The sidebar's row gestures: which row was clicked last, and which one has a name box open in it. Held beside the
 // lists: only one row at a time is either, in whichever section, and both outlive the delegates that show them
@@ -18,12 +17,10 @@ QtObject {
     /// the pane, and a second emitter would be a second answer.
     required property Item host
     required property RepoTab repoTab
+    /// The names already there, which the box's verdict asks (`editVerdict`).
     required property NavSectionModel remotesModel
-    /// Asked by the new worktree's box: whether its name is a branch already, and what is where the worktree would go
-    /// (`Words.worktreeNameRefused`).
     required property NavSectionModel branchesModel
     required property NavSectionModel worktreesModel
-    /// Asked by the tag boxes, for the names already there (`nameClash`).
     required property NavSectionModel tagsModel
 
     /// The page's standing menu's door (`SidebarPane.menuDoor`), null while none stands — raised on these rows or
@@ -87,140 +84,26 @@ QtObject {
     property string editId: ""
     property string editOid: ""
     property string editText: ""
-    /// The remote a remote row lives on (`origin`), empty for every other kind. Cut by the configured names, since a
-    /// remote's own name may contain `/`; an unconfigured one cuts at the first slash (`GitFacts.remoteBranchOf`).
-    readonly property string editRemote: gestures.editKind !== "remote" ? ""
-        : GitFacts.remoteBranchOf(gestures.editId, gestures.repoTab.remoteNames).remote
     function remoteBranchHalf(id) {
         return GitFacts.remoteBranchOf(id, gestures.repoTab.remoteNames).branch
     }
-    /// A rename to a name the remote already carries. Refused here: a plain push to an existing name fast-forwards
-    /// it and reports success, moving somebody else's branch. Rename only — the new-branch box on a remote row makes
-    /// a local branch.
-    readonly property bool editTaken: gestures.editMode === "rename" && gestures.editRemote !== ""
-        && gestures.editText.trim() !== ""
-        && gestures.remotesModel.hasRemoteBranch(gestures.editRemote, gestures.editText.trim())
-    /// A new branch / tag / worktree box still empty since it opened. Not refused: the frame answers for what was typed
-    /// (デザイン規約 §可否・警告の出し場所), and nothing has been. A rename rubbed out to nothing is refused.
-    readonly property bool editUnanswered:
-        (gestures.editMode === "branch" || gestures.editMode === "tag" || gestures.editMode === "worktree")
-        && gestures.editText.trim() === ""
-    /// Where the worktree named in the box would go (`NavSectionModel.newWorktreeFor`), asked per keystroke; undefined
-    /// for every other box.
-    readonly property var editWorktreePlace: gestures.editMode !== "worktree" ? undefined
-        : gestures.worktreesModel.newWorktreeFor(gestures.editText.trim())
-    /// What stands in a new worktree's way, said before the press — the graph's box says the same
-    /// (`Words.worktreeNameRefused`).
-    readonly property string editWorktreeWhy: gestures.editMode !== "worktree" ? ""
-        : Words.worktreeNameRefused(gestures.editText,
-                                gestures.branchesModel.nameClash(gestures.editText.trim(), ""),
-                                gestures.editWorktreePlace)
-    /// The box names a tag: a new one, or a tag's rename. Every other ref box names a branch — a new one, a branch's
-    /// rename, a remote branch's (a branch over there) — a stash's is free text, and a worktree's folder is a folder.
-    readonly property bool editNamesTag: gestures.editMode === "tag"
-        || (gestures.editMode === "rename" && gestures.editKind === "tag")
-    /// git's rules for the kind of name the box takes, asked of core. A worktree's folder follows the disk's rules
-    /// instead (`editFolderWhy`).
-    readonly property bool editNameRuled: gestures.editMode === "rename" && gestures.editKind === "stash"
-        ? GitFacts.validStashMessage(gestures.editText)
-        : gestures.editMode === "rename" && gestures.editKind === "worktreeFolder" ? true
-        : gestures.editNamesTag ? GitFacts.validTagName(gestures.editText.trim())
-        : GitFacts.validBranchName(gestures.editText.trim())
-    /// What git would refuse the name for beside the branches or tags already there (`Words.nameClashed`): a new
-    /// branch or tag, or a local one's rename, the row's own name out of its own way. A remote branch's rename asks the
-    /// remote's names instead (`editTaken`).
-    readonly property string editClashWhy: {
-        const name = gestures.editText.trim()
-        if (name === "")
-            return ""
-        if (gestures.editMode === "branch")
-            return Words.nameClashed(gestures.branchesModel.nameClash(name, ""), false)
-        if (gestures.editMode === "tag")
-            return Words.nameClashed(gestures.tagsModel.nameClash(name, ""), true)
-        if (gestures.editMode !== "rename")
-            return ""
-        if (gestures.editKind === "branch")
-            return Words.nameClashed(gestures.branchesModel.nameClash(name, gestures.editId), false)
-        if (gestures.editKind === "tag")
-            return Words.nameClashed(gestures.tagsModel.nameClash(name, gestures.editId), true)
-        return ""
+    /// What the box may accept, and why not — the verdict the graph's box is given too (`NameVerdict`).
+    readonly property NameVerdict editVerdict: NameVerdict {
+        repoTab: gestures.repoTab
+        remotesModel: gestures.remotesModel
+        worktreesModel: gestures.worktreesModel
+        branchesModel: gestures.branchesModel
+        tagsModel: gestures.tagsModel
+        open: gestures.editKey !== ""
+        mode: gestures.editMode
+        kind: gestures.editKind
+        rowId: gestures.editId
+        text: gestures.editText
     }
-    /// Where a worktree's folder would go renamed to what is typed (`NavSectionModel.renamedWorktreeFor`), asked per
-    /// keystroke; undefined for every other box, and for a name that is not one folder's.
-    readonly property var editFolderPlace: gestures.editKind !== "worktreeFolder" ? undefined
-        : gestures.worktreesModel.renamedWorktreeFor(gestures.editId, gestures.editText.trim())
-    /// What stands in that folder's way, said before the press — the graph's box says the same
-    /// (`Words.worktreeRenameRefused`). A folder's name follows the disk's rules, not git's.
-    readonly property string editFolderWhy: gestures.editKind !== "worktreeFolder" ? ""
-        : Words.worktreeRenameRefused(gestures.editText, gestures.editFolderPlace)
-    /// A branch being renamed that a rebase or bisect stopped in some worktree holds — this one's too: git renames none
-    /// such, whatever the name (`NavSectionModel.heldByOperation`). A branch merely checked out in a worktree is not
-    /// turned down: git renames it and moves that worktree's HEAD along, locked or not — a lock stops `worktree remove`
-    /// / `move` / `prune`, not this. Undefined for every other box. Headless:
-    /// `rename-branch-box fix/rebasing:fix/renamed --preset worktree-places` (`<branch>:<typed>` opens the box on a row
-    /// other than HEAD's).
-    readonly property var editHeld: gestures.editMode === "rename" && gestures.editKind === "branch"
-        ? gestures.worktreesModel.heldByOperation(gestures.editId) : undefined
-    readonly property string editHeldWhy: gestures.editHeld === undefined ? ""
-        : Words.heldByOperation(gestures.editHeld.by, gestures.editHeld.here,
-                                gestures.worktreesModel.worktreeCalled(gestures.editHeld.path))
-    /// What is typed cannot be accepted. The rules are git's own, asked of core (a stash's label is free text, a
-    /// worktree's name a folder's).
-    readonly property bool editRefused: gestures.editKey !== "" && !gestures.editUnanswered
-        && (gestures.editTaken
-            || gestures.editCaseOnly
-            || gestures.editWorktreeWhy !== ""
-            || gestures.editFolderWhy !== ""
-            || gestures.editHeldWhy !== ""
-            || !gestures.editNameRuled
-            || gestures.editClashWhy !== "")
-    /// A tag rename that changes only the letters' case. git writes a ref as a file, so on a case-insensitive disk the
-    /// new name lands on the old one's and both are gone; core refuses it (`tag::rename`), and asking here puts the
-    /// answer in the box (デザイン規約 §答えの要らない報せ). `tag` is the row's kind — mode `tag` is the new-tag box.
-    readonly property bool editCaseOnly:
-        gestures.editKind === "tag" && gestures.editMode === "rename"
-        && GitFacts.tagRenameCaseOnly(gestures.editId, gestures.editText.trim())
-    readonly property string editRefusedWhy: !gestures.editRefused ? ""
-        : gestures.editFolderWhy !== ""
-          ? gestures.editFolderWhy
-        : gestures.editText.trim() === ""
-          ? Words.nameNeeded
-          : gestures.editHeldWhy !== ""
-            ? gestures.editHeldWhy
-          : gestures.editWorktreeWhy !== ""
-            ? gestures.editWorktreeWhy
-          : gestures.editCaseOnly
-            ? Words.caseOnlyRename
-          : gestures.editTaken
-            ? Words.remoteHasBranch(gestures.editRemote)
-          : !gestures.editNameRuled
-            ? (gestures.editMode === "rename" && gestures.editKind === "stash"
-               ? qsTr("One line, and nothing invisible in it")
-               : Words.notAName)
-            : gestures.editClashWhy
-    /// The branch, tag or remote that line names, behind its mark (`Words.refusalMarks`) — asked again of the clash it
-    /// was written from (`editClashWhy`).
-    readonly property var editRefusedMarks: {
-        // Nothing refused, nothing to seat — and no clash asked of the model for it.
-        if (gestures.editRefusedWhy === "")
-            return []
-        const tag = gestures.editMode === "tag" || (gestures.editMode === "rename" && gestures.editKind === "tag")
-        // A new worktree's box names the branch it makes, refused against the branches (`editWorktreeWhy`).
-        const branch = gestures.editMode === "branch" || gestures.editMode === "worktree"
-                       || (gestures.editMode === "rename" && gestures.editKind === "branch")
-        const clash = !tag && !branch ? undefined
-            : (tag ? gestures.tagsModel : gestures.branchesModel).nameClash(
-                  gestures.editText.trim(), gestures.editMode === "rename" ? gestures.editId : "")
-        return Words.refusalMarks(gestures.editRefusedWhy, clash, tag, gestures.editTaken ? gestures.editRemote : "")
-    }
-    /// The worktree's folder in that line, which the box's tip stands the tree mark in front of
-    /// (`Words.worktreeNameMark`); empty where the line names none.
-    readonly property string editRefusedMark: gestures.editKind === "worktreeFolder"
-        ? Words.worktreeRenameMark(gestures.editRefusedWhy, gestures.editFolderPlace)
-        : gestures.editHeldWhy !== "" && gestures.editRefusedWhy === gestures.editHeldWhy
-          && !gestures.editHeld.here
-        ? gestures.worktreesModel.worktreeCalled(gestures.editHeld.path)
-        : Words.worktreeNameMark(gestures.editRefusedWhy, gestures.editWorktreePlace)
+    readonly property bool editRefused: gestures.editVerdict.refused
+    readonly property string editRefusedWhy: gestures.editVerdict.refusedWhy
+    readonly property var editRefusedMarks: gestures.editVerdict.refusedMarks
+    readonly property string editRefusedMark: gestures.editVerdict.refusedMark
 
     function startEdit(kind, key, mode, id, oid, text) {
         // The one door into the box (the second click, a tag row's double-click and the menu's four `begin*`), so the
@@ -259,7 +142,8 @@ QtObject {
         const id = gestures.editId
         const oid = gestures.editOid
         const mode = gestures.editMode
-        // Enter on a box nobody has typed in leaves it standing, as on a refused one (`editUnanswered`).
+        // Enter on a new box nobody has typed in leaves it standing, as on a refused one; the verdict refuses it
+        // nothing (`NameVerdict.refusedWhy`).
         if ((mode === "branch" || mode === "tag" || mode === "worktree") && text.trim() === "")
             return
         const was = kind === "worktreeFolder" ? gestures.editOpenedWith

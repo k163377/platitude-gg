@@ -1877,12 +1877,16 @@ FocusScope {
     /// What the graph's name box may accept, and why not (`NameVerdict`).
     readonly property NameVerdict graphNameVerdict: NameVerdict {
         id: graphNameVerdict
-        graphPane: graphPane
         repoTab: repoTab
         remotesModel: remotesModel
         worktreesModel: worktreesModel
         branchesModel: branchesModel
         tagsModel: tagsModel
+        open: graphPane.namingOid !== ""
+        mode: graphPane.namingMode
+        kind: graphPane.namingKind
+        rowId: graphPane.namingId
+        text: graphPane.namingText
     }
 
     // ---- double-click on a graph row -------------------------------
@@ -4061,10 +4065,10 @@ FocusScope {
                             onCarriedMenuRequested: (path, name) => page.openCarriedMenu(path, name)
                             onRowRenameRequested: (oidHex, chip) => page.startRename(oidHex, chip)
                             onRenameSubmitted: (kind, id, oid, name) => page.renameRow(kind, id, oid, name)
-                            namingRefused: graphNameVerdict.graphNameRefusedWhy !== ""
-                            namingRefusedWhy: graphNameVerdict.graphNameRefusedWhy
-                            namingRefusedMark: graphNameVerdict.graphNameRefusedMark
-                            namingRefusedMarks: graphNameVerdict.graphNameRefusedMarks
+                            namingRefused: graphNameVerdict.refused
+                            namingRefusedWhy: graphNameVerdict.refusedWhy
+                            namingRefusedMark: graphNameVerdict.refusedMark
+                            namingRefusedMarks: graphNameVerdict.refusedMarks
                             onChipExpandRequested: (oidHex, atRow, records, anchor) =>
                                 rowHost.pointChip(oidHex, atRow, records, anchor)
                             onChipCollapseRequested: (oidHex, anchor) => rowHost.unpointChip(oidHex, anchor)

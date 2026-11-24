@@ -210,7 +210,7 @@ Rectangle {
     property string namingId: ""
     readonly property alias namingOpenedWith: graphList.namingOpenedWith
     /// What the box is standing on, for `NameVerdict` to decide whether what is typed can be accepted at all —
-    /// the models that answer that are the page's (`NameVerdict.graphNameRefusedWhy`).
+    /// the models that answer that are the page's (`NameVerdict.refusedWhy`).
     readonly property alias namingMode: graphList.namingMode
     readonly property alias namingKind: graphList.namingKind
     readonly property alias namingOid: graphList.namingOid
