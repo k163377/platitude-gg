@@ -81,12 +81,8 @@ impl DetailsModel {
             .eq_ignore_ascii_case(&details.author_email);
         self.commit_time_differs = details.committer_time != details.author_time;
         self.committer_time = details.committer_time;
-        // Subject / body split mirrors the commit-editor fields.
-        let (subject, body) = details
-            .message
-            .split_once('\n')
-            .map(|(s, b)| (s.to_string(), b.trim_start_matches('\n').to_string()))
-            .unwrap_or_else(|| (details.message.clone(), String::new()));
+        // Cut as the commit editor's two fields are (`commit::split_message`).
+        let (subject, body) = platitude_core::commit::split_message(&details.message);
         self.message_subject = subject;
         self.message_body = body;
         self.loading = false;
