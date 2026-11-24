@@ -173,6 +173,7 @@ fn main() {
     qrc::embed!("ui/CommandRowDelegate.qml");
     qrc::embed!("ui/CommandsOwner.qml");
     qrc::embed!("ui/CommandsPane.qml");
+    qrc::embed!("ui/TextPick.qml");
     qrc::embed!("ui/CommandsTextSelect.qml");
     qrc::embed!("ui/CommandsToggle.qml");
     qrc::embed!("ui/DescriptionBox.qml");

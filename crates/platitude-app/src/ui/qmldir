@@ -57,6 +57,7 @@ EolHoverCard 1.0 EolHoverCard.qml
 CommandRowDelegate 1.0 CommandRowDelegate.qml
 CommandsOwner 1.0 CommandsOwner.qml
 CommandsPane 1.0 CommandsPane.qml
+TextPick 1.0 TextPick.qml
 CommandsTextSelect 1.0 CommandsTextSelect.qml
 CommandsToggle 1.0 CommandsToggle.qml
 DescriptionBox 1.0 DescriptionBox.qml

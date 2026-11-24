@@ -13,13 +13,11 @@ import platitude.ui
 // A plain `MouseArea`, so the rows underneath keep their own hover (a `HoverHandler` here would take all of it —
 // rules-refs/app-ui.md「行に重ねる面の `HoverHandler` は祖先が持つ」).
 //
-// Every place in the frame is a start, the ground under a short log's last row included (`rowAt`), except the
-// list's own scroll bar at the right edge (`barRoom`).
-Item {
+// Every place in the frame is a start, the ground under a short log's last row included (`TextPick.rowAt`), except
+// the list's own scroll bar at the right edge (`barRoom`).
+TextPick {
     id: pick
 
-    /// The rows, for the frame this stands over and for asking which row a point is on.
-    required property var view
     /// Where the selection lives, and where the three columns come from.
     required property var commandsModel
     /// The list's scroll bar at the right edge, where this frame ends (`AppListView.barRoom`).
@@ -45,16 +43,6 @@ Item {
     readonly property int atOut: 4
     readonly property int atBelow: 9
 
-    property bool dragging: false
-    /// Where the hand was last seen, in this item's coordinates (the edge ticker below re-reads it).
-    property point handPosition: Qt.point(0, 0)
-    /// Whether the drag has taken text yet — left the place it was pressed at, which the two below hold. Only then
-    /// does the edge below send: a browser starts its selection's autoscroll the same way, so a click on the last row
-    /// in sight, most of which is the edge's belt, leaves the rows where they are.
-    property bool selecting: false
-    property int fromRow: -1
-    property int fromAt: 0
-
     // ---- what the hand does ------------------------------------------------------------------------------------
     /// A press at a point (own coordinates): true where the text took it, false where it goes down to the list —
     /// only a log with no rows. The `MouseArea` below and a run both enter here, so an unwired hand reports nothing
@@ -79,15 +67,11 @@ Item {
     }
     function pressText(row, at) {
         pick.commandsModel.beginSelect(row, at)
-        pick.selecting = false
-        pick.fromRow = row
-        pick.fromAt = at
-        pick.dragging = true
+        pick.pressedAt(row, at)
     }
     function dragText(row, at) {
         pick.commandsModel.extendSelect(row, at)
-        if (row !== pick.fromRow || at !== pick.fromAt)
-            pick.selecting = true
+        pick.draggedTo(row, at)
     }
     /// A double-click at a point (own coordinates): the word under it becomes the selection, and the drag behind it
     /// grows word by word (`CommandsModel::take_word`). It lands after the second press, which `takeAt` has already
@@ -112,24 +96,7 @@ Item {
             pick.commandsModel.clearSelect()
     }
 
-    // ---- pixels to rows and columns ----------------------------------------------------------------------------
-    /// Which row a point is over, or -1 where the list has no rows. Clamped twice: to the frame, so a drag past an
-    /// edge keeps naming the row it can see while the ticker scrolls, and onto the rows (`onRows`).
-    function rowAt(y) {
-        const inside = Math.max(0, Math.min(y, pick.height - 1))
-        // Rows are as wide as the list, so any x inside it finds the same row.
-        return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
-    }
-    /// A content y clamped onto the band the rows stand on — what makes the ground under the last row a start (see the
-    /// header; 規約 §右のペインの字は掴める), a sweep from there running from the last row's end.
-    /// From `originY`, not 0: rows of differing heights move the view's origin once it is sent to its end
-    /// (`AppListView.clampY`). An empty log has no band, so `indexAt` finds nothing and the press goes to the list.
-    function onRows(y) {
-        const first = pick.view.originY
-        const last = first + pick.view.contentHeight - 1
-        return Math.max(first, Math.min(y, last))
-    }
-
+    // ---- pixels to columns ---------------------------------------------------------------------------------------
     /// Which byte of a row's line a point lands on; a gap holds one tab, whose only two places are its ends.
     function byteAt(row, position) {
         const item = pick.view.itemAtIndex(row)
@@ -172,22 +139,13 @@ Item {
     }
 
     // ---- the ground under the last row ---------------------------------------------------------------------------
-    /// Where the ground under a short log's last row begins (own coordinates), and whether there is any: a sweep
-    /// against a log that fills its panel proves nothing, so it says so (verify-ui `commands-sweep`).
-    readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
-    readonly property bool hasGround: pick.groundTop < pick.height - 2
-    /// Automation: a press on that ground and a drag up into the text, through the functions the `MouseArea` calls.
-    /// It starts in the ground: a sweep started on a row would pass with the ground rule taken out.
+    /// Automation: a press on the ground under a short log's last row (`TextPick.groundPoint`) and a drag up into the
+    /// text, through the functions the `MouseArea` calls.
     function sweepFromGround(fx, fy) {
-        if (!pick.hasGround)
+        const start = pick.groundPoint(fx, fy, pick.width)
+        if (!start || !pick.takeAt(start))
             return false
-        const x = Math.max(1, Math.min(pick.width - 1, pick.width * fx))
-        const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
-        if (!pick.takeAt(Qt.point(x, y)))
-            return false
-        // Straight up at the starting x — a sideways jump would let a run pass while the real gesture fails.
-        const top = pick.view.itemAtIndex(0)
-        pick.followAt(Qt.point(x, top ? top.y - pick.view.contentY + top.height / 2 : 1))
+        pick.followAt(pick.firstRowPoint(start.x))
         pick.releaseText()
         return true
     }

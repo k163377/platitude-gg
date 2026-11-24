@@ -680,7 +680,7 @@ Item {
     // (`CommandsTextSelect`). Nine starts, each judged over a cleared selection: a reach that works from one
     // spot hides at the middle, and one read at the end would report only the last try. `reach` / `tries`: how many of
     // the starts reached a row, and of how many, counted at the sweep. Set up as `commands-select` without the stash;
-    // the drag runs from the ground up to the first row. Taking out `onRows`' two-step clamp (`CommandsTextSelect`)
+    // the drag runs from the ground up to the first row. Taking out `onRows`' two-step clamp (`TextPick`)
     // drops it to `reach=0/9`.
     PageStage {
         id: commandsSweepTimer

@@ -30,10 +30,9 @@ import platitude.ui
 //
 // Headless: `diff-select` / `diff-copy` / `diff-menu` / `diff-copy-removed` / `diff-word`; the clipboard is read back
 // through `ClipboardHelper.lastCopied` (the clipboard itself does not answer).
-Item {
+TextPick {
     id: pick
 
-    required property var view
     required property var diffModel
     /// How wide a column's gutter is, which is where its code starts (`DiffTextMetrics.gutterW`).
     required property real gutterW
@@ -60,18 +59,8 @@ Item {
     width: Math.max(0, pick.view.width - pick.gutterW - pick.barRoom)
     height: pick.view.height
 
-    /// Whether a drag is running — `hand.pressed`, except during a right-click, which never starts one.
-    property bool dragging: false
     /// Which column the drag is of — the one the press landed in (`sideAt`).
     property int side: 0
-    /// Where the hand was last seen, in this item's coordinates, for the edge below.
-    property point handPosition: Qt.point(0, 0)
-    /// Whether the drag has taken text yet — left the place it was pressed at, which the two below hold. Only then
-    /// does the edge below send: a browser starts its selection's autoscroll the same way, so a click on the last row
-    /// in sight, most of which is the edge's belt, leaves the rows where they are.
-    property bool selecting: false
-    property int fromRow: -1
-    property int fromAt: 0
 
     // ---- columns ---------------------------------------------------------------------------------------------------
     /// The hairline between the two columns, in this item's coordinates (the first gutter is left of this item).
@@ -98,6 +87,7 @@ Item {
         if (position.x < pick.codeStart(side))
             return false
         pick.handPosition = position
+        // A right-click starts no drag.
         if (button === Qt.LeftButton)
             pick.pressText(side, row, pick.byteAt(side, row, position.x - pick.codeStart(side)))
         return true
@@ -139,15 +129,11 @@ Item {
     function pressText(side, row, at) {
         pick.side = side
         pick.diffModel.beginSelect(side, row, at)
-        pick.selecting = false
-        pick.fromRow = row
-        pick.fromAt = at
-        pick.dragging = true
+        pick.pressedAt(row, at)
     }
     function dragText(row, at) {
         pick.diffModel.extendSelect(pick.side, row, at)
-        if (row !== pick.fromRow || at !== pick.fromAt)
-            pick.selecting = true
+        pick.draggedTo(row, at)
     }
     /// The button is up. A press that never moved is cleared, which keeps `selActive` honest.
     function releaseText() {
@@ -165,25 +151,7 @@ Item {
         pick.menuWanted()
     }
 
-    // ---- pixels to rows ----------------------------------------------------------------------------------------
-    /// Which row a point of this item is over, or -1 where the list has no rows. **Clamped twice**: to the frame, so a
-    /// drag past either edge keeps naming the row it can still see, and to the rows (`onRows`), so the ground under
-    /// the last row belongs to that row: the body's grip is every place in the frame nobody else takes a press at
-    /// (規約 §右のペインの字は掴める; the log's `CommandsTextSelect` is the same). A hunk heading's press stays the
-    /// heading's (`takesPress`; `diff-sweep`'s `ours=false`).
-    function rowAt(y) {
-        const inside = Math.max(0, Math.min(y, pick.height - 1))
-        // One pixel in from the left: rows are as wide as the list, so any x inside it finds the same row.
-        return pick.view.indexAt(1, pick.onRows(pick.view.contentY + inside))
-    }
-    /// A content y brought onto the band the rows stand on, from `originY`, which a list of rows of differing heights
-    /// moves (`AppListView.clampY`). An empty list has no band: `indexAt` finds nothing and the press goes down to the
-    /// list.
-    function onRows(y) {
-        const first = pick.view.originY
-        const last = first + pick.view.contentHeight - 1
-        return Math.max(first, Math.min(y, last))
-    }
+    // ---- pixels to places ------------------------------------------------------------------------------------------
     /// Which byte of one side of that row's line an x of its column lands on: the row's layout names the place
     /// (`LineRuler`), the model the byte (`DiffModel.sourceByteAt`). Past the line's end the layout answers the end,
     /// and left of the column the head. A heading has no place to land on.
@@ -219,31 +187,21 @@ Item {
         const foot = item.mapToItem(null, Qt.point(0, item.height))
         return Qt.point(pick.mapToItem(null, Qt.point(Math.max(start, Math.min(x, right)), 0)).x, foot.y)
     }
-    /// Not a hunk heading: the press there belongs to its two words (デザイン規約 §diff の中身をコピーする).
+    /// Not a hunk heading: the press there belongs to its two words (デザイン規約 §diff の中身をコピーする;
+    /// `diff-sweep`'s `ours=false`) — the one place in the frame besides the gutters the body's grip leaves.
     function takesPress(row) {
         const item = pick.view.itemAtIndex(row)
         return !!item && item.kind !== "hunk"
     }
 
     // ---- the ground under the last row ---------------------------------------------------------------------------
-    /// Where the ground a file shorter than the frame leaves under its last row begins, in this item's coordinates,
-    /// and whether there is any — a sweep against a diff that fills its frame proves nothing (verify-ui `diff-sweep`).
-    readonly property real groundTop: Math.max(0, pick.view.originY + pick.view.contentHeight - pick.view.contentY)
-    readonly property bool hasGround: pick.groundTop < pick.height - 2
-    /// Automation: a press on that ground and a drag up into the text, through the functions the `MouseArea` calls.
-    /// It **starts in the ground**: begun on a row it would go green with the ground taken back out (`SweepRoom`).
-    /// Across the first column's code.
+    /// Automation: a press on the ground under a short file's last row (`TextPick.groundPoint`) and a drag up into the
+    /// text, through the functions the `MouseArea` calls. Across the first column's code.
     function sweepFromGround(fx, fy) {
-        if (!pick.hasGround)
+        const start = pick.groundPoint(fx, fy, pick.split ? pick.divider : pick.width)
+        if (!start || !pick.takeAt(start, Qt.LeftButton))
             return false
-        const to = pick.split ? pick.divider : pick.width
-        const x = Math.max(1, Math.min(to - 1, to * fx))
-        const y = pick.groundTop + 1 + (pick.height - pick.groundTop - 2) * fy
-        if (!pick.takeAt(Qt.point(x, y), Qt.LeftButton))
-            return false
-        // Up at the x it started from — reading a row out where the reader never pressed passes a broken gesture.
-        const top = pick.view.itemAtIndex(0)
-        pick.followAt(Qt.point(x, top ? top.y - pick.view.contentY + top.height / 2 : 1))
+        pick.followAt(pick.firstRowPoint(start.x))
         pick.releaseText()
         return true
     }
