@@ -20,7 +20,7 @@ use std::path::Path;
 use crate::support::TestRepo;
 use crate::support::exec::{env, logged_global};
 use crate::support::oid;
-use crate::support::push::{row_in, toolbar, toolbar_from};
+use crate::support::push::{row, row_in, toolbar, toolbar_from};
 use crate::support::remote::far;
 use crate::support::session::{CaptureSink, opened, poll_landed, write_answer, write_settled};
 use platitude_core::GitError;
@@ -451,14 +451,7 @@ async fn counts_fetched_under_another_name_still_speak_for_the_marked_remote() {
 
     repo.git(&["switch", "-c", "aside"]);
     let (sink, session) = opened(&repo).await;
-    let row = sink
-        .wait_for("main's row off the refs", |evs| {
-            evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "main")),
-                _ => None,
-            })
-        })
-        .await;
+    let row = row(&sink, "main").await;
     assert_eq!(
         (
             row.standing,
@@ -628,14 +621,7 @@ async fn a_branch_aside_is_counted_and_sent_where_its_mark_says() {
     repo.git(&["switch", "-c", "aside"]);
     let (sink, session) = opened(&repo).await;
 
-    let facts = sink
-        .wait_for("main's counts where its mark sends it", |evs| {
-            evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "main")),
-                _ => None,
-            })
-        })
-        .await;
+    let facts = row(&sink, "main").await;
     let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/main"]);
     assert_eq!(
         (
@@ -695,14 +681,7 @@ async fn a_branch_measured_against_one_here_goes_where_its_mark_says() {
     repo.git(&["config", "branch.stacked.pushRemote", "fork"]);
     let (sink, session) = opened(&repo).await;
 
-    let facts = sink
-        .wait_for("stacked's counts where its mark sends it", |evs| {
-            evs.iter().rev().find_map(|e| match e {
-                SessionEvent::RefsLoaded { snapshot, .. } => Some(row_in(snapshot, "stacked")),
-                _ => None,
-            })
-        })
-        .await;
+    let facts = row(&sink, "stacked").await;
     let fork_tip = repo.git(&["rev-parse", "refs/remotes/fork/stacked"]);
     assert_eq!(
         (
