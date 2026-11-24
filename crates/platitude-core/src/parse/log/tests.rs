@@ -82,6 +82,28 @@ fn co_author_trailers_ride_along_in_the_record() {
     assert_eq!(&*commits[0].body, "Why it was done.");
 }
 
+/// The body's lines come as written: an indented block that opens it keeps
+/// its first line's indent, and only the blank lines around the words —
+/// the one a lifted trailer leaves among them — go.
+#[test]
+fn a_body_keeps_its_lines_as_written_but_the_blank_ones_around_them() {
+    let bytes = record_with_mates(
+        A,
+        "",
+        "Alice",
+        "alice@example.com",
+        "1700000000",
+        "Bob <bob@example.com>",
+        "    [core]\r\n        autocrlf = false\n\nAs written.  \n\nCo-authored-by: Bob <bob@example.com>\n",
+        "quote the config",
+    );
+    let (commits, _) = parse_all(&bytes, bytes.len());
+    assert_eq!(
+        &*commits[0].body,
+        "    [core]\n        autocrlf = false\n\nAs written.  "
+    );
+}
+
 #[test]
 fn a_co_authored_by_in_the_prose_stays_in_the_body() {
     // Field 5 is empty: git did not call it a trailer.

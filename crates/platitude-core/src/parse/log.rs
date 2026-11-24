@@ -165,7 +165,17 @@ impl LogParser {
                             .any(|(name, _)| l.contains(self.pool.get(*name))))
                     })
                     .collect();
-                self.cur_body = kept.join("\n").trim().to_string();
+                // The lines as written, the blank ones around the words
+                // left off: an indent opening the body stays (デザイン規約
+                // §リポジトリの文は原文で描く).
+                let words = |line: &&str| !line.trim().is_empty();
+                self.cur_body = match (
+                    kept.iter().position(words),
+                    kept.iter().rposition(|line| words(&line)),
+                ) {
+                    (Some(first), Some(last)) => kept[first..=last].join("\n"),
+                    _ => String::new(),
+                };
             }
             5 => {
                 // Pooled like the author: the same few names repeat.
