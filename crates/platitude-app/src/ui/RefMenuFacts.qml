@@ -39,7 +39,7 @@ QtObject {
     /// - `card`: the record the row's card stands on — `branchUpstream` on a branch's or a remote branch's row,
     ///   `tagMenu` on a tag's, `undefined` on any other;
     /// - `oid`, `open`, `push`, `merged`: the row's commit, whether the tab is open, and the BRANCH card's push row
-    ///   (`NavSectionModel.branchPush`) and plain delete off the drawn rows (`GraphModel.branchDeleteMerged`);
+    ///   (`NavSectionModel.branchPushFacts`) and plain delete off the drawn rows (`GraphModel.branchDeleteMerged`);
     /// - `tagAt`: the commit the tag here points at now (`RefTagMenu`).
     function stand(kind, full, oidHex, tree, aim, branchAt, worktreePath) {
         const lead = refMenuFacts.leadOf(kind, full, worktreePath === undefined ? "" : worktreePath)
@@ -55,7 +55,7 @@ QtObject {
             "oid": oidHex,
             "open": open,
             "push": kind === "branch"
-                    ? refMenuFacts.branchesModel.branchPush(full, refMenuFacts.repoTab.defaultRemote, open, tree)
+                    ? refMenuFacts.branchesModel.branchPushFacts(full, refMenuFacts.repoTab.defaultRemote, open, tree)
                     : undefined,
             "merged": !open || kind !== "branch" ? ""
                       : refMenuFacts.graphModel.branchDeleteMerged(branchAt, card.upstreamOid, tree.headOid),

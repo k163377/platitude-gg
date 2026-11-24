@@ -1,7 +1,7 @@
 //! The push of the branch HEAD is on, as one value QML hands on and never
 //! builds (`WorktreeModel.headPush`), and what a branch's push stands on —
 //! the toolbar's and a branch's `push` row's alike — as one record
-//! (`NavSectionModel.headPush` / `branchPush`).
+//! (`NavSectionModel.headPushFacts` / `branchPushFacts`).
 
 use platitude_core::AheadBehind;
 use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, PushTrack, StatusPush};
@@ -9,9 +9,6 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::counts::shown_count;
 use super::wire::{Fields, One, Record, field, optional_record, optional_text};
-
-/// What the toolbar's push slot takes (`NavSectionModel.headPush`).
-pub type Push = One<HeadPush>;
 
 /// What a branch's push stands on ([`PushFacts`]) as QML reads it, both
 /// doors' — the one place either answer is put in Qt's spellings of
@@ -200,8 +197,8 @@ mod tests {
     }
 
     fn round_trip(push: HeadPush) -> Option<HeadPush> {
-        let held = Push::new(push);
-        <Push as QVariantConvertible>::try_from_qvariant(&held.to_qvariant())
+        let held = One::new(push);
+        <One<HeadPush> as QVariantConvertible>::try_from_qvariant(&held.to_qvariant())
             .map(|back| (*back).clone())
     }
 

@@ -44,7 +44,7 @@ pub use markup::{
 };
 pub use mates::{Mates, mates_of};
 pub use menu::{CommitMenu, RefMenu, WorktreeMaking};
-pub use push::{Push, PushRecord};
+pub use push::PushRecord;
 pub use routing::{KeyedFile, Routing, file_key, file_of_key};
 pub use rows::{
     DiffRow, LineMarks, Marks, SplitRow, flatten_after, flatten_patches, is_combined, is_new_file,

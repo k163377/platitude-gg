@@ -380,8 +380,8 @@ impl WorktreeModel {
     // the toolbar's push slots take (`PublishFlow`); built as it is read.
     qproperty!("headPush", Read = head_push, Notify = changed);
 
-    fn head_push(&self) -> crate::encode::Push {
-        crate::encode::Push::new(self.head_push_now())
+    fn head_push(&self) -> crate::encode::One<platitude_core::remote::HeadPush> {
+        crate::encode::One::new(self.head_push_now())
     }
 
     // How far the branch HEAD is on stands from its upstream, as the last

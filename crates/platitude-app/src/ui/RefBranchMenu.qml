@@ -154,7 +154,7 @@ AppMenu {
         /// The name git's early check was asked under (`checkDeleteRequested`), which its answer comes back by
         /// (`checkedBranch`): a rename with the menu up leaves it, the commits being the same (`renamed`).
         property string askedAs: ""
-        /// What the push row stands on, whole (`NavSectionModel.branchPush` — the toolbar's record, `encode::PushRecord`:
+        /// What the push row stands on, whole (`NavSectionModel.branchPushFacts` — the toolbar's record, `encode::PushRecord`:
         /// its standing, where it goes, the commit an overwrite is leased to, the upstream the first push's question
         /// opens on, and what a press does there); `undefined` where the row has no seat (core's `offered`).
         property var push: undefined
@@ -172,7 +172,7 @@ AppMenu {
     /// reading answers no `deleteRemote`, which is what greys the rows that reach it — and `upstreamWhere`, where that
     /// upstream stands); `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` /
     /// `no`, empty for a tip or a reference older than the window, whose answer only git has), and `push` what the push
-    /// row stands on (`NavSectionModel.branchPush`, the record `state.push` holds). Every `facts` a branch card stands
+    /// row stands on (`NavSectionModel.branchPushFacts`, the record `state.push` holds). Every `facts` a branch card stands
     /// on carries all of them, a QML test's hand-built ones too: they are written below as they come, and the unset row
     /// stands on `upstream` / `upstreamWhere`.
     ///

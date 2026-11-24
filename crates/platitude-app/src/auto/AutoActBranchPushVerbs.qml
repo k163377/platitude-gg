@@ -62,9 +62,9 @@ Item {
         driver.menuLeaving(menu)
         menu.close()
     }
-    /// What the branch's row reads of its push now, off the listing (`NavSectionModel.branchPush`).
+    /// What the branch's row reads of its push now, off the listing (`NavSectionModel.branchPushFacts`).
     function landed() {
-        return branchesModel.branchPush(acts.branch, repoTab.defaultRemote, repoTab.state === "open", worktree.standing)
+        return branchesModel.branchPushFacts(acts.branch, repoTab.defaultRemote, repoTab.state === "open", worktree.standing)
     }
     /// The row as the menu stands. The free words last: a claim is one substring.
     function rowLine() {
@@ -202,7 +202,7 @@ Item {
         }
     }
     // git's answer, judged on the branch's own row: a push that landed leaves it level with where it went — what the
-    // card reads (`NavSectionModel.branchPush`), off the listing the write's own refresh publishes. `head=` is the
+    // card reads (`NavSectionModel.branchPushFacts`), off the listing the write's own refresh publishes. `head=` is the
     // worktree's branch, which nothing here moves.
     PageStage {
         id: landedTimer

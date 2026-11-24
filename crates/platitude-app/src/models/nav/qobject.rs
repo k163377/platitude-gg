@@ -642,7 +642,7 @@ impl NavSectionModel {
     /// and tracking nothing goes (`RepoTab.defaultRemote`). Asked of the
     /// branches section.
     #[qslot]
-    pub(super) fn branch_push(
+    pub(super) fn branch_push_facts(
         &self,
         name: String,
         fallback: String,
@@ -657,12 +657,12 @@ impl NavSectionModel {
     /// it was read (`WorktreeModel.headPush`; QML builds none) — read
     /// against this section's snapshot, the remotes' names and the commit
     /// an overwrite leases to as the remote branches list it: the hand a
-    /// branch's row leases by too (`branchPush`). A binding that asks
+    /// branch's row leases by too (`branchPushFacts`). A binding that asks
     /// follows `refsRevision`. Asked of the remotes section.
     #[qslot]
-    pub(super) fn head_push(
+    pub(super) fn head_push_facts(
         &self,
-        head: crate::encode::Push,
+        head: One<platitude_core::remote::HeadPush>,
         fallback: String,
         open: bool,
     ) -> One<crate::encode::PushRecord> {

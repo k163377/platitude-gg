@@ -941,7 +941,7 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
 
 /// Both doors' push answers off one snapshot, leased by one hand: the
 /// toolbar's (`headPush`, the branch HEAD is on as the worktree holds it)
-/// and a branch row's (`branchPush`) name as the overwrite's lease the
+/// and a branch row's (`branchPushFacts`) name as the overwrite's lease the
 /// commit the remote branches list where the counts are against. The row
 /// of the branch the tree is on has no seat: its door is the toolbar.
 #[test]
@@ -970,7 +970,7 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
     };
     let tip = oid("b").to_hex();
 
-    let row = branches.branch_push("topic".into(), "origin".into(), true, on_main());
+    let row = branches.branch_push_facts("topic".into(), "origin".into(), true, on_main());
     assert_eq!(
         (
             row.state.as_str(),
@@ -989,7 +989,7 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
         }),
         ..HeadBranch::default()
     });
-    let toolbar = remotes.head_push(crate::encode::Push::new(head), "origin".into(), true);
+    let toolbar = remotes.head_push_facts(One::new(head), "origin".into(), true);
     assert_eq!(
         (
             toolbar.state.as_str(),
@@ -998,9 +998,9 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
         ),
         ("behind", "origin/main", tip.as_str())
     );
-    let own = branches.branch_push("main".into(), "origin".into(), true, on_main());
+    let own = branches.branch_push_facts("main".into(), "origin".into(), true, on_main());
     assert!(!own.offered, "the branch the tree is on: the toolbar's");
-    let closed = branches.branch_push("topic".into(), "origin".into(), false, on_main());
+    let closed = branches.branch_push_facts("topic".into(), "origin".into(), false, on_main());
     assert!(!closed.offered, "a tab that is not open");
 }
 

@@ -80,7 +80,7 @@ Item {
     /// `offers` is core's answer (`menuOf`), with the upstream standing `upstreamWhere`. `merged` is what the drawn
     /// rows already say (`yes` / `no`, empty when only git can answer). The row stands on
     /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
-    /// (`NavSectionModel.branchPush`), none by default. `again`: why the menu stands again with the card up
+    /// (`NavSectionModel.branchPushFacts`), none by default. `again`: why the menu stands again with the card up
     /// (`RefBranchMenu.standOn`'s — `follow` / `wait`), none as it is raised; the row on `oid` (`abc123` unless named).
     function standOn(fields, again, oid) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
