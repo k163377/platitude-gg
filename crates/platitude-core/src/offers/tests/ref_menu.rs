@@ -564,7 +564,7 @@ fn a_stash_is_nobodys_history_to_branch_from() {
 fn a_row_on_no_commit_starts_nothing_on_it() {
     let main = TreeStanding::on("main");
     let row = RowStanding {
-        has_commit: false,
+        commit: None,
         ..standing(Some(target(RefKind::Branch, "feat")), &main)
     };
     assert!(!ref_menu(&row, FarSide::Unread).branch_here);

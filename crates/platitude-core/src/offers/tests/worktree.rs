@@ -209,7 +209,7 @@ fn only_a_closed_tab_or_no_commit_keeps_a_worktree_from_being_made() {
         WorktreeOffers::default()
     );
     let no_commit = RowStanding {
-        has_commit: false,
+        commit: None,
         ..standing(None, &main)
     };
     assert_eq!(

@@ -103,8 +103,9 @@ pub struct RowStanding<'a> {
     /// The row; `None` on a commit row that draws no name, which has the
     /// rows of its commit and none of a name.
     pub target: Option<RefTarget<'a>>,
-    /// The row points at a commit — what anything made on it stands on.
-    pub has_commit: bool,
+    /// The commit the row points at — what anything made on it stands on;
+    /// `None` where it points at none.
+    pub commit: Option<crate::Oid>,
     /// The tab-lifecycle gate.
     pub open: bool,
     pub tree: &'a TreeStanding,
@@ -367,7 +368,7 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
         switch_to: (branchy && !current) || row.leads == Leads::Itself,
         // Leading elsewhere asks nothing: the press opens that worktree.
         switch_asks: row.leads == Leads::Nowhere && tree.moves_blocked,
-        branch_here: kind != RefKind::Stash && row.has_commit,
+        branch_here: kind != RefKind::Stash && row.commit.is_some(),
         integrate_from: row.open && tree.on_branch() && !current,
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
@@ -674,7 +675,7 @@ pub fn worktree_rows(
         _ => None,
     };
     WorktreeOffers {
-        here: row.open && row.has_commit && kind != Some(RefKind::Stash),
+        here: row.open && row.commit.is_some() && kind != Some(RefKind::Stash),
         checkout,
         checkout_out,
     }

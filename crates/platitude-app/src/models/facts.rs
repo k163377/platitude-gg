@@ -188,8 +188,7 @@ impl GitFacts {
         local_listed: bool,
     ) -> One<RefMenu> {
         use platitude_core::offers;
-        let has_commit = crate::encode::oid_arg(&oid_hex).is_some();
-        let row = row_standing(&lead, has_commit, open, &tree);
+        let row = row_standing(&lead, crate::encode::oid_arg(&oid_hex), open, &tree);
         let far = card.as_ref().map_or(FarSide::Unread, CardRecord::far);
         let upstream = match &*card {
             Some(CardRecord::Branch(upstream)) => {
@@ -586,13 +585,13 @@ impl GitFacts {
 /// The row `refMenu` is asked about, standing on `tree`.
 fn row_standing<'a>(
     lead: &'a RowLead,
-    has_commit: bool,
+    commit: Option<platitude_core::Oid>,
     open: bool,
     tree: &'a TreeStanding,
 ) -> RowStanding<'a> {
     RowStanding {
         target: platitude_core::offers::RefTarget::from_words(&lead.kind, &lead.full),
-        has_commit,
+        commit,
         open,
         tree,
         leads: lead.leads,
