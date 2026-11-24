@@ -115,3 +115,42 @@ impl Record for crate::ops::Rows {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every record a tab hands QML comes back as it went, under the
+    /// fields' own names.
+    #[test]
+    fn a_tabs_records_round_trip() {
+        let asked = RemoteBranchAsked {
+            target: RemoteBranch {
+                remote: "my/fork".into(),
+                branch: "feature/x".into(),
+            },
+            local: "x".into(),
+        };
+        assert_eq!(RemoteBranchAsked::from_map(&asked.to_map()), Some(asked));
+        let report = Reported {
+            kind: "outdated".into(),
+            remote: "origin".into(),
+            name: "main".into(),
+            fact: String::new(),
+        };
+        assert_eq!(Reported::from_map(&report.to_map()), Some(report));
+        let draft = crate::hub::Draft {
+            subject: "fix: the subject".into(),
+            body: "The body.\n".into(),
+            amending: true,
+        };
+        assert_eq!(crate::hub::Draft::from_map(&draft.to_map()), Some(draft));
+        let rows = crate::ops::Rows {
+            branch: "topic".into(),
+            worktree_chip: "topic-tree".into(),
+            worktree_branch: "topic".into(),
+            ..crate::ops::Rows::default()
+        };
+        assert_eq!(crate::ops::Rows::from_map(&rows.to_map()), Some(rows));
+    }
+}

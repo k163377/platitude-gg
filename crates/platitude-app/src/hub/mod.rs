@@ -52,7 +52,7 @@ pub use tabs::{
 /// thing that survives `Hub::release_tab`, since no repository can be
 /// asked for it again. `amending` travels with it: an amend message put
 /// back into a plain commit editor would make a second commit.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Draft {
     pub subject: String,
     pub body: String,

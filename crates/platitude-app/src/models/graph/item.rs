@@ -160,7 +160,7 @@ impl Record for Tally {
 /// What a row of another worktree's uncommitted work answers when the
 /// delegate asks: whose it is, where it is, and its six tallies. Beside
 /// the items, since `GraphRowItem` has spent all fifteen fields.
-#[derive(Default, Clone)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct CarriedRow {
     pub(super) name: String,
     pub(super) path: String,
@@ -375,5 +375,32 @@ mod tests {
             <ChosenRows as QVariantConvertible>::try_from_qvariant(&chosen.to_qvariant()),
             Some(chosen)
         );
+    }
+
+    /// Another worktree's row comes back as it went, its tallies nested or
+    /// left out; the two sides' colours alike.
+    #[test]
+    fn a_carried_row_and_the_side_colours_round_trip() {
+        use crate::encode::Record;
+        let row = CarriedRow {
+            name: "topic".into(),
+            path: "C:/work/topic".into(),
+            home: false,
+            tally: Some(Tally {
+                added: 1,
+                modified: 2,
+                conflicted: 3,
+                ..Tally::default()
+            }),
+        };
+        assert_eq!(CarriedRow::from_map(&row.to_map()), Some(row.clone()));
+        let bare = CarriedRow {
+            home: true,
+            tally: None,
+            ..row
+        };
+        assert_eq!(CarriedRow::from_map(&bare.to_map()), Some(bare));
+        let sides = SideColors { ours: 2, theirs: 5 };
+        assert_eq!(SideColors::from_map(&sides.to_map()), Some(sides));
     }
 }
