@@ -43,7 +43,7 @@ pub use markup::{
     spelled_ranges,
 };
 pub use mates::{Mates, mates_of};
-pub use menu::{RefMenu, WorktreeMaking};
+pub use menu::{CommitMenu, RefMenu, WorktreeMaking};
 pub use push::{Push, PushRecord};
 pub use routing::{KeyedFile, Routing, file_key, file_of_key};
 pub use rows::{
@@ -54,7 +54,7 @@ pub use select::{diff_key, hunk_selection, worktree_target};
 pub use text_end::{Ended, TextEnd};
 pub use tree::{Reading, Standing, TreeReading};
 pub(crate) use wire::{
-    Fields, Listed, One, Optional, Record, field, oid_arg, optional_text, pinned_oid,
+    Fields, Listed, One, Optional, Record, field, has_field, oid_arg, optional_text, pinned_oid,
 };
 // `EndingWords` is not re-exported: no caller names it, and in this private
 // module a `pub use` nobody names is an unused import.

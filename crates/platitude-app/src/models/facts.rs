@@ -15,7 +15,9 @@ use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{Chips, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field};
+use crate::encode::{
+    Chips, CommitMenu, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field,
+};
 use crate::models::nav::{CardRecord, RowLead};
 
 /// The singleton every QML file can ask a rule of without wiring a model
@@ -88,22 +90,6 @@ impl GitFacts {
         crate::encode::named_kind_word(&kind).to_string()
     }
 
-    /// What the WORKTREE card offers for one worktree (`RefWorktreeMenu.standOn`):
-    /// `state` is the worktree's row word (`models::nav::item` — `MAIN` /
-    /// `LOCKED` / `PRUNABLE` / empty), `here` whether the tab stands in it.
-    #[qslot]
-    fn worktree_card_offers(&self, state: String, here: bool) -> Vec<String> {
-        platitude_core::offers::worktree_card(
-            state == crate::models::nav::MAIN,
-            state == crate::models::nav::LOCKED,
-            here,
-        )
-        .words()
-        .into_iter()
-        .map(str::to_string)
-        .collect()
-    }
-
     /// What the spaced second click does on a worktree on no branch
     /// (`offers::worktree_rename`): `box`, `locked`, `gone`, or empty for
     /// nothing. `state` is the worktree's row word, as above.
@@ -163,7 +149,8 @@ impl GitFacts {
     /// (`encode::RefMenu`): the row's own rows and the BRANCH and TAG cards'
     /// (`offers::ref_menu`), where the branch's upstream stands
     /// (`offers::upstream_place`), the `pull` row (`offers::pull_row`) and
-    /// the WORKTREE card's two making rows (`offers::worktree_rows`). Asked
+    /// the WORKTREE card's rows (`offers::worktree_rows` /
+    /// `offers::worktree_card`). Asked
     /// as the menu opens and as it stands again, never by a binding
     /// (app-ui.md「メニューは `AppMenu` 系で書く」), by both entrances through
     /// one part (`RefMenuFacts`).
@@ -178,7 +165,9 @@ impl GitFacts {
     /// Every slot here that takes a `tree` takes it so.
     ///
     /// `lead` is the row and where it leads, as the worktrees section
-    /// answered it (`NavSectionModel.leadOf`). `card` is the record the
+    /// answered it (`NavSectionModel.leadOf`) — the WORKTREE card's
+    /// worktree, whether the tab stands in it and where the row's own
+    /// branch would go out among them. `card` is the record the
     /// row's card stood on, handed on as it was read —
     /// `NavSectionModel.branchUpstream` on a branch's or a remote branch's
     /// row, `tagMenu` on a tag's — and `undefined` on any other row, which
@@ -206,34 +195,42 @@ impl GitFacts {
             _ => UpstreamPlace::None,
         };
         let making = offers::worktree_rows(&row, !lead.stopped_by.is_empty(), local_listed);
+        let worktree = lead.card.as_ref().map_or_else(Default::default, |card| {
+            offers::worktree_card(
+                card.change == crate::models::nav::MAIN,
+                card.change == crate::models::nav::LOCKED,
+                lead.card_here,
+            )
+        });
         One::new(RefMenu::new(
             offers::ref_menu(&row, far.clone()),
             offers::pull_row(&row, far),
             upstream,
-            WorktreeMaking::new(making, lead.placed),
+            WorktreeMaking::new(making, lead.placed, lead.place.is_some()),
+            worktree,
         ))
     }
 
-    /// What the right-click menu on a commit row may offer, the same way
-    /// (`CommitMenuState.openRowMenu`). `stash`: the row is a stash's;
-    /// `provisional`: the row is one the discard log's picked entry draws
-    /// (`GraphModel.provisionalAt`).
+    /// What the right-click menu on a commit row may offer, read whole the
+    /// same way (`CommitMenuState.standRow`). `stash`: the row is a
+    /// stash's; `provisional`: the row is one the discard log's picked
+    /// entry draws (`GraphModel.provisionalAt`).
     #[qslot]
-    fn commit_menu_offers(
+    fn commit_menu(
         &self,
         open: bool,
         tree: One<TreeStanding>,
         oid_hex: String,
         stash: bool,
         provisional: bool,
-    ) -> Vec<String> {
+    ) -> One<CommitMenu> {
         let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, stash);
         let offers = if provisional {
             offers.on_provisional()
         } else {
             offers
         };
-        offers.words().into_iter().map(str::to_string).collect()
+        One::new(offers.into())
     }
 
     /// What the details pane's message boxes do with the commit on screen,
@@ -650,7 +647,7 @@ mod tests {
     #[test]
     fn a_refs_menu_is_answered_whole_for_one_stand() {
         use crate::encode::{One, Optional};
-        use crate::models::nav::{BranchUpstream, CardRecord, RowLead};
+        use crate::models::nav::{BranchUpstream, CardRecord, NewWorktree, RowLead, WorktreeRow};
         use platitude_core::offers::{BranchFar, Leads, Reading, TreeStanding};
         let tree = || {
             One::new(TreeStanding {
@@ -666,7 +663,20 @@ mod tests {
             leads: Leads::Holder,
             path: "C:/work/other".into(),
             called: "other".into(),
+            card: Some(WorktreeRow {
+                name: "other".into(),
+                full: "C:/work/other".into(),
+                branch: "topic".into(),
+                change: crate::models::nav::LOCKED.into(),
+                reason: "on a stick".into(),
+                head: String::new(),
+            }),
             placed: true,
+            place: Some(NewWorktree {
+                path: "C:/work/repo.worktrees/topic".into(),
+                name: "topic".into(),
+                ..NewWorktree::default()
+            }),
             ..RowLead::default()
         };
         let card = BranchUpstream {
@@ -711,11 +721,18 @@ mod tests {
             (true, "branch", "held")
         );
         assert_eq!(
+            (menu.remove_worktree, menu.remove_out.as_str()),
+            (true, "locked"),
+            "the holder's card, greyed by its lock"
+        );
+        assert_eq!(
             GitFacts.switch_action(One::new(lead.clone()), tree(), true),
             "holder"
         );
         let nowhere = RowLead {
+            card: None,
             placed: false,
+            place: None,
             ..lead
         };
         let unplaced =
@@ -731,6 +748,15 @@ mod tests {
             ),
             ("", ""),
             "no card record, nothing read over there"
+        );
+        assert_eq!(
+            (
+                unplaced.making.here,
+                unplaced.making.checkout.as_str(),
+                unplaced.remove_worktree
+            ),
+            (false, "", false),
+            "nowhere to make one, and no worktree to take away"
         );
     }
 

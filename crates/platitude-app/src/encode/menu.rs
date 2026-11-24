@@ -1,7 +1,9 @@
 //! A ref's menu as core answers it for one stand (`GitFacts.refMenu`):
 //! what each row and card offers, in fields QML reads by name.
 
-use platitude_core::offers::{PullOffer, RefMenuOffers, UpstreamPlace, WorktreeOffers};
+use platitude_core::offers::{
+    CommitMenuOffers, PullOffer, RefMenuOffers, UpstreamPlace, WorktreeCardOffers, WorktreeOffers,
+};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, Record, field};
@@ -9,9 +11,9 @@ use super::wire::{Fields, Record, field};
 /// What the right-click menu on a ref offers (`offers::ref_menu`,
 /// `offers::pull_row` and `offers::worktree_rows`), read whole as it opens
 /// and as it stands again: the row's own rows, the BRANCH and TAG cards'
-/// rows, the `pull` row and the WORKTREE card's two making rows. Seats and
-/// reasons are words — `Seat::word`, `UpstreamPlace::word`,
-/// `PullRuns::word`, `PullOut::word`.
+/// rows, the `pull` row and the WORKTREE card's rows (`offers::worktree_card`).
+/// Seats and reasons are words — `Seat::word`, `UpstreamPlace::word`,
+/// `PullRuns::word`, `PullOut::word`, `RemoveOut::word`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RefMenu {
     pub switch_to: bool,
@@ -34,6 +36,11 @@ pub struct RefMenu {
     /// Why that row is greyed; empty while it is live.
     pub pull_out: String,
     pub making: WorktreeMaking,
+    /// `worktree remove` has a row: the WORKTREE card stands on a worktree
+    /// git removes.
+    pub remove_worktree: bool,
+    /// Why that row is greyed (`locked` / `here`); empty while it is live.
+    pub remove_out: String,
 }
 
 impl RefMenu {
@@ -42,6 +49,7 @@ impl RefMenu {
         pull: Option<PullOffer>,
         upstream: UpstreamPlace,
         making: WorktreeMaking,
+        card: WorktreeCardOffers,
     ) -> Self {
         Self {
             switch_to: offers.switch_to,
@@ -64,6 +72,8 @@ impl RefMenu {
                 .map_or("", |out| out.word())
                 .to_string(),
             making,
+            remove_worktree: card.remove,
+            remove_out: card.remove_out.map_or("", |out| out.word()).to_string(),
         }
     }
 }
@@ -88,6 +98,8 @@ impl Record for RefMenu {
             .put("pullRuns", &self.pull_runs)
             .put("pullOut", &self.pull_out)
             .put("making", &self.making.to_map())
+            .put("removeWorktree", &self.remove_worktree)
+            .put("removeOut", &self.remove_out)
             .done()
     }
 
@@ -110,6 +122,8 @@ impl Record for RefMenu {
             pull_runs: field(map, "pullRuns")?,
             pull_out: field(map, "pullOut")?,
             making: WorktreeMaking::from_map(&field::<QVariantMap>(map, "making")?)?,
+            remove_worktree: field(map, "removeWorktree")?,
+            remove_out: field(map, "removeOut")?,
         })
     }
 }
@@ -117,8 +131,8 @@ impl Record for RefMenu {
 /// The WORKTREE card's two making rows (`offers::worktree_rows`): whether
 /// `Create worktree here…` stands — only where new worktrees have a place
 /// to go —, how the row's own branch goes out (`branch` / `track`, empty
-/// for no row), and why that row is greyed (`current` / `held` /
-/// `stopped`, empty while live).
+/// for no row — and where no place for it is known), and why that row is
+/// greyed (`current` / `held` / `stopped`, empty while live).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorktreeMaking {
     pub here: bool,
@@ -128,15 +142,19 @@ pub struct WorktreeMaking {
 
 impl WorktreeMaking {
     /// `placed`: the worktrees have a place for a new one — a box whose
-    /// Enter could make nothing is not offered.
-    pub fn new(offers: WorktreeOffers, placed: bool) -> Self {
+    /// Enter could make nothing is not offered. `place_known`: the place
+    /// the row's own branch would go is known — a row naming nowhere is not
+    /// offered either.
+    pub fn new(offers: WorktreeOffers, placed: bool, place_known: bool) -> Self {
+        let checkout = offers.checkout.filter(|_| place_known);
         Self {
             here: offers.here && placed,
-            checkout: offers
-                .checkout
-                .map_or("", |checkout| checkout.word())
+            checkout: checkout.map_or("", |checkout| checkout.word()).to_string(),
+            out: offers
+                .checkout_out
+                .filter(|_| checkout.is_some())
+                .map_or("", |out| out.word())
                 .to_string(),
-            out: offers.checkout_out.map_or("", |out| out.word()).to_string(),
         }
     }
 }
@@ -159,10 +177,70 @@ impl Record for WorktreeMaking {
     }
 }
 
+/// What the right-click menu on a commit row offers (`offers::commit_menu`),
+/// read whole as it opens and as it stands again — one field per row, as
+/// [`RefMenu`] answers a ref's.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommitMenu {
+    pub cherry_pick: bool,
+    pub revert: bool,
+    pub integrate: bool,
+    pub edit_history: bool,
+    pub move_branch: bool,
+    pub branch_here: bool,
+    pub standing: bool,
+    pub stash_write: bool,
+}
+
+impl From<CommitMenuOffers> for CommitMenu {
+    fn from(offers: CommitMenuOffers) -> Self {
+        Self {
+            cherry_pick: offers.cherry_pick,
+            revert: offers.revert,
+            integrate: offers.integrate,
+            edit_history: offers.edit_history,
+            move_branch: offers.move_branch,
+            branch_here: offers.branch_here,
+            standing: offers.standing,
+            stash_write: offers.stash_write,
+        }
+    }
+}
+
+impl Record for CommitMenu {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("cherryPick", &self.cherry_pick)
+            .put("revert", &self.revert)
+            .put("integrate", &self.integrate)
+            .put("editHistory", &self.edit_history)
+            .put("moveBranch", &self.move_branch)
+            .put("branchHere", &self.branch_here)
+            .put("standing", &self.standing)
+            .put("stashWrite", &self.stash_write)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            cherry_pick: field(map, "cherryPick")?,
+            revert: field(map, "revert")?,
+            integrate: field(map, "integrate")?,
+            edit_history: field(map, "editHistory")?,
+            move_branch: field(map, "moveBranch")?,
+            branch_here: field(map, "branchHere")?,
+            standing: field(map, "standing")?,
+            stash_write: field(map, "stashWrite")?,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platitude_core::offers::{PullOut, PullRuns, Seat, WorktreeAddOut, WorktreeCheckout};
+    use platitude_core::offers::{
+        PullOut, PullRuns, RemoveOut, Seat, WorktreeAddOut, WorktreeCheckout,
+    };
 
     #[test]
     fn the_menus_answer_says_each_seat_and_reason_in_its_word() {
@@ -179,6 +257,10 @@ mod tests {
             }),
             UpstreamPlace::Current,
             WorktreeMaking::default(),
+            WorktreeCardOffers {
+                remove: true,
+                remove_out: Some(RemoveOut::Locked),
+            },
         );
         assert!(menu.switch_to);
         assert_eq!(
@@ -193,19 +275,25 @@ mod tests {
             ("aside", "own")
         );
         assert_eq!(menu.upstream_where, "current");
+        assert_eq!(
+            (menu.remove_worktree, menu.remove_out.as_str()),
+            (true, "locked")
+        );
         let none = RefMenu::new(
             RefMenuOffers::default(),
             None,
             UpstreamPlace::None,
             WorktreeMaking::default(),
+            WorktreeCardOffers::default(),
         );
         assert_eq!(
             (
                 none.pull_runs.as_str(),
                 none.pull_out.as_str(),
-                none.delete_remote_tag.as_str()
+                none.delete_remote_tag.as_str(),
+                none.remove_out.as_str()
             ),
-            ("", "", ""),
+            ("", "", "", ""),
             "no row is no word"
         );
         assert_eq!(RefMenu::from_map(&menu.to_map()), Some(menu));
@@ -218,7 +306,7 @@ mod tests {
             checkout: Some(WorktreeCheckout::Branch),
             checkout_out: Some(WorktreeAddOut::Held),
         };
-        let making = WorktreeMaking::new(offers, true);
+        let making = WorktreeMaking::new(offers, true, true);
         assert_eq!(
             making,
             WorktreeMaking {
@@ -227,12 +315,26 @@ mod tests {
                 out: "held".into(),
             }
         );
-        assert!(!WorktreeMaking::new(offers, false).here);
+        assert!(!WorktreeMaking::new(offers, false, true).here);
+        assert_eq!(
+            WorktreeMaking::new(offers, true, false),
+            WorktreeMaking {
+                here: true,
+                ..WorktreeMaking::default()
+            },
+            "a branch with no place known has no row, and no reason for one"
+        );
         assert_eq!(
             WorktreeMaking::from_map(&making.to_map()),
             Some(making.clone())
         );
-        let menu = RefMenu::new(RefMenuOffers::default(), None, UpstreamPlace::None, making);
+        let menu = RefMenu::new(
+            RefMenuOffers::default(),
+            None,
+            UpstreamPlace::None,
+            making,
+            WorktreeCardOffers::default(),
+        );
         assert_eq!(
             RefMenu::from_map(&menu.to_map()),
             Some(menu),

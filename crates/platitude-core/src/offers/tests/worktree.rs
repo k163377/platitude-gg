@@ -35,27 +35,33 @@ fn the_repositorys_own_worktree_has_nothing_to_remove() {
         worktree_card(true, false, false),
         WorktreeCardOffers::default()
     );
-    assert!(worktree_card(true, false, true).words().is_empty());
+    assert_eq!(
+        worktree_card(true, false, true),
+        WorktreeCardOffers::default()
+    );
 }
 
 #[test]
 fn a_worktree_nothing_holds_is_removed_as_it_stands() {
-    let card = worktree_card(false, false, false);
-    assert_eq!(card.words(), vec!["remove"]);
+    assert_eq!(
+        worktree_card(false, false, false),
+        WorktreeCardOffers {
+            remove: true,
+            remove_out: None,
+        }
+    );
 }
 
 /// Every reason keeps the row; the lock goes first, then the tab's own
 /// worktree.
 #[test]
 fn what_stands_in_the_way_greys_the_row_and_says_which() {
-    assert_eq!(
-        worktree_card(false, true, true).words(),
-        vec!["remove", "out-locked"]
-    );
-    assert_eq!(
-        worktree_card(false, false, true).words(),
-        vec!["remove", "out-here"]
-    );
+    let out = |locked: bool, here: bool| {
+        let card = worktree_card(false, locked, here);
+        (card.remove, card.remove_out.map(RemoveOut::word))
+    };
+    assert_eq!(out(true, true), (true, Some("locked")));
+    assert_eq!(out(false, true), (true, Some("here")));
 }
 
 #[test]

@@ -385,37 +385,6 @@ pub struct CommitMenuOffers {
 }
 
 impl CommitMenuOffers {
-    /// The offers as words, the list `GitFacts.commitMenuOffers` answers
-    /// with.
-    pub fn words(&self) -> Vec<&'static str> {
-        let mut words: Vec<&'static str> = Vec::new();
-        if self.cherry_pick {
-            words.push("cherry-pick");
-        }
-        if self.revert {
-            words.push("revert");
-        }
-        if self.integrate {
-            words.push("integrate");
-        }
-        if self.edit_history {
-            words.push("edit-history");
-        }
-        if self.move_branch {
-            words.push("move-branch");
-        }
-        if self.branch_here {
-            words.push("branch-here");
-        }
-        if self.standing {
-            words.push("standing");
-        }
-        if self.stash_write {
-            words.push("stash-write");
-        }
-        words
-    }
-
     /// The same offers on a commit the discard log's picked entry draws on
     /// the graph, a display mode of its own (user decision — ask before
     /// changing): what the mode can never do has no row, not a greyed one, and
@@ -472,7 +441,7 @@ pub enum RemoveOut {
 }
 
 /// What the WORKTREE card offers for one worktree, decided as the
-/// menu opens (`RefWorktreeMenu.standOn`).
+/// menu opens and as it stands again (`GitFacts.refMenu`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct WorktreeCardOffers {
     /// `worktree remove` has a row: every worktree but the repository's own,
@@ -483,20 +452,13 @@ pub struct WorktreeCardOffers {
     pub remove_out: Option<RemoveOut>,
 }
 
-impl WorktreeCardOffers {
-    /// The offers as words, the shape `GitFacts.worktreeCardOffers` answers
-    /// with: `remove`, then `out-locked` / `out-here`.
-    pub fn words(&self) -> Vec<&'static str> {
-        let mut words: Vec<&'static str> = Vec::new();
-        if self.remove {
-            words.push("remove");
+impl RemoveOut {
+    /// The word a menu's record carries it in (`encode::RefMenu`).
+    pub fn word(self) -> &'static str {
+        match self {
+            Self::Locked => "locked",
+            Self::Here => "here",
         }
-        match self.remove_out {
-            Some(RemoveOut::Locked) => words.push("out-locked"),
-            Some(RemoveOut::Here) => words.push("out-here"),
-            None => {}
-        }
-        words
     }
 }
 

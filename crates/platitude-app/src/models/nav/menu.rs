@@ -6,14 +6,14 @@
 use platitude_core::offers::{FarSide, Leads};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
-use super::{BranchUpstream, NavSectionModel, Source, TagMenu};
-use crate::encode::{Fields, Record, field};
+use super::{BranchUpstream, NavSectionModel, NewWorktree, Source, TagMenu, WorktreeRow};
+use crate::encode::{Fields, Record, field, has_field};
 
 /// A ref's row as its menu asks core about it: the row's two words and the
 /// local branch it lands on, where it leads beside the tree the tab stands
-/// in, the worktree its WORKTREE card stands on, what the worktrees say of
-/// its branch, and whether new worktrees have a place at all — one answer
-/// (`NavSectionModel.leadOf`).
+/// in, the worktree its WORKTREE card stands on and whether the tab stands
+/// in that one, what the worktrees say of its branch, and where new
+/// worktrees go — one answer (`NavSectionModel.leadOf`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RowLead {
     /// The row's kind word (`offers::RefKind::from_word`), and its name as
@@ -32,21 +32,27 @@ pub struct RowLead {
     pub called: String,
     /// That worktree is the repository's own: its marks are the house.
     pub home: bool,
-    /// The worktree the row's WORKTREE card stands on, as git lists it: a
-    /// worktree row's own — the tab's too —, or the one holding a local
-    /// branch's; empty for a remote row, which only leads there (デザイン規約
-    /// §メニュー の入れ子), and for any other.
-    pub worktree: String,
+    /// The worktree the row's WORKTREE card stands on, as its row says it:
+    /// the one the menu was opened on, else a worktree row's own — the
+    /// tab's too —, or the one holding a local branch's; none for a remote
+    /// row, which only leads there (デザイン規約 §メニュー の入れ子), for any
+    /// other, and for a worktree not listed or listed as going.
+    pub card: Option<WorktreeRow>,
+    /// The tab stands in that worktree.
+    pub card_here: bool,
     /// `rebase` / `bisect` where an operation stopped in the tree the tab
     /// stands in holds the row's branch; empty otherwise.
     pub stopped_by: String,
     /// New worktrees have a place to go (`has_place_for_worktrees`).
     pub placed: bool,
+    /// Where the row's own branch would go out in a worktree of its own
+    /// (`new_worktree`); none with no local branch, or nowhere to go.
+    pub place: Option<NewWorktree>,
 }
 
 impl Record for RowLead {
     fn to_map(&self) -> QVariantMap {
-        Fields::new()
+        let fields = Fields::new()
             .put("kind", &self.kind)
             .put("full", &self.full)
             .put("local", &self.local)
@@ -54,13 +60,34 @@ impl Record for RowLead {
             .put("path", &self.path)
             .put("called", &self.called)
             .put("home", &self.home)
-            .put("worktree", &self.worktree)
+            .put("cardHere", &self.card_here)
             .put("stoppedBy", &self.stopped_by)
-            .put("placed", &self.placed)
-            .done()
+            .put("placed", &self.placed);
+        // Left out where there is none, which QML reads as `undefined`.
+        let fields = match &self.card {
+            Some(card) => fields.put("card", &card.to_map()),
+            None => fields,
+        };
+        match &self.place {
+            Some(place) => fields.put("place", &place.to_map()),
+            None => fields,
+        }
+        .done()
     }
 
     fn from_map(map: &QVariantMap) -> Option<Self> {
+        // An absent card or place is none; one that is there but does not
+        // read is a refusal, like any field.
+        let card = if has_field(map, "card") {
+            Some(WorktreeRow::from_map(&field(map, "card")?)?)
+        } else {
+            None
+        };
+        let place = if has_field(map, "place") {
+            Some(NewWorktree::from_map(&field(map, "place")?)?)
+        } else {
+            None
+        };
         Some(Self {
             kind: field(map, "kind")?,
             full: field(map, "full")?,
@@ -69,9 +96,11 @@ impl Record for RowLead {
             path: field(map, "path")?,
             called: field(map, "called")?,
             home: field(map, "home")?,
-            worktree: field(map, "worktree")?,
+            card,
+            card_here: field(map, "cardHere")?,
             stopped_by: field(map, "stoppedBy")?,
             placed: field(map, "placed")?,
+            place,
         })
     }
 }
@@ -117,9 +146,11 @@ impl NavSectionModel {
     /// a branch's or a remote branch's holder, by `local` — the local
     /// branch the row lands on —, and a worktree on no branch itself while
     /// the tab does not stand in it. Of a local branch, also the operation
-    /// stopped here that holds it. Asked of any other section, the row
-    /// leads nowhere.
-    pub(super) fn row_lead(&self, kind: &str, full: &str, local: &str) -> RowLead {
+    /// stopped here that holds it. `opened` is the worktree the menu was
+    /// opened on (a WORKTREES row's path), which the WORKTREE card stands on
+    /// over the row's own; empty for none. Asked of any other section, the
+    /// row leads nowhere.
+    pub(super) fn row_lead(&self, kind: &str, full: &str, local: &str, opened: &str) -> RowLead {
         let local = if matches!(kind, "branch" | "remote") {
             local
         } else {
@@ -157,10 +188,23 @@ impl NavSectionModel {
         } else {
             String::new()
         };
-        let worktree = match kind {
-            "worktree" => full.to_string(),
-            "branch" => path.clone(),
-            _ => String::new(),
+        let worktree = if !opened.is_empty() {
+            opened
+        } else {
+            match kind {
+                "worktree" => full,
+                "branch" => path.as_str(),
+                _ => "",
+            }
+        };
+        let card = self.worktree_of(worktree);
+        let card_here = card
+            .as_ref()
+            .is_some_and(|card| platitude_core::session::same_path_key(&card.full) == *current);
+        let place = if local.is_empty() {
+            None
+        } else {
+            self.new_worktree(local)
         };
         let named = if path.is_empty() {
             super::WorktreeName::default()
@@ -169,7 +213,9 @@ impl NavSectionModel {
         };
         RowLead {
             leads,
-            worktree,
+            card,
+            card_here,
+            place,
             called: named.called,
             home: named.home,
             path,

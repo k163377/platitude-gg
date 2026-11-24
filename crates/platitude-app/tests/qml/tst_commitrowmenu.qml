@@ -24,7 +24,8 @@ Item {
                       "delete": false, "deleteRemote": false, "setUpstream": false, "unsetUpstream": false,
                       "current": false, "upstreamWhere": "", "pushTag": false, "deleteRemoteTag": "",
                       "deleteTagEverywhere": "", "pullRuns": "", "pullOut": "",
-                      "making": { "here": false, "checkout": "", "out": "" } }
+                      "making": { "here": false, "checkout": "", "out": "" }, "removeWorktree": false,
+                      "removeOut": "" }
         for (const key in fields)
             all[key] = fields[key]
         return all
@@ -34,7 +35,7 @@ Item {
     function stand(fields) {
         const all = {
             "lead": { "kind": "branch", "full": "feature/topic-a", "local": "feature/topic-a", "leads": "",
-                      "path": "", "called": "", "home": false, "worktree": "", "stoppedBy": "",
+                      "path": "", "called": "", "home": false, "cardHere": false, "stoppedBy": "",
                       "placed": true },
             "menu": root.menuOf({ "switch": true, "branchHere": true, "integrate": true, "delete": true,
                                   "deleteRemote": true, "setUpstream": true, "upstreamWhere": "remote" }),
@@ -44,10 +45,7 @@ Item {
             "open": true,
             "push": undefined,
             "merged": "yes",
-            "tagAt": "",
-            "worktree": undefined,
-            "worktreeHere": false,
-            "place": undefined
+            "tagAt": ""
         }
         for (const key in (fields || {}))
             all[key] = fields[key]
@@ -56,7 +54,7 @@ Item {
     /// A stand whose WORKTREE card makes what `fields` says (`RefWorktreeMenu.standOn`), and whose other cards hold
     /// nothing: `here`, `checkout` and `out` as core answers them; `branch` (the local branch the row lands on),
     /// `start` (the remote branch a tracking one is made off), `holderLeaf` / `stoppedBy` (what holds it) as the row's
-    /// lead says them; `path` / `place` / `taken` as the place it would go — none without a `checkout`.
+    /// lead says them, with `path` / `place` / `taken` as the place it would go — none without a `checkout`.
     function making(fields) {
         const all = Object.assign({ "here": false, "checkout": "", "out": "", "branch": "", "start": "",
                                     "holderLeaf": "", "stoppedBy": "", "path": "", "place": "", "taken": "" },
@@ -64,13 +62,14 @@ Item {
         return root.stand({
             "lead": { "kind": all.start !== "" ? "remote" : "branch",
                       "full": all.start !== "" ? all.start : all.branch, "local": all.branch, "leads": "",
-                      "path": "", "called": all.holderLeaf, "home": false, "worktree": "",
-                      "stoppedBy": all.stoppedBy, "placed": true },
+                      "path": "", "called": all.holderLeaf, "home": false, "cardHere": false,
+                      "stoppedBy": all.stoppedBy, "placed": true,
+                      "place": all.checkout === "" ? undefined
+                             : { "path": all.path, "name": all.place, "taken": all.taken } },
             "menu": root.menuOf({ "making": { "here": all.here, "checkout": all.checkout, "out": all.out } }),
             "card": { "remoteCounterpart": "", "remoteCounterpartOid": "", "upstream": "" },
             "open": false,
-            "merged": "",
-            "place": all.checkout === "" ? undefined : { "path": all.path, "name": all.place, "taken": all.taken }
+            "merged": ""
         })
     }
 
@@ -540,7 +539,7 @@ Item {
             // A tag standing here only, as `tst_tagcard.qml` spells core's answer and the tag's record.
             const tagged = root.stand({
                 "lead": { "kind": "tag", "full": "v1.0", "local": "", "leads": "", "path": "", "called": "",
-                          "home": false, "worktree": "", "stoppedBy": "", "placed": true },
+                          "home": false, "cardHere": false, "stoppedBy": "", "placed": true },
                 "card": { "pushRemote": "origin", "lease": "", "reach": "", "heldBack": "", "carriers": "",
                           "rowGoes": false },
                 "menu": root.menuOf({ "branchHere": true, "integrate": true, "delete": true, "pushTag": true }),

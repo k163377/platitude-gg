@@ -272,7 +272,7 @@ pub(crate) use item::{LOCKED, MAIN, PRUNABLE};
 pub(crate) use menu::{CardRecord, RowLead};
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
-use worktree_card::{NewWorktree, WorktreeName, WorktreeRow, WorktreeRows};
+pub(crate) use worktree_card::{NewWorktree, WorktreeName, WorktreeRow, WorktreeRows};
 
 #[derive(Default)]
 pub struct NavSectionModel {

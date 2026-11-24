@@ -737,13 +737,15 @@ impl NavSectionModel {
     /// the worktree its WORKTREE card stands on, the operation stopped here
     /// that holds a local branch, and whether new worktrees have a place.
     /// `local` is the local branch the row lands on (the remotes section's
-    /// `landsOn`). Read as a menu opens and as it
-    /// stands again, or as a press on a ref is weighed, and handed on whole
+    /// `landsOn`); `opened` the worktree the menu was opened on (a WORKTREES
+    /// row's path), which its WORKTREE card stands on, empty for none. Read
+    /// as a menu opens and as it stands again, or as a press on a ref is
+    /// weighed, and handed on whole
     /// to `GitFacts.refMenu` / `switchAction`. Asked of the worktrees
     /// section.
     #[qslot]
-    pub(super) fn lead_of(&self, kind: String, full: String, local: String) -> One<RowLead> {
-        One::new(self.row_lead(&kind, &full, &local))
+    pub(super) fn lead_of(&self, kind: String, full: String, local: String, opened: String) -> One<RowLead> {
+        One::new(self.row_lead(&kind, &full, &local, &opened))
     }
 
     /// The worktree a stopped rebase or bisect holds this branch in —

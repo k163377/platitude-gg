@@ -76,33 +76,34 @@ AppMenu {
         property string stoppedBy: ""
     }
 
-    /// Stands the card on a row, off what the carrying menu read for it (`RefMenuFacts.stand`): `worktree` — the
-    /// worktree the row names (`NavSectionModel.worktreeFacts`), undefined for none, which takes `worktree remove` off
-    /// the card — and `worktreeHere`, whether this tab stands in it; the two rows that make a worktree as core answered
-    /// them (`menu.making` — `offers::worktree_rows`: whether `Create worktree here…` has a row, how the row's own
-    /// branch goes out, and why that row greys), on the row's commit `oid`; where it goes (`place` — its path, its
-    /// folder and what is in the way there; undefined, no row: there is no place to name yet); and the row and where
-    /// it leads (`lead` — the branch it takes out, and the worktree holding it or the operation stopped here on it).
+    /// Stands the card on a row, off what the carrying menu read for it (`RefMenuFacts.stand`): the worktree the
+    /// row's lead names (`lead.card` — `NavSectionModel.leadOf`, undefined for none) and the rows core answered for it
+    /// (`menu.removeWorktree` / `removeOut` — `offers::worktree_card`); the two rows that make a worktree as core
+    /// answered them (`menu.making` — `offers::worktree_rows`: whether `Create worktree here…` has a row, how the
+    /// row's own branch goes out — no row where no place for it is known —, and why that row greys), on the row's
+    /// commit `oid`; where it goes (`lead.place` — its path, its folder and what is in the way there); and the row and
+    /// where it leads (`lead` — the branch it takes out, and the worktree holding it or the operation stopped here on
+    /// it).
     function standOn(facts) {
-        const worktree = facts.worktree
-        const offers = worktree ? GitFacts.worktreeCardOffers(worktree.change, facts.worktreeHere) : []
-        state.path = worktree ? worktree.full : ""
-        state.name = worktree ? worktree.name : ""
-        state.holds = worktree ? worktree.branch : ""
-        state.lockReason = offers.includes("out-locked") ? worktree.reason : ""
-        state.canRemove = offers.includes("remove")
-        state.out = offers.includes("out-locked") ? "locked"
-                  : offers.includes("out-here") ? "here" : ""
-        const making = facts.menu.making
-        const place = facts.place
+        const lead = facts.lead
+        const worktree = lead.card
+        const menu = facts.menu
+        state.path = worktree === undefined ? "" : worktree.full
+        state.name = worktree === undefined ? "" : worktree.name
+        state.holds = worktree === undefined ? "" : worktree.branch
+        state.canRemove = menu.removeWorktree
+        state.out = menu.removeOut
+        state.lockReason = menu.removeOut === "locked" ? worktree.reason : ""
+        const making = menu.making
+        const place = lead.place
         state.oid = facts.oid
         state.canHere = making.here
-        state.checkout = place === undefined ? "" : making.checkout
-        state.branch = place === undefined ? "" : facts.lead.local
-        state.start = making.checkout === "track" ? facts.lead.full : ""
-        state.addPath = place === undefined ? "" : place.path
-        state.place = place === undefined ? "" : place.name
-        state.taken = place === undefined ? "" : place.taken
+        state.checkout = making.checkout
+        state.branch = making.checkout === "" ? "" : lead.local
+        state.start = making.checkout === "track" ? lead.full : ""
+        state.addPath = making.checkout === "" ? "" : place.path
+        state.place = making.checkout === "" ? "" : place.name
+        state.taken = making.checkout === "" ? "" : place.taken
         state.addOut = making.out
         state.holderLeaf = facts.lead.called
         state.holderHome = facts.lead.home

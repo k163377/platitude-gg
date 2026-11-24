@@ -33,29 +33,20 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
             stash_write: false,
         }
     );
-    assert_eq!(
-        offers.words(),
-        [
-            "cherry-pick",
-            "revert",
-            "integrate",
-            "edit-history",
-            "move-branch",
-            "branch-here"
-        ]
-    );
 }
+
 
 #[test]
 fn a_commit_the_discard_log_draws_offers_only_what_adds() {
-    let offers = commit_offers("abc123", "def456").on_provisional();
-    assert_eq!(offers.words(), ["cherry-pick", "branch-here"]);
+    let adds = CommitMenuOffers {
+        cherry_pick: true,
+        branch_here: true,
+        ..CommitMenuOffers::default()
+    };
+    assert_eq!(commit_offers("abc123", "def456").on_provisional(), adds);
     // HEAD's own commit drawn for an entry that took a name off it: the rows
     // that would rewrite it are as out as anywhere.
-    assert_eq!(
-        commit_offers("abc123", "abc123").on_provisional().words(),
-        ["cherry-pick", "branch-here"]
-    );
+    assert_eq!(commit_offers("abc123", "abc123").on_provisional(), adds);
     assert_eq!(
         commit_menu(
             true,
@@ -63,9 +54,11 @@ fn a_commit_the_discard_log_draws_offers_only_what_adds() {
             "abc123",
             false
         )
-        .on_provisional()
-        .words(),
-        ["cherry-pick", "branch-here", "standing"],
+        .on_provisional(),
+        CommitMenuOffers {
+            standing: true,
+            ..adds
+        },
         "what stays greys under a standing operation as anywhere"
     );
 }
@@ -111,18 +104,6 @@ fn a_standing_operation_greys_the_whole_menu_in_its_seats() {
             ..commit_offers("abc123", "def456")
         },
         "every row the idle menu has, kept"
-    );
-    assert_eq!(
-        offers.words(),
-        [
-            "cherry-pick",
-            "revert",
-            "integrate",
-            "edit-history",
-            "move-branch",
-            "branch-here",
-            "standing"
-        ]
     );
     let detached = TreeStanding {
         head_oid: "def456".into(),

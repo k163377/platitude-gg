@@ -220,11 +220,11 @@ QtObject {
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
         // No running command is asked about: the menu waits for one with its rows greyed (`AppMenu.runningWhy`), so it
         // has one shape whenever it is opened.
-        const offers = GitFacts.commitMenuOffers(
+        const offers = GitFacts.commitMenu(
             menuState.repoTab.state === "open", menuState.tree, oidHex, menuState.menuStashRef !== "",
             menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)))
         if (menuState.menuStashRef !== "") {
-            menuState.menuStashCanWrite = offers.includes("stash-write")
+            menuState.menuStashCanWrite = offers.stashWrite
             return null
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
@@ -232,13 +232,13 @@ QtObject {
         menuState.menuHardResetTakes = menuState.tree.hardResetTakes
         menuState.menuHardResetNotCopied = menuState.tree.hardResetNotCopied
         menuState.menuTipHeldElsewhere = menuState.tree.headReachedElsewhere
-        menuState.menuCanCherryPick = offers.includes("cherry-pick")
-        menuState.menuCanRevert = offers.includes("revert")
-        menuState.menuCanIntegrate = offers.includes("integrate")
-        menuState.menuCanEditHistory = offers.includes("edit-history")
-        menuState.menuCanMoveBranch = offers.includes("move-branch")
-        menuState.menuCanBranchHere = offers.includes("branch-here")
-        menuState.menuOpStanding = offers.includes("standing")
+        menuState.menuCanCherryPick = offers.cherryPick
+        menuState.menuCanRevert = offers.revert
+        menuState.menuCanIntegrate = offers.integrate
+        menuState.menuCanEditHistory = offers.editHistory
+        menuState.menuCanMoveBranch = offers.moveBranch
+        menuState.menuCanBranchHere = offers.branchHere
+        menuState.menuOpStanding = offers.standing
         // The name the menu is aimed at: its `switch` and `pull` rows and every card at the foot, the BRANCH card where
         // its branch points (`aimAt`). A chip drawing one remote's reading of a tag names that remote on its own, so
         // the TAG card's `push` and deletes act on it (user decision — ask before changing;

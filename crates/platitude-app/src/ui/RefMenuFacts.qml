@@ -29,29 +29,25 @@ QtObject {
     /// reader named on its own, which the TAG card acts on (empty for its default). `branchAt` is where the BRANCH
     /// card's branch points: the graph row's menu stands on the row's commit, which the branch may have moved off
     /// (`CommitMenuState.aimedAt`). `worktreePath` is the WORKTREES row the menu was opened on, whose worktree the
-    /// WORKTREE card stands on; left out, the one the row's lead names (`RowLead.worktree`).
+    /// WORKTREE card stands on; left out, the one the worktrees section names for the row (`RowLead.card`).
     ///
     /// One answer the menu and its cards read by name:
-    /// - `lead`: the row and where it leads (`NavSectionModel.leadOf` — `path`, `called`, `home`, `stoppedBy`);
+    /// - `lead`: the row and where it leads (`NavSectionModel.leadOf` — `path`, `called`, `home`, `stoppedBy`), and
+    ///   the WORKTREE card's worktree (`card`), whether the tab stands in it and where the row's own branch would go
+    ///   out (`place`);
     /// - `menu`: core's answer for every row and card (`GitFacts.refMenu` — the making rows in `making`);
     /// - `card`: the record the row's card stands on — `branchUpstream` on a branch's or a remote branch's row,
     ///   `tagMenu` on a tag's, `undefined` on any other;
     /// - `oid`, `open`, `push`, `merged`: the row's commit, whether the tab is open, and the BRANCH card's push row
     ///   (`NavSectionModel.branchPush`) and plain delete off the drawn rows (`GraphModel.branchDeleteMerged`);
-    /// - `tagAt`: the commit the tag here points at now (`RefTagMenu`);
-    /// - `worktree`, `worktreeHere`, `place`: the WORKTREE card's worktree, whether the tab stands in it, and where the
-    ///   row's own branch would go out (`NavSectionModel.newWorktreeFor`; `undefined` with no row, or before the
-    ///   listing names the repository's own worktree).
+    /// - `tagAt`: the commit the tag here points at now (`RefTagMenu`).
     function stand(kind, full, oidHex, tree, aim, branchAt, worktreePath) {
-        const local = refMenuFacts.remotesModel.landsOn(kind, full)
-        const lead = refMenuFacts.worktreesModel.leadOf(kind, full, local)
+        const lead = refMenuFacts.leadOf(kind, full, worktreePath === undefined ? "" : worktreePath)
         const card = kind === "branch" || kind === "remote" ? refMenuFacts.branchesModel.branchUpstream(kind, full)
                    : kind === "tag" ? refMenuFacts.tagsModel.tagMenu(full, refMenuFacts.repoTab.defaultRemote, aim)
                    : undefined
         const open = refMenuFacts.repoTab.state === "open"
-        const menu = GitFacts.refMenu(oidHex, open, tree, lead, card,
-                                      local !== "" && refMenuFacts.branchesModel.oidOfName(local) !== "")
-        const worktreeAt = worktreePath !== undefined ? worktreePath : lead.worktree
+        const menu = GitFacts.refMenu(oidHex, open, tree, lead, card, refMenuFacts.landsListed(lead))
         return {
             "lead": lead,
             "menu": menu,
@@ -63,11 +59,19 @@ QtObject {
                     : undefined,
             "merged": !open || kind !== "branch" ? ""
                       : refMenuFacts.graphModel.branchDeleteMerged(branchAt, card.upstreamOid, tree.headOid),
-            "tagAt": kind === "tag" ? refMenuFacts.tagsModel.oidOfName(full) : "",
-            "worktree": worktreeAt === "" ? undefined : refMenuFacts.worktreesModel.worktreeFacts(worktreeAt),
-            "worktreeHere": GitFacts.samePath(worktreeAt, refMenuFacts.repoTab.repoPath),
-            // Looked at here, as the menu opens and each time it stands again: the folder may have filled since.
-            "place": menu.making.checkout === "" ? undefined : refMenuFacts.worktreesModel.newWorktreeFor(local)
+            "tagAt": kind === "tag" ? refMenuFacts.tagsModel.oidOfName(full) : ""
         }
+    }
+
+    /// The row `full` of `kind` and where it leads (`NavSectionModel.leadOf`), off the local branch it lands on
+    /// (`landsOn` — the one entrance for it); `opened` the WORKTREES row a menu was opened on, empty for none. What a
+    /// menu stands on and a press on a ref weighs (`RepoPage.switchToRef`) alike.
+    function leadOf(kind, full, opened) {
+        return refMenuFacts.worktreesModel.leadOf(kind, full, refMenuFacts.remotesModel.landsOn(kind, full), opened)
+    }
+    /// Whether the local branch that lead lands on is there — a remote row whose local one is takes its way through
+    /// that row (`GitFacts.refMenu` / `switchAction`).
+    function landsListed(lead) {
+        return lead.local !== "" && refMenuFacts.branchesModel.oidOfName(lead.local) !== ""
     }
 }
