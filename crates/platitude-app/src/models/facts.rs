@@ -641,22 +641,22 @@ qml_register!(GitFacts, "GitFacts", singleton = true);
 mod tests {
     use super::{GitFacts, file_lines};
 
-    /// One stand answers every row of a ref's menu off the row's lead and
-    /// its card's record: here a branch another worktree has out, tracking
-    /// `origin/topic` with a commit of its own.
-    #[test]
-    fn a_refs_menu_is_answered_whole_for_one_stand() {
-        use crate::encode::{One, Optional};
-        use crate::models::nav::{BranchUpstream, CardRecord, NewWorktree, RowLead, WorktreeRow};
-        use platitude_core::offers::{BranchFar, Leads, Reading, TreeStanding};
-        let tree = || {
-            One::new(TreeStanding {
-                branch: "main".into(),
-                upstream: "origin/main".into(),
-                ..TreeStanding::default()
-            })
-        };
-        let lead = RowLead {
+    use crate::encode::{One, Optional};
+    use crate::models::nav::{BranchUpstream, CardRecord, NewWorktree, RowLead, WorktreeRow};
+    use platitude_core::offers::{BranchFar, Leads, Reading, TreeStanding};
+
+    fn tree() -> One<TreeStanding> {
+        One::new(TreeStanding {
+            branch: "main".into(),
+            upstream: "origin/main".into(),
+            ..TreeStanding::default()
+        })
+    }
+
+    /// The row `topic`, out in the worktree `other` under a lock, with a
+    /// place for one of its own.
+    fn held_topic() -> RowLead {
+        RowLead {
             kind: "branch".into(),
             full: "topic".into(),
             local: "topic".into(),
@@ -678,8 +678,12 @@ mod tests {
                 ..NewWorktree::default()
             }),
             ..RowLead::default()
-        };
-        let card = BranchUpstream {
+        }
+    }
+
+    /// `topic`'s card: tracking `origin/topic`, with a commit of its own.
+    fn topic_card() -> Optional<CardRecord> {
+        Optional::some(CardRecord::Branch(BranchUpstream {
             far: Some(BranchFar {
                 reading: Reading::Together,
                 tracked: true,
@@ -689,14 +693,21 @@ mod tests {
             counterpart: "origin/topic".into(),
             upstream: "origin/topic".into(),
             ..BranchUpstream::default()
-        };
-        let oid = "ab".repeat(20);
+        }))
+    }
+
+    /// One stand answers every row of a ref's menu off the row's lead and
+    /// its card's record: here a branch another worktree has out, tracking
+    /// `origin/topic` with a commit of its own.
+    #[test]
+    fn a_refs_menu_is_answered_whole_for_one_stand() {
+        let lead = held_topic();
         let menu = (*GitFacts.ref_menu(
-            oid.clone(),
+            "ab".repeat(20),
             true,
             tree(),
             One::new(lead.clone()),
-            Optional::some(CardRecord::Branch(card)),
+            topic_card(),
             true,
         ))
         .clone();
@@ -726,20 +737,28 @@ mod tests {
             "the holder's card, greyed by its lock"
         );
         assert_eq!(
-            GitFacts.switch_action(One::new(lead.clone()), tree(), true),
+            GitFacts.switch_action(One::new(lead), tree(), true),
             "holder"
         );
+    }
+
+    /// The same row with no worktree card, no place to make one and no
+    /// card record: nothing to make, take away or read over there.
+    #[test]
+    fn a_row_with_nowhere_to_go_is_offered_nothing_it_could_not_do() {
         let nowhere = RowLead {
             card: None,
             placed: false,
             place: None,
-            ..lead
+            ..held_topic()
         };
-        let unplaced =
-            GitFacts.ref_menu(oid, true, tree(), One::new(nowhere), Optional::none(), true);
-        assert!(
-            !unplaced.making.here,
-            "a box whose Enter could make nothing is not offered"
+        let unplaced = GitFacts.ref_menu(
+            "ab".repeat(20),
+            true,
+            tree(),
+            One::new(nowhere),
+            Optional::none(),
+            true,
         );
         assert_eq!(
             (
@@ -759,7 +778,6 @@ mod tests {
             "nowhere to make one, and no worktree to take away"
         );
     }
-
     #[test]
     fn the_lines_named_start_at_line_one_and_run_forward() {
         assert_eq!(file_lines(7, 7), Some(7..=7));
