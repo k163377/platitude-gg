@@ -859,14 +859,19 @@ Item {
         }
     }
 
-    // The commit an argument names: an object name, "row:<n>" off the graph, or HEAD when empty — the demo
-    // repository is built fresh every run, so its object names cannot be spelled ahead.
+    // The commit an argument names: an object name, "row:<n>" off the graph, a branch's or a remote branch's name
+    // — the commit the sections list it on —, or HEAD when empty: the demo repository is built fresh every run, so
+    // its object names cannot be spelled ahead, and the writes take object names alone (`RepoTab.cherryPick`).
     function autoActOid(arg) {
         if (arg === "")
             return worktree.headOid
         if (arg.indexOf("row:") === 0)
             return graphModel.oidAt(Number(arg.substring(4)))
-        return arg
+        const local = driver.branchesModel.oidOfName(arg)
+        if (local !== "")
+            return local
+        const remote = driver.remotesModel.oidOfName(arg)
+        return remote !== "" ? remote : arg
     }
 
     // Which verbs write, defer their completion or are owed a status: three lists, read only from `prepareCompletion`.
