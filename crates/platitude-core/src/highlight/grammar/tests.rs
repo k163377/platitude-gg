@@ -551,6 +551,55 @@ fn a_predicate_the_highlighter_skips_claims_nothing() {
     assert_colours(&[("objc", "void f() { NSLog(@\"hi\"); }", "NSLog", FUNCTION)]);
 }
 
+/// Of the property predicates, tree-sitter-highlight evaluates
+/// `#is-not? local` alone: a pattern carrying any other claims nothing,
+/// as one carrying a general predicate does.
+#[test]
+fn a_property_predicate_the_highlighter_skips_claims_nothing() {
+    const UNREAD: &[Highlights] = &[
+        last_wins("((identifier) @keyword (#is? local))"),
+        last_wins("((field_identifier) @keyword (#is-not? test))"),
+    ];
+    let entry = Entry {
+        matches: &[],
+        name: "rust",
+        language: || tree_sitter_rust::LANGUAGE.into(),
+        highlights: UNREAD,
+        injections: &[],
+        locals: &[],
+        cell: OnceLock::new(),
+    };
+    let config = configured(&entry).expect("the query builds");
+    assert!(!paints(&config, "fn f() { x.y }"));
+}
+
+/// A combined injection is matched from a copy of the injections that
+/// [`configured`] cannot turn a pattern off in, so none may carry a
+/// predicate tree-sitter-highlight leaves unevaluated.
+#[test]
+fn every_combined_injection_carries_only_what_the_highlighter_reads() {
+    for entry in &ENTRIES {
+        let language = (entry.language)();
+        let injections = with_regex_matches(&entry.injections.join("\n"));
+        let query = Query::new(&language, &injections).expect("every entry builds");
+        for pattern in 0..query.pattern_count() {
+            let combined = query
+                .property_settings(pattern)
+                .iter()
+                .any(|setting| &*setting.key == "injection.combined");
+            if combined {
+                assert!(
+                    query.general_predicates(pattern).is_empty()
+                        && query.property_predicates(pattern).is_empty(),
+                    "{}'s combined injection at byte {} carries a predicate left unevaluated",
+                    entry.name,
+                    query.start_byte_for_pattern(pattern)
+                );
+            }
+        }
+    }
+}
+
 /// A Lua pattern reads as the regular expression of the same meaning;
 /// one with no such expression here gives none.
 #[test]

@@ -601,11 +601,20 @@ fn configured(entry: &Entry) -> Option<HighlightConfiguration> {
         HighlightConfiguration::new(language, entry.name, &highlights, &injections, &locals)
             .ok()?;
     // tree-sitter-highlight evaluates the text predicates (`#eq?`,
-    // `#match?`, `#any-of?`) and the property ones, and ignores the rest —
-    // the editors' own with no regular expression (`#has-ancestor?`) — so
-    // a pattern carrying one would claim every node of its shape.
+    // `#match?`, `#any-of?`) and `#is-not? local`, and ignores the rest —
+    // the editors' own with no regular expression (`#has-ancestor?`), any
+    // other `#is?` or `#is-not?` — so a pattern carrying one would claim
+    // every node of its shape. A combined injection is matched from a
+    // copy of the injections this does not reach
+    // (`every_combined_injection_carries_only_what_the_highlighter_reads`).
     for pattern in 0..config.query.pattern_count() {
-        if !config.query.general_predicates(pattern).is_empty() {
+        let unread = !config.query.general_predicates(pattern).is_empty()
+            || config
+                .query
+                .property_predicates(pattern)
+                .iter()
+                .any(|(property, positive)| *positive || &*property.key != "local");
+        if unread {
             config.query.disable_pattern(pattern);
         }
     }
