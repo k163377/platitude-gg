@@ -13,6 +13,12 @@ use tokio_util::sync::CancellationToken;
 use crate::error::GitError;
 use crate::process::{GitCommand, GitExecutor};
 
+/// Whether renaming tag `from` to `to` changes only the letters' case —
+/// what [`rename`] refuses, and what a name box asks before the press.
+pub fn changes_case_only(from: &str, to: &str) -> bool {
+    from != to && from.to_lowercase() == to.to_lowercase()
+}
+
 /// Points `to` at whatever `from` names, then deletes `from`.
 ///
 /// Left to git to refuse when `to` exists: overwriting a tag silently is
@@ -31,7 +37,7 @@ pub async fn rename(
     to: &str,
     cancel: &CancellationToken,
 ) -> Result<(), GitError> {
-    if from != to && from.to_lowercase() == to.to_lowercase() {
+    if changes_case_only(from, to) {
         return Err(GitError::Rejected {
             message: format!(
                 "renaming {from} to {to} changes only letter case, which \

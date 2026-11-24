@@ -489,6 +489,14 @@ impl GitFacts {
         One::new(crate::encode::Identity::typed(&text))
     }
 
+    /// Whether renaming tag `from` to `to` changes only the letters' case,
+    /// which core refuses (`tag::changes_case_only`) — asked by the name
+    /// boxes, so the box says it before the press.
+    #[qslot]
+    fn tag_rename_case_only(&self, from: String, to: String) -> bool {
+        platitude_core::tag::changes_case_only(&from, &to)
+    }
+
     /// The identity as a box shows it and `identityOf` reads it back
     /// (`trailers::spell_identity`: `Name <address>`).
     #[qslot]

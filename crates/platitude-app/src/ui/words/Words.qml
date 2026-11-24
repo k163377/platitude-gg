@@ -38,6 +38,9 @@ QtObject {
     readonly property string notAName: qsTr("git will not take this as a name")
     /// A rename box rubbed out — every rename box's refusal of nothing, the left menu's and the graph's alike.
     readonly property string nameNeeded: qsTr("A name is needed")
+    /// A tag rename that changes only the letters' case (`GitFacts.tagRenameCaseOnly`), in the graph's box and the left
+    /// menu's alike: on a case-insensitive disk the new name lands on the old one's and both are gone.
+    readonly property string caseOnlyRename: qsTr("Only the letter case differs — on this disk that deletes both names")
 
     /// Why a name cannot stand beside the branches or tags already there (`NavSectionModel.nameClash`, undefined where
     /// nothing is in the way): one of that name, one under it or above it — one sentence each way, naming which of

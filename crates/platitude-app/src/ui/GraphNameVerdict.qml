@@ -102,9 +102,8 @@ QtObject {
         // As `SidebarRowGestures.editCaseOnly`: a tag renamed to its own name in other case loses both names on a
         // case-insensitive disk.
         const tag = verdict.graphPane.namingKind === "tag"
-        if (tag && name !== verdict.graphPane.namingId
-                && name.toLowerCase() === verdict.graphPane.namingId.toLowerCase())
-            return qsTr("Only the letter case differs — on this disk that deletes both names")
+        if (tag && GitFacts.tagRenameCaseOnly(verdict.graphPane.namingId, name))
+            return Words.caseOnlyRename
         if (verdict.graphNameTaken)
             return Words.remoteHasBranch(verdict.graphRenameRemote)
         if (!(tag ? GitFacts.validTagName(name) : GitFacts.validBranchName(name)))

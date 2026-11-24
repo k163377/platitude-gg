@@ -179,8 +179,7 @@ QtObject {
     /// answer in the box (デザイン規約 §答えの要らない報せ). `tag` is the row's kind — mode `tag` is the new-tag box.
     readonly property bool editCaseOnly:
         gestures.editKind === "tag" && gestures.editMode === "rename"
-        && gestures.editText.trim() !== gestures.editId
-        && gestures.editText.trim().toLowerCase() === gestures.editId.toLowerCase()
+        && GitFacts.tagRenameCaseOnly(gestures.editId, gestures.editText.trim())
     readonly property string editRefusedWhy: !gestures.editRefused ? ""
         : gestures.editFolderWhy !== ""
           ? gestures.editFolderWhy
@@ -191,7 +190,7 @@ QtObject {
           : gestures.editWorktreeWhy !== ""
             ? gestures.editWorktreeWhy
           : gestures.editCaseOnly
-            ? qsTr("Only the letter case differs — on this disk that deletes both names")
+            ? Words.caseOnlyRename
           : gestures.editTaken
             ? Words.remoteHasBranch(gestures.editRemote)
           : !gestures.editNameRuled
