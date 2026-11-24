@@ -71,8 +71,7 @@ pub fn file_key(bucket: &str, path: &str) -> String {
     format!("{bucket}:{path}")
 }
 
-/// A file row's key taken apart, as QML reads it (`GitFacts.fileOfKey`):
-/// both halves empty for a key no colon divides.
+/// A file row's key taken apart, as QML reads it (`GitFacts.fileOfKey`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct KeyedFile {
     pub bucket: String,

@@ -52,10 +52,10 @@ QtObject {
     function fileKey(bucket, path) {
         return bucket + ":" + path
     }
-    /// `encode::file_of_key`: that key taken apart at its first colon, both halves empty without one.
+    /// `encode::file_of_key`: that key taken apart at its first colon, `undefined` without one.
     function fileOfKey(key) {
         const cut = key.indexOf(":")
-        return cut < 0 ? { "bucket": "", "path": "" }
+        return cut < 0 ? undefined
                        : { "bucket": key.substring(0, cut), "path": key.substring(cut + 1) }
     }
 }

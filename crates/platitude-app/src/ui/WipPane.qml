@@ -183,15 +183,16 @@ ColumnLayout {
         const out = []
         for (let i = 0; i < wipPane.rowCount(); i++) {
             const key = wipPane.keyAt(i)
-            if (key !== "" && wipPane.chosenKeys[key] === true)
-                out.push(wipPane.rowOfKey(key))
+            const row = key !== "" && wipPane.chosenKeys[key] === true ? wipPane.rowOfKey(key) : undefined
+            if (row !== undefined)
+                out.push(row)
         }
         return out
     }
-    /// The row a key names (`GitFacts.fileOfKey`).
+    /// The row a key names (`GitFacts.fileOfKey`); `undefined` for a key that names none.
     function rowOfKey(key) {
         const file = GitFacts.fileOfKey(key)
-        return { bucket: file.bucket, fullName: file.path }
+        return file === undefined ? undefined : { bucket: file.bucket, fullName: file.path }
     }
     /// The pane's row numbering across standing buckets, counted off the models, and the key at a place in it (empty
     /// for a folder row).
@@ -330,6 +331,8 @@ ColumnLayout {
     /// the first owner is the answer.
     function rowIndexOf(key) {
         const named = wipPane.rowOfKey(key)
+        if (named === undefined)
+            return -1
         const standing = wipPane.bucketPanes
         let before = 0
         for (let i = 0; i < standing.length; i++) {
@@ -634,7 +637,7 @@ ColumnLayout {
         if (!wipPane.isChosen(bucket, path) || !wipPane.stageOpen(path))
             return false
         const hot = GitFacts.fileOfKey(wipPane.stageHotKey)
-        if (!wipPane.isChosen(hot.bucket, hot.path) || !wipPane.stageOpen(hot.path))
+        if (hot === undefined || !wipPane.isChosen(hot.bucket, hot.path) || !wipPane.stageOpen(hot.path))
             return false
         return (hot.bucket === "staged") === (bucket === "staged")
     }

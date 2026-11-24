@@ -2468,7 +2468,7 @@ FocusScope {
         if (page.stillHere(page.diffKind, page.diffPath))
             return
         const beside = GitFacts.fileOfKey(page.diffNeighbour)
-        if (beside.bucket !== "") {
+        if (beside !== undefined && beside.bucket !== "") {
             if (page.stillHere(beside.bucket, beside.path)) {
                 page.openDiff(beside.bucket, beside.path, page.wipUnstaged.origOf(beside.path))
                 return

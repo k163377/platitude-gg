@@ -522,18 +522,16 @@ impl GitFacts {
         crate::encode::file_key(&bucket, &path)
     }
 
-    /// That key taken apart (`encode::file_of_key`); both halves empty for
-    /// a key no colon divides.
+    /// That key taken apart (`encode::file_of_key`); `undefined` for a key
+    /// no colon divides — apart from a commit's file, whose bucket is empty.
     #[qslot]
-    fn file_of_key(&self, key: String) -> One<crate::encode::KeyedFile> {
-        One::new(
-            crate::encode::file_of_key(&key)
-                .map(|(bucket, path)| crate::encode::KeyedFile {
-                    bucket: bucket.to_string(),
-                    path: path.to_string(),
-                })
-                .unwrap_or_default(),
-        )
+    fn file_of_key(&self, key: String) -> Optional<crate::encode::KeyedFile> {
+        Optional::new(crate::encode::file_of_key(&key).map(|(bucket, path)| {
+            crate::encode::KeyedFile {
+                bucket: bucket.to_string(),
+                path: path.to_string(),
+            }
+        }))
     }
 
     /// The last segment of a path, cut where the platform ends a folder.

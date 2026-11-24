@@ -49,8 +49,8 @@ Item {
         walk.readPath !== "" ? GitFacts.fileKey(walk.readBucket, walk.readPath) : ""
     onFromKeyChanged: {
         const from = GitFacts.fileOfKey(walk.fromKey)
-        walk.atBucket = from.bucket
-        walk.atPath = from.path
+        walk.atBucket = from !== undefined ? from.bucket : ""
+        walk.atPath = from !== undefined ? from.path : ""
     }
 
     /// The arrows moved onto another file — every press, so the light follows the key at its own rate.
