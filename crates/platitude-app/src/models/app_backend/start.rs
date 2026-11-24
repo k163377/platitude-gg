@@ -83,16 +83,14 @@ pub(crate) fn app_workdir() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
 }
 
-/// The four bounds as the settings hold them: this tree's floor and
-/// ceiling, then the other worktrees'.
-fn pace_bounds() -> (i32, i32, i32, i32) {
+/// The two pairs of bounds as the settings hold them: this tree's, then
+/// the other worktrees'.
+fn pace_bounds() -> (
+    platitude_core::session::PaceSecs,
+    platitude_core::session::PaceSecs,
+) {
     let defaults = Hub::with(|hub| hub.settings().defaults.clone()).unwrap_or_default();
-    (
-        defaults.refresh_pace.floor() as i32,
-        defaults.refresh_pace.ceiling() as i32,
-        defaults.worktrees_pace.floor() as i32,
-        defaults.worktrees_pace.ceiling() as i32,
-    )
+    (defaults.refresh_pace, defaults.worktrees_pace)
 }
 
 fn worktrees_reading() -> (String, i32) {
@@ -147,10 +145,8 @@ impl Default for AppBackend {
             worktrees_interval_secs: worktrees_reading().1,
             worktrees_interval_min: platitude_core::session::WORKTREES_INTERVAL_MIN_SECS as i32,
             worktrees_interval_max: platitude_core::session::WORKTREES_INTERVAL_MAX_SECS as i32,
-            refresh_floor_secs: pace_bounds().0,
-            refresh_ceiling_secs: pace_bounds().1,
-            worktrees_floor_secs: pace_bounds().2,
-            worktrees_ceiling_secs: pace_bounds().3,
+            refresh_pace: pace_bounds().0,
+            worktrees_pace: pace_bounds().1,
             pace_min_secs: platitude_core::session::PACE_MIN_SECS as i32,
             pace_max_secs: platitude_core::session::PACE_MAX_SECS as i32,
             initial_commits: Hub::with(|hub| hub.settings().defaults.initial_commits)

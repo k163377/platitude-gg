@@ -93,9 +93,6 @@ impl AppBackend {
     ) {
         use platitude_core::session::PaceSecs;
         let fallback = platitude_core::settings::Defaults::default();
-        let held = |floor: i32, ceiling: i32| {
-            PaceSecs::new(floor.max(0).unsigned_abs(), ceiling.max(0).unsigned_abs())
-        };
         let pair = |asked: Option<(i32, i32)>, held: PaceSecs, default: PaceSecs| {
             let pick = |asked: i32, default: u32| match asked.max(0).unsigned_abs() {
                 0 => default,
@@ -108,25 +105,12 @@ impl AppBackend {
                 )
             })
         };
-        let refresh = pair(
-            refresh,
-            held(self.refresh_floor_secs, self.refresh_ceiling_secs),
-            fallback.refresh_pace,
-        );
-        let worktrees = pair(
-            worktrees,
-            held(self.worktrees_floor_secs, self.worktrees_ceiling_secs),
-            fallback.worktrees_pace,
-        );
-        // In range, so within Qt's `int`.
-        let shown = |pace: PaceSecs| (pace.floor() as i32, pace.ceiling() as i32);
-        let unchanged = shown(refresh) == (self.refresh_floor_secs, self.refresh_ceiling_secs)
-            && shown(worktrees) == (self.worktrees_floor_secs, self.worktrees_ceiling_secs);
-        if unchanged {
+        let refresh = pair(refresh, self.refresh_pace, fallback.refresh_pace);
+        let worktrees = pair(worktrees, self.worktrees_pace, fallback.worktrees_pace);
+        if (refresh, worktrees) == (self.refresh_pace, self.worktrees_pace) {
             return;
         }
-        (self.refresh_floor_secs, self.refresh_ceiling_secs) = shown(refresh);
-        (self.worktrees_floor_secs, self.worktrees_ceiling_secs) = shown(worktrees);
+        (self.refresh_pace, self.worktrees_pace) = (refresh, worktrees);
         Hub::with(|hub| hub.set_pace_bounds(refresh, worktrees));
         self.settings_changed();
     }

@@ -131,10 +131,8 @@ pub struct AppBackend {
     /// again at, and the same pair for each other worktree read automatically
     /// (`session::pace`). The range is core's (`session::PaceSecs`);
     /// an emptied box is the default, which is core's too.
-    refresh_floor_secs: i32,
-    refresh_ceiling_secs: i32,
-    worktrees_floor_secs: i32,
-    worktrees_ceiling_secs: i32,
+    refresh_pace: platitude_core::session::PaceSecs,
+    worktrees_pace: platitude_core::session::PaceSecs,
     pace_min_secs: i32,
     pace_max_secs: i32,
     /// Commits a graph opens with; 0 is the whole history (the screen's own

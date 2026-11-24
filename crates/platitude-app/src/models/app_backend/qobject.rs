@@ -121,26 +121,40 @@ impl AppBackend {
     );
     // The floors and ceilings of the reads while a repository is on screen
     // (`session::pace`), and the range a box can ask for.
+    // Read off the two pairs core keeps in range (`session::PaceSecs`) — in
+    // range, so within Qt's `int`.
     qproperty!(
         "refreshFloorSecs",
-        Member = refresh_floor_secs,
+        Read = refresh_floor_secs,
         Notify = settings_changed
     );
+    fn refresh_floor_secs(&self) -> i32 {
+        self.refresh_pace.floor() as i32
+    }
     qproperty!(
         "refreshCeilingSecs",
-        Member = refresh_ceiling_secs,
+        Read = refresh_ceiling_secs,
         Notify = settings_changed
     );
+    fn refresh_ceiling_secs(&self) -> i32 {
+        self.refresh_pace.ceiling() as i32
+    }
     qproperty!(
         "worktreesFloorSecs",
-        Member = worktrees_floor_secs,
+        Read = worktrees_floor_secs,
         Notify = settings_changed
     );
+    fn worktrees_floor_secs(&self) -> i32 {
+        self.worktrees_pace.floor() as i32
+    }
     qproperty!(
         "worktreesCeilingSecs",
-        Member = worktrees_ceiling_secs,
+        Read = worktrees_ceiling_secs,
         Notify = settings_changed
     );
+    fn worktrees_ceiling_secs(&self) -> i32 {
+        self.worktrees_pace.ceiling() as i32
+    }
     qproperty!("paceMinSecs", Member = pace_min_secs, Constant);
     qproperty!("paceMaxSecs", Member = pace_max_secs, Constant);
     qproperty!(
