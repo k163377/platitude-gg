@@ -72,8 +72,12 @@ pub struct GraphModel {
     /// off it (the WIP row adds one, sifted stash parents subtract).
     walked_total: i32,
     max_lanes: i32,
-    first_chunk_ms: i32,
-    total_ms: i32,
+    /// How long from the walk's start its first chunk took, and the whole
+    /// walk — nothing until this walk has timed it. The first is said in
+    /// the log (`first_chunk_ms=`, which `cargo xtask perf` reads); a pass
+    /// laid out again in place keeps the walk's time (`relay`).
+    first_chunk_ms: Option<u64>,
+    total_ms: Option<u64>,
     truncated: bool,
     /// How many commits one press of the tail would add
     /// (`RepoSession::log_window_step`), read when a walk settles — the

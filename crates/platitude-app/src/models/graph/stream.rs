@@ -118,8 +118,8 @@ impl GraphModel {
             self.first_matched = false;
             self.tail_matched = false;
             self.max_lanes = 1;
-            self.first_chunk_ms = -1;
-            self.total_ms = -1;
+            self.first_chunk_ms = None;
+            self.total_ms = None;
             self.truncated = false;
             // A restart is not the graph the press was made in; it
             // settles a footer of its own.
@@ -134,11 +134,12 @@ impl GraphModel {
         if generation != self.generation {
             return;
         }
-        if self.first_chunk_ms < 0
+        if self.first_chunk_ms.is_none()
             && let Some(t0) = self.started_at
         {
-            self.first_chunk_ms = t0.elapsed().as_millis() as i32;
-            tracing::info!(first_chunk_ms = self.first_chunk_ms, "graph first chunk");
+            let first_chunk_ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
+            self.first_chunk_ms = Some(first_chunk_ms);
+            tracing::info!(first_chunk_ms, "graph first chunk");
         }
         let avatars = crate::hub::AvatarUrls::current();
         let pr = crate::encode::pr_set();
@@ -246,7 +247,7 @@ impl GraphModel {
         self.settle_footer(loaded, elapsed_ms, walked, truncated);
         // Only a replacement zeroes these: one message has no first chunk
         // to time, and it answers whatever failed last.
-        self.first_chunk_ms = 0;
+        self.first_chunk_ms = Some(0);
         self.error = String::new();
         self.failed = false;
         tracing::info!(
@@ -333,7 +334,7 @@ impl GraphModel {
         // Any settled walk answers a press that was out: the one it asked
         // for, or the pass that overtook it on the widened window.
         self.growing = false;
-        self.total_ms = elapsed_ms as i32;
+        self.total_ms = Some(elapsed_ms);
         self.row_total = row_total;
         self.walked_total = walked as i32;
         self.truncated = truncated;

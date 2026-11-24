@@ -23,12 +23,6 @@ impl GraphModel {
     );
     qproperty!("walkedTotal", Member = walked_total, Notify = stats_changed);
     qproperty!("maxLanes", Member = max_lanes, Notify = stats_changed);
-    qproperty!(
-        "firstChunkMs",
-        Member = first_chunk_ms,
-        Notify = stats_changed
-    );
-    qproperty!("totalMs", Member = total_ms, Notify = stats_changed);
     qproperty!("truncated", Member = truncated, Notify = stats_changed);
     // Properties for the reason `matchCount` is: a background refresh
     // moves them unasked (its landing takes the wait back off).

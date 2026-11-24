@@ -90,7 +90,7 @@ impl GraphModel {
         // The walk's time stands: nothing was walked. So does a press of
         // the tail that is out — its wider walk has not landed, and a
         // footer taking the wait off would let a second press cancel it.
-        let elapsed_ms = u64::try_from(self.total_ms).unwrap_or_default();
+        let elapsed_ms = self.total_ms.unwrap_or_default();
         let growing = self.growing;
         self.settle_footer(self.rows.len() as i32, elapsed_ms, walked, truncated);
         self.growing = growing;
