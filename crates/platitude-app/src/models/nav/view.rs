@@ -303,10 +303,9 @@ impl NavSectionModel {
         whole.get(from..).unwrap_or(whole)
     }
 
-    /// The local name a remote-tracking ref would take, from the snapshot
-    /// that shows the row — a separate feed would race the first
-    /// double-click.
-    /// The contract on the `lands_on` slot.
+    /// The local branch a row lands on, read off the snapshot that shows the
+    /// row — a separate feed would race the first double-click. The
+    /// contract on the `lands_on` slot.
     pub(super) fn landing_of(&self, kind: &str, full: &str) -> String {
         match kind {
             "remote" => self.local_name_of(full),
