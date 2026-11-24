@@ -304,7 +304,7 @@ Item {
         if (!page)
             return
         const held = page.pageCommands.letRecordsThrough()
-        if (held >= 0)
+        if (held !== undefined)
             Awaited.note("fault_records released=" + how + " held=" + held)
     }
 

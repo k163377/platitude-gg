@@ -344,14 +344,14 @@ impl CommandsModel {
 
     /// Automation: lowers the harness's hold on the log's records
     /// (`_PGG_FAULT_HOLD_RECORDS`) and takes in what it held, answering how
-    /// many messages that was, or -1 where no hold stood.
+    /// many messages that was, or nothing where no hold stood.
     #[qslot]
-    fn let_records_through(&mut self) -> i32 {
+    fn let_records_through(&mut self) -> Optional<i32> {
         let held = self.held.release();
-        if held >= 0 {
+        if held.is_some() {
             self.drain();
         }
-        held
+        Optional::new(held)
     }
 
     /// Whether every command the write with this id ran is in the log —

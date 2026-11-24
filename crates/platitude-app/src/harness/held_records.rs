@@ -36,13 +36,13 @@ impl HeldRecords {
         messages
     }
 
-    /// Lowers the hold for good, answering how many messages it held — the model drains them next — or -1 where
-    /// none stood. This feed's only.
-    pub(crate) fn release(&mut self) -> i32 {
+    /// Lowers the hold for good, answering how many messages it held — the model drains them next — or nothing
+    /// where none stood. This feed's only.
+    pub(crate) fn release(&mut self) -> Option<i32> {
         #[cfg(any(feature = "automation", test))]
         return self.lower();
         #[cfg(not(any(feature = "automation", test)))]
-        -1
+        None
     }
 
     /// Rows nobody asked for (the opening's reads) are not the write's; once one asked for is held, everything
@@ -68,12 +68,12 @@ impl HeldRecords {
     }
 
     #[cfg(any(feature = "automation", test))]
-    fn lower(&mut self) -> i32 {
+    fn lower(&mut self) -> Option<i32> {
         if !self.standing {
-            return -1;
+            return None;
         }
         self.standing = false;
-        i32::try_from(self.messages.len()).unwrap_or(i32::MAX)
+        Some(i32::try_from(self.messages.len()).unwrap_or(i32::MAX))
     }
 }
 
@@ -109,7 +109,7 @@ mod tests {
         let mut b = standing();
         assert!(a.through(write(11)).is_empty());
         assert!(b.through(write(22)).is_empty());
-        assert_eq!(b.release(), 2);
+        assert_eq!(b.release(), Some(2));
         let b_records = b.through(Vec::new());
         assert!(matches!(
             b_records.as_slice(),
@@ -119,7 +119,7 @@ mod tests {
             ]
         ));
         assert!(a.through(Vec::new()).is_empty());
-        assert_eq!(a.release(), 2);
+        assert_eq!(a.release(), Some(2));
         let a_records = a.through(Vec::new());
         assert!(matches!(
             a_records.as_slice(),
@@ -128,13 +128,13 @@ mod tests {
                 CommandMsg::Settled { operation: 11 }
             ]
         ));
-        assert_eq!(a.release(), -1);
+        assert_eq!(a.release(), None);
     }
 
     #[test]
     fn a_hold_nobody_asked_for_lets_everything_through() {
         let mut none = HeldRecords::default();
         assert_eq!(none.through(write(11)).len(), 2);
-        assert_eq!(none.release(), -1);
+        assert_eq!(none.release(), None);
     }
 }
