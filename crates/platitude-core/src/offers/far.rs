@@ -12,7 +12,7 @@ use super::RefKind;
 /// side is read on a row of its own kind alone ([`Self::on`]): the cards'
 /// rows read it (`RefBranchMenu` / `RefTagMenu`), and of the row's own
 /// menu the `pull` row.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum FarSide {
     /// Nothing read over there: the rows that reach it stay out.
     #[default]
@@ -29,7 +29,7 @@ impl FarSide {
     /// handed to `GitFacts.refMenu` apart, so no type keeps the two
     /// together; this is the one place they are matched.
     pub(super) fn on(self, kind: RefKind) -> Self {
-        match (kind, self) {
+        match (kind, &self) {
             (RefKind::Branch, Self::Branch(_)) | (RefKind::Tag, Self::Tag(_)) => self,
             _ => Self::Unread,
         }
@@ -88,18 +88,25 @@ impl Reading {
 
 /// The sides a tag's name stands on, and what its rows that reach over
 /// there stand on (`TagMenuFacts::far`).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagFar {
     /// `None` where the section has not answered for the name, which reads
     /// as a tag here: the everyday delete keeps its seat, and the rows that
     /// need a remote reading stay out until there is one.
     pub sides: Option<TagSides>,
-    /// A remote for the card's rows to go to — where its push goes
-    /// (`TagMenuFacts::push_remote`). With none, no row reaches over there,
-    /// whatever reading is left from before.
-    pub has_remote: bool,
+    /// Where the card's push sends the name — the remote its rows go to;
+    /// empty for none ([`Self::has_remote`]).
+    pub push_remote: String,
     /// Why the rows that delete over there stand greyed, if they do.
     pub held_back: TagDeleteHeld,
+}
+
+impl TagFar {
+    /// A remote for the card's rows to go to. With none, no row reaches
+    /// over there, whatever reading is left from before.
+    pub fn has_remote(&self) -> bool {
+        !self.push_remote.is_empty()
+    }
 }
 
 /// Which sides of a tag exist ([`TagFar::sides`]).

@@ -296,10 +296,10 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
     };
     // Every row but a tag's has its local half simply there, and an
     // unread tag reads as one here ([`TagFar::sides`]).
-    let sides = tag.and_then(|tag| tag.sides);
+    let sides = tag.as_ref().and_then(|tag| tag.sides);
     let tag_here = sides.is_none_or(TagSides::here);
     let tag_on_remote = sides.is_some_and(TagSides::on_remote);
-    let tag_reaches = tag.is_some_and(|tag| tag.has_remote);
+    let tag_reaches = tag.as_ref().is_some_and(TagFar::has_remote);
     let tag_held = tag.is_some_and(|tag| tag.held_back != TagDeleteHeld::No);
     // A hold names the reading it holds back, so it keeps the seat it greys
     // — on a name here for the pair.

@@ -239,12 +239,12 @@ fn a_tags_menu_and_note_come_off_the_readings() {
     );
 
     let pair = model.tag_menu("v-pair".into(), "origin".into(), String::new());
-    assert_eq!(pair.push_remote, "origin");
+    assert_eq!(pair.far.push_remote, "origin");
     assert_eq!(pair.reach, "");
     assert_eq!(pair.far.held_back, TagDeleteHeld::Unnamed);
     assert_eq!(pair.carriers, "fork, mirror");
     let aimed = model.tag_menu("v-pair".into(), "origin".into(), "mirror".into());
-    assert_eq!(aimed.push_remote, "mirror");
+    assert_eq!(aimed.far.push_remote, "mirror");
     assert_eq!(aimed.reach, "mirror");
     assert_eq!(aimed.far.held_back, TagDeleteHeld::No);
     assert_eq!(
@@ -1039,13 +1039,12 @@ fn a_cards_record_is_read_as_its_far_side() {
     );
     let tag = TagFar {
         sides: Some(TagSides::Both),
-        has_remote: true,
+        push_remote: "origin".to_string(),
         held_back: TagDeleteHeld::Drifted,
     };
     let menu = TagMenu {
-        push_remote: "origin".to_string(),
         reach: "origin".to_string(),
-        far: tag,
+        far: tag.clone(),
         ..TagMenu::default()
     };
     assert_eq!(read(&menu.to_map()), Some(FarSide::Tag(tag)));

@@ -27,13 +27,18 @@ fn upstream(reading: Reading) -> FarSide {
     })
 }
 
-/// A tag's far side standing on `sides`, nothing held back.
+/// A tag's far side standing on `sides`, nothing held back, its push going
+/// to `origin` — or nowhere without a remote.
 fn tag_far(sides: Option<TagSides>, has_remote: bool) -> FarSide {
     FarSide::Tag(TagFar {
         sides,
-        has_remote,
+        push_remote: pushed_to(has_remote),
         held_back: TagDeleteHeld::No,
     })
+}
+
+fn pushed_to(has_remote: bool) -> String {
+    if has_remote { "origin" } else { "" }.to_string()
 }
 
 #[test]
@@ -83,16 +88,16 @@ fn a_far_side_of_another_kind_reads_as_nothing_over_there() {
     let branch = upstream(Reading::Together);
     let tag = tag_far(Some(TagSides::Both), true);
     for (kind, full, far) in [
-        (RefKind::Tag, "v1.0", branch),
-        (RefKind::Remote, "origin/feat", branch),
-        (RefKind::Stash, "stash@{0}", branch),
-        (RefKind::Worktree, "C:/work/topic", branch),
-        (RefKind::Branch, "feat", tag),
-        (RefKind::Remote, "origin/feat", tag),
-        (RefKind::Stash, "stash@{0}", tag),
+        (RefKind::Tag, "v1.0", branch.clone()),
+        (RefKind::Remote, "origin/feat", branch.clone()),
+        (RefKind::Stash, "stash@{0}", branch.clone()),
+        (RefKind::Worktree, "C:/work/topic", branch.clone()),
+        (RefKind::Branch, "feat", tag.clone()),
+        (RefKind::Remote, "origin/feat", tag.clone()),
+        (RefKind::Stash, "stash@{0}", tag.clone()),
     ] {
         assert_eq!(
-            reading(kind, full, far),
+            reading(kind, full, far.clone()),
             offers_on(kind, full),
             "{kind:?} reading {far:?}"
         );
@@ -463,7 +468,7 @@ fn a_tag_held_back_over_there_greys_both_rows_that_reach_it() {
             "v1.0",
             FarSide::Tag(TagFar {
                 sides: Some(sides),
-                has_remote,
+                push_remote: pushed_to(has_remote),
                 held_back,
             }),
         )

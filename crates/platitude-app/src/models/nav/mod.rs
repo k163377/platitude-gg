@@ -117,11 +117,11 @@ impl Record for HeldMark {
 /// What a tag's menu stands on (`NavSectionModel::tag_menu`,
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads,
 /// with what its rows read over there flat beside them (`encode::put_far`:
-/// `sides`, `hasRemote` and the `heldBack` the card words its greyed rows
-/// by) — the record QML hands `GitFacts.refMenu` as it is (`CardRecord`).
+/// `sides`, the `pushRemote` its pushes go to and the `heldBack` the card
+/// words its greyed rows by) — the record QML hands `GitFacts.refMenu` as
+/// it is (`CardRecord`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenu {
-    pub push_remote: String,
     /// Hex; empty for the plain push.
     pub lease: String,
     pub reach: String,
@@ -133,9 +133,8 @@ pub struct TagMenu {
 
 impl Record for TagMenu {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
-        let far = platitude_core::offers::FarSide::Tag(self.far);
+        let far = platitude_core::offers::FarSide::Tag(self.far.clone());
         crate::encode::put_far(Fields::new(), &far)
-            .put("pushRemote", &self.push_remote)
             .put("lease", &self.lease)
             .put("reach", &self.reach)
             .put("carriers", &self.carriers)
@@ -148,7 +147,6 @@ impl Record for TagMenu {
             return None;
         };
         Some(Self {
-            push_remote: field(map, "pushRemote")?,
             lease: field(map, "lease")?,
             reach: field(map, "reach")?,
             carriers: field(map, "carriers")?,
@@ -161,8 +159,7 @@ impl Record for TagMenu {
 impl From<platitude_core::session::TagMenuFacts> for TagMenu {
     fn from(facts: platitude_core::session::TagMenuFacts) -> Self {
         Self {
-            far: facts.far(),
-            push_remote: facts.push_remote,
+            far: facts.far,
             lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
             reach: facts.reach,
             carriers: facts.carriers.join(", "),

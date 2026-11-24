@@ -11,9 +11,9 @@ use super::wire::{Fields, field};
 /// [`FarSide`]'s fields, written into the record that carries it — flat,
 /// beside the record's own, as [`super::TreeReading`] carries the
 /// standing: `far` says which (`branch` / `tag`, empty for none), and the
-/// rest are its parts. The TAG card reads two of them too: `heldBack`
-/// (`drift` / `unnamed`) for the words its greyed rows say, and `sides` for
-/// whether the copy here exists.
+/// rest are its parts. The TAG card reads all three of a tag's: `pushRemote`
+/// for where its pushes go, `heldBack` (`drift` / `unnamed`) for the words
+/// its greyed rows say, and `sides` for whether the copy here exists.
 pub(crate) fn put_far(fields: Fields, far: &FarSide) -> Fields {
     match far {
         FarSide::Unread => fields.put("far", ""),
@@ -26,7 +26,7 @@ pub(crate) fn put_far(fields: Fields, far: &FarSide) -> Fields {
         FarSide::Tag(tag) => fields
             .put("far", "tag")
             .put("sides", tag.sides.map_or("", TagSides::word))
-            .put("hasRemote", &tag.has_remote)
+            .put("pushRemote", &tag.push_remote)
             .put("heldBack", tag.held_back.word()),
     }
 }
@@ -45,7 +45,7 @@ pub(crate) fn read_far(map: &QVariantMap) -> Option<FarSide> {
         })),
         "tag" => Some(FarSide::Tag(TagFar {
             sides: sides_of(&field::<String>(map, "sides")?)?,
-            has_remote: field(map, "hasRemote")?,
+            push_remote: field(map, "pushRemote")?,
             held_back: TagDeleteHeld::from_word(&field::<String>(map, "heldBack")?)?,
         })),
         _ => None,
@@ -96,7 +96,12 @@ mod tests {
             .map(|held_back| {
                 FarSide::Tag(TagFar {
                     sides,
-                    has_remote: held_back != TagDeleteHeld::No,
+                    push_remote: if held_back == TagDeleteHeld::No {
+                        ""
+                    } else {
+                        "origin"
+                    }
+                    .into(),
                     held_back,
                 })
             })
@@ -120,11 +125,10 @@ mod tests {
     fn the_far_side_reads_out_of_a_record_carrying_it() {
         let far = FarSide::Tag(TagFar {
             sides: Some(TagSides::Both),
-            has_remote: true,
+            push_remote: "origin".into(),
             held_back: TagDeleteHeld::Unnamed,
         });
         let record = put_far(Fields::new(), &far)
-            .put("pushRemote", "origin")
             .put("carriers", "fork, mirror")
             .done();
         assert_eq!(read_far(&record), Some(far));

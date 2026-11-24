@@ -913,43 +913,43 @@ fn a_tag_menu_reaches_the_remote_it_can_name() {
     // The reference reached, off the commit here: the plain rows are
     // held back and the push is the leased one.
     let moved = snapshot.tag_menu("moved", "origin", "");
-    assert_eq!(moved.push_remote, "origin");
+    assert_eq!(moved.far.push_remote, "origin");
     assert_eq!(moved.lease, Some(oid(2)));
     assert_eq!(moved.reach, "origin");
-    assert_eq!(moved.held_back, TagDeleteHeld::Drifted);
+    assert_eq!(moved.far.held_back, TagDeleteHeld::Drifted);
     assert!(!moved.row_goes, "the copy here stays");
 
     // Named on its own, fork takes every row, and agrees with here.
     let aimed = snapshot.tag_menu("moved", "origin", "fork");
-    assert_eq!(aimed.push_remote, "fork");
+    assert_eq!(aimed.far.push_remote, "fork");
     assert_eq!(aimed.lease, None);
     assert_eq!(aimed.reach, "fork");
-    assert_eq!(aimed.held_back, TagDeleteHeld::No);
+    assert_eq!(aimed.far.held_back, TagDeleteHeld::No);
 
     // Named on its own, origin is reached drifted or not.
     let pointed = snapshot.tag_menu("moved", "origin", "origin");
-    assert_eq!(pointed.held_back, TagDeleteHeld::No);
+    assert_eq!(pointed.far.held_back, TagDeleteHeld::No);
     assert_eq!(pointed.lease, Some(oid(2)));
 
     // Only fork has it and nothing here does: fork is reached, and the
     // row goes with the one reading there is.
     let theirs = snapshot.tag_menu("theirs", "origin", "");
-    assert_eq!(theirs.push_remote, "origin");
+    assert_eq!(theirs.far.push_remote, "origin");
     assert_eq!(theirs.reach, "fork");
-    assert_eq!(theirs.held_back, TagDeleteHeld::No);
+    assert_eq!(theirs.far.held_back, TagDeleteHeld::No);
     assert!(theirs.row_goes);
 
     // Two remotes, no reference: none can be named unasked.
     let pair = snapshot.tag_menu("pair-here", "origin", "");
     assert_eq!(pair.reach, "");
-    assert_eq!(pair.held_back, TagDeleteHeld::Unnamed);
+    assert_eq!(pair.far.held_back, TagDeleteHeld::Unnamed);
     assert_eq!(pair.carriers, ["fork", "mirror"]);
     assert!(!pair.row_goes);
 }
 
 /// What the card's rows read over there comes with the menu
-/// (`TagMenuFacts::far`): the sides the name stands on, whether the push
-/// names a remote, and why the deletes are held back.
+/// (`TagMenuFacts::far`): the sides the name stands on, where the push
+/// goes, and why the deletes are held back.
 #[test]
 fn a_tag_menu_hands_its_card_what_the_rows_read_over_there() {
     let refs = [
@@ -960,28 +960,28 @@ fn a_tag_menu_hands_its_card_what_the_rows_read_over_there() {
     let snapshot = read_with(&refs, &[("moved", 2, "origin"), ("theirs", 5, "fork")]);
 
     assert_eq!(
-        snapshot.tag_menu("moved", "origin", "").far(),
+        snapshot.tag_menu("moved", "origin", "").far,
         TagFar {
             sides: Some(TagSides::Both),
-            has_remote: true,
+            push_remote: "origin".into(),
             held_back: TagDeleteHeld::Drifted,
         }
     );
     assert_eq!(
-        snapshot.tag_menu("mine", "origin", "").far().sides,
+        snapshot.tag_menu("mine", "origin", "").far.sides,
         Some(TagSides::Here)
     );
     assert_eq!(
-        snapshot.tag_menu("theirs", "origin", "").far().sides,
+        snapshot.tag_menu("theirs", "origin", "").far.sides,
         Some(TagSides::Remote)
     );
     assert_eq!(
-        snapshot.tag_menu("never", "origin", "").far().sides,
+        snapshot.tag_menu("never", "origin", "").far.sides,
         None,
         "no tag of the name is listed"
     );
     assert!(
-        !snapshot.tag_menu("mine", "", "").far().has_remote,
+        !snapshot.tag_menu("mine", "", "").far.has_remote(),
         "no remote for the push to go to"
     );
 }

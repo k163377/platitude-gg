@@ -207,7 +207,7 @@ impl GitFacts {
         };
         let making = offers::worktree_rows(&row, !lead.stopped_by.is_empty(), local_listed);
         One::new(RefMenu::new(
-            offers::ref_menu(&row, far),
+            offers::ref_menu(&row, far.clone()),
             offers::pull_row(&row, far),
             upstream,
             WorktreeMaking::new(making, lead.placed),

@@ -215,7 +215,11 @@ impl RefsSnapshot {
             TagDeleteHeld::No
         };
         TagMenuFacts {
-            push_remote: push_remote.to_string(),
+            far: TagFar {
+                sides: tag.map(TagItem::sides),
+                push_remote: push_remote.to_string(),
+                held_back,
+            },
             lease: if push_remote.is_empty() {
                 None
             } else {
@@ -223,8 +227,6 @@ impl RefsSnapshot {
             },
             row_goes: here.is_none() && carriers.as_slice() == [reach],
             reach: reach.to_string(),
-            held_back,
-            sides: tag.map(TagItem::sides),
             carriers: carriers
                 .iter()
                 .map(|remote| (*remote).to_string())
@@ -661,38 +663,23 @@ impl TagItem {
 /// What a menu on one tag stands on ([`RefsSnapshot::tag_menu`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenuFacts {
-    /// Where `push` sends the name.
-    pub push_remote: String,
+    /// What the card's rows read over there (`offers::ref_menu`): which
+    /// sides the name stands on — `None` where this snapshot lists no tag
+    /// of the name —, where `push` sends it, and why the delete rows stand
+    /// greyed, if they do.
+    pub far: TagFar,
     /// Where that remote has the name when that is not where it stands
     /// here — what the held overwrite is leased to; `None` for the plain
     /// push.
     pub lease: Option<Oid>,
     /// The remote the delete rows reach; empty where none can be named.
     pub reach: String,
-    /// Why those rows stand greyed, if they do.
-    pub held_back: TagDeleteHeld,
-    /// Which sides the name stands on; `None` where this snapshot lists no
-    /// tag of the name.
-    pub sides: Option<TagSides>,
     /// Every remote carrying the name, in name order — what the greyed
     /// rows name when no one of them can be reached.
     pub carriers: Vec<String>,
     /// Deleting from `reach` leaves no holder of the name, so its row goes
     /// with it.
     pub row_goes: bool,
-}
-
-impl TagMenuFacts {
-    /// What the card's rows read over there (`offers::ref_menu`): the
-    /// sides, whether the push names a remote, and why the deletes are held
-    /// back.
-    pub fn far(&self) -> TagFar {
-        TagFar {
-            sides: self.sides,
-            has_remote: !self.push_remote.is_empty(),
-            held_back: self.held_back,
-        }
-    }
 }
 
 /// One remote holding one tag on a commit this repository does not have

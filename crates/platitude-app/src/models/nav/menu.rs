@@ -91,7 +91,7 @@ impl CardRecord {
     pub fn far(&self) -> FarSide {
         match self {
             Self::Branch(upstream) => upstream.far.map_or(FarSide::Unread, FarSide::Branch),
-            Self::Tag(menu) => FarSide::Tag(menu.far),
+            Self::Tag(menu) => FarSide::Tag(menu.far.clone()),
         }
     }
 }

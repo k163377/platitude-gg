@@ -630,7 +630,10 @@ impl NavSectionModel {
         if name.is_empty() || self.section != "tags" {
             return One::new(
                 platitude_core::session::TagMenuFacts {
-                    push_remote: against,
+                    far: platitude_core::offers::TagFar {
+                        push_remote: against,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 }
                 .into(),
