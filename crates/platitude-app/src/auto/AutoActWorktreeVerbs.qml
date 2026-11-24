@@ -196,7 +196,8 @@ Item {
             // A remote's root folder starts closed (`models::nav::tree`), leaving its rows in no list
             // (as `AutoActNavBoxVerbs.navNameBoxTimer`).
             if (worktreeTimer.kind === "remote" && !worktreeTimer.onGraph)
-                acts.remotesModel.toggleFolder(GitFacts.remoteOfRef(worktreeTimer.ref, acts.repoTab.remoteNames))
+                acts.remotesModel.toggleFolder(
+                    GitFacts.remoteBranchOf(worktreeTimer.ref, acts.repoTab.remoteNames).remote)
             worktreeTimer.mode = mode
             worktreeTimer.order = mode === "menu" ? ["raised", "carded", "tipped"] : []
             worktreeTimer.start()

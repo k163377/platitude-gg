@@ -13,6 +13,7 @@ mod mates;
 mod menu;
 mod metatype;
 mod push;
+mod remote;
 mod rows;
 mod select;
 mod text_end;

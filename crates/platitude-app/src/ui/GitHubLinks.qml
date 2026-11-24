@@ -83,7 +83,8 @@ QtObject {
                     holders.push({ "remote": hubs[i].remote, "url": GitFacts.githubBranchLink(hubs[i].repo, there),
                                    "name": there })
             }
-            found.push({ "kind": "branch", "preferred": kind === "remote" ? GitFacts.remoteOfRef(name, names) : own,
+            found.push({ "kind": "branch",
+                         "preferred": kind === "remote" ? GitFacts.remoteBranchOf(name, names).remote : own,
                          "holders": holders })
         } else if (kind === "tag") {
             const carriers = links.tagsModel.tagRemotes(name, own)

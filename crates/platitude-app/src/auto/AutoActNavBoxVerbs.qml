@@ -83,11 +83,11 @@ Item {
             // — aim at another row (`origin/feature/topic-a`).
             const parts = arg.split(":")
             const ref = parts[0]
-            const was = GitFacts.branchOfRef(ref, repoTab.remoteNames)
+            const was = GitFacts.remoteBranchOf(ref, repoTab.remoteNames).branch
             // "-box" types the argument in, to photograph a name the remote already carries being refused, and opens
             // the remote's fold (a remote root starts closed) so the row is there at all.
             if (act === "replace-remote-box")
-                remotesModel.toggleFolder(GitFacts.remoteOfRef(ref, repoTab.remoteNames))
+                remotesModel.toggleFolder(GitFacts.remoteBranchOf(ref, repoTab.remoteNames).remote)
             sidebarPane.beginRename("remote", ref, act === "replace-remote-box" ? parts[1] : was)
             // The dispatch completes "-box". A known verb answers true even on its early way out — falsy would send the
             // dispatch on asking every other family.
@@ -449,7 +449,7 @@ Item {
                 page.setSidebarWidth(asked)
             // A remote's root folder starts closed (`models::nav::tree`), leaving its rows in no list.
             if (navNameBoxTimer.kind === "remote")
-                remotesModel.toggleFolder(GitFacts.remoteOfRef(navNameBoxTimer.ref, repoTab.remoteNames))
+                remotesModel.toggleFolder(GitFacts.remoteBranchOf(navNameBoxTimer.ref, repoTab.remoteNames).remote)
             navNameBoxTimer.order = navNameBoxTimer.away ? ["opened", "walked"] : ["opened"]
             navNameBoxTimer.start()
         }
@@ -497,7 +497,7 @@ Item {
                     if (op.mode === "rename") {
                         // What a second click puts in the box (`NavList`): a remote branch without its remote.
                         const shown = op.kind === "remote"
-                            ? GitFacts.branchOfRef(op.ref, repoTab.remoteNames)
+                            ? GitFacts.remoteBranchOf(op.ref, repoTab.remoteNames).branch
                             : op.ref
                         sidebarPane.beginRename(op.kind, op.ref, shown)
                         return

@@ -29,7 +29,7 @@ use super::tracked::TrackedBranch;
 /// the pair.
 /// Nothing here checks them; git judges the names, and the callers refuse
 /// what they refuse.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RemoteBranch {
     pub remote: String,
     pub branch: String,

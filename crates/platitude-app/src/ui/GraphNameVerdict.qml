@@ -26,7 +26,7 @@ QtObject {
     required property NavSectionModel tagsModel
 
     readonly property string graphRenameRemote: verdict.graphPane.namingKind !== "remote" ? ""
-        : GitFacts.remoteOfRef(verdict.graphPane.namingId, verdict.repoTab.remoteNames)
+        : GitFacts.remoteBranchOf(verdict.graphPane.namingId, verdict.repoTab.remoteNames).remote
     readonly property bool graphNameTaken: verdict.graphPane.namingMode === "rename" && verdict.graphRenameRemote !== ""
         && verdict.graphPane.namingText.trim() !== ""
         && verdict.remotesModel.hasRemoteBranch(verdict.graphRenameRemote, verdict.graphPane.namingText.trim())

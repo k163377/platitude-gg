@@ -41,7 +41,8 @@ Item {
         // The reading's own row is in its remote's fold, which starts closed: opened once here, not in the press that
         // raises the menu, which is sent again until it takes.
         if (followTimer.form === "remote-moved")
-            acts.remotesModel.toggleFolder(GitFacts.remoteOfRef(followTimer.reading, acts.repoTab.remoteNames))
+            acts.remotesModel.toggleFolder(
+                GitFacts.remoteBranchOf(followTimer.reading, acts.repoTab.remoteNames).remote)
         followTimer.order = followTimer.withdraws ? ["raised", "changed", "tipped"] : ["raised", "changed"]
         followTimer.start()
         return true

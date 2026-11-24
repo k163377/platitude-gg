@@ -111,7 +111,7 @@ Item {
             // The left menu's REMOTES row is in its remote's fold, which starts closed: opened once here, not in the
             // press that raises the menu, which is sent again until it takes.
             if (arg === "fetch-ref")
-                remotesModel.toggleFolder(GitFacts.remoteOfRef(menuWaitTimer.fetched, repoTab.remoteNames))
+                remotesModel.toggleFolder(GitFacts.remoteBranchOf(menuWaitTimer.fetched, repoTab.remoteNames).remote)
             // The stash forms put their one input in and wait for the menu to stand again. The others can meet the
             // write landed first, and end on saying so from whichever stage it caught.
             menuWaitTimer.order = arg === "stash" || arg === "stash-ref" ? ["popped"]

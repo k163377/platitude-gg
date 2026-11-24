@@ -82,7 +82,7 @@ Item {
              ? upstreamFlow.remotesModel.branchesOn(upstreamFlow.remote, upstreamFlow.repoTab.remoteNames)
              : []
     }
-    readonly property string target: upstreamFlow.remote + "/" + upstreamFlow.branchName
+    readonly property string target: GitFacts.remoteBranchName(upstreamFlow.remote, upstreamFlow.branchName)
     readonly property bool filled: upstreamFlow.remote !== "" && upstreamFlow.branchName !== ""
 
     anchors.fill: parent
@@ -95,12 +95,10 @@ Item {
         upstreamFlow.branch = branch
         upstreamFlow.unsettable = unsettable
         // The cut is the configured remote name where one owns the ref — a remote's own name may contain `/`
-        // (`GitFacts.remoteOfRef`).
-        const from = counterpart !== ""
-                   ? GitFacts.remoteOfRef(counterpart, upstreamFlow.repoTab.remoteNames) : ""
-        upstreamFlow.remote = from !== "" ? from : upstreamFlow.repoTab.defaultRemote
-        upstreamFlow.branchName = from !== ""
-            ? GitFacts.branchOfRef(counterpart, upstreamFlow.repoTab.remoteNames) : branch
+        // (`GitFacts.remoteBranchOf`).
+        const from = GitFacts.remoteBranchOf(counterpart, upstreamFlow.repoTab.remoteNames)
+        upstreamFlow.remote = from.remote !== "" ? from.remote : upstreamFlow.repoTab.defaultRemote
+        upstreamFlow.branchName = from.remote !== "" ? from.branch : branch
         upstreamFlow.settleTarget()
         upstreamFlow.askRequested(oidHex, upstreamFlow.heading, upstreamFlow.pill, upstreamFlow.answer, upstreamForm)
         // After the bar is up: raising it resets the properties the `asking` bindings below own, and a

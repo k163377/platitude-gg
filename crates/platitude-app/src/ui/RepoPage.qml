@@ -1839,7 +1839,7 @@ FocusScope {
     // ---- the second click, spaced, on a graph row -------------------
     /// The row chip's name goes into a box where the chip is (デザイン規約 §グラフ行のダブルクリック / §左メニューの所作),
     /// from the row or the card its chip unfolds into. The box holds the ref's own name — a remote branch without its
-    /// remote (`GitFacts.branchOfRef`), the shape `renameRow` takes, as from the left menu. Headless `graph-reclick`
+    /// remote (`GitFacts.remoteBranchOf`), the shape `renameRow` takes, as from the left menu. Headless `graph-reclick`
     /// (to the box) / `graph-rename` (through to git) / `graph-reclick-scrolled` (the row scrolled away first).
     function startRename(oidHex, chip) {
         // An entry of the discard log picked under a second click's wait: the wait ends on a graph that renames nothing
@@ -1859,7 +1859,7 @@ FocusScope {
         // The card the chip unfolds into is standing on the column the box opens in.
         rowHost.closeRefList()
         graphPane.startRenaming(oidHex, kind, id,
-                                kind === "remote" ? GitFacts.branchOfRef(id, repoTab.remoteNames) : id)
+                                kind === "remote" ? GitFacts.remoteBranchOf(id, repoTab.remoteNames).branch : id)
         // デザイン規約 §左メニューの所作「開く行は必ず見える所へ送る」 — the gesture's wait is long enough to scroll away in.
         const row = graphModel.rowOf(oidHex)
         if (row >= 0)

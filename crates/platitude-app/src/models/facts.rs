@@ -10,6 +10,7 @@
 use std::ops::RangeInclusive;
 
 use platitude_core::offers::{FarSide, RowStanding, TreeStanding, UpstreamPlace};
+use platitude_core::remote::RemoteBranch;
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -117,28 +118,33 @@ impl GitFacts {
         .to_string()
     }
 
-    /// The remote half of a remote-tracking name (`origin/main`), as the
-    /// writes read it (`TrackedBranch::listed`): the longest of
-    /// `remote_names` wins (a remote's name may contain `/`); where none
-    /// owns the ref the first slash answers, so the gesture still acts and
-    /// git refuses loudly — the list may still be loading, or the remote
-    /// gone while its refs remain. `""` only where there is no slash at
-    /// all.
+    /// A remote-tracking name (`origin/main`) as the remote and the branch
+    /// over there, cut as the writes read the row (`TrackedBranch::listed`):
+    /// the longest of `remote_names` wins (a remote's name may contain `/`);
+    /// where none owns the ref the first slash answers, so the gesture still
+    /// acts and git refuses loudly — the list may still be loading, or the
+    /// remote gone while its refs remain. A name no slash divides is all
+    /// branch, on no remote (`remote` empty): the shape a rename box is
+    /// typed in, and the row the remotes' tree lists flat.
     #[qslot]
-    fn remote_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
-        platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names))
-            .map(|row| row.far().remote.clone())
-            .unwrap_or_default()
+    fn remote_branch_of(&self, full: String, remote_names: Vec<String>) -> One<RemoteBranch> {
+        One::new(
+            match platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names)) {
+                Some(row) => row.far().clone(),
+                None => RemoteBranch {
+                    remote: String::new(),
+                    branch: full,
+                },
+            },
+        )
     }
 
-    /// The branch half of the same cut; a name no slash divides is all
-    /// branch (the shape a rename box is typed in).
+    /// The name the branch `branch` on `remote` is listed under here
+    /// (`origin/main`), spelled from the halves as they were picked
+    /// (`RemoteBranch`'s `Display`) — never joined in QML.
     #[qslot]
-    fn branch_of_ref(&self, full: String, remote_names: Vec<String>) -> String {
-        match platitude_core::remote::TrackedBranch::listed(&full, names(&remote_names)) {
-            Some(row) => row.far().branch.clone(),
-            None => full,
-        }
+    fn remote_branch_name(&self, remote: String, branch: String) -> String {
+        RemoteBranch { remote, branch }.to_string()
     }
 
     /// The name a branch called `name` is listed under on the remote the

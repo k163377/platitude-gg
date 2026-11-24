@@ -177,7 +177,8 @@ Item {
         publishFlow.refreshPublishCheck()
     }
 
-    readonly property string publishTarget: publishFlow.publishRemote + "/" + publishFlow.publishBranch
+    readonly property string publishTarget: GitFacts.remoteBranchName(publishFlow.publishRemote,
+                                                                      publishFlow.publishBranch)
     readonly property bool publishFilled: publishFlow.publishBranch !== "" && publishFlow.publishRemote !== ""
     /// What the remote's last answer is about — the remote, the name, and the branch here it was weighed against;
     /// nothing while a read is out. **`remoteBranchRevision` is read on
@@ -362,17 +363,14 @@ Item {
     /// field defaults to the branch's own name. Net: `publish-upstream`.
     function startPublishAsk(branch, upstream, oidHex) {
         // Open on the upstream where there is one, even with no tracking ref — but only on a remote still configured:
-        // `remoteOfRef` cuts a lost name at the first slash, and the chooser cannot pick back a row it does not hold.
+        // `remoteBranchOf` cuts a lost name at the first slash, and the chooser cannot pick back a row it does not hold.
         // A gone branch here (`remote = .`) names no remote either and falls back to the guess: a plain `git push`
         // refuses that shape too, so the row's `to…` says "not in one go; decide where it goes again".
-        const on = upstream !== ""
-                 ? GitFacts.remoteOfRef(upstream, publishFlow.repoTab.remoteNames) : ""
-        const tracked = on !== "" && publishFlow.publishRemotes.indexOf(on) >= 0
+        const far = GitFacts.remoteBranchOf(upstream, publishFlow.repoTab.remoteNames)
+        const tracked = far.remote !== "" && publishFlow.publishRemotes.indexOf(far.remote) >= 0
         publishFlow.publishLocal = branch
-        publishFlow.publishRemote = tracked ? on : publishFlow.repoTab.defaultRemote
-        publishFlow.publishBranch = tracked
-            ? GitFacts.branchOfRef(upstream, publishFlow.repoTab.remoteNames)
-            : branch
+        publishFlow.publishRemote = tracked ? far.remote : publishFlow.repoTab.defaultRemote
+        publishFlow.publishBranch = tracked ? far.branch : branch
         // `push` untranslated (the command's spelling); `%1` is left for the bar to draw the name in its ref colour —
         // the worktree's own branch's blue, any other's plain ink (デザイン規約 §ref の種別).
         publishFlow.askRequested(

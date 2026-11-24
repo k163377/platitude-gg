@@ -88,11 +88,11 @@ QtObject {
     property string editOid: ""
     property string editText: ""
     /// The remote a remote row lives on (`origin`), empty for every other kind. Cut by the configured names, since a
-    /// remote's own name may contain `/`; an unconfigured one cuts at the first slash (`GitFacts.remoteOfRef`).
+    /// remote's own name may contain `/`; an unconfigured one cuts at the first slash (`GitFacts.remoteBranchOf`).
     readonly property string editRemote: gestures.editKind !== "remote" ? ""
-        : GitFacts.remoteOfRef(gestures.editId, gestures.repoTab.remoteNames)
+        : GitFacts.remoteBranchOf(gestures.editId, gestures.repoTab.remoteNames).remote
     function remoteBranchHalf(id) {
-        return GitFacts.branchOfRef(id, gestures.repoTab.remoteNames)
+        return GitFacts.remoteBranchOf(id, gestures.repoTab.remoteNames).branch
     }
     /// A rename to a name the remote already carries. Refused here: a plain push to an existing name fast-forwards
     /// it and reports success, moving somebody else's branch. Rename only — the new-branch box on a remote row makes

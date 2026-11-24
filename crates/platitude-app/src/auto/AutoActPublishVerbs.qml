@@ -230,7 +230,7 @@ Item {
             if (op.at("start")) {
                 if (!Awaited.all("publish_upstream_ready", {
                     "counts": worktree.headPush.settled,
-                    "upstream": worktree.upstream === repoTab.defaultRemote + "/" + op.want,
+                    "upstream": worktree.upstream === GitFacts.remoteBranchName(repoTab.defaultRemote, op.want),
                     "idle": repoTab.busyCount <= 0 }))
                     return
                 op.input("pressed", () => {

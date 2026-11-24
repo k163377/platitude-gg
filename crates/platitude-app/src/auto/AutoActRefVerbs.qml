@@ -121,8 +121,8 @@ Item {
             }
         } else if (act === "delete-remote" || act === "delete-remote-go" || act === "remote-refused") {
             // Named outright (`origin/feature/x`); its fold is opened so the row is under the menu. A remote's name
-            // may hold `/`, so the cut is the configured one (`GitFacts.remoteOfRef`).
-            remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
+            // may hold `/`, so the cut is the configured one (`GitFacts.remoteBranchOf`).
+            remotesModel.toggleFolder(GitFacts.remoteBranchOf(arg, repoTab.remoteNames).remote)
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             // The row as the menu offered it, read here, ahead of the press below, and kept (`offered`): the
             // completion reads its report past the write.
@@ -165,7 +165,7 @@ Item {
             const onRemote = arg !== "" && branchesModel.oidOfName(arg) === ""
             const name = arg === "" ? worktree.branch : arg
             if (onRemote)
-                remotesModel.toggleFolder(GitFacts.remoteOfRef(arg, repoTab.remoteNames))
+                remotesModel.toggleFolder(GitFacts.remoteBranchOf(arg, repoTab.remoteNames).remote)
             const oid = onRemote ? remotesModel.oidOfName(arg) : branchesModel.oidOfName(name)
             pullMenuTimer.onRemote = onRemote
             page.openRefMenu(onRemote ? "remote" : "branch", name, name, oid)

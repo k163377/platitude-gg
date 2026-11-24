@@ -326,7 +326,7 @@ impl NavSectionModel {
     /// the upstream question offers (`Source::branches_on`). Empty for
     /// every section but the remotes; the whole section, whatever the
     /// sidebar filters to. `remote_names` is the configured names, for the
-    /// cut `GitFacts.remoteOfRef` makes.
+    /// cut `GitFacts.remoteBranchOf` makes.
     #[qslot]
     pub(super) fn branches_on(&self, remote: String, remote_names: Vec<String>) -> Vec<String> {
         let names: Vec<&str> = remote_names.iter().map(String::as_str).collect();
