@@ -1429,14 +1429,6 @@ impl RepoTab {
         self.look_up_signature(oid_hex)
     }
 
-    /// Records `user.name` / `user.email`. `global` writes the user's own
-    /// configuration, which is the right default for a first-run prompt:
-    /// the answer is about the person.
-    #[qslot]
-    fn set_identity(&mut self, name: String, email: String, global: bool) {
-        self.write_identity(name, email, global)
-    }
-
     /// Shows/hides tags in the graph walk (restarts the stream). Hidden
     /// means every tag off the graph: the rows only a tag reaches and the
     /// chips of tags on rows a branch reaches too — a chip left standing

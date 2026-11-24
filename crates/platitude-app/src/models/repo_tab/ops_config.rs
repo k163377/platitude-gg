@@ -40,16 +40,6 @@ impl RepoTab {
         self.feed = crate::hub::attach_feed(tab_id, |f| &f.tab, consumer);
     }
 
-    pub(super) fn write_identity(&mut self, name: String, email: String, global: bool) {
-        let scope = if global {
-            platitude_core::identity::ConfigScope::Global
-        } else {
-            platitude_core::identity::ConfigScope::Local
-        };
-        let values = platitude_core::identity::IdentityValues::new(&name, &email);
-        self.ask_session(|s| s.set_identity(values, scope));
-    }
-
     pub(super) fn write_tags_shown(&mut self, shown: bool) {
         if self.tags_shown == shown {
             return;
