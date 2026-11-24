@@ -267,6 +267,17 @@ Binary files differ
         assert_eq!(files[0].path(), "bin.dat");
     }
 
+    /// git names a path as it is spelt, a blank at its end too — measured
+    /// with 2.55 on an index that took one (`core.protectNTFS=false`).
+    #[test]
+    fn a_path_keeps_a_blank_at_its_end() {
+        let patch = "diff --cc sp \nindex b19a1e9,950b81b..0000000\nBinary files differ\n\
+                     * Unmerged path del \n";
+        let files = parse_patch(patch.as_bytes());
+        assert_eq!(files[0].path(), "sp ");
+        assert_eq!(files[1].path(), "del ");
+    }
+
     #[test]
     fn an_unmerged_path_with_no_patch_is_still_a_file() {
         // Deleted on one side: git says only this, among ordinary patches,

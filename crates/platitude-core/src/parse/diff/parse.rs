@@ -59,13 +59,14 @@ impl Reading {
         }
 
         // A combined header names one path; `---`/`+++` follow and carry
-        // the prefixes.
+        // the prefixes. Both headers end at the path as git spells it, a
+        // blank at its end included (measured, 2.55: `diff --cc sp `).
         if let Some(rest) = line
             .strip_prefix("diff --cc ")
             .or_else(|| line.strip_prefix("diff --combined "))
         {
             self.flush_file();
-            let path = rest.trim().to_string();
+            let path = rest.to_string();
             self.current = Some(FilePatch {
                 old_path: Some(path.clone()),
                 new_path: Some(path),
@@ -80,7 +81,7 @@ impl Reading {
             self.flush_file();
             self.files.push(FilePatch {
                 old_path: None,
-                new_path: Some(path.trim().to_string()),
+                new_path: Some(path.to_string()),
                 unmerged: true,
                 ..FilePatch::default()
             });
