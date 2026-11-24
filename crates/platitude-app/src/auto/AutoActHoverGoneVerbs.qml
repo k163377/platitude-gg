@@ -258,7 +258,7 @@ Item {
                     // The first stroke has no write before it to wait out.
                     "wrote": stage === "first_del" || driver.wroteAndSettled(),
                     "diff": !page.diffSettling && diffPane.diffSettled()
-                             && page.diffKey === "unstaged:" + eolChangeTimer.path,
+                             && page.diffKey === GitFacts.fileKey("unstaged", eolChangeTimer.path),
                     "line": line >= 0
                 }))
                 return

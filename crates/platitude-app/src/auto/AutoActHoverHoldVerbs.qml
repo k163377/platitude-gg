@@ -235,7 +235,7 @@ Item {
         function putOut() {
             const owner = menuBlockTimer.display
             if (owner === "eol" || owner === "eol-key") {
-                wipPane.pointEol("unstaged:" + menuBlockTimer.first)
+                wipPane.pointEol(GitFacts.fileKey("unstaged", menuBlockTimer.first))
                 return wipPane.eolCardOpen
             }
             if (owner === "author" || owner === "author-files") {
@@ -284,7 +284,7 @@ Item {
         function askOther() {
             const owner = menuBlockTimer.display
             if (owner === "eol" || owner === "eol-key") {
-                wipPane.pointEol("unstaged:" + menuBlockTimer.second)
+                wipPane.pointEol(GitFacts.fileKey("unstaged", menuBlockTimer.second))
             } else if (owner === "author" || owner === "author-files") {
                 detailsPane.valueRow.showAuthor(false)
                 detailsPane.valueRow.showCoAuthors(true)

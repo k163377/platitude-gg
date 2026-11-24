@@ -52,7 +52,7 @@ Item {
         /// it is held back. Answers how many went in.
         function pressHunks(keepLast) {
             let went = 0
-            while (page.diffKey === "unstaged:" + hunkRunTimer.file && page.diffPressable
+            while (page.diffKey === GitFacts.fileKey("unstaged", hunkRunTimer.file) && page.diffPressable
                    && !(keepLast && diffPane.diffModel.takesAll(0, -1))
                    && went < hunkRunTimer.witnessed("rows0")) {
                 if (went > 0)
@@ -88,7 +88,7 @@ Item {
                 return
             }
             if (op.at("opened")) {
-                if (!Awaited.all("hunk_run_open", { "open": page.diffKey === "unstaged:" + op.file,
+                if (!Awaited.all("hunk_run_open", { "open": page.diffKey === GitFacts.fileKey("unstaged", op.file),
                                                     "rows": diffPane.view.count > 0,
                                                     "settled": !page.diffSettling }))
                     return
@@ -105,7 +105,7 @@ Item {
             if (apart && op.at("pressed")) {
                 // The pane has read what git left: the last hunk alone, on a file now on both sides.
                 if (!Awaited.all("hunk_run_left", { "written": runs.wroteAndSettled(),
-                                                    "open": page.diffKey === "unstaged:" + op.file,
+                                                    "open": page.diffKey === GitFacts.fileKey("unstaged", op.file),
                                                     "rows": diffPane.view.count > 0,
                                                     "last": diffPane.diffModel.takesAll(0, -1) }))
                     return

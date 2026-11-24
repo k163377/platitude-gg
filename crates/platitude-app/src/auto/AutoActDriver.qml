@@ -740,19 +740,17 @@ Item {
         name: "tree_barrier"
         /// `landed=` tells a file resolved into the index from one discarded out of the tree ("" = nowhere).
         function settledLine() {
-            const cut = driver.treeGoneRow.indexOf(":")
-            const path = driver.treeGoneRow.substring(cut + 1)
-            return "tree_settled from=" + driver.treeGoneRow.substring(0, cut)
-                   + " landed=" + unstagedModel.bucketOf(path)
+            const gone = GitFacts.fileOfKey(driver.treeGoneRow)
+            return "tree_settled from=" + gone.bucket
+                   + " landed=" + unstagedModel.bucketOf(gone.path)
                    + " conflicts=" + worktree.conflictCount
                    + " staged=" + worktree.stagedCount
                    + " unstaged=" + (worktree.unstagedCount + worktree.untrackedCount)
         }
         /// The row gone from the bucket it was named in.
         function gone() {
-            const cut = driver.treeGoneRow.indexOf(":")
-            return { "ready": !unstagedModel.holdsPath(driver.treeGoneRow.substring(0, cut),
-                                                       driver.treeGoneRow.substring(cut + 1)) }
+            const gone = GitFacts.fileOfKey(driver.treeGoneRow)
+            return { "ready": !unstagedModel.holdsPath(gone.bucket, gone.path) }
         }
         onTriggered: {
             if (driver.graphGoneOid === "") {

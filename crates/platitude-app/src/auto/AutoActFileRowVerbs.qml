@@ -133,7 +133,7 @@ Item {
                 "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0,
                                  "shown": !repoTab.stagingUnseen,
                                  "followed": Harness.autoActArg === ""
-                                             || page.diffKey !== bucketAllTimer.from + ":" + Harness.autoActArg,
+                                             || page.diffKey !== GitFacts.fileKey(bucketAllTimer.from, Harness.autoActArg),
                                  "diff": Harness.autoActArg === "" || !page.diffSettling,
                                  "page": PageSettled.settled(page) }),
                 "report": () => "wip_heads from=" + bucketAllTimer.from
@@ -195,7 +195,7 @@ Item {
             }
             if (op.at("opened")) {
                 if (act === "stage-ahead" && !Awaited.all("stage_ahead_diff", {
-                        "open": page.diffKey === "unstaged:" + path, "rows": diffPane.view.count > 0,
+                        "open": page.diffKey === GitFacts.fileKey("unstaged", path), "rows": diffPane.view.count > 0,
                         "settled": !page.diffSettling }))
                     return
                 op.input("pressed", () => acts.pressAhead(path))
@@ -563,7 +563,7 @@ Item {
             const taken = fileRowMenu.chosenConflicts().length
             fileRowMenu.takeSideNow(act === "take-side-ours" ? "ours" : "theirs")
             if (taken > 0)
-                driver.awaitTreeGone("conflicts:" + arg)
+                driver.awaitTreeGone(GitFacts.fileKey("conflicts", arg))
         } else if (act === "open-mergetool") {
             // With a tool configured this holds the write queue until it exits, so a demo tool that blocks leaves the
             // wait on screen.
@@ -582,7 +582,7 @@ Item {
             lines.push("merge_tool " + wipPane.worktree.mergeTool + " paths=" + handed)
             // Only where something was handed over — else the barrier reports a landing nothing here caused.
             if (handed > 0)
-                driver.awaitTreeGone("conflicts:" + arg)
+                driver.awaitTreeGone(GitFacts.fileKey("conflicts", arg))
         } else if (act === "discard-file" || act === "discard-file-go"
                    || act === "delete-file" || act === "delete-file-go"
                    || act === "discard-staged" || act === "discard-staged-go") {

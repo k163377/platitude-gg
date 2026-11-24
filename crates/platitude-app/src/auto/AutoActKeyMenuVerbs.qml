@@ -125,7 +125,7 @@ Item {
             // after the ask and its rows (`DiffRowDelegate`) come and go between the picture and the census.
             return {
                 "keyboard": !!row && row.ListView.view.activeFocus,
-                "diff": acts.page.diffKey === "unstaged:" + rest && acts.diffPane.diffSettled()
+                "diff": acts.page.diffKey === GitFacts.fileKey("unstaged", rest) && acts.diffPane.diffSettled()
             }
         }
         if (surface === "diff")

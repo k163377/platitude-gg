@@ -463,11 +463,11 @@ Item {
                         key = files.fileKeyAt(i)
                     if (key === "")
                         return false
-                    const cut = key.indexOf(":")
+                    const file = GitFacts.fileOfKey(key)
                     // Pressed on the row, so what is read is what the row makes of the model — handing the model's
                     // answer to `openDiff` would skip that (verify-ui §壊れない動詞の実装と反復). Null until the list
                     // builds the row.
-                    const row = driver.carriedPane.filesWalk.rowFor(key.substring(0, cut), key.substring(cut + 1))
+                    const row = driver.carriedPane.filesWalk.rowFor(file.bucket, file.path)
                     if (row === null)
                         return false
                     row.press()

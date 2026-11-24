@@ -51,7 +51,7 @@ Item {
         property real since: 0
         /// Whether the pane is reading this run's file.
         function reading() {
-            return page.diffShown && page.diffKey === "unstaged:" + Harness.autoActArg
+            return page.diffShown && page.diffKey === GitFacts.fileKey("unstaged", Harness.autoActArg)
         }
         /// Both halves of the reach as they stand.
         function reach() {

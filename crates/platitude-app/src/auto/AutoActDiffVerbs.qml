@@ -1178,10 +1178,9 @@ Item {
                     return
                 }
                 op.input("swapped", () => {
-                    const cut = beside.indexOf(":")
-                    const path = beside.substring(cut + 1)
+                    const file = GitFacts.fileOfKey(beside)
                     op.witness("landed", beside)
-                    page.toggleDiff(beside.substring(0, cut), path, unstagedModel.origOf(path))
+                    page.toggleDiff(file.bucket, file.path, unstagedModel.origOf(file.path))
                 })
                 return
             }
