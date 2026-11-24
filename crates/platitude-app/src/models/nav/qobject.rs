@@ -206,11 +206,7 @@ impl NavSectionModel {
     /// carries changes nothing.
     #[qslot]
     fn set_hidden(&mut self, name: String) {
-        let hidden: Vec<String> = if name.is_empty() {
-            Vec::new()
-        } else {
-            vec![name]
-        };
+        let hidden: Vec<String> = crate::encode::optional_text(name).into_iter().collect();
         if self.hidden == hidden {
             return;
         }

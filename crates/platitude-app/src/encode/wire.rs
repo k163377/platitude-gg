@@ -478,10 +478,9 @@ pub(crate) fn optional_text<S: AsRef<str>>(text: S) -> Option<S> {
 pub(crate) fn pinned_oid(
     hex: &str,
 ) -> Result<Option<platitude_core::Oid>, platitude_core::oid::OidParseError> {
-    if hex.is_empty() {
-        return Ok(None);
-    }
-    platitude_core::Oid::from_hex_str(hex).map(Some)
+    optional_text(hex)
+        .map(platitude_core::Oid::from_hex_str)
+        .transpose()
 }
 
 /// The other way across: an object name as a model spells it for QML
