@@ -28,12 +28,6 @@ impl AppBackend {
         self.reload_avatars();
     }
 
-    /// The picture for an address, or empty — for the settings card opened
-    /// from a badge, which is not already showing the person.
-    pub(super) fn avatar_url(&self, email: &str) -> String {
-        Hub::with(|hub| hub.avatar_url(email)).unwrap_or_default()
-    }
-
     fn reload_avatars(&mut self) {
         self.avatars = assignments();
         self.avatars_changed();

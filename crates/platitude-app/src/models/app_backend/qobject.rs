@@ -276,11 +276,6 @@ impl AppBackend {
     }
 
     #[qslot]
-    fn avatar_url_for(&self, email: String) -> String {
-        self.avatar_url(&email)
-    }
-
-    #[qslot]
     fn set_auto_fetch_minutes(&mut self, minutes: i32) {
         self.apply_auto_fetch_minutes(minutes);
     }

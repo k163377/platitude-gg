@@ -487,20 +487,6 @@ impl GraphModel {
         }
     }
 
-    /// The lane colour of the row a ref sits on, as a graph palette index;
-    /// -1 when no loaded row carries that name. A conflicted file's diff
-    /// paints each side in its branch's graph colour.
-    #[qslot]
-    fn color_of_ref(&self, name: String) -> i32 {
-        if name.is_empty() {
-            return -1;
-        }
-        self.rows
-            .iter()
-            .find(|r| r.labels.iter().any(|chip| chip.name == name))
-            .map_or(-1, |r| r.node_color)
-    }
-
     /// The colour each side of a conflict is drawn in, both at once
     /// (`encode::conflict_side_colors` decides).
     #[qslot]
@@ -660,8 +646,21 @@ impl GraphModel {
 impl GraphModel {
     fn conflict_colors(&self, ours: &str, theirs: &str) -> (i32, i32) {
         crate::encode::conflict_side_colors(
-            (self.color_of_ref(ours.to_string()), ours),
-            (self.color_of_ref(theirs.to_string()), theirs),
+            (self.colour_of_ref(ours), ours),
+            (self.colour_of_ref(theirs), theirs),
         )
+    }
+
+    /// The lane colour of the row a ref sits on, as a graph palette index;
+    /// -1 when no loaded row carries that name. A conflicted file's diff
+    /// paints each side in its branch's graph colour.
+    fn colour_of_ref(&self, name: &str) -> i32 {
+        if name.is_empty() {
+            return -1;
+        }
+        self.rows
+            .iter()
+            .find(|r| r.labels.iter().any(|chip| chip.name == name))
+            .map_or(-1, |r| r.node_color)
     }
 }
