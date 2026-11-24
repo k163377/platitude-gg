@@ -100,7 +100,7 @@ impl Record for HeadPush {
     fn to_map(&self) -> QVariantMap {
         let blank = HeadBranch::default();
         let (name, read) = match self {
-            Self::Detached => ("", &blank),
+            Self::NoBranch => ("", &blank),
             Self::Moving(name) => (name.as_str(), &blank),
             Self::Read(branch) => (branch.name.as_str(), branch),
         };
@@ -128,7 +128,7 @@ impl Record for HeadPush {
         let name: String = field(map, "branch")?;
         let settled: bool = field(map, "settled")?;
         if name.is_empty() {
-            return Some(Self::Detached);
+            return Some(Self::NoBranch);
         }
         if !settled {
             return Some(Self::Moving(name));
@@ -223,7 +223,7 @@ mod tests {
             round_trip(HeadPush::Moving("main".into())),
             Some(HeadPush::Moving("main".into()))
         );
-        assert_eq!(round_trip(HeadPush::Detached), Some(HeadPush::Detached));
+        assert_eq!(round_trip(HeadPush::NoBranch), Some(HeadPush::NoBranch));
     }
 
     /// The bridge's spellings of "nothing" reach the rules as none, and a

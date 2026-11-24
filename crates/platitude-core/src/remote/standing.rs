@@ -210,7 +210,7 @@ impl StatusPush {
 pub enum HeadPush {
     /// No branch to send: HEAD detached, or not read yet.
     #[default]
-    Detached,
+    NoBranch,
     /// On this branch, the last status still another's.
     Moving(String),
     /// On a branch, as the last status read it.
@@ -231,7 +231,7 @@ impl HeadPush {
         push: &StatusPush,
     ) -> Self {
         if head.is_empty() {
-            return Self::Detached;
+            return Self::NoBranch;
         }
         if status.branch_head.as_deref() != Some(head) {
             return Self::Moving(head.to_string());
@@ -250,7 +250,7 @@ impl HeadPush {
     pub fn read(&self) -> Option<&HeadBranch> {
         match self {
             Self::Read(branch) => Some(branch),
-            Self::Detached | Self::Moving(_) => None,
+            Self::NoBranch | Self::Moving(_) => None,
         }
     }
 
@@ -534,7 +534,7 @@ mod tests {
         );
         let moved = HeadPush::of("topic", false, &status, &push);
         assert!(!moved.settled() && moved.read().is_none(), "{moved:?}");
-        assert_eq!(HeadPush::of("", false, &status, &push), HeadPush::Detached);
+        assert_eq!(HeadPush::of("", false, &status, &push), HeadPush::NoBranch);
     }
 
     /// The route the branch's own mark and the repository's give, empty
@@ -1066,7 +1066,7 @@ mod tests {
             PushFacts::default(),
             "nothing of main is known yet: the last status is another branch's"
         );
-        assert_eq!(facts(&HeadPush::Detached), PushFacts::default());
+        assert_eq!(facts(&HeadPush::NoBranch), PushFacts::default());
         let unborn = HeadPush::Read(HeadBranch {
             unborn: true,
             upstream: None,
@@ -1079,7 +1079,7 @@ mod tests {
         );
         assert!(!HeadPush::Moving("main".to_string()).settled());
         assert!(HeadPush::Read(branch(None)).settled());
-        assert!(HeadPush::Detached.settled(), "nothing is pending");
+        assert!(HeadPush::NoBranch.settled(), "nothing is pending");
     }
 
     /// The lease is the listing's commit of the remote branch the counts
