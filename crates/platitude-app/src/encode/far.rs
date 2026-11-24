@@ -1,6 +1,6 @@
 //! What a ref's card reads over there (`offers::FarSide`), as the fields of
-//! the record the model hands QML — a branch's `NavSectionModel.branchUpstream`,
-//! a tag's `tagMenu` — which QML hands on to `GitFacts.refMenu` as it is
+//! the record the model hands QML (`NavSectionModel.cardOf`) — a branch's upstream,
+//! a tag's menu — which QML hands on to `GitFacts.refMenu` as it is
 //! (`models::nav::CardRecord`) and never builds.
 
 use platitude_core::offers::{BranchFar, FarSide, Reading, TagDeleteHeld, TagFar, TagSides};

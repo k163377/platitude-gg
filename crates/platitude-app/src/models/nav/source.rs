@@ -202,11 +202,14 @@ impl Source {
         }
     }
 
-    /// What a menu on tag `name` stands on (`RefsSnapshot::tag_menu`).
-    pub(super) fn tag_menu(&self, name: &str, against: &str, aim: &str) -> TagMenu {
+    /// What a menu on tag `name` stands on (`RefsSnapshot::tag_menu`), off
+    /// any refs section's snapshot; none before the refs are read.
+    pub(super) fn tag_menu(&self, name: &str, against: &str, aim: &str) -> Option<TagMenu> {
         match self {
-            Self::Tags(snapshot) => snapshot.tag_menu(name, against, aim).into(),
-            _ => TagMenu::default(),
+            Self::Locals(snapshot) | Self::Remotes(snapshot) | Self::Tags(snapshot) => {
+                Some(snapshot.tag_menu(name, against, aim).into())
+            }
+            _ => None,
         }
     }
 
@@ -245,11 +248,13 @@ impl Source {
     }
 
     /// What local branch `name`'s card reads of its upstream
-    /// (`RefsSnapshot::branch_upstream`); nothing over there in every other
-    /// section, and before the branches are read.
+    /// (`RefsSnapshot::branch_upstream`), off any refs section's snapshot;
+    /// nothing over there before the refs are read.
     pub(super) fn branch_upstream(&self, name: &str) -> BranchUpstream {
         match self {
-            Self::Locals(snapshot) => snapshot.branch_upstream(name).into(),
+            Self::Locals(snapshot) | Self::Remotes(snapshot) | Self::Tags(snapshot) => {
+                snapshot.branch_upstream(name).into()
+            }
             _ => BranchUpstream::default(),
         }
     }

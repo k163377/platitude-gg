@@ -490,18 +490,22 @@ impl NavSectionModel {
         }
     }
 
-    /// What a branch's card reads of its upstream (`BranchUpstream`), read
-    /// as the menu opens and as it stands again, and handed on whole to
-    /// `GitFacts.refMenu`. A row of any `kind` but `branch` reads
-    /// nothing over there: a remote branch is a reading, with no upstream
-    /// of its own — and its name may be a local branch's as well. Asked of
-    /// the branches section.
+    /// The record the card of the row `name` of `kind` stands on
+    /// (`CardRecord`, `card_record`), read as the menu opens and as it
+    /// stands again and handed on whole to `GitFacts.refMenu`; none on a
+    /// row with no card. `against` is the remote this window's tag rows
+    /// act on, `aim` one the reader named on its own (`tag_aim_at`) or
+    /// empty. Every refs section holds the one snapshot, so any of them
+    /// answers.
     #[qslot]
-    pub(super) fn branch_upstream(&self, kind: String, name: String) -> One<BranchUpstream> {
-        if kind != "branch" {
-            return One::new(BranchUpstream::default());
-        }
-        One::new(self.all.branch_upstream(&name))
+    pub(super) fn card_of(
+        &self,
+        kind: String,
+        name: String,
+        against: String,
+        aim: String,
+    ) -> Optional<CardRecord> {
+        Optional::new(self.card_record(&kind, &name, against, &aim))
     }
 
     /// How far the branch of this name stands from what it reads, as of
@@ -607,31 +611,6 @@ impl NavSectionModel {
             return String::new();
         }
         self.all.tag_weighed_against(&name, &against)
-    }
-
-    /// What a menu on this tag stands on, read as it opens (`RefTagMenu`):
-    /// where the push goes and what it is leased to, which remote the
-    /// deletes reach and why they stand greyed, and whether the row goes
-    /// with them (`RefsSnapshot::tag_menu`), and the sides the name stands
-    /// on — the record `GitFacts.refMenu` reads the card's rows off.
-    /// `aim` is a remote the reader named on its own — a carrier's line, a
-    /// chip drawing that remote's reading (`tag_aim_at`) — or empty. Asked
-    /// of the tags section.
-    #[qslot]
-    pub(super) fn tag_menu(&self, name: String, against: String, aim: String) -> One<TagMenu> {
-        if name.is_empty() || self.section != "tags" {
-            return One::new(
-                platitude_core::session::TagMenuFacts {
-                    far: platitude_core::offers::TagFar {
-                        push_remote: against,
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                }
-                .into(),
-            );
-        }
-        One::new(self.all.tag_menu(&name, &against, &aim))
     }
 
     /// What a menu's `push` row on this branch stands on, read as the menu

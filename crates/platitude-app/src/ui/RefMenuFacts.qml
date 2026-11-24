@@ -21,7 +21,7 @@ QtObject {
     required property NavSectionModel branchesModel
     /// The local branch the row lands on (`landsOn` — the one entrance for it).
     required property NavSectionModel remotesModel
-    /// What a tag's card reaches (`tagMenu`) and where the tag here points.
+    /// Where the tag here points (`tagAt`).
     required property NavSectionModel tagsModel
 
     /// Reads the row `full` of `kind` on the commit `oidHex` off `tree` — the reading the menu stands on, handed to
@@ -36,16 +36,14 @@ QtObject {
     ///   the WORKTREE card's worktree (`card`), whether the tab stands in it and where the row's own branch would go
     ///   out (`place`);
     /// - `menu`: core's answer for every row and card (`GitFacts.refMenu` — the making rows in `making`);
-    /// - `card`: the record the row's card stands on — `branchUpstream` on a branch's or a remote branch's row,
-    ///   `tagMenu` on a tag's, `undefined` on any other;
+    /// - `card`: the record the row's card stands on, the kind picking it in core (`NavSectionModel.cardOf`) — a
+    ///   branch's upstream on a branch's or a remote branch's row, a tag's menu on a tag's, `undefined` on any other;
     /// - `oid`, `open`, `push`, `merged`: the row's commit, whether the tab is open, and the BRANCH card's push row
     ///   (`NavSectionModel.branchPushFacts`) and plain delete off the drawn rows (`GraphModel.branchDeleteMerged`);
     /// - `tagAt`: the commit the tag here points at now (`RefTagMenu`).
     function stand(kind, full, oidHex, tree, aim, branchAt, worktreePath) {
         const lead = refMenuFacts.leadOf(kind, full, worktreePath === undefined ? "" : worktreePath)
-        const card = kind === "branch" || kind === "remote" ? refMenuFacts.branchesModel.branchUpstream(kind, full)
-                   : kind === "tag" ? refMenuFacts.tagsModel.tagMenu(full, refMenuFacts.repoTab.defaultRemote, aim)
-                   : undefined
+        const card = refMenuFacts.branchesModel.cardOf(kind, full, refMenuFacts.repoTab.defaultRemote, aim)
         const open = refMenuFacts.repoTab.state === "open"
         const menu = GitFacts.refMenu(oidHex, open, tree, lead, card, refMenuFacts.landsListed(lead))
         return {

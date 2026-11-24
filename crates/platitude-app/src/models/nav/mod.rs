@@ -114,7 +114,7 @@ impl Record for HeldMark {
     }
 }
 
-/// What a tag's menu stands on (`NavSectionModel::tag_menu`,
+/// What a tag's menu stands on (`NavSectionModel::tag_card`,
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads,
 /// with what its rows read over there flat beside them (`encode::put_far`:
 /// `sides`, the `pushRemote` its pushes go to and the `heldBack` the card
@@ -169,7 +169,7 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 }
 
 /// What a branch's card reads of its upstream, read as the menu opens and
-/// as it stands again (`NavSectionModel::branch_upstream`): the remote
+/// as it stands again (`NavSectionModel::card_record`): the remote
 /// reading it speaks for and that reading's commit — what the card's
 /// remote deletes name and are leased to —, the upstream it is configured
 /// with, where that stands and the commit it is on, and core's part flat

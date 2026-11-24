@@ -169,8 +169,8 @@ impl GitFacts {
     /// worktree, whether the tab stands in it and where the row's own
     /// branch would go out among them. `card` is the record the
     /// row's card stood on, handed on as it was read —
-    /// `NavSectionModel.branchUpstream` on a branch's or a remote branch's
-    /// row, `tagMenu` on a tag's — and `undefined` on any other row, which
+    /// `NavSectionModel.cardOf`: a branch's upstream on a branch's or a remote branch's
+    /// row, a tag's menu on a tag's — and `undefined` on any other row, which
     /// reads nothing over there (`offers::FarSide`). The `pull` row reads
     /// the same record: on a local branch's row, its far side is the row's
     /// own. `local_listed`: the local branch the row lands on is there —

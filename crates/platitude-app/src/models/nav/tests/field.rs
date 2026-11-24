@@ -238,12 +238,12 @@ fn a_tags_menu_and_note_come_off_the_readings() {
         ""
     );
 
-    let pair = model.tag_menu("v-pair".into(), "origin".into(), String::new());
+    let pair = model.tag_card("v-pair", "origin".into(), "");
     assert_eq!(pair.far.push_remote, "origin");
     assert_eq!(pair.reach, "");
     assert_eq!(pair.far.held_back, TagDeleteHeld::Unnamed);
     assert_eq!(pair.carriers, "fork, mirror");
-    let aimed = model.tag_menu("v-pair".into(), "origin".into(), "mirror".into());
+    let aimed = model.tag_card("v-pair", "origin".into(), "mirror");
     assert_eq!(aimed.far.push_remote, "mirror");
     assert_eq!(aimed.reach, "mirror");
     assert_eq!(aimed.far.held_back, TagDeleteHeld::No);
@@ -812,7 +812,7 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
 /// What the BRANCH card names, and in which colour, when the upstream
 /// comes off: wherever the configured upstream stands — a remote reading,
 /// a branch here (the one the worktree is on, or another), or gone
-/// (`branch_upstream`'s `upstream` / `upstreamHere`, read by core's
+/// (`card_of`'s `upstream` / `upstreamHere`, read by core's
 /// `upstream_place` on the tree the menu stands on, デザイン規約 §ref の種別).
 #[test]
 fn an_upstream_is_named_wherever_it_stands() {
@@ -846,7 +846,7 @@ fn an_upstream_is_named_wherever_it_stands() {
         ..Default::default()
     };
     let told = |name: &str| {
-        let card = model.branch_upstream("branch".to_string(), name.to_string());
+        let card = model.all.branch_upstream(name);
         (
             card.upstream.clone(),
             platitude_core::offers::upstream_place(&card.upstream, card.upstream_here, &on_main)
@@ -877,7 +877,7 @@ fn an_upstream_is_named_wherever_it_stands() {
 }
 
 /// What the BRANCH card reads of its upstream comes in one record
-/// (`branch_upstream`): the reading and its commit, the upstream it is
+/// (`card_of`): the reading and its commit, the upstream it is
 /// configured with, and the far side core reads off the same row. A row
 /// that is no local branch's reads nothing over there, even where a local
 /// branch carries its name.
@@ -899,11 +899,11 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
     };
     let mut model = section("branches", Source::Locals(Arc::new(snapshot)));
     model.arrange();
-    let card = |kind: &str, name: &str| (*model.branch_upstream(kind.into(), name.into())).clone();
+    let card = |kind: &str, name: &str| model.card_record(kind, name, String::new(), "");
 
     assert_eq!(
         card("branch", "reads"),
-        BranchUpstream {
+        Some(CardRecord::Branch(BranchUpstream {
             far: Some(BranchFar {
                 reading: Reading::Drifted,
                 tracked: true,
@@ -915,11 +915,11 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
             upstream: "origin/reads".to_string(),
             upstream_here: false,
             upstream_oid: oid("b").to_hex(),
-        }
+        }))
     );
     assert_eq!(
         card("branch", "lost"),
-        BranchUpstream {
+        Some(CardRecord::Branch(BranchUpstream {
             far: Some(BranchFar {
                 reading: Reading::None,
                 tracked: true,
@@ -928,15 +928,19 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
             }),
             upstream: "origin/lost".to_string(),
             ..BranchUpstream::default()
-        },
+        })),
         "gone: no reading to name or lease to, an upstream to take off"
     );
     assert_eq!(
         card("remote", "origin/reads"),
-        BranchUpstream::default(),
+        Some(CardRecord::Branch(BranchUpstream::default())),
         "a remote branch's row, whatever local branch carries its name"
     );
-    assert_eq!(card("tag", "reads"), BranchUpstream::default());
+    assert!(
+        matches!(card("tag", "reads"), Some(CardRecord::Tag(_))),
+        "a tag's row stands on its menu"
+    );
+    assert_eq!(card("stash", "stash@{0}"), None, "a row with no card");
 }
 
 /// Both doors' push answers off one snapshot, leased by one hand: the

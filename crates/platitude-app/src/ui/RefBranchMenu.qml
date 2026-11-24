@@ -120,7 +120,7 @@ AppMenu {
         property string upstream: ""
         property string upstreamWhere: ""
         /// The commit that reading showed as the menu opened: the lease of every delete that reaches it
-        /// (`NavSectionModel.branchUpstream`'s `remoteCounterpartOid`, kept through the menu standing again, so a
+        /// (`NavSectionModel.cardOf`'s `remoteCounterpartOid`, kept through the menu standing again, so a
         /// fetch behind the open menu leaves the press on the tip the reader saw — or greys it, `remoteMoved`).
         /// Headless: `delete-both-go side` / `delete-upstream-go next`, `--preset stack` — a lease that misses fails
         /// the write.
@@ -166,7 +166,7 @@ AppMenu {
 
     /// Stands the card on that branch. `facts` is what the carrying menu read for it (`RefMenuFacts.stand`): `lead`
     /// the other worktree holding this row's local branch (`path`), the name it goes by (`called`) and whether it is
-    /// the repository's own (`home`); `card` what the branch reads of its upstream (`NavSectionModel.branchUpstream` —
+    /// the repository's own (`home`); `card` what the branch reads of its upstream (`NavSectionModel.cardOf` —
     /// `remoteCounterpart` the reading a local branch speaks for and `remoteCounterpartOid` its commit, `upstream` the
     /// one it is configured with, a gone one too); `menu` core's answer for the rows (`GitFacts.refMenu` — a drifted
     /// reading answers no `deleteRemote`, which is what greys the rows that reach it — and `upstreamWhere`, where that
@@ -340,7 +340,7 @@ AppMenu {
     // puts it back (§回数押しの色). The press runs
     // `unsetUpstreamRequested` → the carrying menu → `RepoTab.unsetUpstream` → `RepoSession::unset_upstream`
     // (`AfterWrite::Config`). Headless: `unset-upstream [chip:]<branch>` reads the row, `unset-upstream-go` presses it
-    // through until the list's `branchUpstream` names no upstream.
+    // through until the list's `cardOf` names no upstream.
     AppMenuItem {
         id: refUnsetUpstreamItem
         //: Followed by the upstream it takes off: "Unset upstream origin/feature".

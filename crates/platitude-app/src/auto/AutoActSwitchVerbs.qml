@@ -759,7 +759,7 @@ Item {
         }
         /// The upstream the listing names for the branch now, listed or gone; empty for none.
         function upstream() {
-            return branchesModel.branchUpstream("branch", unsetUpstreamTimer.branch).upstream
+            return branchesModel.cardOf("branch", unsetUpstreamTimer.branch, "", "").upstream
         }
         // The shape is fixed as the card opens: seat, chip, what it names, the plain delete's presses and ink.
         function line() {
@@ -801,7 +801,7 @@ Item {
         }
     }
     // The row's press, then git's answer, judged on the branch's own row: the listing the write's refresh publishes
-    // names no upstream for it, listed or gone (`NavSectionModel.branchUpstream`'s `upstream`).
+    // names no upstream for it, listed or gone (`NavSectionModel.cardOf`'s `upstream`).
     PageStage {
         id: unsetLandedTimer
         name: "unset_landed"

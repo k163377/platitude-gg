@@ -89,9 +89,9 @@ impl Record for RowLead {
 }
 
 /// The record a ref's card stood on, handed back as the section built it
-/// (`GitFacts.refMenu`): a branch's upstream (`NavSectionModel.branchUpstream`
-/// — nothing over there on any row but a local branch's) or a tag's menu
-/// (`tagMenu`). Told apart by the far side it carries (`encode::put_far`).
+/// (`GitFacts.refMenu`, picked by the row's kind in `card_record`): a branch's upstream
+/// — nothing over there on any row but a local branch's — or a tag's menu
+/// (`tag_card`). Told apart by the far side it carries (`encode::put_far`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardRecord {
     Branch(BranchUpstream),
@@ -105,6 +105,52 @@ impl CardRecord {
             Self::Branch(upstream) => upstream.far.map_or(FarSide::Unread, FarSide::Branch),
             Self::Tag(menu) => FarSide::Tag(menu.far.clone()),
         }
+    }
+}
+
+impl NavSectionModel {
+    /// The record the card of the row `name` of `kind` stands on — the one
+    /// place a row's kind picks it (`card_of`): a local branch's upstream
+    /// (`RefsSnapshot::branch_upstream`); the same record empty on a remote
+    /// branch's row, a reading with no upstream of its own — and its name
+    /// may be a local branch's as well; a tag's menu (`tag_card`); none on
+    /// a row with no card.
+    pub(super) fn card_record(
+        &self,
+        kind: &str,
+        name: &str,
+        against: String,
+        aim: &str,
+    ) -> Option<CardRecord> {
+        use platitude_core::offers::RefKind;
+        match RefKind::from_word(kind)? {
+            RefKind::Branch => Some(CardRecord::Branch(self.all.branch_upstream(name))),
+            RefKind::Remote => Some(CardRecord::Branch(BranchUpstream::default())),
+            RefKind::Tag => Some(CardRecord::Tag(self.tag_card(name, against, aim))),
+            RefKind::Stash | RefKind::Worktree => None,
+        }
+    }
+
+    /// What a menu on tag `name` stands on (`RefTagMenu`): where the push
+    /// goes and what it is leased to, which remote the deletes reach and
+    /// why they stand greyed, and whether the row goes with them
+    /// (`RefsSnapshot::tag_menu`), and the sides the name stands on. With
+    /// no name, or before the refs are read, it reaches nothing beyond
+    /// `against`.
+    pub(super) fn tag_card(&self, name: &str, against: String, aim: &str) -> TagMenu {
+        self.all
+            .tag_menu(name, &against, aim)
+            .filter(|_| !name.is_empty())
+            .unwrap_or_else(|| {
+                platitude_core::session::TagMenuFacts {
+                    far: platitude_core::offers::TagFar {
+                        push_remote: against,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+                .into()
+            })
     }
 }
 

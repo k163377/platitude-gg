@@ -97,7 +97,7 @@ Item {
     /// Why that row is greyed — `standing` / `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
     property string pullOut: ""
     /// The remote branch this row's branch tracks, which the `own` reason names — the reading its BRANCH card speaks
-    /// for (`NavSectionModel.branchUpstream`'s `remoteCounterpart`): a remote one only, so a branch tracking a local
+    /// for (`NavSectionModel.cardOf`'s `remoteCounterpart`): a remote one only, so a branch tracking a local
     /// one (`branch.<n>.remote = .`) has no `aside` row.
     property string pullUpstream: ""
     /// The stash's drop, in the last group with the branch's delete table; a tag's deletes are its card's
