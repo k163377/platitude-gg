@@ -323,17 +323,18 @@ impl RepoSession {
         )
     }
 
-    /// Moves the current branch to `rev`, carrying the index and the
+    /// Moves the current branch to `at`, carrying the index and the
     /// working tree as far as `mode` says. `ResetMode::Hard` destroys
     /// uncommitted work, so the UI asks before sending that one — and what
     /// it destroys is copied first and put on the discard record with the
     /// move (`discard_record::copy_for_reset`).
-    pub fn reset(self: &Arc<Self>, rev: String, mode: branch::ResetMode) -> Option<OperationId> {
+    pub fn reset(self: &Arc<Self>, at: Oid, mode: branch::ResetMode) -> Option<OperationId> {
         let s = Arc::clone(self);
         self.write(
             OperationKind::Reset,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let rev = at.to_hex();
                 let copied = match mode {
                     branch::ResetMode::Hard => copy_for_reset(&exec, &repo, &rev, &cancel).await?,
                     _ => None,

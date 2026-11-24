@@ -5,7 +5,7 @@
 
 use crate::support::session::{opened, write_answer, write_result};
 use crate::support::wait::bounded;
-use crate::support::{TestRepo, barrier_hook};
+use crate::support::{TestRepo, barrier_hook, oid};
 use platitude_core::OperationKind;
 use platitude_core::commit::CommitOptions;
 use platitude_core::session::SessionEvent;
@@ -434,7 +434,7 @@ async fn a_reset_moves_the_branch_through_the_write_queue() {
     repo.commit_file("f.txt", "1\n", "second");
 
     let (sink, session) = opened(&repo).await;
-    session.reset(root.clone(), platitude_core::branch::ResetMode::Mixed);
+    session.reset(oid(&root), platitude_core::branch::ResetMode::Mixed);
     assert_eq!(write_result(&sink, OperationKind::Reset).await, None);
 
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), root);

@@ -208,13 +208,14 @@ impl RepoSession {
         )
     }
 
-    /// Puts a tag on a commit. Lightweight and unforced: an existing
-    /// name is git's to refuse (see [`crate::tag::create`]).
-    pub fn create_tag(self: &Arc<Self>, name: String, commit: String) -> Option<OperationId> {
+    /// Puts a tag on `at`, HEAD where none. Lightweight and unforced: an
+    /// existing name is git's to refuse (see [`crate::tag::create`]).
+    pub fn create_tag(self: &Arc<Self>, name: String, at: Option<Oid>) -> Option<OperationId> {
         self.write(
             OperationKind::Tag,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let commit = at.map(|at| at.to_hex()).unwrap_or_default();
                 tag::create(&exec, &repo.workdir, &name, &commit, &cancel).await
             },
         )

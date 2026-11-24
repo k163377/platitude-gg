@@ -89,9 +89,12 @@ impl RebasePlanModel {
     /// Another commit replaces the ask (core cancels the read behind it).
     #[qslot]
     fn open(&mut self, oid_hex: String) {
-        let from = oid_hex.trim().to_string();
+        let Some(from) = crate::encode::oid_arg(&oid_hex) else {
+            return;
+        };
+        let from = from.to_hex();
         // An accepted answer stands on the plan on screen (`answer.rs`).
-        if self.locked || from.is_empty() || self.already_asking(&from) {
+        if self.locked || self.already_asking(&from) {
             return;
         }
         self.loading = true;

@@ -297,13 +297,14 @@ impl RepoSession {
         Ok(())
     }
 
-    /// `git cherry-pick <revs>`.
-    pub fn cherry_pick(self: &Arc<Self>, revs: Vec<String>) -> Option<OperationId> {
+    /// `git cherry-pick <oid>`.
+    pub fn cherry_pick(self: &Arc<Self>, oid: Oid) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
             OperationKind::CherryPick,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let revs = [oid.to_hex()];
                 let landing = integrate::cherry_pick(&exec, &repo.workdir, &revs, &cancel).await?;
                 session.note_landing(landing);
                 Ok(())
@@ -311,13 +312,14 @@ impl RepoSession {
         )
     }
 
-    /// `git revert <revs>`.
-    pub fn revert(self: &Arc<Self>, revs: Vec<String>) -> Option<OperationId> {
+    /// `git revert <oid>`.
+    pub fn revert(self: &Arc<Self>, oid: Oid) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
             OperationKind::Revert,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
+                let revs = [oid.to_hex()];
                 let landing = integrate::revert(&exec, &repo.workdir, &revs, &cancel).await?;
                 session.note_landing(landing);
                 Ok(())

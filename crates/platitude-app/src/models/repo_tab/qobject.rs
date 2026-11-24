@@ -926,11 +926,11 @@ impl RepoTab {
         self.ask_session(|s| s.checkout_moving_branch(local, start, leaving));
     }
 
-    /// Moves the current branch to `rev`; `mode` is git's `"soft"` /
-    /// `"mixed"` / `"hard"`.
+    /// Moves the current branch to the commit `oid` names; `mode` is
+    /// git's `"soft"` / `"mixed"` / `"hard"`.
     #[qslot]
-    fn reset_to(&mut self, rev: String, mode: String) {
-        self.reset_head(rev, mode);
+    fn reset_to(&mut self, oid: String, mode: String) {
+        self.reset_head(oid, mode);
     }
 
     /// Creates a branch at `start_point` (HEAD when empty).
@@ -984,11 +984,12 @@ impl RepoTab {
         self.upstream_unset(branch);
     }
 
-    /// Puts a lightweight tag on `commit` (HEAD when empty). Always
-    /// plain: a name already taken is git's to refuse.
+    /// Puts a lightweight tag on the commit `oid` names (HEAD when empty).
+    /// Always plain: a name already taken is git's to refuse.
     #[qslot]
-    fn create_tag(&mut self, name: String, commit: String) {
-        self.ask_session(|s| s.create_tag(name, commit));
+    fn create_tag(&mut self, name: String, oid: String) {
+        let at = crate::encode::pinned_oid(&oid);
+        self.ask_pinned("create tag", at, |s, at| s.create_tag(name, at));
     }
 
     /// Sends one tag to one remote. `expect` pins a leased
@@ -1370,9 +1371,10 @@ impl RepoTab {
         self.rebase_head(upstream, onto);
     }
 
+    /// Applies the commit `oid` names on top of HEAD.
     #[qslot]
-    fn cherry_pick(&mut self, rev: String) {
-        self.ask_session(|s| s.cherry_pick(vec![rev]));
+    fn cherry_pick(&mut self, oid: String) {
+        self.ask_on_object("cherry-pick", &oid, |s, oid| s.cherry_pick(oid));
     }
 
     /// Folds a commit into its parent (one-commit interactive rebase).
@@ -1393,9 +1395,10 @@ impl RepoTab {
         self.reword_from_fields(oid, subject, body);
     }
 
+    /// Undoes the commit `oid` names in a new commit on top of HEAD.
     #[qslot]
-    fn revert(&mut self, rev: String) {
-        self.ask_session(|s| s.revert(vec![rev]));
+    fn revert(&mut self, oid: String) {
+        self.ask_on_object("revert", &oid, |s, oid| s.revert(oid));
     }
 
     /// The way out of whatever is in progress: `how` is `"continue"` /

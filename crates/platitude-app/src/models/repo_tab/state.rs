@@ -491,8 +491,8 @@ impl RepoTab {
     }
 
     /// [`Self::ask_pinned`] for a write made on the object its row showed
-    /// — a name taken off a remote leased to it, a commit rewritten or a
-    /// stash entry renamed by it: with none to pin to — an empty pin as much
+    /// — a name taken off a remote leased to it, a commit rewritten, reset
+    /// to, picked or reverted, a stash entry renamed by it: with none to pin to — an empty pin as much
     /// as a malformed one — nothing is asked. Where the write is two
     /// commands, the first has not run either.
     pub(super) fn ask_on_object(
@@ -504,8 +504,7 @@ impl RepoTab {
             platitude_core::Oid,
         ) -> Option<platitude_core::OperationId>,
     ) -> Option<u64> {
-        let pin = crate::encode::pinned_oid(object)
-            .and_then(|pin| pin.ok_or(platitude_core::oid::OidParseError));
+        let pin = crate::encode::oid_arg(object).ok_or(platitude_core::oid::OidParseError);
         self.ask_pinned(what, pin, f)
     }
 
@@ -676,8 +675,9 @@ impl RepoTab {
     }
 
     /// The reset slot's mode word, turned into core's enum; an unknown
-    /// word is a caller's bug and moves nothing.
-    pub(super) fn reset_head(&mut self, rev: String, mode: String) {
+    /// word is a caller's bug and moves nothing, as a commit `oid` names
+    /// none of does.
+    pub(super) fn reset_head(&mut self, oid: String, mode: String) {
         use platitude_core::branch::ResetMode;
         let mode = match mode.as_str() {
             "soft" => ResetMode::Soft,
@@ -688,7 +688,7 @@ impl RepoTab {
                 return;
             }
         };
-        self.ask_session(|s| s.reset(rev, mode));
+        self.ask_on_object("reset", &oid, |s, at| s.reset(at, mode));
     }
 }
 

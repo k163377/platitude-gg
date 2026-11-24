@@ -404,7 +404,7 @@ async fn what_a_hard_reset_writes_over_is_copied() {
     let (sink, session) = opened(&repo).await;
 
     let id = session
-        .reset(target, ResetMode::Hard)
+        .reset(oid(&target), ResetMode::Hard)
         .expect("the reset is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(repo.git(&["status", "--porcelain=v1"]), "?? other.txt");
@@ -525,7 +525,7 @@ async fn writes_that_leave_commits_behind_tell_the_log() {
     assert_eq!(told(&sink).len(), 1, "only main had what this one replaced");
 
     let id = session
-        .reset("kept".to_string(), ResetMode::Soft)
+        .reset(oid(&repo.git(&["rev-parse", "kept"])), ResetMode::Soft)
         .expect("the reset is accepted");
     assert_eq!(write_answer(&sink, id).await, None);
     assert_eq!(told(&sink).len(), 2, "the reset left the amended commit");
