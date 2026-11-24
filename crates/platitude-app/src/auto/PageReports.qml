@@ -58,7 +58,7 @@ Item {
             Harness.report("replace_remote_asked from=" + from + " to=" + to)
         }
         // What the write was about rides the signal: one drain can bring several answers
-        // (`RepoTab.writeAnswerReportKind`).
+        // (`RepoTab.writeAnswerReport`).
         function onWriteReported(kind, remote, name) {
             Harness.report("write_reported kind=" + kind + " ref=" + remote + "/" + name)
         }

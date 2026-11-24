@@ -612,7 +612,8 @@ FocusScope {
         if (answer < 0)
             return
         if (repoTab.writeAnswerFailed(answer)) {
-            const made = repoTab.writeAnswerReportKind(answer) === "worktree-hook"
+            const report = repoTab.writeAnswerReport(answer)
+            const made = report !== undefined && report.kind === "worktree-hook"
             page.tellRefusal(answer)
             if (!made)
                 return
@@ -641,19 +642,17 @@ FocusScope {
     }
     /// A refusal somebody outside made (a hook, a remote newer than our picture) comes down as a report
     /// (デザイン規約 §答えの要らない報せ). Returns whether there was one; otherwise each caller does its own thing.
-    /// Read off the answer: one drain can carry several reports (`RepoTab.writeAnswerReportKind`).
+    /// Read off the answer: one drain can carry several reports (`RepoTab.writeAnswerReport`).
     function reportRefusal(answer) {
-        const kind = repoTab.writeAnswerReportKind(answer)
-        if (kind === "")
+        const report = repoTab.writeAnswerReport(answer)
+        if (report === undefined)
             return false
-        const remote = repoTab.writeAnswerReportRemote(answer)
-        const name = repoTab.writeAnswerReportName(answer)
-        page.showReport(kind, remote, name, repoTab.writeAnswerReportFact(answer))
+        page.showReport(report.kind, report.remote, report.name, report.fact)
         // The `>_` mark goes quiet with the report (`answeredFailures`).
         if (!commandsModel.failed)
             page.answeredFailures++
         commandsModel.noteAnswered()
-        page.writeReported(kind, remote, name)
+        page.writeReported(report.kind, report.remote, report.name)
         return true
     }
     /// A press's refusal: a report where somebody outside wrote the words, otherwise the log comes up
@@ -2075,7 +2074,7 @@ FocusScope {
 
     /// The one door, so a headless run handing it a kind enters the same body the answer does. Both lines are ours
     /// (`Words.writeReported`, `Words.writeReportedWhy`); `fact` is the one thing core hands the second line besides
-    /// the names (`RepoTab.writeReportFact`).
+    /// the names (`RepoTab.writeReport`).
     function showReport(kind, remote, name, fact) {
         const names = Words.reportNamesWorktree(kind)
         // The only reports that can name the repository's own worktree (it is never removed or made), which goes by
@@ -2215,27 +2214,23 @@ FocusScope {
             // press is refused forever.
             if (repoTab.writeStaleDiff)
                 page.readDiffForAnswer()
+            const report = repoTab.writeReport()
             // Unless git turned the rename down, the box has nothing to answer and closes as on a landing (a
             // half-finished rename too: its row is what could not be found).
-            if (!Words.renameStillOpen(repoTab.writeReportKind))
+            if (report === undefined || !Words.renameStillOpen(report.kind))
                 page.noteRenameLanded()
             // Refused from outside: a report, as `reportRefusal`.
-            if (repoTab.writeReportKind !== "") {
+            if (report !== undefined) {
                 // A refused rename leaves its box open holding the name, to try again; the bar says why
                 // (デザイン規約 §答えの要らない報せ).
-                if (Words.renameStillOpen(repoTab.writeReportKind))
+                if (Words.renameStillOpen(report.kind))
                     page.noteRenameRefused()
-                page.showReport(repoTab.writeReportKind,
-                                repoTab.writeReportRemote,
-                                repoTab.writeReportName,
-                                repoTab.writeReportFact)
+                page.showReport(report.kind, report.remote, report.name, report.fact)
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
                 page.forgetRenameCarry()
-                page.writeReported(repoTab.writeReportKind,
-                                   repoTab.writeReportRemote,
-                                   repoTab.writeReportName)
+                page.writeReported(report.kind, report.remote, report.name)
                 return
             }
             // Otherwise the log comes up, as `tellRefusal`. A fetch here is not other news: the tab already raised the

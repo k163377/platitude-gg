@@ -40,6 +40,46 @@ impl Record for RemoteBranchAsked {
     }
 }
 
+/// What a write that did not happen says for itself, for the page's notice
+/// (デザイン規約 §答えの要らない報せ): `kind` (`drain::report_word`) is what both
+/// sentences turn on, `remote` and `name` what it is about, and `fact` the
+/// one thing the second line names beside them (`WriteReport::fact`) —
+/// never anybody's message. Empty `kind` is no report.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Reported {
+    pub kind: String,
+    pub remote: String,
+    pub name: String,
+    pub fact: String,
+}
+
+impl Reported {
+    /// The report as QML is handed it: none where `kind` is empty.
+    pub(super) fn handed(&self) -> Optional<Self> {
+        Optional::new((!self.kind.is_empty()).then(|| self.clone()))
+    }
+}
+
+impl Record for Reported {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("kind", &self.kind)
+            .put("remote", &self.remote)
+            .put("name", &self.name)
+            .put("fact", &self.fact)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
+            kind: field(map, "kind")?,
+            remote: field(map, "remote")?,
+            name: field(map, "name")?,
+            fact: field(map, "fact")?,
+        })
+    }
+}
+
 /// The commit editor's unsent words as the tab holds them while it has no
 /// page (`hub::Draft`), handed back whole: the words and whether they
 /// were an amend's travel together.
@@ -441,10 +481,10 @@ pub struct RepoTab {
     /// (`drain::absorb`), so a run's answer and the fetch behind it reach
     /// QML as one `changed`: read off the group, the run's answer and its
     /// stop are lost to the fetch. What waits for one answer looks here.
-    /// The report is the answer's own (`writeAnswerReportKind` and its
-    /// three siblings): two refusals in one drain would leave the group
-    /// only the later. `writeAnswerIndex(id)` finds one by id (-1 for
-    /// none); ids come only from `ask_session`, and reach QML only for
+    /// The report is the answer's own (`writeAnswerReport`): two refusals
+    /// in one drain would leave the group only the later.
+    /// `writeAnswerIndex(id)` finds one by id (-1 for none); ids come only
+    /// from `ask_session`, and reach QML only for
     /// `popStash`. The bridge gets one slot per field, added with its
     /// `TabMsg` once something reads it.
     ///
@@ -533,14 +573,8 @@ pub struct RepoTab {
     /// said so — a protected branch, a rule, a hook, a stale picture of
     /// the remote (デザイン規約 §答えの要らない報せ).
     ///
-    /// `kind` (`drain::report_word`) is what both sentences turn on;
-    /// `remote` and `name` are what it is about, and `fact` the one thing
-    /// the second line names beside them. Empty `kind` is "no report in
-    /// this answer".
-    write_report_kind: String,
-    write_report_remote: String,
-    write_report_name: String,
-    write_report_fact: String,
+    /// The last answer's ([`Reported`]); empty where it brought none.
+    write_report: Reported,
     /// A branch move that would take commits off the branch, waiting to be
     /// asked about, and how many it would take. Nothing has happened yet.
     move_ask_local: String,
@@ -607,12 +641,9 @@ struct WriteAnswer {
     head_seq: u64,
     reads_from: u64,
     /// Who refused it — the far side, a hook, this end — per answer, since
-    /// a drain can bring several. Empty `kind` is git's plain refusal, the
+    /// a drain can bring several. Empty where git's plain refusal is the
     /// command log's news (デザイン規約 §答えの要らない報せ).
-    report_kind: String,
-    report_remote: String,
-    report_name: String,
-    report_fact: String,
+    report: Reported,
 }
 
 /// How many settled writes' ids the tab keeps for the log's receipts to be

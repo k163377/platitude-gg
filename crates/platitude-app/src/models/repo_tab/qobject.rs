@@ -288,28 +288,6 @@ impl RepoTab {
     qproperty!("writeBranchOp", Member = write_branch_op, Notify = changed);
     qproperty!("writeTagOp", Member = write_tag_op, Notify = changed);
     qproperty!("writeFetched", Member = write_fetched, Notify = changed);
-    // What a write that did not happen says for itself, for the page's
-    // notice (デザイン規約 §答えの要らない報せ).
-    qproperty!(
-        "writeReportKind",
-        Member = write_report_kind,
-        Notify = changed
-    );
-    qproperty!(
-        "writeReportRemote",
-        Member = write_report_remote,
-        Notify = changed
-    );
-    qproperty!(
-        "writeReportName",
-        Member = write_report_name,
-        Notify = changed
-    );
-    qproperty!(
-        "writeReportFact",
-        Member = write_report_fact,
-        Notify = changed
-    );
     qproperty!("moveAskLocal", Member = move_ask_local, Notify = changed);
     qproperty!("moveAskStart", Member = move_ask_start, Notify = changed);
     qproperty!("moveAskLost", Member = move_ask_lost, Notify = changed);
@@ -542,35 +520,25 @@ impl RepoTab {
         self.write_answer_at(index).is_some_and(|a| a.at_tip)
     }
 
-    /// Which report that refusal made (`drain::report_word`: `delete-rule` /
-    /// `outdated` / `commit-hook` / `stale-stage` …), read with the three
-    /// below. Empty is git's plain refusal, the command log's news
-    /// (デザイン規約 §答えの要らない報せ).
+    /// The report that refusal made ([`Reported`] — `kind` is
+    /// `drain::report_word`'s `delete-rule` / `outdated` / `commit-hook` /
+    /// `stale-stage` …); `undefined` where git's plain refusal is the command
+    /// log's news (デザイン規約 §答えの要らない報せ).
     ///
     /// Read off the answer, or a drain with two refusals gives the earlier
     /// press the later one's words.
     #[qslot]
-    fn write_answer_report_kind(&self, index: i32) -> String {
-        self.write_answer_text(index, |a| &a.report_kind)
+    fn write_answer_report(&self, index: i32) -> Optional<Reported> {
+        self.write_answer_at(index)
+            .map(|answer| answer.report.handed())
+            .unwrap_or_default()
     }
 
-    /// The remote it was about, where one was involved.
+    /// The group's: the last answer's report, for the leftover answer
+    /// nobody owned (`RepoPage.absorbLeftoverAnswer`).
     #[qslot]
-    fn write_answer_report_remote(&self, index: i32) -> String {
-        self.write_answer_text(index, |a| &a.report_remote)
-    }
-
-    /// The ref it was about, spelled the way the screen spells it.
-    #[qslot]
-    fn write_answer_report_name(&self, index: i32) -> String {
-        self.write_answer_text(index, |a| &a.report_name)
-    }
-
-    /// The one thing the report's second line names beside the heading's
-    /// names (`WriteReport::fact`) — never anybody's message.
-    #[qslot]
-    fn write_answer_report_fact(&self, index: i32) -> String {
-        self.write_answer_text(index, |a| &a.report_fact)
+    fn write_report(&self) -> Optional<Reported> {
+        self.write_report.handed()
     }
 
     #[qslot]

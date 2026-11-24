@@ -399,7 +399,7 @@ QtObject {
         }
     }
 
-    /// The heading for a write that did not happen, from the kind core answered with (`RepoTab.writeReportKind`).
+    /// The heading for a write that did not happen, from the kind core answered with (`RepoTab.writeReport`).
     /// Whoever decided is the subject, and a branch and a tag share one sentence (デザイン規約 §答えの要らない報せ). The
     /// remote is the subject where it said no (`<remote> would not …`); `<name> was not sent` where git decided, from
     /// this end's out-of-date picture — the session is already fetching, so nothing is left to ask. One sentence for

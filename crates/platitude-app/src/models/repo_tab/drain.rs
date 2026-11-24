@@ -420,15 +420,12 @@ impl RepoTab {
         // Who said no and what about. It rides the answer below: a drain
         // can bring several, each with its own report.
         let reported = report.is_some();
-        let (report_kind, remote, name, fact) = match report {
-            Some(report) => (
-                report_word(report.kind),
-                report.remote,
-                report.name,
-                report.fact,
-            ),
-            None => (String::new(), String::new(), String::new(), String::new()),
-        };
+        let report = report.map_or_else(Reported::default, |report| Reported {
+            kind: report_word(report.kind),
+            remote: report.remote,
+            name: report.name,
+            fact: report.fact,
+        });
         // A fetch the user asked for counts as the timer's do.
         if kind == OperationKind::Fetch {
             self.fetch_settled(&error, true);
@@ -478,10 +475,7 @@ impl RepoTab {
             at_tip,
             head_seq,
             reads_from,
-            report_kind,
-            report_remote: remote,
-            report_name: name,
-            report_fact: fact,
+            report,
         });
         let at = self.write_answers.len() - 1;
         // Handed to whoever named this write at the press, and stops
@@ -613,10 +607,7 @@ impl RepoTab {
         let Some(answer) = self.write_answers.get(at) else {
             return;
         };
-        self.write_report_kind = answer.report_kind.clone();
-        self.write_report_remote = answer.report_remote.clone();
-        self.write_report_name = answer.report_name.clone();
-        self.write_report_fact = answer.report_fact.clone();
+        self.write_report = answer.report.clone();
     }
 
     /// The group at rest — values that ask the page to do nothing.
@@ -628,10 +619,7 @@ impl RepoTab {
         self.write_branch_op = false;
         self.write_tag_op = false;
         self.write_fetched = false;
-        self.write_report_kind = String::new();
-        self.write_report_remote = String::new();
-        self.write_report_name = String::new();
-        self.write_report_fact = String::new();
+        self.write_report = Reported::default();
     }
 }
 
