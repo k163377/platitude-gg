@@ -705,7 +705,7 @@ static ENTRIES: [Entry; 37] = [
     entry!(&["ml"], "ocaml", tree_sitter_ocaml::LANGUAGE_OCAML, [last_wins(tree_sitter_ocaml::HIGHLIGHTS_QUERY), last_wins(include_str!("queries/ocaml-highlights.scm"))], [], [tree_sitter_ocaml::LOCALS_QUERY]),
     // objc's query is a delta over C's (`; inherits: c`), which its
     // manifest does not list.
-    entry!(&["m", "mm"], "objc", tree_sitter_objc::LANGUAGE, [last_wins(tree_sitter_c::HIGHLIGHT_QUERY), last_wins(tree_sitter_objc::HIGHLIGHTS_QUERY), last_wins(C_CONSTANTS)], [tree_sitter_objc::INJECTIONS_QUERY], [tree_sitter_objc::LOCALS_QUERY]),
+    entry!(&["m", "mm"], "objc", tree_sitter_objc::LANGUAGE, [last_wins(tree_sitter_c::HIGHLIGHT_QUERY), last_wins(tree_sitter_objc::HIGHLIGHTS_QUERY), last_wins(C_CONSTANTS), last_wins(include_str!("queries/objc-highlights.scm"))], [tree_sitter_objc::INJECTIONS_QUERY], [tree_sitter_objc::LOCALS_QUERY]),
     // Ordered as its own highlight tests expect; its locals.scm holds no
     // pattern.
     entry!(&["nix"], "nix", tree_sitter_nix::LANGUAGE, [first_wins(tree_sitter_nix::HIGHLIGHTS_QUERY)], [tree_sitter_nix::INJECTIONS_QUERY], []),
