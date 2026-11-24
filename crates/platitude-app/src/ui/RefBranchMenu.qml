@@ -85,9 +85,9 @@ AppMenu {
     signal upstreamRequested(string branch, string counterpart, bool unsettable)
     /// The upstream taken off (`RepoTab.unsetUpstream`), for the carrying menu, which holds the tab.
     signal unsetUpstreamRequested(string branch)
-    /// The branch sent where its marks and upstream say (`RepoTab.pushNamed`): `force` `""` or `"lease"`, `lease` the
-    /// commit the card showed the far side on.
-    signal pushRequested(string branch, string force, string lease)
+    /// The branch sent where its marks and upstream say (`RepoTab.pushNamed`): `force` `""` or `"lease"`, `expect` the
+    /// commit the card showed the far side on — the lease's pin, as the slot names it.
+    signal pushRequested(string branch, string force, string expect)
     /// Its first push: the page asks where it goes, in the window's one question bar (`PublishFlow.startPublishAsk`),
     /// opening on `upstream`, where the branch already points.
     signal publishRequested(string branch, string upstream)

@@ -467,7 +467,7 @@ Item {
             onUpstreamRequested: (branch, counterpart, unsettable) =>
                 refRowMenu.upstreamRequested(branch, counterpart, unsettable)
             onUnsetUpstreamRequested: branch => refRowMenu.repoTab.unsetUpstream(branch)
-            onPushRequested: (branch, force, lease) => refRowMenu.repoTab.pushNamed(branch, force, lease)
+            onPushRequested: (branch, force, expect) => refRowMenu.repoTab.pushNamed(branch, force, expect)
             onPublishRequested: (branch, upstream) => refRowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => refRowMenu.repoTab.checkBranchDelete(branch)
             onForceDeleteRequested: branch => refRowMenu.repoTab.deleteBranch(branch, true)

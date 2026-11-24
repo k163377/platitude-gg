@@ -1798,7 +1798,7 @@ FocusScope {
             onUpstreamRequested: (branch, counterpart, unsettable) =>
                 page.startUpstreamAsk(branch, counterpart, unsettable)
             onUnsetUpstreamRequested: branch => repoTab.unsetUpstream(branch)
-            onPushBranchRequested: (branch, force, lease) => repoTab.pushNamed(branch, force, lease)
+            onPushBranchRequested: (branch, force, expect) => repoTab.pushNamed(branch, force, expect)
             onPublishRequested: (branch, upstream) => page.startPublishAskFor(branch, upstream)
             onRemoveWorktreeRequested: (path, name, holds) => repoTab.removeWorktree(path, name, holds)
             onCherryPickRequested: oidHex => repoTab.cherryPick(oidHex)

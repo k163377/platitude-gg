@@ -72,7 +72,7 @@ Item {
             onDeleteRemoteRequested: (remoteRef, expect) => root.asked = "delete-remote " + remoteRef + " " + expect
             onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
                 root.asked = "delete-both " + branch + " " + remoteRef + " " + forced + " " + expect
-            onPushRequested: (branch, force, lease) => root.asked = "push " + branch + " " + force + " " + lease
+            onPushRequested: (branch, force, expect) => root.asked = "push " + branch + " " + force + " " + expect
             onPublishRequested: (branch, upstream) => root.asked = "publish " + branch + " " + upstream
         }
     }

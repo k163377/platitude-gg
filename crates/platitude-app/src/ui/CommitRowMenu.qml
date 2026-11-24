@@ -133,7 +133,7 @@ Item {
     signal deleteRequested(string kind, string id, string name, string oidHex)
     signal upstreamRequested(string branch, string counterpart, bool unsettable)
     signal unsetUpstreamRequested(string branch)
-    signal pushBranchRequested(string branch, string force, string lease)
+    signal pushBranchRequested(string branch, string force, string expect)
     signal publishRequested(string branch, string upstream)
     signal cherryPickRequested(string oidHex)
     signal revertRequested(string oidHex)
@@ -592,7 +592,7 @@ Item {
             onUpstreamRequested: (branch, counterpart, unsettable) =>
                 rowMenu.upstreamRequested(branch, counterpart, unsettable)
             onUnsetUpstreamRequested: branch => rowMenu.unsetUpstreamRequested(branch)
-            onPushRequested: (branch, force, lease) => rowMenu.pushBranchRequested(branch, force, lease)
+            onPushRequested: (branch, force, expect) => rowMenu.pushBranchRequested(branch, force, expect)
             onPublishRequested: (branch, upstream) => rowMenu.publishRequested(branch, upstream)
             onCheckDeleteRequested: branch => rowMenu.checkDeleteRequested(branch)
             onForceDeleteRequested: branch => rowMenu.forceDeleteRequested(branch)
