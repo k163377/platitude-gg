@@ -157,6 +157,40 @@ impl Record for Tally {
     }
 }
 
+/// What a row of another worktree's uncommitted work answers when the
+/// delegate asks: whose it is, where it is, and its six tallies. Beside
+/// the items, since `GraphRowItem` has spent all fifteen fields.
+#[derive(Default, Clone)]
+pub(super) struct CarriedRow {
+    pub(super) name: String,
+    pub(super) path: String,
+    /// The repository's own worktree, which wears the house.
+    pub(super) home: bool,
+    pub(super) tally: Optional<Tally>,
+}
+
+/// What `GraphModel.carriedAt` hands QML, under the same names.
+impl crate::encode::Record for CarriedRow {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        crate::encode::Fields::new()
+            .put("name", &self.name)
+            .put("path", &self.path)
+            .put("home", &self.home)
+            .put("tally", &self.tally)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        use crate::encode::field;
+        Some(Self {
+            name: field(map, "name")?,
+            path: field(map, "path")?,
+            home: field(map, "home")?,
+            tally: field(map, "tally")?,
+        })
+    }
+}
+
 /// The graph colour each side of a conflict is drawn in (`GraphModel.sideColors`),
 /// -1 for a side no lane colours.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

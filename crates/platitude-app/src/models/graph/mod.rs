@@ -22,42 +22,10 @@ mod qobject;
 mod relay;
 mod stream;
 
-use item::{ChosenRow, ChosenRows, GraphRowItem, RemoteTip, SideColors, Tally, to_row_item};
+use item::{
+    CarriedRow, ChosenRow, ChosenRows, GraphRowItem, RemoteTip, SideColors, Tally, to_row_item,
+};
 use marks::RowMark;
-
-/// What a row of another worktree's uncommitted work answers when the
-/// delegate asks: whose it is, where it is, and its six tallies. Beside
-/// the items, since `GraphRowItem` has spent all fifteen fields.
-#[derive(Default, Clone)]
-struct CarriedRow {
-    name: String,
-    path: String,
-    /// The repository's own worktree, which wears the house.
-    home: bool,
-    tally: Optional<Tally>,
-}
-
-/// What `GraphModel.carriedAt` hands QML, under the same names.
-impl crate::encode::Record for CarriedRow {
-    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
-        crate::encode::Fields::new()
-            .put("name", &self.name)
-            .put("path", &self.path)
-            .put("home", &self.home)
-            .put("tally", &self.tally)
-            .done()
-    }
-
-    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
-        use crate::encode::field;
-        Some(Self {
-            name: field(map, "name")?,
-            path: field(map, "path")?,
-            home: field(map, "home")?,
-            tally: field(map, "tally")?,
-        })
-    }
-}
 
 #[derive(Default)]
 pub struct GraphModel {
