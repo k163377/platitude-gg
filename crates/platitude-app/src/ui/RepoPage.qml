@@ -1029,7 +1029,8 @@ FocusScope {
         // Not where the remote already carries the new name: both answers would push, which fast-forwards the branch
         // over there and reports success — somebody else's branch would move. The box refuses it too; this catches
         // the way in that has no box.
-        if (comes === "" || comes === remoteRef || remotesModel.oidOfName(comes) !== "")
+        if (comes === "" || comes === remoteRef
+                || remotesModel.hasRemoteBranch(GitFacts.remoteBranchOf(remoteRef, repoTab.remoteNames).remote, name))
             return
         // The commit the old name's row shows, empty where the row is out of the list — gone before the rename, or
         // pruned by a fetch while it ran: asked all the same — the upstream still names the old branch —, with the
@@ -1381,7 +1382,8 @@ FocusScope {
         // there, which the box turns down: a plain push onto an existing name passes as a success wherever it
         // fast-forwards.
         const comes = GitFacts.remoteRefBeside(remoteRef, name, repoTab.remoteNames)
-        if (comes === "" || comes === remoteRef || remotesModel.oidOfName(comes) !== "")
+        if (comes === "" || comes === remoteRef
+                || remotesModel.hasRemoteBranch(GitFacts.remoteBranchOf(remoteRef, repoTab.remoteNames).remote, name))
             return
         // The commit the bar marks, taken as it is raised: the old name's delete is leased to it
         // (`remote::replace_remote_branch`), so a remote that moved while the question stood is refused. A row gone

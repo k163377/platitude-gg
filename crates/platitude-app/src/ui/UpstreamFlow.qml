@@ -122,7 +122,7 @@ Item {
     function settleTarget() {
         upstreamFlow.targetIsThere =
             upstreamFlow.filled
-            && upstreamFlow.remotesModel.oidOfName(upstreamFlow.target) !== ""
+            && upstreamFlow.remotesModel.hasRemoteBranch(upstreamFlow.remote, upstreamFlow.branchName)
     }
 
     function answer() {
