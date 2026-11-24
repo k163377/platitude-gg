@@ -7,7 +7,7 @@ use platitude_core::offers::{FarSide, Leads};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::{BranchUpstream, NavSectionModel, NewWorktree, Source, TagMenu, WorktreeRow};
-use crate::encode::{Fields, Record, field, has_field};
+use crate::encode::{Fields, Record, field, optional_record};
 
 /// A ref's row as its menu asks core about it: the row's two words and the
 /// local branch it lands on, where it leads beside the tree the tab stands
@@ -52,7 +52,9 @@ pub struct RowLead {
 
 impl Record for RowLead {
     fn to_map(&self) -> QVariantMap {
-        let fields = Fields::new()
+        // A card and a place are left out where there is none, which QML
+        // reads as `undefined`.
+        Fields::new()
             .put("kind", &self.kind)
             .put("full", &self.full)
             .put("local", &self.local)
@@ -62,32 +64,13 @@ impl Record for RowLead {
             .put("home", &self.home)
             .put("cardHere", &self.card_here)
             .put("stoppedBy", &self.stopped_by)
-            .put("placed", &self.placed);
-        // Left out where there is none, which QML reads as `undefined`.
-        let fields = match &self.card {
-            Some(card) => fields.put("card", &card.to_map()),
-            None => fields,
-        };
-        match &self.place {
-            Some(place) => fields.put("place", &place.to_map()),
-            None => fields,
-        }
-        .done()
+            .put("placed", &self.placed)
+            .put_record("card", self.card.as_ref())
+            .put_record("place", self.place.as_ref())
+            .done()
     }
 
     fn from_map(map: &QVariantMap) -> Option<Self> {
-        // An absent card or place is none; one that is there but does not
-        // read is a refusal, like any field.
-        let card = if has_field(map, "card") {
-            Some(WorktreeRow::from_map(&field(map, "card")?)?)
-        } else {
-            None
-        };
-        let place = if has_field(map, "place") {
-            Some(NewWorktree::from_map(&field(map, "place")?)?)
-        } else {
-            None
-        };
         Some(Self {
             kind: field(map, "kind")?,
             full: field(map, "full")?,
@@ -96,11 +79,11 @@ impl Record for RowLead {
             path: field(map, "path")?,
             called: field(map, "called")?,
             home: field(map, "home")?,
-            card,
+            card: optional_record(map, "card")?,
             card_here: field(map, "cardHere")?,
             stopped_by: field(map, "stoppedBy")?,
             placed: field(map, "placed")?,
-            place,
+            place: optional_record(map, "place")?,
         })
     }
 }

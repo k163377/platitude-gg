@@ -8,7 +8,7 @@ use platitude_core::parse::diff::{DiffLineKind, DiffLineLocation, FilePatch};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::markup::{Runs, spelled_ranges, styled};
-use super::wire::{Fields, Record, field, has_field};
+use super::wire::{Fields, Record, field, optional_record};
 
 /// One flattened row of the diff pane.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -120,24 +120,18 @@ pub struct Marks {
 
 impl Record for Marks {
     fn to_map(&self) -> QVariantMap {
-        let own = Fields::new().put("own", &self.own.to_map());
-        match &self.pair {
-            Some(pair) => own.put("pair", &pair.to_map()),
-            None => own,
-        }
-        .done()
+        Fields::new()
+            .put("own", &self.own.to_map())
+            .put_record("pair", self.pair.as_ref())
+            .done()
     }
 
     fn from_map(map: &QVariantMap) -> Option<Self> {
-        let own = LineMarks::from_map(&field(map, "own")?)?;
-        // A right side that is absent is a row with one line; one that
-        // is there but does not read is a refusal, like any field.
-        let pair = if has_field(map, "pair") {
-            Some(LineMarks::from_map(&field(map, "pair")?)?)
-        } else {
-            None
-        };
-        Some(Self { own, pair })
+        // A right side that is absent is a row with one line.
+        Some(Self {
+            own: LineMarks::from_map(&field(map, "own")?)?,
+            pair: optional_record(map, "pair")?,
+        })
     }
 }
 

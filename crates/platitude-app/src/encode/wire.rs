@@ -111,6 +111,15 @@ impl Fields {
         self
     }
 
+    /// A record nested where there is one, the field left out where there
+    /// is none ([`optional_record`] reads it back).
+    pub(crate) fn put_record<T: Record>(self, key: &'static str, value: Option<&T>) -> Self {
+        match value {
+            Some(value) => self.put(key, &value.to_map()),
+            None => self,
+        }
+    }
+
     pub(crate) fn done(self) -> QVariantMap {
         self.0
     }
@@ -125,6 +134,19 @@ pub(crate) fn field<T: FieldRead>(map: &QVariantMap, key: &'static str) -> Optio
 /// that may be left out is told apart by.
 pub(crate) fn has_field(map: &QVariantMap, key: &'static str) -> bool {
     map.get(&key_of(key)).is_some_and(|value| value.is_valid())
+}
+
+/// A record nested by [`Fields::put_record`]: `Some(None)` where it was
+/// left out, `None` where one is there and does not read — a refusal, like
+/// any field.
+pub(crate) fn optional_record<T: Record>(
+    map: &QVariantMap,
+    key: &'static str,
+) -> Option<Option<T>> {
+    if !has_field(map, key) {
+        return Some(None);
+    }
+    T::from_map(&field(map, key)?).map(Some)
 }
 
 /// A field's name as Qt keys it, made once per name and thread and copied
