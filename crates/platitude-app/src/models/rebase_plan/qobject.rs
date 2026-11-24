@@ -350,7 +350,7 @@ impl RebasePlanModel {
     /// tip — either moving puts the plan away.
     #[qslot]
     fn note_standing(&mut self, tree: crate::encode::Standing) {
-        self.note_op(&tree.op_text);
+        self.note_op(tree.op_standing());
         self.note_head(&tree.head_oid);
     }
 
@@ -380,10 +380,11 @@ impl RebasePlanModel {
         self.stale_plan();
     }
 
-    /// The operation the status now reads as standing (`worktree.opText`,
-    /// empty = none); one under an open plan puts it away. `note_head`
-    /// alone misses it — a merge stopped on a conflict leaves HEAD where it
-    /// was — and core refusing the run does not take the button away.
+    /// Whether the status now reads an operation standing
+    /// (`TreeStanding::op_standing`); one under an open plan puts it
+    /// away. `note_head` alone misses it — a merge stopped on a conflict
+    /// leaves HEAD where it was — and core refusing the run does not take
+    /// the button away.
     ///
     /// One strike: a report naming an operation was taken while one stood,
     /// so there is no stale reading to wait out.
@@ -391,8 +392,8 @@ impl RebasePlanModel {
     /// Doubles core's own refusal (`RepoSession::rebase_interactive`) on
     /// purpose: the screen's part is to offer only a button that can be
     /// pressed, so the plan falls closed while an operation stands.
-    fn note_op(&mut self, op_text: &str) {
-        if !self.active || op_text.is_empty() {
+    fn note_op(&mut self, op_standing: bool) {
+        if !self.active || !op_standing {
             return;
         }
         self.close();
