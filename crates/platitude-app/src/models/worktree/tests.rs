@@ -7,7 +7,7 @@ const NEXT: &str = "2222222222222222222222222222222222222222";
 
 fn head_on(branch: &str, oid_hex: &str, seq: u64) -> StateMsg {
     StateMsg::Head(HeadMsg {
-        oid_hex: oid_hex.to_string(),
+        oid: crate::encode::oid_arg(oid_hex),
         branch: branch.to_string(),
         detached: false,
         held: String::new(),
@@ -19,7 +19,7 @@ fn head_on(branch: &str, oid_hex: &str, seq: u64) -> StateMsg {
 /// keeps to the worktree ("" for none).
 fn head_detached(oid_hex: &str, held: &str, seq: u64) -> StateMsg {
     StateMsg::Head(HeadMsg {
-        oid_hex: oid_hex.to_string(),
+        oid: crate::encode::oid_arg(oid_hex),
         branch: String::new(),
         detached: true,
         held: held.to_string(),

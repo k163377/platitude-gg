@@ -21,9 +21,8 @@ impl GraphModel {
                 // No generation check: HEAD is the repository's, not a
                 // stream's.
                 GraphMsg::Head(head) => {
-                    let head = Oid::from_hex_str(&head.oid_hex).ok();
-                    changed |= self.head_oid != head;
-                    self.head_oid = head;
+                    changed |= self.head_oid != head.oid;
+                    self.head_oid = head.oid;
                     continue;
                 }
                 GraphMsg::Started { generation } => self.start_walk(generation),

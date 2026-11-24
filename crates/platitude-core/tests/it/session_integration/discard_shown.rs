@@ -20,7 +20,7 @@ fn subjects(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<String> {
 /// The commits drawn, the uncommitted row (its id all zero) left out.
 fn drawn(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<Oid> {
     rows.values()
-        .map(|row| oid(&row.oid_hex))
+        .map(|row| row.oid)
         .filter(|oid| !Oid::hex_is_zero(&oid.to_hex()))
         .collect()
 }
@@ -190,7 +190,7 @@ async fn a_copy_on_a_base_of_its_own_draws_on_head() {
     assert_eq!(drawn(&rows), vec![oid(&copy), oid(&head)]);
     let row = rows
         .values()
-        .find(|row| oid(&row.oid_hex) == oid(&copy))
+        .find(|row| row.oid == oid(&copy))
         .expect("the copy's row");
     assert_eq!(row.parents.to_vec(), vec![oid(&head)]);
     session.close_and_wait().await;

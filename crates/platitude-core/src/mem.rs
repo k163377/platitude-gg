@@ -219,8 +219,7 @@ impl Footprint for crate::details::CoAuthor {
 
 impl Footprint for crate::session::LogRow {
     fn heap_bytes(&self) -> usize {
-        self.oid_hex.heap_bytes()
-            + self.short_sha.heap_bytes()
+        self.short_sha.heap_bytes()
             + self.author.heap_bytes()
             + self.author_email.heap_bytes()
             + self.co_authors.heap_bytes()

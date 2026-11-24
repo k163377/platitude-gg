@@ -27,7 +27,7 @@ fn walk(rows: &[(u8, &[u8], bool)]) -> Vec<LogRow> {
             let g = builder.push_ids(&mine, &parents, *stash);
             LogRow {
                 row: g.row,
-                oid_hex: mine.to_hex(),
+                oid: mine,
                 short_sha: mine.short_hex(8),
                 author: "Test".to_string(),
                 author_email: "test@example.com".to_string(),
@@ -401,7 +401,7 @@ fn what_stays_is_laid_as_if_the_commits_had_never_been_walked() {
         .iter()
         .map(|row| {
             (
-                row.oid_hex.clone(),
+                row.oid.to_hex(),
                 row.row,
                 row.node_lane,
                 row.node_color,
@@ -453,7 +453,7 @@ fn the_uncommitted_row_is_made_again_on_top() {
         true,
     );
     assert!(
-        matches!(&laid.rows[0], RelaidRow::Made(row) if Oid::hex_is_zero(&row.oid_hex)),
+        matches!(&laid.rows[0], RelaidRow::Made(row) if row.oid.is_zero()),
         "{:?}",
         laid.rows[0]
     );

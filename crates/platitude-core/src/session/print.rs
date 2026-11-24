@@ -101,7 +101,7 @@ impl RowPrint {
         use std::hash::{Hash, Hasher};
         let LogRow {
             row: _,
-            oid_hex,
+            oid,
             short_sha,
             author,
             author_email,
@@ -121,7 +121,7 @@ impl RowPrint {
             provisional,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        oid_hex.hash(&mut h);
+        oid.hash(&mut h);
         short_sha.hash(&mut h);
         author.hash(&mut h);
         author_email.hash(&mut h);
@@ -178,7 +178,7 @@ mod tests {
     fn a_row() -> LogRow {
         LogRow {
             row: 3,
-            oid_hex: "a".repeat(40),
+            oid: crate::oid::Oid::from_hex_str(&"a".repeat(40)).unwrap(),
             short_sha: "aaaaaaa".into(),
             author: "Ada".into(),
             author_email: "ada@example.com".into(),
@@ -227,7 +227,10 @@ mod tests {
         type Moved = (&'static str, Box<dyn Fn(&mut LogRow)>);
         let moved: Vec<Moved> = vec![
             ("row", Box::new(|r: &mut LogRow| r.row = 4)),
-            ("oid_hex", Box::new(|r| r.oid_hex = "b".repeat(40))),
+            (
+                "oid",
+                Box::new(|r| r.oid = crate::oid::Oid::from_hex_str(&"b".repeat(40)).unwrap()),
+            ),
             ("short_sha", Box::new(|r| r.short_sha = "bbbbbbb".into())),
             ("author", Box::new(|r| r.author = "Bo".into())),
             (

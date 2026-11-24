@@ -125,7 +125,7 @@ fn graphs(events: &[SessionEvent], from: usize) -> Vec<(usize, Vec<String>)> {
         .skip(from)
         .filter_map(|(at, e)| match e {
             SessionEvent::LogReplaced { rows, .. } => {
-                Some((at, rows.iter().map(|row| row.oid_hex.clone()).collect()))
+                Some((at, rows.iter().map(|row| row.oid.to_hex()).collect()))
             }
             _ => None,
         })
@@ -506,7 +506,7 @@ async fn a_commit_whose_refs_read_failed_is_walked_behind_its_status() {
                 SessionEvent::LogReplaced { rows, .. } => Some((
                     at,
                     rows.iter()
-                        .map(|row| (row.oid_hex.clone(), row.node_lane))
+                        .map(|row| (row.oid.to_hex(), row.node_lane))
                         .collect(),
                 )),
                 _ => None,

@@ -467,7 +467,7 @@ async fn relaid(sink: &CaptureSink, nth: usize) -> Vec<String> {
                 rows.iter()
                     .map(|row| match row {
                         RelaidRow::Moved { oid, .. } => oid.to_hex(),
-                        RelaidRow::Made(row) => row.oid_hex.clone(),
+                        RelaidRow::Made(row) => row.oid.to_hex(),
                     })
                     .collect()
             })

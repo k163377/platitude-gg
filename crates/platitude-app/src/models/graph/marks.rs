@@ -46,11 +46,7 @@ impl GraphModel {
         self.marks.reserve(rows.len());
         self.index.reserve(rows.len());
         for row in rows {
-            // `oid_hex` came from `Oid::to_hex`; one that does not parse
-            // becomes the WIP row's zero id, which no range ends on and no
-            // row names as a parent.
-            let oid = Oid::from_hex_str(&row.oid_hex).unwrap_or_else(|_| Oid::zero_unsized());
-            self.push_mark(oid, row.published, &row.parents, row.carried.as_ref());
+            self.push_mark(row.oid, row.published, &row.parents, row.carried.as_ref());
         }
         // Once per chunk (a handful per walk). The stable sort: it finds
         // everything before this chunk already in order and merges the

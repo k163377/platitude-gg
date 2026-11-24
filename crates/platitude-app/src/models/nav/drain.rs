@@ -48,9 +48,10 @@ impl NavSectionModel {
                     // Only the branches section is handed this
                     // (`hub::sink`).
                     RefsMsg::Head(head) => {
-                        if self.head_name != head.branch || self.head_oid != head.oid_hex {
+                        let oid = crate::encode::oid_text(head.oid);
+                        if self.head_name != head.branch || self.head_oid != oid {
                             self.head_name = head.branch;
-                            self.head_oid = head.oid_hex;
+                            self.head_oid = oid;
                             head_moved = true;
                         }
                     }

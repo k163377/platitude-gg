@@ -57,7 +57,7 @@ pub fn replay_graph(events: &[SessionEvent]) -> BTreeMap<u32, SeenRow> {
             into.insert(
                 r.row,
                 SeenRow {
-                    oid_hex: r.oid_hex.clone(),
+                    oid_hex: r.oid.to_hex(),
                     labels: r.labels.clone(),
                 },
             );

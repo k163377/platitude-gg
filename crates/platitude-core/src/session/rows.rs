@@ -14,7 +14,7 @@ pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
     let published = false;
     LogRow {
         row: g.row,
-        oid_hex: zero.to_hex(),
+        oid: zero,
         short_sha: zero.short_hex(8),
         author: String::new(),
         author_email: String::new(),
@@ -46,7 +46,7 @@ pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) 
     let published = false;
     LogRow {
         row: g.row,
-        oid_hex: zero.to_hex(),
+        oid: zero,
         short_sha: zero.short_hex(8),
         author: String::new(),
         author_email: String::new(),
@@ -231,7 +231,7 @@ fn make_row(
     let published = marks.mark(commit);
     LogRow {
         row: g.row,
-        oid_hex: commit.oid.to_hex(),
+        oid: commit.oid,
         short_sha: commit.oid.short_hex(8),
         author: pool.get(commit.author).to_string(),
         author_email: pool.get(commit.author_email).to_string(),

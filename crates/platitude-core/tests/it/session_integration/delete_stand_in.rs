@@ -41,7 +41,7 @@ async fn relaid(sink: &CaptureSink, nth: usize) -> Vec<String> {
                 rows.iter()
                     .map(|row| match row {
                         RelaidRow::Moved { oid, .. } => oid.to_hex(),
-                        RelaidRow::Made(row) => row.oid_hex.clone(),
+                        RelaidRow::Made(row) => row.oid.to_hex(),
                     })
                     .collect()
             })
@@ -512,10 +512,10 @@ fn drawn_in(event: &SessionEvent, oid: &str) -> bool {
     match event {
         SessionEvent::LogRelaid { rows, .. } => rows.iter().any(|row| match row {
             RelaidRow::Moved { oid: at, .. } => at.to_hex() == oid,
-            RelaidRow::Made(row) => row.oid_hex == oid,
+            RelaidRow::Made(row) => row.oid.to_hex() == oid,
         }),
         SessionEvent::LogReplaced { rows, .. } | SessionEvent::LogChunk { rows, .. } => {
-            rows.iter().any(|row| row.oid_hex == oid)
+            rows.iter().any(|row| row.oid.to_hex() == oid)
         }
         _ => false,
     }

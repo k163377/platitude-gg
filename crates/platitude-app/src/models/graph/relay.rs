@@ -137,8 +137,7 @@ impl GraphModel {
                 RelaidRow::Made(row) => {
                     items.push(to_row_item(row, &avatars, pr));
                     marked.push(Marked {
-                        oid: Oid::from_hex_str(&row.oid_hex)
-                            .unwrap_or_else(|_| Oid::zero_unsized()),
+                        oid: row.oid,
                         published: row.published,
                         parents: row.parents.clone(),
                         carried: row.carried.clone(),
@@ -216,7 +215,7 @@ mod tests {
                 let g = builder.push_ids(&mine, &parents, false);
                 LogRow {
                     row: g.row,
-                    oid_hex: mine.to_hex(),
+                    oid: mine,
                     short_sha: mine.short_hex(8),
                     author: "Test".to_string(),
                     author_email: "test@example.com".to_string(),
@@ -249,7 +248,7 @@ mod tests {
         walk(rows)
             .into_iter()
             .map(|row| RelaidRow::Moved {
-                oid: Oid::from_hex_str(&row.oid_hex).unwrap(),
+                oid: row.oid,
                 lanes: GraphRow {
                     row: row.row,
                     node_lane: row.node_lane,

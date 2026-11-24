@@ -79,7 +79,7 @@ pub(super) fn to_row_item(
     pr: &std::collections::HashSet<String>,
 ) -> GraphRowItem {
     GraphRowItem {
-        oid_hex: row.oid_hex.clone(),
+        oid_hex: row.oid.to_hex(),
         author: row.author.clone(),
         author_email: row.author_email.clone(),
         author_time: row.time,

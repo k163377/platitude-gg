@@ -293,7 +293,9 @@ pub enum RelaidRow {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {
     pub row: u32,
-    pub oid_hex: String,
+    /// The commit; the all-zero id (`Oid::zero_like`) on an uncommitted
+    /// row, this worktree's or another's.
+    pub oid: Oid,
     pub short_sha: String,
     pub author: String,
     /// The author's address, lowercased and mailmapped — what a locally

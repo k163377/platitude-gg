@@ -41,7 +41,7 @@ fn a_map_counts_its_table_and_its_entries() {
 fn nested_rows_add_up() {
     let row = crate::session::LogRow {
         row: 0,
-        oid_hex: "0".repeat(40),
+        oid: crate::oid::Oid::zero_unsized(),
         short_sha: String::new(),
         author: String::new(),
         author_email: String::new(),
@@ -60,7 +60,8 @@ fn nested_rows_add_up() {
         carried: None,
         provisional: false,
     };
-    let nested = 70 + size_of::<crate::Oid>();
+    // The subject, and the parent behind its box; the id lives in the row.
+    let nested = 30 + size_of::<crate::Oid>();
     assert_eq!(row.heap_bytes(), nested);
     let rows = vec![row];
     assert_eq!(

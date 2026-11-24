@@ -48,7 +48,7 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
     for row in &rows {
         assert_eq!(
             row.published,
-            git_says_published(&mut work, &row.oid_hex),
+            git_says_published(&mut work, &row.oid.to_hex()),
             "row {} ({}) disagrees with `rev-list --not --remotes`",
             row.row,
             row.subject,
@@ -64,11 +64,11 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
         .collect();
     assert_eq!(marked, vec!["pushed", "root"], "newest first");
     assert!(
-        rows.iter().any(|r| r.oid_hex == local && !r.published)
-            && rows.iter().any(|r| r.oid_hex == tip && !r.published),
+        rows.iter().any(|r| r.oid.to_hex() == local && !r.published)
+            && rows.iter().any(|r| r.oid.to_hex() == tip && !r.published),
         "the two commits after the push are ours alone"
     );
-    assert!(rows.iter().any(|r| r.oid_hex == pushed && r.published));
+    assert!(rows.iter().any(|r| r.oid.to_hex() == pushed && r.published));
     session.close_and_wait().await;
 }
 
@@ -90,7 +90,7 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
     assert!(
         !rows
             .iter()
-            .find(|r| r.oid_hex == mine)
+            .find(|r| r.oid.to_hex() == mine)
             .expect("mine")
             .published,
         "nobody has it yet"
@@ -106,7 +106,7 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
         (rows.len() == 2
             && rows
                 .values()
-                .find(|r| r.oid_hex == mine)
+                .find(|r| r.oid.to_hex() == mine)
                 .is_some_and(|r| r.published))
         .then_some(())
     })

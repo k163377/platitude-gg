@@ -592,7 +592,7 @@ impl WorktreeModel {
     }
 
     fn take_head(&mut self, head: HeadMsg) {
-        self.head_oid = head.oid_hex;
+        self.head_oid = crate::encode::oid_text(head.oid);
         self.held_branch = if head.branch.is_empty() {
             head.held
         } else {

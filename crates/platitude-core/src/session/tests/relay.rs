@@ -20,7 +20,7 @@ fn walked(id: u8, parents: &[u8], builder: &mut GraphBuilder) -> LogRow {
     let g = builder.push_ids(&mine, &parents, false);
     LogRow {
         row: g.row,
-        oid_hex: mine.to_hex(),
+        oid: mine,
         short_sha: mine.short_hex(8),
         author: "Test".to_string(),
         author_email: "test@example.com".to_string(),
@@ -52,7 +52,7 @@ fn history() -> Vec<LogRow> {
 
 fn where_they_sit(rows: &[LogRow]) -> Vec<(String, u16, u8)> {
     rows.iter()
-        .map(|r| (r.oid_hex.clone(), r.node_lane, r.node_color))
+        .map(|r| (r.oid.to_hex(), r.node_lane, r.node_color))
         .collect()
 }
 
@@ -78,9 +78,9 @@ fn the_uncommitted_row_can_be_put_on_a_graph_that_was_walked_without_it() {
 
     assert_eq!(laid.len(), 4, "the row was not put on");
     assert!(
-        Oid::hex_is_zero(&laid[0].oid_hex),
+        laid[0].oid.is_zero(),
         "the row is not the one at the top: {}",
-        laid[0].oid_hex
+        laid[0].oid.to_hex()
     );
     assert_eq!(
         where_they_sit(&laid[1..]),
@@ -120,7 +120,7 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
         .position(|r| r.carried.is_some())
         .expect("the worktree drew no row");
     assert_eq!(
-        was[at_one + 1].oid_hex,
+        was[at_one + 1].oid.to_hex(),
         oid(1).to_hex(),
         "the row is not above the commit its reading names"
     );
@@ -131,7 +131,7 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
         .position(|r| r.carried.is_some())
         .expect("the worktree drew no row after it moved");
     assert_eq!(
-        now[at_three + 1].oid_hex,
+        now[at_three + 1].oid.to_hex(),
         oid(3).to_hex(),
         "the row stayed on the commit the worktree left"
     );
@@ -147,7 +147,7 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
 fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
     let (laid, _) = lay(Vec::new(), &standing(Some(Vec::new()), Vec::new()), None);
     assert_eq!(laid.len(), 1);
-    assert!(Oid::hex_is_zero(&laid[0].oid_hex));
+    assert!(laid[0].oid.is_zero());
     assert!(
         laid[0].segments.is_empty(),
         "a leash was drawn to nothing: {:?}",
@@ -200,7 +200,7 @@ fn laying_out_again_rewrites_the_lanes_and_nothing_a_row_says() {
 
     let same = laid
         .iter()
-        .find(|r| r.oid_hex == oid(2).to_hex())
+        .find(|r| r.oid == oid(2))
         .expect("the commit was lost");
     assert!(same.published, "the published mark was dropped");
     assert_eq!(same.subject, "the subject the walk read");

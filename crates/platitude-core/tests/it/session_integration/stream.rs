@@ -32,7 +32,11 @@ async fn open_streams_the_full_pipeline() {
         "stash subject is its reflog message: {:?}",
         rows[&0].subject
     );
-    assert_eq!(rows[&1].oid_hex, head, "merge commit is the newest commit");
+    assert_eq!(
+        rows[&1].oid.to_hex(),
+        head,
+        "merge commit is the newest commit"
+    );
     assert!(rows.values().skip(1).all(|r| r.stash_ref.is_empty()));
     assert!(rows.values().all(|r| !r.subject.is_empty()));
     assert!(rows.values().all(|r| r.author == "Test User"));
@@ -272,9 +276,9 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
 
     let wip = &rows[&0];
     assert!(
-        wip.oid_hex.bytes().all(|b| b == b'0'),
+        wip.oid.is_zero(),
         "the uncommitted row leads: {:?}",
-        wip.oid_hex
+        wip.oid.to_hex()
     );
     let outs: Vec<(u16, bool)> = wip
         .segments
@@ -288,7 +292,7 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
         "both parents of the pending merge leave the row dotted: {:?}",
         wip.segments
     );
-    assert_eq!(rows[&2].oid_hex, theirs, "the side the leash reaches");
+    assert_eq!(rows[&2].oid.to_hex(), theirs, "the side the leash reaches");
     session.close_and_wait().await;
 }
 
@@ -313,7 +317,7 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
             (rows.len() == 4).then_some(rows)
         })
         .await;
-    assert_eq!(rows[&2].oid_hex, theirs, "the side is on screen");
+    assert_eq!(rows[&2].oid.to_hex(), theirs, "the side is on screen");
     assert!(
         rows[&2]
             .segments

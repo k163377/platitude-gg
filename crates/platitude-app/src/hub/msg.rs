@@ -238,8 +238,8 @@ impl TabMsg {
 /// of its own.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeadMsg {
-    /// The commit, hex; empty on a branch with no commits yet.
-    pub oid_hex: String,
+    /// The commit; none on a branch with no commits yet.
+    pub oid: Option<platitude_core::Oid>,
     /// The branch, empty when detached or unborn-without-a-name.
     pub branch: String,
     pub detached: bool,
@@ -255,7 +255,7 @@ pub struct HeadMsg {
 impl HeadMsg {
     pub fn of(head: &platitude_core::refs::HeadState, seq: u64) -> Self {
         Self {
-            oid_hex: crate::encode::oid_text(head.oid),
+            oid: head.oid,
             branch: head.branch.clone().unwrap_or_default(),
             detached: head.detached,
             held: head.held.clone().unwrap_or_default(),

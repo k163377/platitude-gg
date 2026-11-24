@@ -175,12 +175,7 @@ pub(super) fn lay_without(
         if is_synthetic(&row) {
             continue;
         }
-        let Ok(oid) = Oid::from_hex_str(&row.oid_hex) else {
-            // Kept un-laned: it anchors nothing, and losing the row would
-            // be worse.
-            out.push(row);
-            continue;
-        };
+        let oid = row.oid;
         if gone.contains(&oid) {
             continue;
         }
@@ -272,7 +267,7 @@ impl Laying {
 /// Every worktree's uncommitted row carries the all-zero id, which no
 /// commit can.
 fn is_synthetic(row: &LogRow) -> bool {
-    crate::oid::Oid::hex_is_zero(&row.oid_hex)
+    row.oid.is_zero()
 }
 
 /// The readings still describing where the listing says each worktree is.
