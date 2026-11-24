@@ -211,8 +211,9 @@ pub enum HeadPush {
     /// No branch to send: HEAD detached, or not read yet.
     #[default]
     NoBranch,
-    /// On this branch, the last status still another's.
-    Moving(String),
+    /// On a branch the last status is not about yet: nothing of its push
+    /// is known, so nothing of it — its name neither — is held.
+    Moving,
     /// On a branch, as the last status read it.
     Read(HeadBranch),
 }
@@ -234,7 +235,7 @@ impl HeadPush {
             return Self::NoBranch;
         }
         if status.branch_head.as_deref() != Some(head) {
-            return Self::Moving(head.to_string());
+            return Self::Moving;
         }
         Self::Read(HeadBranch {
             name: head.to_string(),
@@ -250,14 +251,14 @@ impl HeadPush {
     pub fn read(&self) -> Option<&HeadBranch> {
         match self {
             Self::Read(branch) => Some(branch),
-            Self::NoBranch | Self::Moving(_) => None,
+            Self::NoBranch | Self::Moving => None,
         }
     }
 
     /// Whether the last status is about where HEAD is — what a reader of
     /// the push after a move of HEAD waits for.
     pub fn settled(&self) -> bool {
-        !matches!(self, Self::Moving(_))
+        !matches!(self, Self::Moving)
     }
 
     /// The toolbar's whole answer ([`PushFacts::read`], along
@@ -1062,7 +1063,7 @@ mod tests {
             }
         );
         assert_eq!(
-            facts(&HeadPush::Moving("main".to_string())),
+            facts(&HeadPush::Moving),
             PushFacts::default(),
             "nothing of main is known yet: the last status is another branch's"
         );
@@ -1077,7 +1078,7 @@ mod tests {
             (facts(&unborn).standing, facts(&unborn).target),
             (PushStanding::Unborn, Some("origin/main".to_string()))
         );
-        assert!(!HeadPush::Moving("main".to_string()).settled());
+        assert!(!HeadPush::Moving.settled());
         assert!(HeadPush::Read(branch(None)).settled());
         assert!(HeadPush::NoBranch.settled(), "nothing is pending");
     }

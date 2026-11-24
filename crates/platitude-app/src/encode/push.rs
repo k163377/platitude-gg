@@ -90,7 +90,8 @@ impl Record for PushRecord {
 }
 
 /// In Qt's spellings of "nothing": an empty `branch` for HEAD on no
-/// branch, `settled` down while the last status is another branch's, an
+/// branch and while the last status is another branch's (`settled` down,
+/// which tells the two apart), an
 /// empty name for the upstream and each mark; the upstream's counts and
 /// the destination's tracking ref are records of their own, left out
 /// where there is none (`Fields::put_record`). `tracked` says the first is
@@ -100,8 +101,7 @@ impl Record for HeadPush {
     fn to_map(&self) -> QVariantMap {
         let blank = HeadBranch::default();
         let (name, read) = match self {
-            Self::NoBranch => ("", &blank),
-            Self::Moving(name) => (name.as_str(), &blank),
+            Self::NoBranch | Self::Moving => ("", &blank),
             Self::Read(branch) => (branch.name.as_str(), branch),
         };
         Fields::new()
@@ -127,11 +127,11 @@ impl Record for HeadPush {
     fn from_map(map: &QVariantMap) -> Option<Self> {
         let name: String = field(map, "branch")?;
         let settled: bool = field(map, "settled")?;
+        if !settled {
+            return Some(Self::Moving);
+        }
         if name.is_empty() {
             return Some(Self::NoBranch);
-        }
-        if !settled {
-            return Some(Self::Moving(name));
         }
         Some(Self::Read(HeadBranch {
             name,
@@ -219,10 +219,7 @@ mod tests {
             })),
             "nothing counted, nothing marked, nothing tracked over there"
         );
-        assert_eq!(
-            round_trip(HeadPush::Moving("main".into())),
-            Some(HeadPush::Moving("main".into()))
-        );
+        assert_eq!(round_trip(HeadPush::Moving), Some(HeadPush::Moving));
         assert_eq!(round_trip(HeadPush::NoBranch), Some(HeadPush::NoBranch));
     }
 

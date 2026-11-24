@@ -273,7 +273,7 @@ fn the_counts_are_the_branch_they_were_read_with() {
     assert_eq!(model.upstream, "");
     assert_eq!(
         model.head_push_now(),
-        platitude_core::remote::HeadPush::Moving("main".to_string()),
+        platitude_core::remote::HeadPush::Moving,
         "nothing of main's push is known yet"
     );
     assert_eq!(model.upstream_counts.ahead, 0);
@@ -377,7 +377,7 @@ fn the_push_destinations_counts_are_the_branch_they_were_read_with() {
     model.absorb(vec![head_on("main", NEXT, 2)]);
     assert_eq!(
         model.head_push_now(),
-        platitude_core::remote::HeadPush::Moving("main".to_string()),
+        platitude_core::remote::HeadPush::Moving,
         "feature's destination, its mark and the mark read beside it are not main's"
     );
 }
