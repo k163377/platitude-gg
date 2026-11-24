@@ -25,13 +25,13 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | ```rust
      ssss
 | fn main() { let s = "hi"; }
-  kksffff  s skkksssssssss s
+  kk ffff     kkk     ssss
 | ```
 | 
 | ```py
      ss
 | def twice(n): return n * 2
-  kkksfffffs ssskkkkkks s sn
+  kkk fffff     kkkkkk     n
 | ```
 | 
 |     indented code

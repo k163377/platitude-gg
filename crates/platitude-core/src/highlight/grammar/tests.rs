@@ -128,14 +128,11 @@ fn row_of(capture: &str) -> Option<&'static str> {
 }
 
 /// The names a shipped query uses with no row, each meant to read as
-/// the capture around it: `none`, which a query lays on a node so a
-/// local reference there has a capture to take its definition's
-/// highlight through (scala's interpolated names); `escape` and the
-/// markup emphases, always inside a run of their own colour; and the
-/// one-off names no editors' theme knows (`delimiter`, `error`,
-/// powershell's `array` and `assignvalue`).
-const SURROUNDINGS: [&str; 9] = [
-    "none",
+/// the capture around it: `escape` and the markup emphases, always
+/// inside a run of their own colour; and the one-off names no editors'
+/// theme knows (`delimiter`, `error`, powershell's `array` and
+/// `assignvalue`).
+const SURROUNDINGS: [&str; 8] = [
     "escape",
     "markup",
     "markup.italic",
@@ -458,10 +455,31 @@ fn an_interpolated_name_reads_as_itself() {
     ]);
 }
 
+/// What a query marks `@none` reads as plain text, not as the capture
+/// around it: a fenced block's code where its own language names nothing,
+/// scala's interpolated name that is no local.
+#[test]
+fn a_none_capture_reads_as_plain_text() {
+    assert_colours(&[
+        (
+            "markdown",
+            "```rust\nlet s = 1;\n```\n",
+            "s =",
+            theme::PLAIN,
+        ),
+        (
+            "scala",
+            "object A { def f = s\"hi $name\" }",
+            "name",
+            theme::PLAIN,
+        ),
+    ]);
+}
+
 /// A host's capture and an injected language's that begin at one byte
 /// nest host outside: a heading that opens with inline code or a link
-/// keeps its colour past it
-/// (vendor/tree-sitter-highlight/PLATITUDE-MODIFIED.md).
+/// keeps its colour past it, and a fenced block's first token keeps its
+/// own (vendor/tree-sitter-highlight/PLATITUDE-MODIFIED.md).
 #[test]
 fn an_injected_capture_at_a_host_capture_s_first_byte_nests_inside_it() {
     assert_colours(&[
@@ -472,6 +490,7 @@ fn an_injected_capture_at_a_host_capture_s_first_byte_nests_inside_it() {
             "2024",
             KEYWORD,
         ),
+        ("markdown", "```rust\nlet s = 1;\n```\n", "let", KEYWORD),
     ]);
 }
 

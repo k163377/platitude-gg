@@ -36,7 +36,7 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 |   def describe[T <: Shape](shape: T): String = {
     kkk ffffffff t    ttttt         t   tttttt
 |     val text = s"area = ${shape.area}"
-      kkk        fssssssss  sssss      s
+      kkk        fssssssss             s
 |     val c = 'c'
       kkk     sss
 |     val n = 0xFF + 42L

@@ -43,8 +43,11 @@ pub(super) const PLAIN: Rgb = PLAIN_RGB;
 /// definition's highlight and reads as a non-local (QML's `require` would
 /// be a builtin function where it is used and plain where it is defined),
 /// and a run takes the colour of the capture around it (a name
-/// interpolated into a string would read as the string). The names left
-/// without a row are the ones meant to read as their surroundings
+/// interpolated into a string would read as the string). `none` is the
+/// editors' word for no highlight, laid on a node so that it reads as
+/// plain text inside a capture of another colour (a fenced block's code,
+/// scala's interpolated names): plain too. The names left without a row
+/// are the ones meant to read as their surroundings
 /// (`every_capture_name_has_a_row_or_reads_as_its_surroundings`).
 ///
 /// The rows speak the current generation of the editors' vocabulary, and
@@ -52,7 +55,7 @@ pub(super) const PLAIN: Rgb = PLAIN_RGB;
 /// renamed on the way in ([`current_names`]). A narrower row in
 /// `theme::PLAIN` keeps a name off a broader row's colour: swift's
 /// wildcard `_` (`character.special`) is not a character literal.
-const CAPTURES: [(&str, u32); 24] = [
+const CAPTURES: [(&str, u32); 25] = [
     ("comment", COMMENT),
     ("keyword", KEYWORD),
     ("type", TYPE),
@@ -77,6 +80,7 @@ const CAPTURES: [(&str, u32); 24] = [
     ("operator", theme::PLAIN),
     ("punctuation", theme::PLAIN),
     ("embedded", theme::PLAIN),
+    ("none", theme::PLAIN),
 ];
 
 /// The older capture names some crates still ship, each with the name
