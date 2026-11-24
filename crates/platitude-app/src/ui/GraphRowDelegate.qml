@@ -116,20 +116,15 @@ Item {
         view.model.carriedRevision
         return view.model.carriedAt(rowItem.index)
     }
-    readonly property string carriedName: rowItem.carriedRow !== undefined ? rowItem.carriedRow.name : ""
-    /// That worktree is the repository's own: its name wears the house, as its WORKTREES row does
-    /// (規約 §ref の種別「名前の印」).
-    readonly property bool carriedHome: rowItem.carriedRow !== undefined && rowItem.carriedRow.home
     // A row about a worktree this window is not open on. **It selects like any other row and opens that worktree
     // read-only** (`leftClick`) — the only tree this window can write is its own (`RepoPage.wipWritable`); the
     // worktree's writes are in its own tab, which the double-click opens (デザイン規約 §別の worktree を読む).
-    readonly property bool carried: rowItem.carriedName !== ""
-    // Its six tallies (`{added, modified, deleted, renamed, copied, conflicted}`), and nothing on every other row.
-    readonly property var carriedTally: rowItem.carriedRow !== undefined ? rowItem.carriedRow.tally : undefined
+    readonly property bool carried: rowItem.carriedRow !== undefined
+    // Its six tallies (`{added, modified, deleted, renamed, copied, conflicted}`) ride its record (`tally`).
     // The six counts an uncommitted row shows: another worktree's off its row, this window's off the view.
     readonly property var shownTally: {
-        if (rowItem.carriedTally)
-            return rowItem.carriedTally
+        if (rowItem.carried && rowItem.carriedRow.tally)
+            return rowItem.carriedRow.tally
         const view = rowItem.ListView.view
         if (!view)
             return { "added": 0, "modified": 0, "deleted": 0, "renamed": 0, "copied": 0, "conflicted": 0 }
@@ -398,8 +393,10 @@ Item {
                         id: carriedRun
                         Layout.maximumWidth: carriedRun.markCell + rowItem.carriedNameMax
                         Layout.alignment: Qt.AlignVCenter
-                        name: rowItem.carriedName
-                        kind: rowItem.carriedHome ? "home" : "tree"
+                        name: rowItem.carried ? rowItem.carriedRow.name : ""
+                        // The repository's own worktree wears the house, as its WORKTREES row does
+                        // (規約 §ref の種別「名前の印」).
+                        kind: rowItem.carried && rowItem.carriedRow.home ? "home" : "tree"
                         pixelSize: Theme.fontMd
                         color: Words.nameInk(wordsCut.color)
                     }
@@ -687,7 +684,7 @@ Item {
         if (rowItem.carried) {
             const path = rowItem.carriedRow.path
             if (path !== "")
-                view.carriedMenuRequested(path, rowItem.carriedName)
+                view.carriedMenuRequested(path, rowItem.carriedRow.name)
             return
         }
         // This worktree's own uncommitted row is not a commit, so it has no menu (user decision — ask before changing):
