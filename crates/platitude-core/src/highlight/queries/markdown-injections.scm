@@ -5,9 +5,13 @@
 ;; grammar's punctuation (`` ` ``, `[`, `<`, `{`) as anonymous children of
 ;; `inline`, `code_fence_content` and `html_block`, and
 ;; tree-sitter-highlight cuts every child out of an injection's text
-;; unless told to keep them. A document's HTML blocks read as one HTML
-;; text (`injection.combined`), so a `</details>` a blank line puts in a
-;; block of its own still closes its element.
+;; unless told to keep them all. Kept with them are the content's named
+;; children, its `block_continuation`s — a quote's `> ` and a list item's
+;; indent on the lines after the first — which Neovim, for which these
+;; queries were written, cuts out alone; the injected grammars read past
+;; them (the role sample's quoted and listed fences). A document's HTML
+;; blocks read as one HTML text (`injection.combined`), so a `</details>`
+;; a blank line puts in a block of its own still closes its element.
 
 (fenced_code_block
   (info_string

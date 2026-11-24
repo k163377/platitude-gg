@@ -58,3 +58,25 @@ description: "Each sample line (`|`) over the role of each of its characters: c 
 | 
 | [ref]: https://example.com "Title"
   kkkkk  kkkkkkkkkkkkkkkkkkk sssssss
+| 
+| > A quote with `code`
+                  ssss
+| > over two lines.
+| >
+| > ```rust
+       ssss
+| > let a = 1;
+    kkk     n
+| > let b = a + 2;
+    kkk         n
+| > ```
+| 
+| - An item with a fence:
+| 
+|   ```py
+       ss
+|   x = 1
+        n
+|   y = "two"
+        sssss
+|   ```

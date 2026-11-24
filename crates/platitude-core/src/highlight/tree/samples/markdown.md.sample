@@ -39,3 +39,18 @@ Hidden text.
 </details>
 
 [ref]: https://example.com "Title"
+
+> A quote with `code`
+> over two lines.
+>
+> ```rust
+> let a = 1;
+> let b = a + 2;
+> ```
+
+- An item with a fence:
+
+  ```py
+  x = 1
+  y = "two"
+  ```
