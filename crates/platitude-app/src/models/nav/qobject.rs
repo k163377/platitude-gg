@@ -274,16 +274,12 @@ impl NavSectionModel {
     #[qslot]
     pub(super) fn oid_of_name(&self, name: String) -> String {
         match &self.all {
-            Source::Locals(_) | Source::Remotes(_) => self
-                .all
-                .branch_named(&name)
-                .map(|branch| branch.oid.to_hex())
-                .unwrap_or_default(),
-            Source::Tags(_) => self
-                .all
-                .tag_named(&name)
-                .map(|tag| tag.oid.to_hex())
-                .unwrap_or_default(),
+            Source::Locals(_) | Source::Remotes(_) => {
+                crate::encode::oid_text(self.all.branch_named(&name).map(|branch| branch.oid))
+            }
+            Source::Tags(_) => {
+                crate::encode::oid_text(self.all.tag_named(&name).map(|tag| tag.oid))
+            }
             _ => self.told(Role::Name, &name, Role::OidHex),
         }
     }
@@ -536,11 +532,11 @@ impl NavSectionModel {
     /// same off its BRANCH card's record (`upstreamOid`).
     #[qslot]
     fn upstream_oid_of(&self, name: String) -> String {
-        self.all
-            .branch_named(&name)
-            .and_then(|branch| branch.upstream_oid)
-            .map(|oid| oid.to_hex())
-            .unwrap_or_default()
+        crate::encode::oid_text(
+            self.all
+                .branch_named(&name)
+                .and_then(|branch| branch.upstream_oid),
+        )
     }
 
     /// Which sides the tag with this name stands on — `here` / `remote` /

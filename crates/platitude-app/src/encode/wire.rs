@@ -462,6 +462,13 @@ pub(crate) fn pinned_oid(
     platitude_core::Oid::from_hex_str(hex).map(Some)
 }
 
+/// The other way across: an object name as a model spells it for QML
+/// (`Oid::to_hex`), and Qt's word for none — an empty string — where there
+/// is none, the one place it is.
+pub(crate) fn oid_text<O: std::borrow::Borrow<platitude_core::Oid>>(oid: Option<O>) -> String {
+    oid.map_or_else(String::new, |oid| oid.borrow().to_hex())
+}
+
 /// [`pinned_oid`] where an empty name and a malformed one alike are no
 /// object: the slot answers as for a row that has none.
 pub(crate) fn oid_arg(hex: &str) -> Option<platitude_core::Oid> {
@@ -714,6 +721,9 @@ mod tests {
         }
         assert_eq!(oid_arg(hex), Some(oid));
         assert_eq!(oid_arg(""), None);
+        assert_eq!(oid_text(Some(oid)), hex);
+        assert_eq!(oid_text(Some(&oid)), hex);
+        assert_eq!(oid_text(None::<platitude_core::Oid>), "");
         assert_eq!(oid_arg("main"), None);
     }
 }

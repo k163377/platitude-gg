@@ -148,7 +148,7 @@ impl SessionSink for BridgeSink {
                 self.feeds.graph.push(GraphMsg::Silent { silent })
             }
             SessionEvent::DiscardWalked { tip } => self.feeds.graph.push(GraphMsg::DiscardWalked {
-                tip: tip.map(|tip| tip.to_hex()).unwrap_or_default(),
+                tip: crate::encode::oid_text(tip),
             }),
             SessionEvent::LogReplaced {
                 generation,
@@ -193,7 +193,7 @@ impl SessionSink for BridgeSink {
             }
             SessionEvent::HeadPublished { oid, published } => {
                 self.feeds.status.push_coalescing(StateMsg::HeadPublished {
-                    oid_hex: oid.map(|o| o.to_hex()).unwrap_or_default(),
+                    oid_hex: crate::encode::oid_text(oid),
                     published,
                 });
             }
@@ -460,7 +460,7 @@ impl SessionSink for BridgeSink {
                     target,
                     local,
                     state: state.as_str().to_string(),
-                    tip: tip.map(|tip| tip.to_hex()).unwrap_or_default(),
+                    tip: crate::encode::oid_text(tip),
                     theirs: i32::try_from(theirs).unwrap_or(i32::MAX),
                 });
             }

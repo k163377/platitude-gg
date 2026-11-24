@@ -255,7 +255,7 @@ pub struct HeadMsg {
 impl HeadMsg {
     pub fn of(head: &platitude_core::refs::HeadState, seq: u64) -> Self {
         Self {
-            oid_hex: head.oid.map(|o| o.to_hex()).unwrap_or_default(),
+            oid_hex: crate::encode::oid_text(head.oid),
             branch: head.branch.clone().unwrap_or_default(),
             detached: head.detached,
             held: head.held.clone().unwrap_or_default(),

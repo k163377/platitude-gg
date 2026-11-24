@@ -49,7 +49,7 @@ impl From<PushFacts> for PushRecord {
             overwrites: standing.overwrites(),
             offered: standing.offered(),
             target: facts.target.unwrap_or_default(),
-            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
+            lease: super::oid_text(facts.lease),
             ahead: shown_count(facts.counts.ahead),
             behind: shown_count(facts.counts.behind),
             upstream: facts.upstream.unwrap_or_default(),

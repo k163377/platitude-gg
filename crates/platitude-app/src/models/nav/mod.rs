@@ -160,7 +160,7 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
     fn from(facts: platitude_core::session::TagMenuFacts) -> Self {
         Self {
             far: facts.far,
-            lease: facts.lease.map(|oid| oid.to_hex()).unwrap_or_default(),
+            lease: crate::encode::oid_text(facts.lease),
             reach: facts.reach,
             carriers: facts.carriers.join(", "),
             row_goes: facts.row_goes,
@@ -232,16 +232,10 @@ impl From<platitude_core::session::BranchUpstreamFacts> for BranchUpstream {
         Self {
             far: Some(facts.far),
             counterpart: facts.counterpart,
-            counterpart_oid: facts
-                .counterpart_oid
-                .map(|oid| oid.to_hex())
-                .unwrap_or_default(),
+            counterpart_oid: crate::encode::oid_text(facts.counterpart_oid),
             upstream: facts.upstream,
             upstream_here: facts.upstream_here,
-            upstream_oid: facts
-                .upstream_oid
-                .map(|oid| oid.to_hex())
-                .unwrap_or_default(),
+            upstream_oid: crate::encode::oid_text(facts.upstream_oid),
         }
     }
 }

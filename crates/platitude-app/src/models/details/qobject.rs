@@ -135,12 +135,12 @@ impl DetailsModel {
         if compare {
             // Whole ids, oldest as `from`: they address the patch behind
             // a row (`DiffModel::request_range_file`).
-            self.compare_from = oids.last().map(Oid::to_hex).unwrap_or_default();
-            self.compare_to = oids.first().map(Oid::to_hex).unwrap_or_default();
+            self.compare_from = crate::encode::oid_text(oids.last());
+            self.compare_to = crate::encode::oid_text(oids.first());
         }
         // Named by the newest, so a failure addressed to it finds a
         // reader (the drain's `Failed` arm).
-        self.requested = oids.first().map(Oid::to_hex).unwrap_or_default();
+        self.requested = crate::encode::oid_text(oids.first());
         self.requested_at = Some(Instant::now());
         let mode = if compare {
             SelectionRead::Compare
