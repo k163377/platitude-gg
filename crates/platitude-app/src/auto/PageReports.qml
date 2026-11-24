@@ -59,8 +59,8 @@ Item {
         }
         // What the write was about rides the signal: one drain can bring several answers
         // (`RepoTab.writeAnswerReport`).
-        function onWriteReported(kind, remote, name) {
-            Harness.report("write_reported kind=" + kind + " ref=" + remote + "/" + name)
+        function onWriteReported(report) {
+            Harness.report("write_reported kind=" + report.kind + " ref=" + report.remote + "/" + report.name)
         }
     }
 

@@ -645,12 +645,12 @@ FocusScope {
         const report = repoTab.writeAnswerReport(answer)
         if (report === undefined)
             return false
-        page.showReport(report.kind, report.remote, report.name, report.fact)
+        page.showReport(report)
         // The `>_` mark goes quiet with the report (`answeredFailures`).
         if (!commandsModel.failed)
             page.answeredFailures++
         commandsModel.noteAnswered()
-        page.writeReported(report.kind, report.remote, report.name)
+        page.writeReported(report)
         return true
     }
     /// A press's refusal: a report where somebody outside wrote the words, otherwise the log comes up
@@ -2058,10 +2058,14 @@ FocusScope {
     // `report-tone half-rename` / `rename-tag-box`, and on the presets where git's run refuses, `push` / `force-push` /
     // `drop-commit-go` / `rename-stash` / `worktree-add` — each says the bar as `write_notice … place= says=`.
 
-    /// The one door, so a headless run handing it a kind enters the same body the answer does. Both lines are ours
-    /// (`Words.writeReported`, `Words.writeReportedWhy`); `fact` is the one thing core hands the second line besides
-    /// the names (`RepoTab.writeReport`).
-    function showReport(kind, remote, name, fact) {
+    /// The one door, so a headless run handing it a report enters the same body the answer does. Both lines are ours
+    /// (`Words.writeReported`, `Words.writeReportedWhy`), off core's record whole (`RepoTab.writeAnswerReport`:
+    /// `kind`, `remote`, `name`, and `fact`, the one thing core hands the second line besides the names).
+    function showReport(report) {
+        const kind = report.kind
+        const remote = report.remote
+        const name = report.name
+        const fact = report.fact
         const names = Words.reportNamesWorktree(kind)
         // The only reports that can name the repository's own worktree (it is never removed or made), which goes by
         // the branch it keeps (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
@@ -2086,7 +2090,7 @@ FocusScope {
     /// Automation only: git's answer to a write has been taken all the way — bar raised, mark down, standing questions
     /// cleared. What it was about rides the signal: a drain can bring several reports, so the tab holds none to read
     /// back.
-    signal writeReported(string kind, string remote, string name)
+    signal writeReported(var report)
     /// `label` is what did not happen, `detail` the line under it, `tone` the state colour, if any; `marks` the names
     /// in `label` that wear their marks, left out for none (`NoticeBar.marks`); `place` the word of `detail` that opens
     /// the command log, left out for none (`NoticeBar.detailPlace`); `detailMarks` the names in `detail` that wear
@@ -2211,12 +2215,12 @@ FocusScope {
                 // (デザイン規約 §答えの要らない報せ).
                 if (Words.renameStillOpen(report.kind))
                     page.noteRenameRefused()
-                page.showReport(report.kind, report.remote, report.name, report.fact)
+                page.showReport(report)
                 if (!commandsModel.failed)
                     page.answeredFailures++
                 commandsModel.noteAnswered()
                 page.forgetRenameCarry()
-                page.writeReported(report.kind, report.remote, report.name)
+                page.writeReported(report)
                 return
             }
             // Otherwise the log comes up, as `tellRefusal`. A fetch here is not other news: the tab already raised the

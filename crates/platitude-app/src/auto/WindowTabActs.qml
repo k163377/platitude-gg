@@ -476,8 +476,8 @@ Item {
     }
     Connections {
         target: worktreeMadeTimer.running ? window.curPage : null
-        function onWriteReported(kind, remote, name) {
-            worktreeMadeTimer.reported = kind
+        function onWriteReported(report) {
+            worktreeMadeTimer.reported = report.kind
         }
     }
 

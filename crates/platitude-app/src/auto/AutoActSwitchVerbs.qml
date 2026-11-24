@@ -46,7 +46,7 @@ Item {
             // keeps Escape, and takes its place once the report is gone (`AskBar.held`, `BarTravel`). The report goes
             // up first, the order a hand meets them in (`RepoPage.startRowAsk` leaves a standing report where it is);
             // which report it is does not matter.
-            page.showReport("update-rule", "origin", "main", "")
+            page.showReport({ "kind": "update-rule", "remote": "origin", "name": "main", "fact": "" })
             askOverNoticeTimer.ref = arg === "" ? "origin/main" : arg
             askOverNoticeTimer.start()
         } else if (act === "ask-sweep") {

@@ -93,12 +93,12 @@ Item {
         } else if (act === "notice-link") {
             // The one report whose own line names the command log (`Words.reportPlace`), raised through the page's door
             // as `report-tone` raises one.
-            page.showReport("carried-refused", "", "topic", "")
+            page.showReport({ "kind": "carried-refused", "remote": "", "name": "topic", "fact": "" })
             noticeLinkTimer.start()
         } else if (act === "report-tone") {
             // Through the page's door (`showReport`) with only the kind: each kind's dress is proven in
             // `tests/qml/tst_reportdress.qml`, and this proves the door carries it through to the bar.
-            page.showReport(arg, "origin", "main", "")
+            page.showReport({ "kind": arg, "remote": "origin", "name": "main", "fact": "" })
             driver.barrierNotice.start()
         } else if (act === "amend") {
             // `--preset marker`: HEAD is an `--allow-empty` marker commit, the one tree where a message-only amend has

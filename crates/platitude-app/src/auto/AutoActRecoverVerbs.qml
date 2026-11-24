@@ -372,7 +372,7 @@ Item {
                     const name = acts.looks.indexOf("long") >= 0 ? "release-train/2026-q4/platform-migration/layer-08"
                                                                  : "main"
                     if (acts.looks.indexOf("notice") >= 0)
-                        page.showReport("outdated", "origin", name, "")
+                        page.showReport({ "kind": "outdated", "remote": "origin", "name": name, "fact": "" })
                     if (acts.looks.indexOf("askform") >= 0)
                         page.startPublishAskFor(name, "")
                     return true
