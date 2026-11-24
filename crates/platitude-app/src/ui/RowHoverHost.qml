@@ -457,8 +457,9 @@ Item {
                 { "upstream": reads, "gone": gone !== "",
                   "upstreamTo": NavFacts.place("remote", reads, host.branchesModel.upstreamOidOf(name)) })
             // The counts are the branch's, so the chip draws them on the name (`RefChip.trackOnName`).
-            line.ahead = host.branchesModel.aheadOf(name)
-            line.behind = host.branchesModel.behindOf(name)
+            const counts = host.branchesModel.countsOf(name)
+            line.ahead = counts.ahead
+            line.behind = counts.behind
             return line
         }
         if (chip.kind === "remote") {
@@ -468,8 +469,7 @@ Item {
             // This line names the branch, so the measure rides it.
             return NavFacts.branchLine(
                 local,
-                { "ahead": host.branchesModel.aheadOf(local),
-                  "behind": host.branchesModel.behindOf(local) },
+                host.branchesModel.countsOf(local),
                 NavFacts.place("branch", local, host.branchesModel.oidOfName(local)))
         }
         return null

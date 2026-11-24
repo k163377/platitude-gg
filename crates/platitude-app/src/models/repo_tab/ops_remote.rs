@@ -72,11 +72,9 @@ impl RepoTab {
     pub(super) fn named_push(&mut self, branch: String, force: String, expect: String) {
         let fallback = self.default_remote.clone();
         let named = branch.clone();
-        let asked = self.ask_pinned(
-            "push",
-            Self::push_force(&force, &expect),
-            |s, force| s.push_named(named, fallback, force),
-        );
+        let asked = self.ask_pinned("push", Self::push_force(&force, &expect), |s, force| {
+            s.push_named(named, fallback, force)
+        });
         self.push_out.asked(asked, branch);
     }
 
@@ -85,11 +83,9 @@ impl RepoTab {
     /// shows.
     pub(super) fn current_push(&mut self, branch: String, force: String, expect: String) {
         let fallback = self.default_remote.clone();
-        let asked = self.ask_pinned(
-            "push",
-            Self::push_force(&force, &expect),
-            |s, force| s.push_current(fallback, force),
-        );
+        let asked = self.ask_pinned("push", Self::push_force(&force, &expect), |s, force| {
+            s.push_current(fallback, force)
+        });
         self.push_out.asked(asked, branch);
     }
 

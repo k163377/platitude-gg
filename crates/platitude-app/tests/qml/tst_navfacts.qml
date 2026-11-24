@@ -58,8 +58,7 @@ Item {
         function upstreamOf(name) { return root.branchUpstream }
         function upstreamOidOf(name) { return root.branchReadingAt }
         function upstreamGoneOf(name) { return root.branchGone }
-        function aheadOf(name) { return root.branchAhead }
-        function behindOf(name) { return root.branchBehind }
+        function countsOf(name) { return { "ahead": root.branchAhead, "behind": root.branchBehind } }
         function oidOfName(name) { return root.branchAt }
     }
     readonly property QtObject worktrees: QtObject {

@@ -3,6 +3,7 @@
 //! taken apart.
 
 mod columns;
+mod counts;
 mod discards;
 mod far;
 mod graph;

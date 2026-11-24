@@ -524,18 +524,13 @@ impl NavSectionModel {
     /// landing meanwhile does not move it. Every other row's pair is its
     /// own role.
     #[qslot]
-    pub(super) fn ahead_of(&self, name: String) -> i32 {
-        self.all
-            .branch_named(&name)
-            .map_or(0, |branch| super::field::counted(branch.counts.ahead))
-    }
-
-    /// The other half of that pair — how far it is behind.
-    #[qslot]
-    pub(super) fn behind_of(&self, name: String) -> i32 {
-        self.all
-            .branch_named(&name)
-            .map_or(0, |branch| super::field::counted(branch.counts.behind))
+    pub(super) fn counts_of(&self, name: String) -> One<platitude_core::AheadBehind> {
+        One::new(
+            self.all
+                .branch_named(&name)
+                .map(|branch| branch.counts)
+                .unwrap_or_default(),
+        )
     }
 
     /// The commit this branch's configured upstream stands on, hex — the

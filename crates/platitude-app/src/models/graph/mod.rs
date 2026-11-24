@@ -8,7 +8,7 @@ use platitude_core::find::Query;
 use platitude_core::session::{LogRow, RelaidRow};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
-use crate::encode::{Chips, Lanes, Listed, Optional};
+use crate::encode::{Chips, Lanes, Listed, One, Optional};
 use crate::hub::{Feed, GraphMsg};
 
 use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
@@ -22,7 +22,7 @@ mod qobject;
 mod relay;
 mod stream;
 
-use item::{ChosenRow, ChosenRows, GraphRowItem, RemoteTip, Tally, to_row_item};
+use item::{ChosenRow, ChosenRows, GraphRowItem, RemoteTip, SideColors, Tally, to_row_item};
 use marks::RowMark;
 
 /// What a row of another worktree's uncommitted work answers when the

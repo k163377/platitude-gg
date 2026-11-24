@@ -962,7 +962,7 @@ Item {
                              "level": pullBranchTimer.level() || repoTab.writeRefused }),
             "report": () => "pull_branch refused=" + repoTab.writeRefused
                             + " level=" + pullBranchTimer.level()
-                            + " behind=" + branchesModel.behindOf(pullPressTimer.branch)
+                            + " behind=" + branchesModel.countsOf(pullPressTimer.branch).behind
                             + " head=" + (worktree.headOid !== pullPressTimer.witnessed("headBefore")) })
     }
     /// `pull-ahead`: git brings nothing (`Already up to date.`) and nothing on screen changes, so the command panel is

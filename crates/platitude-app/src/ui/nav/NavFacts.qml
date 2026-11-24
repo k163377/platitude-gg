@@ -49,6 +49,8 @@ QtObject {
         // **Two doors**: `upstreamOf` answers only a reading that is there (`BranchItem.upstream`), so a gone one is
         // asked for apart — read through the first alone, a gone branch would never say so.
         const asked = kind === "worktree" && branch !== "" && row.branchesModel !== null ? branch : ""
+        // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
+        const counts = asked !== "" ? row.branchesModel.countsOf(asked) : { "ahead": row.ahead, "behind": row.behind }
         const upstream = kind === "branch" && row.sectionModel !== null
                        ? row.sectionModel.upstreamOf(row.fullName)
                        : asked !== "" ? row.branchesModel.upstreamOf(asked) : ""
@@ -113,9 +115,8 @@ QtObject {
             "branchTo": navFacts.place("branch", named, tip),
             "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfWorktree(held)),
             "upstreamTo": navFacts.place("remote", upstream, reading),
-            // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
-            "ahead": asked !== "" ? row.branchesModel.aheadOf(asked) : row.ahead,
-            "behind": asked !== "" ? row.branchesModel.behindOf(asked) : row.behind,
+            "ahead": counts.ahead,
+            "behind": counts.behind,
             // The state git noted on a checkout, and the words that came with it (`Role::Change` / `Role::OrigPath`).
             "state": kind === "worktree" && leaf ? row.change : "",
             "why": kind === "worktree" && leaf ? row.orig_path : ""

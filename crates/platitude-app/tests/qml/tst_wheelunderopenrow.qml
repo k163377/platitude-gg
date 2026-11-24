@@ -35,11 +35,8 @@ Item {
         function upstreamGoneOf(name) {
             return ""
         }
-        function aheadOf(name) {
-            return 0
-        }
-        function behindOf(name) {
-            return 0
+        function countsOf(name) {
+            return { "ahead": 0, "behind": 0 }
         }
         function oidOfName(name) {
             return ""

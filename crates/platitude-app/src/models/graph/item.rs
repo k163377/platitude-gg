@@ -157,6 +157,30 @@ impl Record for Tally {
     }
 }
 
+/// The graph colour each side of a conflict is drawn in (`GraphModel.sideColors`),
+/// -1 for a side no lane colours.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SideColors {
+    pub ours: i32,
+    pub theirs: i32,
+}
+
+impl Record for SideColors {
+    fn to_map(&self) -> QVariantMap {
+        Fields::new()
+            .put("ours", &self.ours)
+            .put("theirs", &self.theirs)
+            .done()
+    }
+
+    fn from_map(map: &QVariantMap) -> Option<Self> {
+        Some(Self {
+            ours: field(map, "ours")?,
+            theirs: field(map, "theirs")?,
+        })
+    }
+}
+
 /// A remote-tracking branch's tip and the remote it belongs to, as an index
 /// into the asker's list (`GraphModel.remotesHolding`).
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

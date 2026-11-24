@@ -2323,10 +2323,12 @@ FocusScope {
     /// Each conflict side's colour: the graph's lane colour for that branch, where it has one. `finishCount` is read
     /// only to depend on it — every graph property shares one notify, and the graph arrives in two passes (chips after
     /// rows) and rebuilds when refs move.
-    readonly property int sideColorOurs:
-        graphModel.finishCount >= 0 ? graphModel.conflictColorOurs(worktree.sideOurs, worktree.sideTheirs) : -1
-    readonly property int sideColorTheirs:
-        graphModel.finishCount >= 0 ? graphModel.conflictColorTheirs(worktree.sideOurs, worktree.sideTheirs) : -1
+    readonly property var sideColors: {
+        graphModel.finishCount
+        return graphModel.sideColors(worktree.sideOurs, worktree.sideTheirs)
+    }
+    readonly property int sideColorOurs: page.sideColors.ours
+    readonly property int sideColorTheirs: page.sideColors.theirs
     function toggleDiff(kind, path, origPath) {
         if (page.diffShown && page.diffKey === kind + ":" + path) {
             page.closeDiff()

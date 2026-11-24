@@ -529,17 +529,12 @@ impl GraphModel {
             .map_or(-1, |r| r.node_color)
     }
 
-    /// The colour each side of a conflict is drawn in
-    /// (`encode::conflict_side_colors` decides); two slots because a slot
-    /// cannot hand back a pair.
+    /// The colour each side of a conflict is drawn in, both at once
+    /// (`encode::conflict_side_colors` decides).
     #[qslot]
-    fn conflict_color_ours(&self, ours: String, theirs: String) -> i32 {
-        self.conflict_colors(&ours, &theirs).0
-    }
-
-    #[qslot]
-    fn conflict_color_theirs(&self, ours: String, theirs: String) -> i32 {
-        self.conflict_colors(&ours, &theirs).1
+    fn side_colors(&self, ours: String, theirs: String) -> One<SideColors> {
+        let (ours, theirs) = self.conflict_colors(&ours, &theirs);
+        One::new(SideColors { ours, theirs })
     }
 
     /// Re-reads the assigned pictures onto the rows already loaded, in
