@@ -54,7 +54,7 @@ Item {
         function upstreamOf(name) { return "" }
         function upstreamOidOf(name) { return "" }
         function upstreamGoneOf(name) { return "" }
-        function countsOf(name) { return { "ahead": 0, "behind": 0 } }
+        function countsOf(name) { return { "ahead": 0, "behind": 0, "level": true } }
         function oidOfName(name) { return "" }
     }
     readonly property QtObject worktrees: QtObject {
@@ -91,8 +91,7 @@ Item {
             depth: 0
             folder: false
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             kindHint: "branch"
             rowKey: "branch:feature/topic-a"
             listWidth: panel.width

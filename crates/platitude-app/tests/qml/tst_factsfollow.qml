@@ -41,13 +41,13 @@ Item {
         // The table's shape (`NavFacts.lines`): a line naming a branch, the worktree holding it — the same commit, so
         // the one band (`withAbove`) — and one naming nothing.
         lines: [{ "mark": "branch", "markTint": Theme.accent, "text": "main", "tone": Theme.textSecondary,
-                  "ahead": 0, "behind": 0, "note": "", "to": { "key": "branch:main", "oid": "abc" },
+                  "note": "", "to": { "key": "branch:main", "oid": "abc" },
                   "withAbove": false },
                 { "mark": "tree", "markTint": Theme.success, "text": "a", "tone": Theme.textSecondary,
-                  "ahead": 0, "behind": 0, "note": "", "to": { "key": "worktree:C:/a", "oid": "abc" },
+                  "note": "", "to": { "key": "worktree:C:/a", "oid": "abc" },
                   "withAbove": true },
                 { "mark": "", "markTint": Theme.warning, "text": "Folder is gone", "tone": Theme.warning,
-                  "ahead": 0, "behind": 0, "note": "", "to": null, "withAbove": false }]
+                  "note": "", "to": null, "withAbove": false }]
     }
 
     TestCase {

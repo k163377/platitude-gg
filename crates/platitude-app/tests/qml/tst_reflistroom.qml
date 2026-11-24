@@ -29,7 +29,7 @@ Item {
             card.records = [root.mirrors]
             // A line under the name, as a tag standing apart opens on (`NavFacts.apartLine`).
             card.mates = [{ "mark": "remote", "markTint": Theme.warning, "text": "Remotes disagree",
-                            "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "", "to": null }]
+                            "tone": Theme.warning, "note": "", "to": null }]
             card.listRoom = root.height
             card.layOutRows()
             card.open()

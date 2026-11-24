@@ -339,10 +339,9 @@ pub struct NavSectionModel {
     head_upstream_gone: String,
     /// How far that branch stands from its upstream, off the same lookup,
     /// so the stand-in and its row cannot say different numbers. Drawn
-    /// while the status read's pair (`WorktreeModel.ahead`) is held back
+    /// while the status read's pair (`WorktreeModel.upstreamCounts`) is held back
     /// after a switch, not yet being about the branch HEAD is on.
-    head_ahead: i32,
-    head_behind: i32,
+    head_counts: platitude_core::AheadBehind,
     /// Visible row of the current entry, or -1 when it has none (a
     /// filter or a collapsed folder hides it, or HEAD is detached).
     head_row: i32,

@@ -58,7 +58,7 @@ Item {
         function upstreamOf(name) { return root.branchUpstream }
         function upstreamOidOf(name) { return root.branchReadingAt }
         function upstreamGoneOf(name) { return root.branchGone }
-        function countsOf(name) { return { "ahead": root.branchAhead, "behind": root.branchBehind } }
+        function countsOf(name) { return root.pair(root.branchAhead, root.branchBehind) }
         function oidOfName(name) { return root.branchAt }
     }
     readonly property QtObject worktrees: QtObject {
@@ -89,11 +89,16 @@ Item {
         }
     }
 
+    /// A pair as the sections hand it (`encode::counts`), standing in for Rust.
+    function pair(ahead, behind) {
+        return { "ahead": ahead, "behind": behind, "level": ahead === 0 && behind === 0 }
+    }
+
     /// One row, off the fields a case names over empty defaults. Closed, so a case that wants the lines drawn says so
     /// (`openRow`): the row's own line and its lines both draw a measure, and a walk over an open row finds two.
     function rowOf(fields) {
         const all = { "name": "", "full": "", "bucket": "", "change": "", "orig_path": "",
-                      "folder": false, "ahead": 0, "behind": 0, "pushRemote": "" }
+                      "folder": false, "counts": root.pair(0, 0), "pushRemote": "" }
         for (const key in fields)
             all[key] = fields[key]
         const row = rowMaker.createObject(root, all)
@@ -139,13 +144,13 @@ Item {
         function test_a_branch_names_the_reading_it_is_measured_against() {
             root.sectionUpstream = "origin/feature/topic-a"
             const row = root.rowOf({ "kindHint": "branch", "name": "feature/topic-a",
-                                     "full": "feature/topic-a", "ahead": 2, "behind": 3 })
+                                     "full": "feature/topic-a", "counts": root.pair(2, 3) })
             verify(row.gatherFacts(), "the row has a name to open on")
             compare(row.factsName, "feature/topic-a")
             compare(row.factsUpstream, "origin/feature/topic-a")
             compare(row.factsGone, false)
-            compare(row.factsAhead, 2, "the row's own role, not the branches' lookup")
-            compare(row.factsBehind, 3)
+            compare(row.factsCounts.ahead, 2, "the row's own role, not the branches' lookup")
+            compare(row.factsCounts.behind, 3)
             compare(row.factsLines.length, 1)
             compare(row.factsLines[0].mark, "remote")
             compare(row.factsLines[0].text, "origin/feature/topic-a")
@@ -190,7 +195,7 @@ Item {
         function test_the_worktree_holding_a_branch_is_named_in_the_worktrees_colour() {
             const held = NavFacts.place("worktree", "C:/worktrees/topic", "d4")
             const lines = NavFacts.lines("branch", { "heldBy": "topic", "heldTo": held, "upstream": "",
-                                                     "gone": false, "ahead": 0, "behind": 0 })
+                                                     "gone": false })
             compare(lines.length, 1, "the worktree, and no reading to measure against")
             compare(lines[0].mark, "tree")
             compare(lines[0].markTint, Theme.success, "the WORKTREES section's own colour")
@@ -219,13 +224,13 @@ Item {
             root.sectionTracked = "main"
             root.holdingWorktree = ""
             const row = root.rowOf({ "kindHint": "remote", "name": "origin/main",
-                                     "full": "origin/main", "ahead": 1 })
+                                     "full": "origin/main", "counts": root.pair(1, 0) })
             verify(row.gatherFacts())
             compare(row.factsLocal, "main")
             compare(row.factsLines.length, 1)
             compare(row.factsLines[0].mark, "branch")
             compare(row.factsLines[0].text, "main")
-            compare(row.factsLines[0].ahead, 1)
+            compare(row.factsLines[0].counts.ahead, 1)
             compare(row.factsLines[0].to.key, "branch:main")
             compare(row.factsLines[0].to.oid, "b2", "asked of the branches' section")
             row.destroy()
@@ -252,14 +257,14 @@ Item {
             root.branchBehind = 5
             const row = root.rowOf({ "kindHint": "worktree", "name": "topic",
                                      "full": "C:/worktrees/topic", "bucket": "feature/topic-a",
-                                     "ahead": 9, "behind": 9 })
+                                     "counts": root.pair(9, 9) })
             verify(row.gatherFacts())
             compare(row.factsName, "topic", "the folder it is named by")
             compare(row.factsPath, "C:/worktrees/topic")
             compare(row.factsBranch, "feature/topic-a")
             compare(row.factsUpstream, "origin/feature/topic-a", "the branches' answer, not the section's")
-            compare(row.factsAhead, 4, "and its counts, not the row's own roles")
-            compare(row.factsBehind, 5)
+            compare(row.factsCounts.ahead, 4, "and its counts, not the row's own roles")
+            compare(row.factsCounts.behind, 5)
             compare(row.factsLines.length, 2)
             compare(row.factsLines[0].mark, "branch")
             compare(row.factsLines[0].text, "feature/topic-a")
@@ -566,7 +571,7 @@ Item {
         function test_the_measure_a_branch_row_draws_on_its_own_line(data) {
             const row = root.rowOf({ "kindHint": "branch", "name": "feature/topic-a",
                                      "full": "feature/topic-a",
-                                     "ahead": data.ahead, "behind": data.behind })
+                                     "counts": root.pair(data.ahead, data.behind) })
             const measures = root.measuresUnder(row)
             if (data.legs.length === 0) {
                 // An empty seat would be a column the other rows are indented past.

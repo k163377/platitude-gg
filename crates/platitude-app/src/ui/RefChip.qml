@@ -416,14 +416,13 @@ Rectangle {
     // draw it (`HeadTrack`).
     Loader {
         id: mateTrack
-        active: chip.mate !== null && (chip.mate.ahead > 0 || chip.mate.behind > 0)
+        active: chip.mate !== null && chip.mate.counts !== undefined && !chip.mate.counts.level
         visible: mateTrack.active
         x: chip.width - Theme.spaceXs - mateTrack.width
         // The count's seat, both being `fontSm` digits; centred on the box, it hangs below the name.
         y: (chip.trackOnName ? 0 : mateRow.y) + chip.inkY(countLabel, countInk)
         sourceComponent: HeadTrack {
-            ahead: chip.mate ? chip.mate.ahead : 0
-            behind: chip.mate ? chip.mate.behind : 0
+            counts: chip.mate !== null ? chip.mate.counts : undefined
         }
     }
 }

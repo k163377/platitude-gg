@@ -129,8 +129,7 @@ AppMenu {
                               : card.page !== null && card.page.pageWorktrees
                                 && row.full === card.page.pageWorktrees.homeBranch ? "home"
                               : "tree",
-                    "ahead": row.ahead,
-                    "behind": row.behind,
+                    "counts": row.counts,
                     "remoteBadge": row.remote,
                     "badgePr": row.pr,
                     "badgeGone": row.gone

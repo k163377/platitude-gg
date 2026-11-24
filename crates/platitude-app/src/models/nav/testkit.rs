@@ -162,12 +162,15 @@ pub(super) fn flags(model: &NavSectionModel, row: usize, role: Role) -> bool {
         .is_some_and(|row| model.field(row, role).flag())
 }
 
-/// A number role's answer; `-1` for a missing row, so a miss cannot read
-/// as zero.
-pub(super) fn numbers(model: &NavSectionModel, row: usize, role: Role) -> i32 {
+/// The counts role's answer; `None` for a missing row, so a miss cannot
+/// read as level.
+pub(super) fn counts_at(
+    model: &NavSectionModel,
+    row: usize,
+) -> Option<platitude_core::AheadBehind> {
     model
         .row_at(row)
-        .map_or(-1, |row| model.field(row, role).number())
+        .map(|row| model.field(row, Role::Counts).counts())
 }
 
 pub(super) fn depth_of(model: &NavSectionModel, row: usize) -> i32 {

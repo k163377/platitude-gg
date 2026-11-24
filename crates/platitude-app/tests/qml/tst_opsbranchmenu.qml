@@ -33,7 +33,7 @@ Item {
         const segments = full.split("/")
         const made = {
             "name": segments[segments.length - 1], "full": full, "depth": depth, "folder": false, "head": false,
-            "offers": true, "held": false, "ahead": 0, "behind": 0, "remote": false, "pr": false, "gone": false
+            "offers": true, "held": false, "counts": { "ahead": 0, "behind": 0, "level": true }, "remote": false, "pr": false, "gone": false
         }
         for (const key in extra)
             made[key] = extra[key]
@@ -58,7 +58,7 @@ Item {
             page.asked = []
             page.rows = [
                 root.row("feature", 0, { "folder": true }),
-                root.row("feature/tracked", 1, { "ahead": 1, "behind": 2, "remote": true }),
+                root.row("feature/tracked", 1, { "counts": { "ahead": 1, "behind": 2, "level": false }, "remote": true }),
                 root.row("main", 0, { "head": true, "offers": false }),
                 root.row("rig", 0),
                 root.row("topic", 0, { "folder": true }),

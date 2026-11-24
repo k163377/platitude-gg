@@ -22,23 +22,23 @@ fn the_stand_in_takes_its_counts_off_the_row_it_stands_for() {
 
     // One branch, one pair: the row reads it out of the same `BranchItem`.
     assert_eq!(model.head_row, 2);
-    assert_eq!(numbers(&model, 2, Role::Ahead), 2);
-    assert_eq!(numbers(&model, 2, Role::Behind), 1);
-    assert_eq!(model.head_ahead, 2);
-    assert_eq!(model.head_behind, 1);
+    assert_eq!(counts_at(&model, 2).map(|c| c.ahead), Some(2));
+    assert_eq!(counts_at(&model, 2).map(|c| c.behind), Some(1));
+    assert_eq!(model.head_counts.ahead, 2);
+    assert_eq!(model.head_counts.behind, 1);
 
     // A filter takes the row away; the stand-in keeps its pair.
     model.filter = "feature".to_string();
     model.arrange();
     assert_eq!(model.head_row, -1);
-    assert_eq!(model.head_ahead, 2);
-    assert_eq!(model.head_behind, 1);
+    assert_eq!(model.head_counts.ahead, 2);
+    assert_eq!(model.head_counts.behind, 1);
 
     // Not in the listing: nothing to count.
     model.head_name = "made-since".to_string();
     assert!(model.settle_head_marks());
-    assert_eq!(model.head_ahead, 0);
-    assert_eq!(model.head_behind, 0);
+    assert_eq!(model.head_counts.ahead, 0);
+    assert_eq!(model.head_counts.behind, 0);
 }
 
 /// The stand-in carries its row's unreachable upstream, by name: the far

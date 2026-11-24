@@ -50,7 +50,7 @@ QtObject {
         // asked for apart — read through the first alone, a gone branch would never say so.
         const asked = kind === "worktree" && branch !== "" && row.branchesModel !== null ? branch : ""
         // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
-        const counts = asked !== "" ? row.branchesModel.countsOf(asked) : { "ahead": row.ahead, "behind": row.behind }
+        const counts = asked !== "" ? row.branchesModel.countsOf(asked) : row.counts
         const upstream = kind === "branch" && row.sectionModel !== null
                        ? row.sectionModel.upstreamOf(row.fullName)
                        : asked !== "" ? row.branchesModel.upstreamOf(asked) : ""
@@ -115,8 +115,7 @@ QtObject {
             "branchTo": navFacts.place("branch", named, tip),
             "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfWorktree(held)),
             "upstreamTo": navFacts.place("remote", upstream, reading),
-            "ahead": counts.ahead,
-            "behind": counts.behind,
+            "counts": counts,
             // The state git noted on a checkout, and the words that came with it (`Role::Change` / `Role::OrigPath`).
             "state": kind === "worktree" && leaf ? row.change : "",
             "why": kind === "worktree" && leaf ? row.orig_path : ""
@@ -164,14 +163,14 @@ QtObject {
     function branchLine(name, a, to) {
         return name === "" ? null
              : { "mark": "branch", "markTint": Theme.accent, "text": name, "tone": Theme.textSecondary,
-                 "ahead": a.ahead, "behind": a.behind, "note": "", "to": to }
+                 "counts": a.counts, "note": "", "to": to }
     }
     /// The worktree holding the branch this row is about, in the WORKTREES section's mark and colour
     /// (規約 §ref の種別).
     function worktreeLine(a) {
         return a.heldBy === "" ? null
              : { "mark": a.heldHome ? "home" : "tree", "markTint": Theme.success, "text": a.heldBy,
-                 "tone": Theme.textSecondary, "ahead": 0, "behind": 0, "note": "", "to": a.heldTo }
+                 "tone": Theme.textSecondary, "note": "", "to": a.heldTo }
     }
     /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), the whole line in
     /// `warning`, and goes nowhere: the row's far-end mark wears `!`, but a mark cannot tell "nothing to follow" from
@@ -182,7 +181,7 @@ QtObject {
         const tint = a.gone ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint,
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
-                 "tone": tint, "ahead": 0, "behind": 0, "note": "", "to": a.gone ? null : a.upstreamTo }
+                 "tone": tint, "note": "", "to": a.gone ? null : a.upstreamTo }
     }
     /// One remote carrying this tag, by name alone. Whether it stands on the right reading is said by colour, `warning`
     /// (user decision; デザイン規約 §状態), and why by the note a rest opens — a clause on one line would make
@@ -191,7 +190,7 @@ QtObject {
     function carrierLine(carried, note) {
         const tint = carried.apart ? Theme.warning : Theme.textSecondary
         return { "mark": "remote", "markTint": tint, "text": carried.remote,
-                 "tone": tint, "ahead": 0, "behind": 0,
+                 "tone": tint,
                  "note": carried.apart ? note : "", "to": null, "aim": carried.remote }
     }
     /// Why a holder of a tag wears the warning, given who the right reading belongs to (`by`, as a sentence lists
@@ -206,7 +205,7 @@ QtObject {
     /// in the shape a gone upstream's line has there. It goes nowhere: it names no ref.
     function apartLine(note) {
         return { "mark": "remote", "markTint": Theme.warning, "text": note,
-                 "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "", "to": null }
+                 "tone": Theme.warning, "note": "", "to": null }
     }
     /// The one state a mark cannot name: a folder git can no longer find (`!` names nothing). A lock's padlock says it
     /// all — its reason is the locker's words, not this panel's (デザイン規約 §左メニューの所作). Read off `change`, the
@@ -214,6 +213,6 @@ QtObject {
     function stateLine(a) {
         return a.state !== "PRUNABLE" ? null
              : { "mark": "", "markTint": Theme.warning, "text": qsTr("Folder is gone"),
-                 "tone": Theme.warning, "ahead": 0, "behind": 0, "note": "", "to": null }
+                 "tone": Theme.warning, "note": "", "to": null }
     }
 }

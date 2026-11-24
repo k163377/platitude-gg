@@ -30,8 +30,7 @@ Item {
         depth: 0
         folder: false
         eol_mark: false
-        ahead: 0
-        behind: 0
+        counts: ({ "ahead": 0, "behind": 0, "level": true })
         listWidth: root.width
         height: Theme.rowHeight
         paneHand: hand

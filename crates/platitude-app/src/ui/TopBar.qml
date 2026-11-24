@@ -771,8 +771,7 @@ Rectangle {
                 name: topBar.branchName
                 note: topBar.branchUpstream
                 noteTone: topBar.upstreamGone ? Theme.warning : Theme.textMuted
-                ahead: topBar.curPage === null ? 0 : topBar.curPage.pageWorktree.ahead
-                behind: topBar.curPage === null ? 0 : topBar.curPage.pageWorktree.behind
+                counts: topBar.curPage === null ? undefined : topBar.curPage.pageWorktree.upstreamCounts
                 given: topBar.opsBranchCut
                 opened: topBar.branchMenuOpen
                 // `Loading…` while the page in front is still reading its HEAD (a tab come to the front reads git

@@ -33,6 +33,11 @@ impl AheadBehind {
     pub fn is_diverged(self) -> bool {
         self.ahead > 0 && self.behind > 0
     }
+
+    /// Neither side has a commit the other lacks: 0/0, nothing to say.
+    pub fn is_level(self) -> bool {
+        self.ahead == 0 && self.behind == 0
+    }
 }
 
 /// Interning pool for strings that repeat heavily (author names): commits

@@ -238,21 +238,18 @@ impl NavSectionModel {
         };
         let has_remote = branch.is_some_and(|b| b.has_remote);
         let has_pr = branch.is_some() && crate::encode::pr_set().contains(self.head_name.as_str());
-        let ahead = branch.map_or(0, |b| crate::encode::shown_count(b.counts.ahead));
-        let behind = branch.map_or(0, |b| crate::encode::shown_count(b.counts.behind));
+        let counts = branch.map(|b| b.counts).unwrap_or_default();
         let gone = branch.map_or("", |b| b.upstream_gone.as_str());
-        let changed = (has_remote, has_pr, ahead, behind, gone)
+        let changed = (has_remote, has_pr, counts, gone)
             != (
                 self.head_has_remote,
                 self.head_has_pr,
-                self.head_ahead,
-                self.head_behind,
+                self.head_counts,
                 self.head_upstream_gone.as_str(),
             );
         self.head_has_remote = has_remote;
         self.head_has_pr = has_pr;
-        self.head_ahead = ahead;
-        self.head_behind = behind;
+        self.head_counts = counts;
         self.head_upstream_gone = gone.to_string();
         changed
     }

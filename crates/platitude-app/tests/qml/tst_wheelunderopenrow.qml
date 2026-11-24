@@ -36,7 +36,7 @@ Item {
             return ""
         }
         function countsOf(name) {
-            return { "ahead": 0, "behind": 0 }
+            return { "ahead": 0, "behind": 0, "level": true }
         }
         function oidOfName(name) {
             return ""
@@ -158,13 +158,15 @@ Item {
                 rows.append({
                     "name": name, "full": name, "oid_hex": "", "change": "", "bucket": "", "orig_path": "",
                     "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false, "has_pr": false,
-                    "depth": 0, "folder": i === testCase.folderRow, "eol_mark": false, "ahead": 0, "behind": 0
+                    "depth": 0, "folder": i === testCase.folderRow, "eol_mark": false,
+                    "counts": { "ahead": 0, "behind": 0, "level": true }
                 })
                 // A worktree's row is named by its folder and carries the branch it holds in `bucket` (`NavFacts`).
                 worktrees.append({
                     "name": "w" + name, "full": "w" + name, "oid_hex": "", "change": "", "bucket": name,
                     "orig_path": "", "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false,
-                    "has_pr": false, "depth": 0, "folder": false, "eol_mark": false, "ahead": 0, "behind": 0
+                    "has_pr": false, "depth": 0, "folder": false, "eol_mark": false,
+                    "counts": { "ahead": 0, "behind": 0, "level": true }
                 })
             }
         }

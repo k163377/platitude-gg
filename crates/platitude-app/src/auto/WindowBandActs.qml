@@ -232,7 +232,7 @@ Item {
     function opsPanelKey() {
         const worktree = window.curPage === null ? null : window.curPage.pageWorktree
         return topBar.opsNames + "|" + topBar.branchUpstream + "|"
-            + (worktree === null ? "" : worktree.ahead + "/" + worktree.behind)
+            + (worktree === null ? "" : worktree.upstreamCounts.ahead + "/" + worktree.upstreamCounts.behind)
             + "|" + topBar.width
     }
     function opsPanelLoaded() {

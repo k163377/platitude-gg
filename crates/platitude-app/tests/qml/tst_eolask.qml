@@ -42,8 +42,7 @@ Item {
             depth: 0
             folder: false
             eol_mark: true
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             kindHint: "file"
             rowKey: "file:src/flipped.kt"
             listWidth: panel.width

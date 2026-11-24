@@ -26,8 +26,8 @@ pub struct CardRow {
     pub offers: bool,
     /// Another worktree has it out (`item::HELD`).
     pub held: bool,
-    pub ahead: i32,
-    pub behind: i32,
+    /// How far it stands from its upstream (`HeadTrack`).
+    pub counts: platitude_core::AheadBehind,
     /// The badge the section's row ends with (`NavRowBody.remoteSeat`):
     /// a remote carries it, a pull request is open for it, and the
     /// upstream it is measured against has gone.
@@ -50,8 +50,7 @@ impl Record for CardRow {
             .put("head", &self.head)
             .put("offers", &self.offers)
             .put("held", &self.held)
-            .put("ahead", &self.ahead)
-            .put("behind", &self.behind)
+            .put("counts", &self.counts.to_map())
             .put("remote", &self.remote)
             .put("pr", &self.pr)
             .put("gone", &self.gone)
@@ -67,8 +66,7 @@ impl Record for CardRow {
             head: field(map, "head")?,
             offers: field(map, "offers")?,
             held: field(map, "held")?,
-            ahead: field(map, "ahead")?,
-            behind: field(map, "behind")?,
+            counts: platitude_core::AheadBehind::from_map(&field(map, "counts")?)?,
             remote: field(map, "remote")?,
             pr: field(map, "pr")?,
             gone: field(map, "gone")?,
@@ -108,8 +106,7 @@ impl NavSectionModel {
                     head,
                     offers: !folder && !head,
                     held: self.field(row, Role::Change).as_str() == HELD,
-                    ahead: self.field(row, Role::Ahead).number(),
-                    behind: self.field(row, Role::Behind).number(),
+                    counts: self.field(row, Role::Counts).counts(),
                     remote: self.field(row, Role::HasRemote).flag(),
                     pr: self.field(row, Role::HasPr).flag(),
                     gone: !self.field(row, Role::Bucket).as_str().is_empty(),
@@ -249,7 +246,7 @@ mod tests {
         assert!(!row("main").held);
         let tracked = row("feature/tracked");
         assert_eq!(
-            (tracked.ahead, tracked.behind, tracked.remote),
+            (tracked.counts.ahead, tracked.counts.behind, tracked.remote),
             (1, 2, true)
         );
         assert!(row("feature/zz-gone").gone);

@@ -21,7 +21,7 @@ Item {
     readonly property var record: Chips.chip("remote", "origin/main", { "here": false })
     function mateGoing(to) {
         return { "mark": "branch", "markTint": Theme.accent, "text": "main", "tone": Theme.textSecondary,
-                 "ahead": 0, "behind": 0, "note": "", "to": to }
+                 "note": "", "to": to }
     }
 
     // A row of the card, as far as a press goes: the band answers at the press, the way the card's rows do.

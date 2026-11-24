@@ -39,9 +39,8 @@ HoverToolButton {
     property color noteTone: Theme.textMuted
     /// The upstream's step. Fixed rather than following `pixelSize`: raising the name must not raise the upstream.
     property int noteSize: Theme.fontMd
-    /// Counts against the upstream, drawn as `HeadTrack`; both zero draws nothing.
-    property int ahead: 0
-    property int behind: 0
+    /// Counts against the upstream (`encode::counts`), drawn as `HeadTrack`; level, or none, draws nothing.
+    property var counts: undefined
     /// The worktree, set after the name as one run — tree mark + folder name, a step down and quieter, as the tab
     /// draws it (デザイン規約 §タブの所作). Empty draws none.
     property string trail: ""
@@ -109,7 +108,7 @@ HoverToolButton {
     /// Counts beside the name, and what they cost. They end the longer line: past an upstream longer than the name,
     /// their right end meets the upstream's. The step is a word's (`spaceSm`), not a letter's: at `spaceXs`, `main↑2`
     /// reads as one word (user decision).
-    readonly property bool tracked: picker.ahead > 0 || picker.behind > 0
+    readonly property bool tracked: picker.counts !== undefined && !picker.counts.level
     property int trackGap: Theme.spaceSm
     readonly property real trackRun: picker.tracked ? picker.trackGap + Math.ceil(trackSeat.implicitWidth) : 0
     /// Each line measured on its own: the box is the longer of the two, never both end to end.
@@ -347,8 +346,7 @@ HoverToolButton {
                     visible: trackSeat.active
                     Layout.alignment: Qt.AlignVCenter
                     sourceComponent: HeadTrack {
-                        ahead: picker.ahead
-                        behind: picker.behind
+                        counts: picker.counts
                     }
                 }
             }

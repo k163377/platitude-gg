@@ -10,13 +10,18 @@ import platitude.ui
 /// there is** (user decision — ask before changing): `↑2`, `↓1`, `↑1 ↓1`. Only a nonzero leg is drawn, as git spells
 /// `[ahead 2]` and never `[ahead 2, behind 0]`, and as other products drop the 0 beside an inline name; a 0 belongs
 /// only in a table where the count has a column of its own. Whoever seats this leaves it empty when both are zero, and
-/// with no upstream or a gone one. Level and "no upstream" look alike on the row — accepted (git's short `trackshort`
-/// has `=` for level; here it is empty). Every local branch with an upstream draws it, a branch behind too.
+/// with no upstream or a gone one: it is built only where `counts.level` is false. Level and "no upstream" look alike
+/// on the row — accepted (git's short `trackshort` has `=` for level; here it is empty). Every local branch with an
+/// upstream draws it, a branch behind too.
 RowLayout {
     id: track
-    property int ahead: 0
-    property int behind: 0
+    /// The pair as one record (`encode::counts`: `ahead`, `behind`, `level`), handed on as it was read.
+    required property var counts
     property color tint: Theme.textSecondary
+    /// The two legs. A host whose record goes away (a chip's card closing under the hand) can hand none for the last
+    /// beat before its `Loader` lets this go — read as level, not as a `TypeError`.
+    readonly property int ahead: track.counts === undefined || track.counts === null ? 0 : track.counts.ahead
+    readonly property int behind: track.counts === undefined || track.counts === null ? 0 : track.counts.behind
 
     /// One colour for the pair: `warning` once anything is behind — something came in from outside, to act on before a
     /// push: the "diverged" a standing state colour is allowed for (デザイン規約 §状態), the same colour on the same

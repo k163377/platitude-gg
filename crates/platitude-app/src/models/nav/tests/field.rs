@@ -541,8 +541,8 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     ours.counts.behind = 1;
     let mut mine = section("branches", Source::Locals(locals(vec![ours])));
     mine.arrange();
-    assert_eq!(numbers(&mine, 0, Role::Ahead), 2);
-    assert_eq!(numbers(&mine, 0, Role::Behind), 1);
+    assert_eq!(counts_at(&mine, 0).map(|c| c.ahead), Some(2));
+    assert_eq!(counts_at(&mine, 0).map(|c| c.behind), Some(1));
 
     let mut read = remote("origin/main");
     read.tracked_by = "main".into();
@@ -561,14 +561,14 @@ fn a_branch_and_the_reading_it_names_answer_the_same_pair() {
     assert_eq!(says(&theirs, 0, Role::Name), "fork");
     assert_eq!(says(&theirs, 1, Role::Full), "fork/main");
     assert_eq!(
-        numbers(&theirs, 1, Role::Ahead),
-        0,
+        counts_at(&theirs, 1).map(|c| c.ahead),
+        Some(0),
         "a name alone joins nothing"
     );
     assert_eq!(says(&theirs, 2, Role::Name), "origin");
     assert_eq!(says(&theirs, 3, Role::Full), "origin/main");
-    assert_eq!(numbers(&theirs, 3, Role::Ahead), 2);
-    assert_eq!(numbers(&theirs, 3, Role::Behind), 1);
+    assert_eq!(counts_at(&theirs, 3).map(|c| c.ahead), Some(2));
+    assert_eq!(counts_at(&theirs, 3).map(|c| c.behind), Some(1));
     assert_eq!(theirs.tracked_by("origin/main".to_string()), "main");
     assert_eq!(theirs.tracked_by("fork/main".to_string()), "");
     assert_eq!(

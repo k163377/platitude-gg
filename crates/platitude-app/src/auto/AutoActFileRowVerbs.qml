@@ -654,17 +654,17 @@ Item {
             // The rows; the fetch being over and read back (`RepoTab.fetching`), so the count is settled and the button
             // at rest (seeing it turn is optional — it can end before this page exists; verify-ui verbs.md
             // §通信中(リング)と起動直後の狙い方); and
-            // `headBehind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
+            // `headCounts.behind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
             // only the fetch moves it off zero. The fetched row arrives chipless and takes the remote name a pass
             // later. Row zero is that row: the preset opens on a clean tree, so no worktree row stands above it.
             openFetchTimer.complete({
                 "name": "open_fetch_ready",
                 "when": () => ({
                     "ready": !(graphModel.rowTotal < acts.openFetchRows || repoTab.fetching
-                        || branchesModel.headBehind < 1),
+                        || branchesModel.headCounts.behind < 1),
                     "chips": openFetchTimer.topChips().length > 0 }),
                 "report": () => "open_fetch fails=" + repoTab.fetchFailures
-                                + " behind=" + branchesModel.headBehind
+                                + " behind=" + branchesModel.headCounts.behind
                                 + " top=" + openFetchTimer.topChips()[0].name
                                 + " rows=" + graphModel.rowTotal
                                 + " wanted=" + acts.openFetchRows })

@@ -422,8 +422,8 @@ AppListView {
         // a worktree's row, the branch it holds (`NavItemDelegate.factsAhead`).
         return row === null ? ""
              : row.factsName + " local=" + row.factsLocal
-               + " track=" + (row.factsBranch !== "" ? row.factsAhead : row.ahead)
-               + "/" + (row.factsBranch !== "" ? row.factsBehind : row.behind)
+               + " track=" + (row.factsBranch !== "" ? row.factsCounts : row.counts).ahead
+               + "/" + (row.factsBranch !== "" ? row.factsCounts : row.counts).behind
                + " held=" + row.factsHeldBy + " up=" + row.factsUpstream + " gone=" + row.factsGone
                + " branch=" + row.factsBranch
                + " state=" + row.factsState

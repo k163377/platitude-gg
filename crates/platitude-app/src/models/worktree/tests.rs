@@ -266,7 +266,7 @@ fn the_counts_are_the_branch_they_were_read_with() {
     ]);
     assert!(model.counts_settled);
     assert_eq!(model.upstream, "origin/feature");
-    assert_eq!(model.ahead, 2);
+    assert_eq!(model.upstream_counts.ahead, 2);
 
     model.absorb(vec![head_on("main", NEXT, 2)]);
     assert!(!model.counts_settled, "feature's counts are not main's");
@@ -276,7 +276,7 @@ fn the_counts_are_the_branch_they_were_read_with() {
         platitude_core::remote::HeadPush::Moving("main".to_string()),
         "nothing of main's push is known yet"
     );
-    assert_eq!(model.ahead, 0);
+    assert_eq!(model.upstream_counts.ahead, 0);
 
     model.absorb(vec![status_of(
         "main",
@@ -287,7 +287,7 @@ fn the_counts_are_the_branch_they_were_read_with() {
     )]);
     assert!(model.counts_settled);
     assert_eq!(model.upstream, "origin/main");
-    assert_eq!(model.ahead, 0);
+    assert_eq!(model.upstream_counts.ahead, 0);
 }
 
 /// An upstream git names with nothing counted against it — its ref gone —
@@ -306,17 +306,16 @@ fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
                 .head_push_now()
                 .read()
                 .is_some_and(|read| read.upstream_counts.is_some()),
-            model.ahead,
-            model.behind,
+            model.upstream_counts,
             model.pull_blocked,
         )
     };
-    assert_eq!(read(None), (false, 0, 0, false));
+    assert_eq!(read(None), (false, platitude_core::AheadBehind::default(), false));
     let both = platitude_core::AheadBehind {
         ahead: 1,
         behind: 2,
     };
-    assert_eq!(read(Some(both)), (true, 1, 2, true));
+    assert_eq!(read(Some(both)), (true, both, true));
 }
 
 /// Commits on both sides of the upstream grey the pull; on one side
@@ -332,7 +331,7 @@ fn commits_on_both_sides_of_the_upstream_block_the_pull() {
                 Some(platitude_core::AheadBehind { ahead, behind });
         }
         model.absorb(vec![head_on("feature", ROOT, 1), status]);
-        (model.ahead, model.behind, model.pull_blocked)
+        (model.upstream_counts.ahead, model.upstream_counts.behind, model.pull_blocked)
     };
     assert_eq!(read(2, 1), (2, 1, true));
     assert_eq!(read(2, 0), (2, 0, false));

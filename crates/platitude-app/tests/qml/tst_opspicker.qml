@@ -30,7 +30,7 @@ Control {
         id: shortName
         name: "main"
         note: "origin/main-that-runs-further"
-        ahead: 2
+        counts: ({ "ahead": 2, "behind": 0, "level": false })
     }
     // A long name over a shorter upstream — one that still runs well past the name cut to its floor, in any face.
     Branch {
@@ -38,8 +38,7 @@ Control {
         y: 60
         name: "release/2026-08-candidate-with-a-very-long-branch-name"
         note: "origin/release/2026-08-candidate"
-        ahead: 1
-        behind: 1
+        counts: ({ "ahead": 1, "behind": 1, "level": false })
     }
     Branch {
         id: bare
@@ -53,7 +52,7 @@ Control {
         name: "feature/topic-that-runs-long"
         trail: "a-worktree-folder-with-a-long-name"
         note: "origin/topic"
-        ahead: 1
+        counts: ({ "ahead": 1, "behind": 0, "level": false })
     }
 
     // A name far past the name ceiling, over a short upstream.

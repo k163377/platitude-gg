@@ -10,8 +10,7 @@ impl NavSectionModel {
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("headHasRemote", Member = head_has_remote, Notify = changed);
     qproperty!("headHasPr", Member = head_has_pr, Notify = changed);
-    qproperty!("headAhead", Member = head_ahead, Notify = changed);
-    qproperty!("headBehind", Member = head_behind, Notify = changed);
+    qproperty!("headCounts", Read = head_counts_record, Notify = changed);
     qproperty!(
         "headUpstreamGone",
         Member = head_upstream_gone,
@@ -54,6 +53,11 @@ impl NavSectionModel {
         Notify = changed
     );
     qproperty!("pointedEolExt", Member = pointed_eol_ext, Notify = changed);
+
+    // `head_counts` as one record (`encode::counts`), built as it is read.
+    fn head_counts_record(&self) -> One<platitude_core::AheadBehind> {
+        One::new(self.head_counts)
+    }
 
     /// Names the row the pointer is on, so its line-ending sentence can be
     /// built; an empty path clears it. Automation writes it too, since
@@ -426,7 +430,7 @@ impl NavSectionModel {
     /// remote-tracking ref (`BranchItem::tracked_by`). Empty where
     /// nothing here names it, and for every section but the remotes.
     /// What a remote row's opened lines lead with (デザイン規約
-    /// §左メニューの所作); the counts beside it ride the row (`Role::Ahead`).
+    /// §左メニューの所作); the counts beside it ride the row (`Role::Counts`).
     #[qslot]
     pub(super) fn tracked_by(&self, name: String) -> String {
         self.all
@@ -502,7 +506,7 @@ impl NavSectionModel {
 
     /// How far the branch of this name stands from what it reads, as of
     /// the last fetch — the pair its own row draws (`models::nav::field` の
-    /// `Role::Ahead`). Zero where level, untracked, or not in this section.
+    /// `Role::Counts`). Zero where level, untracked, or not in this section.
     ///
     /// For rows naming somebody else's branch, e.g. a worktree's
     /// (デザイン規約 §左メニューの所作). A slot, not a role: only this

@@ -38,7 +38,7 @@ impl NavSectionModel {
                     Role::Depth => Value::Number(item.depth),
                     Role::Folder => Value::Flag(item.folder),
                     // A folder is measured against no upstream.
-                    Role::Ahead | Role::Behind => Value::Number(0),
+                    Role::Counts => Value::Counts(platitude_core::AheadBehind::default()),
                 };
             }
             Row::Shown { of, depth, from } => (of, depth, from),
@@ -176,17 +176,9 @@ impl NavSectionModel {
             // A local branch carries its own pair; a remote-tracking ref
             // carries the one made against it (`BranchItem::tracked_by`),
             // drawn by the line naming that branch (`NavRowFacts`).
-            Role::Ahead => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => {
-                    crate::encode::shown_count(branch.counts.ahead)
-                }
-                _ => 0,
-            }),
-            Role::Behind => Value::Number(match of {
-                Entry::Local(branch) | Entry::Remote(branch) => {
-                    crate::encode::shown_count(branch.counts.behind)
-                }
-                _ => 0,
+            Role::Counts => Value::Counts(match of {
+                Entry::Local(branch) | Entry::Remote(branch) => branch.counts,
+                _ => platitude_core::AheadBehind::default(),
             }),
         }
     }

@@ -51,8 +51,7 @@ Item {
             depth: 0
             folder: true
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: 200
             height: Theme.rowHeight
             kindHint: "file"
@@ -74,8 +73,7 @@ Item {
             depth: 1
             folder: false
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: 200
             height: Theme.rowHeight
             kindHint: "file"
@@ -97,8 +95,7 @@ Item {
             depth: 0
             folder: false
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: 200
             height: Theme.rowHeight
             kindHint: "file"
@@ -126,8 +123,7 @@ Item {
             depth: 0
             folder: true
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: 200
             height: Theme.rowHeight
         }
@@ -148,8 +144,7 @@ Item {
             depth: 1
             folder: true
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: 200
             height: Theme.rowHeight
         }

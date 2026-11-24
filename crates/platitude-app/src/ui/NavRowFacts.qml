@@ -29,7 +29,7 @@ Item {
     /// The row this belongs to — where a press that took no words goes (`NavItemDelegate.rowPressed`), and where a
     /// press in a line's band is handed (`followFact`).
     property Item row: null
-    /// The lines to draw, in reading order (`NavFacts.lines`). Each is `{mark, markTint, text, tone, ahead, behind,
+    /// The lines to draw, in reading order (`NavFacts.lines`). Each is `{mark, markTint, text, tone, counts,
     /// note, to, withAbove}` — `to` is where a press on it takes the graph, null where it goes nowhere of its own
     /// (`NavFacts.place`), and `withAbove` says it shares the band of the line above (`NavFacts.joined`).
     property var lines: []
@@ -330,8 +330,7 @@ Item {
                 markTint: modelData.markTint
                 text: modelData.text
                 tone: modelData.tone
-                ahead: modelData.ahead
-                behind: modelData.behind
+                counts: modelData.counts
                 // **Truthiness, not a comparison**: lines are handed as plain values
                 // (`tests/qml/tst_factstipsteal.qml`), and one without the field has no supplement.
                 noted: !!modelData.note

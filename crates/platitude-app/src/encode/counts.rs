@@ -12,12 +12,16 @@ pub fn shown_count(commits: u32) -> i32 {
     i32::try_from(commits).unwrap_or(i32::MAX)
 }
 
-/// `ahead` / `behind`, as [`shown_count`] draws each.
+/// `ahead` / `behind`, as [`shown_count`] draws each, and `level` where
+/// both are 0 (`AheadBehind::is_level`) — what decides whether a pair is
+/// drawn at all (`HeadTrack`), so no reader weighs the two numbers itself.
+/// Read back from the counts alone.
 impl Record for AheadBehind {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
             .put("ahead", &shown_count(self.ahead))
             .put("behind", &shown_count(self.behind))
+            .put("level", &self.is_level())
             .done()
     }
 
@@ -44,5 +48,15 @@ mod tests {
         let back =
             <One<AheadBehind> as QVariantConvertible>::try_from_qvariant(&counts.to_qvariant());
         assert_eq!(back.map(|b| *b), Some(*counts));
+    }
+
+    #[test]
+    fn a_pair_says_level_only_where_both_counts_are_zero() {
+        let level_of =
+            |ahead, behind| field::<bool>(&AheadBehind { ahead, behind }.to_map(), "level");
+        assert_eq!(level_of(0, 0), Some(true));
+        assert_eq!(level_of(1, 0), Some(false));
+        assert_eq!(level_of(0, 1), Some(false));
+        assert_eq!(level_of(2, 3), Some(false));
     }
 }

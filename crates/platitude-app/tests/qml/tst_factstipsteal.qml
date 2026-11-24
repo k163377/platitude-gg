@@ -30,7 +30,8 @@ Item {
         height: 60
         // The lines as `NavFacts.lines` hands them over.
         lines: [{ "mark": "branch", "markTint": Theme.accent, "text": "feature/topic-a",
-                  "tone": Theme.textSecondary, "ahead": 1, "behind": 0 }]
+                  "tone": Theme.textSecondary,
+                  "counts": { "ahead": 1, "behind": 0, "level": false } }]
         path: "C:/Users/somebody/IdeaProjects/project/.claude/worktrees/d"
     }
 

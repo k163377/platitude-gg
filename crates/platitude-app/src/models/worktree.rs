@@ -74,7 +74,7 @@ pub struct WorktreeModel {
     /// claims about the counts — only a status numbered at or above a
     /// write's answer has counted that write's tree.
     status_seq: i32,
-    /// Whether `upstream` / `ahead` / `behind` (and the push reading,
+    /// Whether `upstream` / `upstream_counts` (and the push reading,
     /// `head_push`, both marks among it) are about the branch the record
     /// names — the last status (`status`) read HEAD on it. Between a move of
     /// HEAD and the status behind it they are blank and the push stands
@@ -83,11 +83,10 @@ pub struct WorktreeModel {
     /// What the last status said of its branch's standing, shown only while
     /// it is the branch HEAD is on (`settle`).
     upstream: String,
-    /// Zero where the upstream has no ref to count against: a branch whose
-    /// upstream has no remote-tracking ref yet compares against nothing
-    /// (`head_push` says which).
-    ahead: i32,
-    behind: i32,
+    /// How far that branch stands from it. Level where the upstream has no
+    /// ref to count against: a branch whose upstream has no remote-tracking
+    /// ref yet compares against nothing (`head_push` says which).
+    upstream_counts: platitude_core::AheadBehind,
     /// Whether the `pull` row is greyed: the two sides have diverged, which
     /// is brought together by choosing rebase or merge
     /// (デザイン規約 §取り込んで合流させる). Derived from the counts, so
@@ -292,8 +291,6 @@ impl WorktreeModel {
     );
     qproperty!("statusSeq", Member = status_seq, Notify = changed);
     qproperty!("upstream", Member = upstream, Notify = changed);
-    qproperty!("ahead", Member = ahead, Notify = changed);
-    qproperty!("behind", Member = behind, Notify = changed);
     qproperty!("pullBlocked", Member = pull_blocked, Notify = changed);
     qproperty!("opText", Member = op_text, Notify = changed);
     qproperty!("opCommand", Member = op_command, Notify = changed);
@@ -385,6 +382,15 @@ impl WorktreeModel {
 
     fn head_push(&self) -> crate::encode::Push {
         crate::encode::Push::new(self.head_push_now())
+    }
+
+    // How far the branch HEAD is on stands from its upstream, as the last
+    // status read it (`upstream_counts`) — one record (`encode::counts`),
+    // built as it is read.
+    qproperty!("upstreamCounts", Read = upstream_counts, Notify = changed);
+
+    fn upstream_counts(&self) -> crate::encode::One<platitude_core::AheadBehind> {
+        crate::encode::One::new(self.upstream_counts)
     }
 
     // Said for every status drained, whether or not a row moved — the one
@@ -506,8 +512,7 @@ impl WorktreeModel {
         self.status_seq = 0;
         self.counts_settled = false;
         self.upstream = String::new();
-        self.ahead = 0;
-        self.behind = 0;
+        self.upstream_counts = platitude_core::AheadBehind::default();
         self.pull_blocked = false;
         self.status_push = platitude_core::remote::StatusPush::default();
         self.op_text = String::new();
@@ -765,16 +770,13 @@ impl WorktreeModel {
             self.loaded && self.status.branch_head.as_deref().unwrap_or_default() == self.branch;
         if self.counts_settled {
             self.upstream = self.status.upstream.clone().unwrap_or_default();
-            // The properties are Qt's own: zeroes for "nothing to count
-            // against", and `int`s (`encode::shown_count`).
+            // Level for "nothing to count against", as the row draws it.
             let upstream = self.status.upstream_counts;
-            self.ahead = crate::encode::shown_count(upstream.map_or(0, |counts| counts.ahead));
-            self.behind = crate::encode::shown_count(upstream.map_or(0, |counts| counts.behind));
+            self.upstream_counts = upstream.unwrap_or_default();
             self.pull_blocked = upstream.is_some_and(platitude_core::AheadBehind::is_diverged);
         } else {
             self.upstream.clear();
-            self.ahead = 0;
-            self.behind = 0;
+            self.upstream_counts = platitude_core::AheadBehind::default();
             self.pull_blocked = false;
         }
         let standing = self.tree_standing();

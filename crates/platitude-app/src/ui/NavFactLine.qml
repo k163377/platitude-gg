@@ -21,9 +21,9 @@ RowLayout {
     property color tone: Theme.textSecondary
     property int weight: Font.Normal
     property real pixelSize: Theme.fontSm
-    /// How far the branch this line names stands from what it reads; both zero draws nothing.
-    property int ahead: 0
-    property int behind: 0
+    /// How far the branch this line names stands from what it reads (`encode::counts`); level, or none on a line that
+    /// names no branch, draws nothing.
+    property var counts: undefined
     /// Whether a rest on this line opens a supplement — why it wears its colour (デザイン規約 §hover のツールチップ).
     /// The block raises the words, so one pointer opens one thing (`NavRowFacts`); this only says the hand is here.
     property bool noted: false
@@ -96,13 +96,12 @@ RowLayout {
     }
     Loader {
         id: trackSeat
-        active: line.ahead > 0 || line.behind > 0
+        active: line.counts !== undefined && !line.counts.level
         visible: trackSeat.active
         baselineOffset: trackSeat.item ? trackSeat.item.baselineOffset : 0
         Layout.alignment: Qt.AlignBaseline
         sourceComponent: HeadTrack {
-            ahead: line.ahead
-            behind: line.behind
+            counts: line.counts
         }
     }
 }

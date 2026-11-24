@@ -392,11 +392,11 @@ Item {
         /// `RowHoverHost.mateOf`).
         readonly property var reads: ({ "mark": "remote", "markTint": Theme.textSecondary,
                                         "text": "origin/preview", "tone": Theme.textSecondary,
-                                        "ahead": 1, "behind": 0 })
+                                        "counts": { "ahead": 1, "behind": 0, "level": false } })
         /// A remote-tracking chip's mate: the branch reading it, with its counts (`NavFacts.branchLine`).
         readonly property var readBy: ({ "mark": "branch", "markTint": Theme.accent,
                                          "text": "hotfix", "tone": Theme.textSecondary,
-                                         "ahead": 1, "behind": 1 })
+                                         "counts": { "ahead": 1, "behind": 1, "level": false } })
 
         function init() {
             readingChip.mate = null

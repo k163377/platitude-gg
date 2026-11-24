@@ -43,6 +43,8 @@ pub(super) enum Value<'a> {
     Spelled(String),
     Flag(bool),
     Number(i32),
+    /// How far a branch stands, one record (`encode::counts`).
+    Counts(platitude_core::AheadBehind),
 }
 
 impl Value<'_> {
@@ -52,6 +54,7 @@ impl Value<'_> {
             Self::Spelled(text) => QVariant::from(&QString::from(text)),
             Self::Flag(flag) => QVariant::from(flag),
             Self::Number(number) => QVariant::from(number),
+            Self::Counts(counts) => qtbridge::QVariantConvertible::to_qvariant(&One::new(*counts)),
         }
     }
 
@@ -59,7 +62,7 @@ impl Value<'_> {
         match self {
             Self::Said(text) => text,
             Self::Spelled(text) => text,
-            Self::Flag(_) | Self::Number(_) => "",
+            Self::Flag(_) | Self::Number(_) | Self::Counts(_) => "",
         }
     }
 
@@ -70,7 +73,16 @@ impl Value<'_> {
     pub(super) fn number(&self) -> i32 {
         match self {
             Self::Number(number) => *number,
-            Self::Said(_) | Self::Spelled(_) | Self::Flag(_) => 0,
+            Self::Said(_) | Self::Spelled(_) | Self::Flag(_) | Self::Counts(_) => 0,
+        }
+    }
+
+    pub(super) fn counts(&self) -> platitude_core::AheadBehind {
+        match self {
+            Self::Counts(counts) => *counts,
+            Self::Said(_) | Self::Spelled(_) | Self::Flag(_) | Self::Number(_) => {
+                platitude_core::AheadBehind::default()
+            }
         }
     }
 }
@@ -100,15 +112,15 @@ pub(super) enum Role {
     EolMark,
     Depth,
     Folder,
-    /// How far a local branch stands from its upstream. Past the end of
-    /// `NavItem`: no folder row is measured, so these carry no field.
+    /// How far a local branch stands from its upstream, the pair as one
+    /// record (`encode::counts`) — level on every other row. Past the end
+    /// of `NavItem`: no folder row is measured, so it carries no field.
     ///
-    /// Roles, not a string built here (`↑a ↓b`): the side that draws the
+    /// A role, not a string built here (`↑a ↓b`): the side that draws the
     /// marks holds the counts (`HeadTrack`). Not a slot per row either:
     /// the section tells `changed()` only when rows move, so a binding
     /// over a slot would never be weighed again.
-    Ahead,
-    Behind,
+    Counts,
 }
 
 impl Role {
@@ -116,7 +128,7 @@ impl Role {
     ///
     /// No upstream role: no delegate asks for it, and the menus that do
     /// read it by name (`upstream_of` / `branch_upstream`).
-    pub(super) const ALL: [Self; 17] = [
+    pub(super) const ALL: [Self; 16] = [
         Self::Name,
         Self::Full,
         Self::OidHex,
@@ -132,8 +144,7 @@ impl Role {
         Self::EolMark,
         Self::Depth,
         Self::Folder,
-        Self::Ahead,
-        Self::Behind,
+        Self::Counts,
     ];
 
     pub(super) fn of(role: i32) -> Option<Self> {
@@ -161,8 +172,7 @@ impl Role {
             Self::EolMark => "eol_mark",
             Self::Depth => "depth",
             Self::Folder => "folder",
-            Self::Ahead => "ahead",
-            Self::Behind => "behind",
+            Self::Counts => "counts",
         }
     }
 }

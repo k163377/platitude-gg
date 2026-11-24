@@ -44,8 +44,7 @@ Item {
             depth: 0
             folder: false
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: rows.width
             height: Theme.rowHeight + (rows.firstOpen ? Theme.rowHeight * 3 : 0)
             paneHand: hand
@@ -68,8 +67,7 @@ Item {
             depth: 0
             folder: false
             eol_mark: false
-            ahead: 0
-            behind: 0
+            counts: ({ "ahead": 0, "behind": 0, "level": true })
             listWidth: rows.width
             height: Theme.rowHeight
             paneHand: hand

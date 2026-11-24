@@ -115,7 +115,8 @@ Item {
                 navRows.append({
                     "name": "b" + i, "full": "b" + i, "oid_hex": "", "change": "", "bucket": "", "orig_path": "",
                     "orig_name": "", "is_head": false, "has_remote": false, "only_remote": false, "has_pr": false,
-                    "depth": 0, "folder": false, "eol_mark": false, "ahead": 0, "behind": 0
+                    "depth": 0, "folder": false, "eol_mark": false,
+                    "counts": { "ahead": 0, "behind": 0, "level": true }
                 })
             desc.text = Array.from({ length: 40 }, (_, i) => "line " + i).join("\n")
             tryVerify(() => floatBar.visible && paneBar.visible && desc.bar.visible && navBar.visible)

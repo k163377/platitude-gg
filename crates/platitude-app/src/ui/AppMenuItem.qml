@@ -123,9 +123,10 @@ MenuItem {
     readonly property real headingSeat:
         menuItem.subMenu !== null && menuItem.menu !== null && menuItem.menu.headingSeat !== undefined
         ? menuItem.menu.headingSeat : 0
-    /// How far this row's branch stands from its upstream (`HeadTrack`); both zero draws nothing (§左メニューの所作).
-    property int ahead: 0
-    property int behind: 0
+    /// How far this row's branch stands from its upstream (`HeadTrack`), the section's record (`OpsBranchMenu`);
+    /// level, or none on a row of no branch, draws nothing (§左メニューの所作).
+    property var counts: undefined
+    readonly property bool tracked: menuItem.counts !== undefined && !menuItem.counts.level
     /// The badge the left menu's row ends with (`NavRowBody.remoteSeat`): on a remote, a pull request open, or the
     /// upstream gone.
     property bool remoteBadge: false
@@ -389,7 +390,7 @@ MenuItem {
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
                    // card is measured before it opens.
                    + (menuItem.sideName !== "" ? menuItem.sideWidth + Theme.spaceLg : 0)
-                   + (menuItem.ahead > 0 || menuItem.behind > 0 ? trackSeat.implicitWidth + Theme.spaceSm : 0)
+                   + (menuItem.tracked ? trackSeat.implicitWidth + Theme.spaceSm : 0)
                    + (menuItem.badged ? Math.ceil(badgeSeat.implicitWidth) + Theme.spaceXs : 0)
                    + (trailSeat.item !== null ? trailSeat.item.cappedWidth : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
@@ -1031,13 +1032,12 @@ MenuItem {
         // count to say.
         Loader {
             id: trackSeat
-            active: menuItem.ahead > 0 || menuItem.behind > 0
-            visible: menuItem.ahead > 0 || menuItem.behind > 0
+            active: menuItem.tracked
+            visible: menuItem.tracked
             Layout.leftMargin: Theme.spaceSm
             Layout.alignment: Qt.AlignVCenter
             sourceComponent: HeadTrack {
-                ahead: menuItem.ahead
-                behind: menuItem.behind
+                counts: menuItem.counts
             }
         }
         // …and the badge after it, as the left menu's row ends (`NavRowBody`'s `remoteSeat`). Built on a row that

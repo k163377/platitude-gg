@@ -457,9 +457,7 @@ Item {
                 { "upstream": reads, "gone": gone !== "",
                   "upstreamTo": NavFacts.place("remote", reads, host.branchesModel.upstreamOidOf(name)) })
             // The counts are the branch's, so the chip draws them on the name (`RefChip.trackOnName`).
-            const counts = host.branchesModel.countsOf(name)
-            line.ahead = counts.ahead
-            line.behind = counts.behind
+            line.counts = host.branchesModel.countsOf(name)
             return line
         }
         if (chip.kind === "remote") {

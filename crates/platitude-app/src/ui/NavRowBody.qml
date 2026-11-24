@@ -131,23 +131,21 @@ RowLayout {
             pixelSize: Theme.fontSm
         }
     }
-    // Every branch's distance from its upstream (`models::nav` の `Role::Ahead` rides each row); none when level or
+    // Every branch's distance from its upstream (`models::nav` の `Role::Counts` rides each row); none when level or
     // untracked (デザイン規約 §左メニューの所作). The main worktree, named by its branch and opening no line for it (the
     // same word would stand right under the name; its upstream line still opens), draws that branch's measure here
     // only while open (user decision — ask before changing), as a BRANCHES row does — the counts it read as
-    // it opened (`NavFacts.answers`; its own `ahead` role is 0). Held by `tst_navfacts`'
+    // it opened (`NavFacts.answers`; its own `counts` role is level). Held by `tst_navfacts`'
     // `test_the_repositorys_own_worktree_draws_its_branchs_measure_only_while_open`.
     Loader {
         id: trackSeat
-        readonly property int ahead: body.homeWorktree ? body.row.factsAhead : body.row.ahead
-        readonly property int behind: body.homeWorktree ? body.row.factsBehind : body.row.behind
-        active: !body.row.folder && (trackSeat.ahead > 0 || trackSeat.behind > 0)
+        readonly property var counts: body.homeWorktree ? body.row.factsCounts : body.row.counts
+        active: !body.row.folder && trackSeat.counts !== undefined && !trackSeat.counts.level
                 && (body.row.kindHint === "branch" || (body.homeName !== "" && body.row.factsOpen))
         visible: trackSeat.active
         Layout.alignment: Qt.AlignVCenter
         sourceComponent: HeadTrack {
-            ahead: trackSeat.ahead
-            behind: trackSeat.behind
+            counts: trackSeat.counts
         }
     }
     // Nothing = local only, cloud = on a remote, PR mark = has a PR (fake until Phase 4: _PGG_FAKE_PR). Tags too

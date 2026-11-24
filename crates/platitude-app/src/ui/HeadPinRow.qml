@@ -164,12 +164,11 @@ Rectangle {
             }
         }
         // The row's own listing pair (`drain::settle_head_marks`), not the status read's: that one
-        // (`WorktreeModel.ahead` / `behind`) is held at 0 until a status about this branch lands — from a branch moving
+        // (`WorktreeModel.upstreamCounts`) is held level until a status about this branch lands — from a branch moving
         // to the next status — so right after a switch, the very moment this row stands, the counts alone would vanish.
         HeadTrack {
-            visible: headPin.branchesModel.headAhead > 0 || headPin.branchesModel.headBehind > 0
-            ahead: headPin.branchesModel.headAhead
-            behind: headPin.branchesModel.headBehind
+            visible: !headPin.branchesModel.headCounts.level
+            counts: headPin.branchesModel.headCounts
             Layout.alignment: Qt.AlignVCenter
         }
         GoneBadge {
@@ -242,8 +241,7 @@ Rectangle {
             "oid_hex": headPin.branchesModel.headOid,
             "change": "",
             "orig_path": "",
-            "ahead": headPin.branchesModel.headAhead,
-            "behind": headPin.branchesModel.headBehind,
+            "counts": headPin.branchesModel.headCounts,
             "sectionModel": headPin.branchesModel,
             "worktreesModel": headPin.worktreesModel,
             "branchesModel": headPin.branchesModel
@@ -271,7 +269,7 @@ Rectangle {
     function openWords() {
         return headPin.factsOpen
             ? headPin.branchesModel.headName + " local= track="
-              + headPin.branchesModel.headAhead + "/" + headPin.branchesModel.headBehind
+              + headPin.branchesModel.headCounts.ahead + "/" + headPin.branchesModel.headCounts.behind
               + " held=" + headPin.factsHeldBy
               + " up=" + headPin.factsUpstream + " gone=" + headPin.factsGone
             : ""
