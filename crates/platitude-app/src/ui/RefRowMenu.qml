@@ -79,7 +79,7 @@ Item {
     property bool switchAsks: false
     /// The name the worktree holding this row's branch goes by, empty when none does; the switch row then opens that
     /// worktree and names it (`RepoPage.switchToRef`). Its WORKTREES row's name — the folder, or the branch the
-    /// repository's own has out (`NavSectionModel.worktreeCalled`, デザイン規約 §ref の種別).
+    /// repository's own has out (`NavSectionModel.leadOf`'s `called`, デザイン規約 §ref の種別).
     property string heldLeaf: ""
     /// That worktree is the repository's own: its name wears the house, not the tree (デザイン規約 §ref の種別).
     property bool heldHome: false
@@ -299,7 +299,7 @@ Item {
         // Another worktree having this row's branch out (through the same-named local branch for a remote row) makes
         // `switch` open that worktree instead (offers::SwitchAction::OpenHolder); a worktree with no branch leads to
         // itself, unless this tab already stands in it. Named as its WORKTREES row names it
-        // (`NavSectionModel.worktreeCalled`).
+        // (`NavSectionModel.leadOf`'s `called`).
         refRowMenu.canSwitch = menu.switch
         refRowMenu.switchAsks = menu.switchAsks
         refRowMenu.heldLeaf = facts.lead.called

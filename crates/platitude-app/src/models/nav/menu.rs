@@ -162,15 +162,16 @@ impl NavSectionModel {
             "branch" => path.clone(),
             _ => String::new(),
         };
+        let named = if path.is_empty() {
+            super::WorktreeName::default()
+        } else {
+            self.called_worktree(&path)
+        };
         RowLead {
             leads,
             worktree,
-            called: if path.is_empty() {
-                String::new()
-            } else {
-                self.name_of_worktree(&path)
-            },
-            home: self.is_home_worktree(&path),
+            called: named.called,
+            home: named.home,
             path,
             stopped_by,
             placed: self.has_place_for_worktrees(),

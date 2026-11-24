@@ -23,7 +23,7 @@ pub struct DiscardRow {
     /// The worktree it happened in when that is not this one.
     pub worktree: String,
     /// Where that worktree is, for the page to name it as everything else
-    /// does (`NavSectionModel.worktreeCalled`); empty where `worktree` is.
+    /// does (`NavSectionModel.worktreeName`); empty where `worktree` is.
     pub worktree_path: String,
     /// When git or the record wrote the line, epoch seconds.
     pub at: i64,

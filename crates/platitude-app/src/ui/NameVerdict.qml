@@ -65,7 +65,7 @@ QtObject {
         ? verdict.worktreesModel.heldByOperation(verdict.rowId) : undefined
     readonly property string heldWhy: verdict.held === undefined ? ""
         : Words.heldByOperation(verdict.held.by, verdict.held.here,
-                                verdict.worktreesModel.worktreeCalled(verdict.held.path))
+                                verdict.worktreesModel.worktreeName(verdict.held.path).called)
 
     /// Whether what is typed cannot be accepted, and why — empty for a name the box takes.
     readonly property bool refused: verdict.refusedWhy !== ""
@@ -134,6 +134,6 @@ QtObject {
     readonly property string refusedMark: verdict.kind === "worktreeFolder"
         ? Words.worktreeRenameMark(verdict.refusedWhy, verdict.folderPlace)
         : verdict.heldWhy !== "" && verdict.refusedWhy === verdict.heldWhy && !verdict.held.here
-        ? verdict.worktreesModel.worktreeCalled(verdict.held.path)
+        ? verdict.worktreesModel.worktreeName(verdict.held.path).called
         : Words.worktreeNameMark(verdict.refusedWhy, verdict.worktreePlace)
 }

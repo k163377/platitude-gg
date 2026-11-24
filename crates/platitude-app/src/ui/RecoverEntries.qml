@@ -30,7 +30,8 @@ QtObject {
     /// The model's entries, newest first.
     property var rows: []
     /// How the worktree at a path is named, as everything else names it — the repository's own by the branch it has
-    /// out (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」): `{name, home}`, or null for none to say.
+    /// out (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」): `{called, home}`
+    /// (`NavSectionModel.worktreeName`), or null for none to say.
     property var calledOf: path => null
     /// The branch the repository's own worktree has out — read by `entries`, so the words follow it.
     property string homeBranch: ""
@@ -47,7 +48,7 @@ QtObject {
     /// tree.
     function worktreeAt(path, folder) {
         const called = path ? shown.calledOf(path) : null
-        return called && called.name !== "" ? { name: called.name, mark: called.home ? "home" : "tree" }
+        return called && called.called !== "" ? { name: called.called, mark: called.home ? "home" : "tree" }
                                             : { name: folder, mark: "tree" }
     }
 

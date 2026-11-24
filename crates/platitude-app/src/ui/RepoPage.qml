@@ -313,12 +313,10 @@ FocusScope {
     property string carriedName: ""
     /// That worktree is the repository's own, whose name wears the house (規約 §ref の種別「名前の印」).
     property bool carriedHome: false
-    /// Whether the last worktree whose changes were asked here was the repository's own — the mark a report naming it
-    /// wears (`showReport`).
-    property bool appliedFromHome: false
-    /// …and the name it went by then (`NavSectionModel.worktreeCalled`) — the one such a report says, which carries the
-    /// folder alone.
-    property string appliedName: ""
+    /// The last worktree whose changes were asked here, as it went by then (`NavSectionModel.worktreeName`) — the name
+    /// such a report says, which carries the folder alone, and whether it was the repository's own, the mark that name
+    /// wears (`showReport`); undefined before the first.
+    property var appliedFrom: undefined
     /// Whether the pane may write what it shows — the one property every write control reads (デザイン規約 §無効).
     readonly property bool wipWritable: page.carriedPath === ""
     /// Another worktree's pane is the right pane's face (`carriedSeat`), which its first standing builds.
@@ -1791,8 +1789,7 @@ FocusScope {
                 // The report names the worktree by its folder alone; whether it was the repository's own, and what it
                 // goes by, is known here on the way in (`showReport`). No second apply can be asked before the report:
                 // the menus hold while a write is out.
-                page.appliedFromHome = worktreesModel.worktreeHome(path)
-                page.appliedName = worktreesModel.worktreeCalled(path)
+                page.appliedFrom = worktreesModel.worktreeName(path)
                 repoTab.applyCarried(path)
             }
             // The BRANCH card's signals, raised by its rows and the first level's, answered where the ref menu's are.
@@ -2072,8 +2069,8 @@ FocusScope {
         const names = Words.reportNamesWorktree(kind)
         // The only reports that can name the repository's own worktree (it is never removed or made), which goes by
         // the branch it keeps (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
-        const home = kind.startsWith("carried-") && page.appliedFromHome
-        const shown = home ? page.appliedName : name
+        const home = kind.startsWith("carried-") && page.appliedFrom !== undefined && page.appliedFrom.home
+        const shown = home ? page.appliedFrom.called : name
         // Every name either line says wears its kind's mark (デザイン規約 §ref の種別「名前の印」): the worktree's tree
         // or house, the branch's, the tag's, the remote's cloud.
         const nameMark = names ? (home ? "home" : "tree")
@@ -2725,7 +2722,7 @@ FocusScope {
     readonly property RecoverEntries recoverWords: RecoverEntries {
         id: recoverWords
         rows: discardModel.rows
-        calledOf: path => ({ name: worktreesModel.worktreeCalled(path), home: worktreesModel.worktreeHome(path) })
+        calledOf: path => worktreesModel.worktreeName(path)
         homeBranch: worktreesModel.homeBranch
     }
     /// What the discard log draws, worded.

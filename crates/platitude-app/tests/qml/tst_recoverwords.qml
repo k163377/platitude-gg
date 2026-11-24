@@ -104,8 +104,8 @@ Item {
         /// A worktree is named as everything else names it (`calledOf`): the repository's own by the branch it has
         /// out, behind the house; another by its folder, behind the tree.
         function test_a_worktree_is_named_as_everything_else_names_it() {
-            shown.calledOf = path => path === "C:/work/repo" ? { name: "main", home: true }
-                                                             : { name: "side", home: false }
+            shown.calledOf = path => path === "C:/work/repo" ? { called: "main", home: true }
+                                                             : { called: "side", home: false }
             const into = part("changes", { name: "repo", look: "uncommitted", files: 2, worktreePath: "C:/work/repo" })
             const work = shown.entryOf(row("discarded", "main", [into]))
             compare(work.parts[0].restore, "back into main", "the repository's own, by its branch")

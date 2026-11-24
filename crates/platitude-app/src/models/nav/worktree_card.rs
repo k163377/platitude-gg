@@ -28,6 +28,32 @@ pub struct WorktreeRow {
 /// The card, in the order the section draws it.
 pub type WorktreeRows = Listed<WorktreeRow>;
 
+/// How the worktree at a path goes by where something else names it
+/// (`NavSectionModel::worktree_name`): what its WORKTREES row says, and
+/// whether it is the repository's own, whose mark is the house
+/// (デザイン規約 §ref の種別「リポジトリ自身の worktree の呼び名」).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorktreeName {
+    pub called: String,
+    pub home: bool,
+}
+
+impl Record for WorktreeName {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        Fields::new()
+            .put("called", &self.called)
+            .put("home", &self.home)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
+            called: field(map, "called")?,
+            home: field(map, "home")?,
+        })
+    }
+}
+
 impl Record for WorktreeRow {
     fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
         Fields::new()
@@ -257,6 +283,16 @@ impl NavSectionModel {
             Some(row) if row.change == MAIN && !row.branch.is_empty() => row.branch,
             Some(row) => row.name,
             None => crate::urlpath::path_leaf(path).to_string(),
+        }
+    }
+
+    /// The worktree at `path` as something else names it: its name
+    /// (`name_of_worktree`) and whether it is the repository's own
+    /// (`is_home_worktree`), one answer.
+    pub(super) fn called_worktree(&self, path: &str) -> WorktreeName {
+        WorktreeName {
+            called: self.name_of_worktree(path),
+            home: self.is_home_worktree(path),
         }
     }
 
