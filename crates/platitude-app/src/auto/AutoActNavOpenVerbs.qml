@@ -645,7 +645,7 @@ Item {
         /// (`NavSectionModel`) — no count of fetches says whether the readings are in.
         function ready() {
             if (navOpenTagTimer.wants === "drift")
-                return tagsModel.remoteTagDrift(navOpenTagTimer.tag, repoTab.defaultRemote) !== ""
+                return tagsModel.remoteTagDrift(repoTab.defaultRemote, navOpenTagTimer.tag) !== ""
             if (navOpenTagTimer.wants === "remote") {
                 const sides = tagsModel.tagSides(navOpenTagTimer.tag)
                 return sides === "remote" || sides === "both"

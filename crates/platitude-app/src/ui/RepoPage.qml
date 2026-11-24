@@ -1328,7 +1328,7 @@ FocusScope {
         const remote = repoTab.defaultRemote
         if (remote === "" || from === to)
             return
-        if (tagsModel.tagSides(from) !== "both" || tagsModel.remoteTagDrift(from, remote) !== "")
+        if (tagsModel.tagSides(from) !== "both" || tagsModel.remoteTagDrift(remote, from) !== "")
             return
         // The new name taken anywhere: here git's rename refuses first, over there the push would.
         if (tagsModel.tagSides(to) !== "")

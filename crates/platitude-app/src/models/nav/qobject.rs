@@ -563,7 +563,7 @@ impl NavSectionModel {
     /// remote has elsewhere is refused, so the row becomes the leased
     /// overwrite pinned to this commit (デザイン規約 §相手の履歴を置き換える).
     #[qslot]
-    pub(super) fn remote_tag_drift(&self, name: String, remote: String) -> String {
+    pub(super) fn remote_tag_drift(&self, remote: String, name: String) -> String {
         if name.is_empty() || remote.is_empty() {
             return String::new();
         }

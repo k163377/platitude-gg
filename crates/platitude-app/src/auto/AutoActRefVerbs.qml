@@ -559,7 +559,7 @@ Item {
             if (tagMenuTimer.wants === "read")
                 return driver.wroteAndSettled()
             if (tagMenuTimer.wants === "drift")
-                return tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote) !== ""
+                return tagsModel.remoteTagDrift(repoTab.defaultRemote, tagMenuTimer.tag) !== ""
             if (tagMenuTimer.wants === "remote") {
                 const sides = tagsModel.tagSides(tagMenuTimer.tag)
                 return sides === "remote" || sides === "both"
@@ -587,7 +587,7 @@ Item {
                     + " code=" + refPushTagItem.code
                     + " held=" + (refPushTagItem.holdPresses > 0)
                     // The model's reading, as `ready()` polls: this family reaches only the driver's properties.
-                    + " lease=" + tagsModel.remoteTagDrift(tagMenuTimer.tag, repoTab.defaultRemote)
+                    + " lease=" + tagsModel.remoteTagDrift(repoTab.defaultRemote, tagMenuTimer.tag)
                     + " text=" + refPushTagItem.text,
                     acts.reachWords(refTagCard)]
         }

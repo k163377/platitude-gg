@@ -49,34 +49,34 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
     model.arrange();
 
     assert_eq!(
-        model.remote_tag_drift("origin".into(), "v1.0".into()),
+        model.remote_tag_drift("v1.0".into(), "origin".into()),
         oid("e").to_hex(),
         "a tag named like a remote on a remote named like a tag: the pair swapped is another one"
     );
     assert_eq!(
-        model.remote_tag_drift("v1.0".into(), "origin".into()),
+        model.remote_tag_drift("origin".into(), "v1.0".into()),
         oid("b").to_hex(),
         "the commit the lease has to be pinned to"
     );
     assert_eq!(
-        model.remote_tag_drift("v1.0".into(), "mirror".into()),
+        model.remote_tag_drift("mirror".into(), "v1.0".into()),
         oid("c").to_hex(),
         "a second remote is a second answer, not the same one"
     );
     assert_eq!(
-        model.remote_tag_drift("v2.0".into(), "origin".into()),
+        model.remote_tag_drift("origin".into(), "v2.0".into()),
         "",
         "the destination agrees, whatever some other remote says"
     );
     assert_eq!(
-        model.remote_tag_drift("v3.0".into(), "origin".into()),
+        model.remote_tag_drift("origin".into(), "v3.0".into()),
         "",
         "no remote carries the name at all"
     );
     // The row is decided as the menu opens, so a half-formed question
     // has to answer "no drift".
-    assert_eq!(model.remote_tag_drift("v1.0".into(), String::new()), "");
-    assert_eq!(model.remote_tag_drift(String::new(), "origin".into()), "");
+    assert_eq!(model.remote_tag_drift(String::new(), "v1.0".into()), "");
+    assert_eq!(model.remote_tag_drift("origin".into(), String::new()), "");
 }
 
 /// The branches and stashes are asked the same question by the same
@@ -85,7 +85,7 @@ fn a_drifted_tag_answers_for_the_remote_the_push_would_go_to() {
 fn only_the_tags_section_answers_for_a_drift() {
     let mut model = section("branches", Source::Locals(snapshot(Vec::new(), Vec::new())));
     model.arrange();
-    assert_eq!(model.remote_tag_drift("v1.0".into(), "origin".into()), "");
+    assert_eq!(model.remote_tag_drift("origin".into(), "v1.0".into()), "");
     assert_eq!(model.tag_sides("v1.0".into()), "");
     assert!(model.tag_remotes("v1.0".into(), "origin".into()).is_empty());
 }
