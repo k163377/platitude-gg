@@ -278,11 +278,12 @@ Item {
     /// own tick moves a count too.
     property int statusOwedFrom: 0
     /// Arms on the answer at `index` of the notify being drained — the run's own, where it knows which that is
-    /// (`RepoTab.commitAnswer`). -1 leaves the arming to the connection below. Not the first answer: `commit` presses
-    /// a stage and a commit, and the stage's answer comes first, its gate met by a status without the commit in it.
+    /// (`RepoTab.commitAnswer`). Undefined leaves the arming to the connection below. Not the first answer: `commit`
+    /// presses a stage and a commit, and the stage's answer comes first, its gate met by a status without the commit
+    /// in it.
     function owedStatusAt(index) {
         driver.statusOwed = true
-        driver.statusOwedFrom = index < 0 ? 0 : repoTab.writeAnswerHeadSeq(index)
+        driver.statusOwedFrom = index === undefined ? 0 : repoTab.writeAnswerHeadSeq(index)
     }
     /// Whether everything a [`statusOwed`] run waits for is in: the status its write asked for, the graph holding
     /// where it put HEAD, and the page that pair leaves behind.

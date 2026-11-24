@@ -26,18 +26,15 @@ impl RepoTab {
         self.write_answers.clear();
         self.paced_worktrees.clear();
         self.commit_out.new_notify();
-        self.read_commit_out();
         self.branch_delete_out.new_notify();
         self.read_branch_delete_out();
         self.stash_out.new_notify();
-        self.read_stash_out();
         self.push_out.new_notify();
         self.read_push_out();
         self.ref_push_out.new_notify();
         self.read_ref_push_out();
         self.worktree_out.new_notify();
         self.worktree_move_out.new_notify();
-        self.read_worktree_out();
         self.clear_write_group();
         for msg in batch {
             match msg {
@@ -350,6 +347,14 @@ impl RepoTab {
         self.write_answers.iter().position(|a| a.id == id)
     }
 
+    /// Where an answer stands in this notify's list, as the bridge numbers
+    /// it, or nothing where this notify carried none — a press's own
+    /// (`commitAnswer()` and its six neighbours) or one found by id
+    /// (`writeAnswerIndex`).
+    pub(super) fn answer_place(at: Option<usize>) -> Optional<i32> {
+        Optional::new(at.and_then(|at| i32::try_from(at).ok()))
+    }
+
     /// One of the answers this notify carried, or nothing where the
     /// index is past their end — a reader that asks after the list has
     /// been emptied gets the resting values, which are the failing ones.
@@ -483,7 +488,6 @@ impl RepoTab {
         // answer twice.
         let mut answered_for = false;
         if self.commit_out.answered(id, at, !landed, head_seq) {
-            self.read_commit_out();
             answered_for = true;
         }
         if self.branch_delete_out.answered(id, at, !landed, reported) {
@@ -491,7 +495,6 @@ impl RepoTab {
             answered_for = true;
         }
         if self.stash_out.answered(id, at, !landed, head_seq) {
-            self.read_stash_out();
             answered_for = true;
         }
         if self.push_out.answered(id, at) {
@@ -503,7 +506,6 @@ impl RepoTab {
             answered_for = true;
         }
         if self.worktree_out.answered(id, at) || self.worktree_move_out.answered(id, at) {
-            self.read_worktree_out();
             answered_for = true;
         }
         if !answered_for {
@@ -512,64 +514,17 @@ impl RepoTab {
         self.last_write_error = error;
     }
 
-    /// Where the editor's commit answered, copied to a plain member for
-    /// bindings to read. The tree it waits for is not copied: asking
-    /// spends it (`takeCommitLanding`).
-    fn read_commit_out(&mut self) {
-        self.commit_answer = self
-            .commit_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-    }
-
-    /// The same for the stash press that took the worktree away. The
-    /// tree it waits for is not copied: asking spends it
-    /// (`takeStashLanding`).
-    fn read_stash_out(&mut self) {
-        self.stash_answer = self
-            .stash_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-    }
-
-    /// The same for the toolbar's push: where its answer stands, and the
-    /// branch that press was sent for.
+    /// The branch the toolbar's push — or a branch row's — was sent for,
+    /// copied to a plain member for bindings to read; where its answer
+    /// stands is the press's own (`pushAnswer()`).
     fn read_push_out(&mut self) {
-        self.push_answer = self
-            .push_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
         self.push_answer_branch = self.push_out.branch().to_string();
     }
 
-    /// The same for the pushes a ref row sends: where their answer
-    /// stands, and the row that press was about.
+    /// The same for the pushes a ref row sends: the row that press was
+    /// about (`refPushAnswer()`).
     fn read_ref_push_out(&mut self) {
-        self.ref_push_answer = self
-            .ref_push_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
         self.ref_push_target = self.ref_push_out.branch().to_string();
-    }
-
-    /// The same for the worktree a menu asked for, and the one a name box
-    /// renamed. Their folders are the presses' own, written down as they were
-    /// asked (`worktree_add` / `worktree_move`).
-    fn read_worktree_out(&mut self) {
-        self.worktree_answer = self
-            .worktree_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-        self.worktree_move_answer = self
-            .worktree_move_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
     }
 
     /// One answer nobody was waiting for by name, folded into the group

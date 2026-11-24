@@ -106,12 +106,12 @@ Item {
     function forcePush() {
         publishFlow.repoTab.pushCurrent(publishFlow.worktree.branch, "lease", publishFlow.pushFacts.lease)
     }
-    /// A branch's push has come back — the toolbar's or a branch row's —, found by its id (`RepoTab.pushAnswer`, -1
-    /// when this notify carries none; the page calls this once per notify). Reads that answer's own words
+    /// A branch's push has come back — the toolbar's or a branch row's —, found by its id (`RepoTab.pushAnswer`,
+    /// undefined when this notify carries none; the page calls this once per notify). Reads that answer's own words
     /// (`writeAnswerFailed(at)` / `writeAnswerError(at)`; why by id: `ops::PushOut`).
     function noteWriteAnswer() {
-        const at = publishFlow.repoTab.pushAnswer
-        if (at < 0)
+        const at = publishFlow.repoTab.pushAnswer()
+        if (at === undefined)
             return
         const sent = publishFlow.repoTab.pushAnswerBranch
         const fails = new Map(publishFlow.pushFails)

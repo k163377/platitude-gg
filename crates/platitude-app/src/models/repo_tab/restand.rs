@@ -38,7 +38,6 @@ impl RepoTab {
         self.branch_delete_out = crate::ops::BranchDeleteOut::default();
         self.branch_delete_landed = String::new();
         self.branch_delete_refused = String::new();
-        self.branch_delete_answer = -1;
         // What a delete took away stays gone until the next session's lists
         // say (`ops::StandIn::session_gone`): the staying page would draw it
         // back from the listing it holds.
@@ -62,23 +61,17 @@ impl RepoTab {
         self.clear_write_group();
         self.write_answers = Vec::new();
         self.commit_out = crate::ops::TreeOut::default();
-        self.commit_answer = -1;
         self.diff_reread = crate::ops::DiffReread::default();
         self.tree_seen = 0;
         self.tree_emptied = false;
         self.stash_out = crate::ops::TreeOut::default();
-        self.stash_answer = -1;
         self.push_out = crate::ops::PushOut::default();
-        self.push_answer = -1;
         self.push_answer_branch = String::new();
         self.ref_push_out = crate::ops::PushOut::default();
-        self.ref_push_answer = -1;
         self.ref_push_target = String::new();
         self.worktree_out = crate::ops::Press::default();
-        self.worktree_answer = -1;
         self.worktree_answer_path = String::new();
         self.worktree_move_out = crate::ops::Press::default();
-        self.worktree_move_answer = -1;
         self.worktree_move_from = String::new();
         self.worktree_move_to = String::new();
         self.worktree_move_standing = false;

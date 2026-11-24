@@ -315,7 +315,7 @@ Item {
             commitAnswer.answered = true
             // Completed behind the status the commit's own answer asks for (`RepoTab.commitAnswer`) — the staging
             // answers first, with a status that predates the commit.
-            driver.owedStatusAt(repoTab.commitAnswer)
+            driver.owedStatusAt(repoTab.commitAnswer())
             const barrier = driver.barrierWrite
             barrier.start()
             barrier.witness("landed", landed)

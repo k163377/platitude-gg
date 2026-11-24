@@ -359,7 +359,8 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
         Some(refused),
     )]);
     let answer = tab
-        .write_answer_at(tab.worktree_answer)
+        .worktree_answer()
+        .and_then(|at| tab.write_answer_at(at))
         .expect("its own answer");
     assert!(answer.failed);
     assert_eq!(
@@ -377,7 +378,7 @@ fn the_worktree_a_menu_asked_for_is_answered_by_name_with_its_report() {
     assert_eq!(tab.write_report, None, "nobody else reads it off the group");
 
     tab.absorb(vec![no_answer()]);
-    assert_eq!(tab.worktree_answer, -1, "told once");
+    assert_eq!(*tab.worktree_answer(), None, "told once");
 }
 
 /// A worktree's folder renamed from a name box answers to its own press,
@@ -395,7 +396,8 @@ fn a_renamed_worktree_is_answered_by_name() {
         Some(refused),
     )]);
     let answer = tab
-        .write_answer_at(tab.worktree_move_answer)
+        .worktree_move_answer()
+        .and_then(|at| tab.write_answer_at(at))
         .expect("its own answer");
     assert!(answer.failed);
     assert_eq!(
@@ -403,7 +405,11 @@ fn a_renamed_worktree_is_answered_by_name() {
         "worktree-not-renamed"
     );
     assert_eq!(answer.report.as_ref().expect("a report").name, "loose");
-    assert_eq!(tab.worktree_answer, -1, "not the made worktree's answer");
+    assert_eq!(
+        *tab.worktree_answer(),
+        None,
+        "not the made worktree's answer"
+    );
     assert_eq!(tab.write_report, None, "nobody else reads it off the group");
 }
 

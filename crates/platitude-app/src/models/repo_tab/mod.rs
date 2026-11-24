@@ -150,10 +150,6 @@ pub struct RepoTab {
     /// edge and may not have been drawn yet.
     branch_delete_landed: String,
     branch_delete_refused: String,
-    /// Where the plain delete's own answer stands in `write_answers`, or -1
-    /// where this notify carried none — how the page tells the answer in
-    /// hand from the one standing above (`RepoPage.absorbBranchDelete`).
-    branch_delete_answer: i32,
     /// The rows a delete is standing in for, one name per list, which the
     /// sidebar and the graph draw without (デザイン規約 §消す操作は先に画面から消す).
     ///
@@ -388,7 +384,7 @@ pub struct RepoTab {
     /// stop are lost to the fetch. What waits for one answer looks here.
     /// The report is the answer's own (`writeAnswerReport`): two refusals
     /// in one drain would leave the group only the later.
-    /// `writeAnswerIndex(id)` finds one by id (-1 for none); ids come only
+    /// `writeAnswerIndex(id)` finds one by id (nothing for none); ids come only
     /// from `ask_session`, and reach QML only for
     /// `popStash`. The bridge gets one slot per field, added with its
     /// `TabMsg` once something reads it.
@@ -403,9 +399,6 @@ pub struct RepoTab {
     /// in (`ops::TreeOut`: it can empty the tree, and whether the status that
     /// finds it empty is its doing is asked for, `takeCommitLanding`).
     commit_out: crate::ops::TreeOut,
-    /// Where the editor's own answer stands in `write_answers`, or -1
-    /// where this notify carried none.
-    commit_answer: i32,
     /// The open diff read again where a write answered, waiting for the
     /// status that write publishes behind it (`ops::DiffReread`). A slot,
     /// not a property: it has an answer only while a status is being
@@ -429,19 +422,14 @@ pub struct RepoTab {
     /// acts on a tree, and asking spends it (`takeStashLanding`) — a
     /// binding would read an answer already gone.
     stash_out: crate::ops::TreeOut,
-    /// Where that press's own answer stands in `write_answers`, or -1
-    /// where this notify carried none.
-    stash_answer: i32,
     /// A branch's push — plain, leased, or the question's first push, from
     /// the toolbar or the branch's row — waiting for its own answer, with
     /// the branch it was sent for (`ops::PushOut`). A remote branch's
     /// replace and delete answer as `push` too, beside a fetch in the same
     /// drain; only the id says whose it was.
     push_out: crate::ops::PushOut,
-    /// Where that press's own answer stands in `write_answers`, or -1
-    /// where this notify carried none, and the branch a refusal is
-    /// remembered against (デザイン規約 §リモートへ送る).
-    push_answer: i32,
+    /// The branch that press was sent for, which a refusal is remembered
+    /// against (デザイン規約 §リモートへ送る).
     push_answer_branch: String,
     /// The pushes a ref row sends that are no branch's push — the two
     /// `push --delete`s, the replace git has no command for, and the three
@@ -450,27 +438,22 @@ pub struct RepoTab {
     /// group, a fetch in the same drain would take the refusal over
     /// (`drain::fold_into_group`).
     ref_push_out: crate::ops::PushOut,
-    /// Where that press's own answer stands in `write_answers`, or -1
-    /// where this notify carried none of it, and the row it was about.
-    ref_push_answer: i32,
+    /// The row that press was about.
     ref_push_target: String,
     /// The worktree a menu asked git to make, waiting for its own
     /// answer: landed, the tab goes and stands in it; refused, the report
     /// is that answer's (`RepoPage.absorbWorktreeAnswer`). Owned: in the group
     /// a fetch in the same drain would take the refusal over.
     worktree_out: crate::ops::Press,
-    /// Where that press's answer stands in `write_answers`, or -1 where
-    /// this notify carried none of it, and the folder it was to make.
-    worktree_answer: i32,
+    /// The folder that press was to make.
     worktree_answer_path: String,
     /// The worktree whose folder a name box asked git to rename, waiting for
     /// its own answer: the box comes down on it or keeps the refusal, and a
     /// tab that stood in that worktree stands in its new place — or back in
     /// the old one (`RepoPage.absorbWorktreeMove`). Owned, as `worktree_out`.
     worktree_move_out: crate::ops::Press,
-    /// Where that press's answer stands in `write_answers`, or -1; the folder
-    /// it was in and the one it was to take; and whether this tab stood in it.
-    worktree_move_answer: i32,
+    /// The folder that press was in and the one it was to take, and whether
+    /// this tab stood in it.
     worktree_move_from: String,
     worktree_move_to: String,
     worktree_move_standing: bool,

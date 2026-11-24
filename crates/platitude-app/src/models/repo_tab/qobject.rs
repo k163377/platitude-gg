@@ -91,8 +91,8 @@ impl RepoTab {
         Notify = changed
     );
     // git's answer to the plain delete a menu stayed up for, by name
-    // (`RefBranchMenu`), and where it stands in this notify, -1 for none
-    // (`ops::BranchDeleteOut`).
+    // (`RefBranchMenu`); where it stands in this notify is
+    // `branchDeleteAnswer()` (`ops::BranchDeleteOut`).
     qproperty!(
         "branchDeleteLanded",
         Member = branch_delete_landed,
@@ -101,11 +101,6 @@ impl RepoTab {
     qproperty!(
         "branchDeleteRefused",
         Member = branch_delete_refused,
-        Notify = changed
-    );
-    qproperty!(
-        "branchDeleteAnswer",
-        Member = branch_delete_answer,
         Notify = changed
     );
     // The rows a delete has taken off the screen, one name per list
@@ -248,42 +243,26 @@ impl RepoTab {
     // paced read ended in this notify (`TabMsg::PacedRead`).
     qproperty!("pacedSeq", Member = paced_seq, Notify = changed);
     qproperty!("pacedWorktrees", Member = paced_worktrees, Notify = changed);
-    // Where the editor's own commit answered in this notify, or -1 —
-    // matched by the press's id, whatever order the answers came in
-    // (`ops::TreeOut`). Its other wait — the tree itself — is asked for
-    // (`takeCommitLanding`).
-    qproperty!("commitAnswer", Member = commit_answer, Notify = changed);
-    // …and where the stash press that took the worktree away answered, its
-    // tree asked for the same way (`takeStashLanding`).
-    qproperty!("stashAnswer", Member = stash_answer, Notify = changed);
-    // …and where a branch's push answered — the toolbar's or the branch
-    // row's — with the branch it was sent for: refusals are remembered per
-    // branch and an answer does not name it (`ops::PushOut`).
-    qproperty!("pushAnswer", Member = push_answer, Notify = changed);
+    // The branch a push was sent for — the toolbar's or the branch row's —:
+    // refusals are remembered per branch and an answer does not name it
+    // (`pushAnswer()`, `ops::PushOut`).
     qproperty!(
         "pushAnswerBranch",
         Member = push_answer_branch,
         Notify = changed
     );
-    // …and the same pair for a ref row's pushes, which answer under the
-    // same word (`ops::PushOut`).
-    qproperty!("refPushAnswer", Member = ref_push_answer, Notify = changed);
+    // …and the row a ref row's push was about, which answers under the same
+    // word (`refPushAnswer()`, `ops::PushOut`).
     qproperty!("refPushTarget", Member = ref_push_target, Notify = changed);
-    // …and where the worktree a menu asked for answered, with the folder
-    // it was to be made in (`ops::Press`).
-    qproperty!("worktreeAnswer", Member = worktree_answer, Notify = changed);
+    // …and the folder the worktree a menu asked for was to be made in
+    // (`worktreeAnswer()`, `ops::Press`).
     qproperty!(
         "worktreeAnswerPath",
         Member = worktree_answer_path,
         Notify = changed
     );
-    // …and where the folder a name box renamed answered, with both folders
-    // and whether this tab stood in it (`moveWorktree`).
-    qproperty!(
-        "worktreeMoveAnswer",
-        Member = worktree_move_answer,
-        Notify = changed
-    );
+    // …and both folders of the one a name box renamed, and whether this tab
+    // stood in it (`worktreeMoveAnswer()`, `moveWorktree`).
     qproperty!(
         "worktreeMoveFrom",
         Member = worktree_move_from,
@@ -403,15 +382,66 @@ impl RepoTab {
     }
 
     /// Where the answer to the press given `id` stands in this notify's
-    /// list, or -1 — a reader holding an id reads nothing into the order
-    /// or count of the rest.
+    /// list, or nothing — a reader holding an id reads nothing into the
+    /// order or count of the rest.
     #[qslot]
-    fn write_answer_index(&self, id: i32) -> i32 {
-        u64::try_from(id)
-            .ok()
-            .and_then(|id| self.write_answer_index_of(id))
-            .and_then(|index| i32::try_from(index).ok())
-            .unwrap_or(-1)
+    fn write_answer_index(&self, id: i32) -> Optional<i32> {
+        Self::answer_place(
+            u64::try_from(id)
+                .ok()
+                .and_then(|id| self.write_answer_index_of(id)),
+        )
+    }
+
+    /// Where the editor's own commit answered in this notify, or nothing —
+    /// matched by the press's id, whatever order the answers came in
+    /// (`ops::TreeOut`). Its other wait — the tree itself — is asked for
+    /// (`takeCommitLanding`). Each of the six below is the same for a press
+    /// of its own.
+    #[qslot]
+    pub(super) fn commit_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.commit_out.answer())
+    }
+
+    /// …the stash press that took the worktree away, its tree asked for the
+    /// same way (`takeStashLanding`).
+    #[qslot]
+    pub(super) fn stash_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.stash_out.answer())
+    }
+
+    /// …a branch's push, the toolbar's or the branch row's
+    /// (`pushAnswerBranch`).
+    #[qslot]
+    pub(super) fn push_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.push_out.answer())
+    }
+
+    /// …a ref row's push (`refPushTarget`).
+    #[qslot]
+    pub(super) fn ref_push_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.ref_push_out.answer())
+    }
+
+    /// …the worktree a menu asked for (`worktreeAnswerPath`).
+    #[qslot]
+    pub(super) fn worktree_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.worktree_out.answer())
+    }
+
+    /// …the folder a name box renamed (`worktreeMoveFrom` /
+    /// `worktreeMoveTo`).
+    #[qslot]
+    pub(super) fn worktree_move_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.worktree_move_out.answer())
+    }
+
+    /// …the plain delete a menu stayed up for (`branchDeleteLanded` /
+    /// `branchDeleteRefused`) — how the page tells the answer in hand from
+    /// the one standing over (`RepoPage.absorbBranchDelete`).
+    #[qslot]
+    pub(super) fn branch_delete_answer(&self) -> Optional<i32> {
+        Self::answer_place(self.branch_delete_out.answer())
     }
 
     /// The number of the first HEAD report after that write

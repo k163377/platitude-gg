@@ -42,24 +42,16 @@ impl RepoTab {
     }
 
     /// Copies the card's picture out of its owner, as [`Self::stand_in`]
-    /// does for `gone`. Says whether any of it moved.
+    /// does for `gone`. Says whether any of it moved. Where the answer
+    /// stands is the owner's own (`branchDeleteAnswer()`).
     pub(super) fn read_branch_delete_out(&mut self) -> bool {
         let landed = self.branch_delete_out.landed().to_string();
         let refused = self.branch_delete_out.refused().to_string();
-        let at = self
-            .branch_delete_out
-            .answer()
-            .and_then(|at| i32::try_from(at).ok())
-            .unwrap_or(-1);
-        if landed == self.branch_delete_landed
-            && refused == self.branch_delete_refused
-            && at == self.branch_delete_answer
-        {
+        if landed == self.branch_delete_landed && refused == self.branch_delete_refused {
             return false;
         }
         self.branch_delete_landed = landed;
         self.branch_delete_refused = refused;
-        self.branch_delete_answer = at;
         true
     }
 

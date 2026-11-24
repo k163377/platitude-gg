@@ -547,7 +547,7 @@ FocusScope {
         if (page.pendingPopId === 0)
             return
         const answer = repoTab.writeAnswerIndex(page.pendingPopId)
-        if (answer < 0)
+        if (answer === undefined)
             return
         const carried = page.pendingPopLabel
         const landed = !repoTab.writeAnswerFailed(answer)
@@ -565,13 +565,13 @@ FocusScope {
             return
         repoTab.commit(wipPane.outgoingSubject, wipPane.outgoingBody, page.amending, wipPane.resetAuthor)
     }
-    /// The answer to that commit — **its own answer** among those this notify carried (`RepoTab.commitAnswer`, -1
-    /// for none): one drain can bring a fetch's too, and read off a shared property a landed commit would keep its
-    /// message and a hook's refusal would go untold. Everything the page does with a commit is here;
+    /// The answer to that commit — **its own answer** among those this notify carried (`RepoTab.commitAnswer`,
+    /// undefined for none): one drain can bring a fetch's too, and read off a shared property a landed commit would
+    /// keep its message and a hook's refusal would go untold. Everything the page does with a commit is here;
     /// `absorbLeftoverAnswer` never reaches it.
     function absorbCommitAnswer() {
-        const answer = repoTab.commitAnswer
-        if (answer < 0)
+        const answer = repoTab.commitAnswer()
+        if (answer === undefined)
             return
         const landed = !repoTab.writeAnswerFailed(answer)
         if (landed) {
@@ -585,11 +585,11 @@ FocusScope {
         }
         page.commitAnswered(landed)
     }
-    /// The answer to the stash press that emptied the tree — its own answer (`RepoTab.stashAnswer`, -1 for none). The
-    /// emptied tree is a second wait (`leaveWipWhenDone`); this half is over as soon as git speaks.
+    /// The answer to the stash press that emptied the tree — its own answer (`RepoTab.stashAnswer`, undefined for
+    /// none). The emptied tree is a second wait (`leaveWipWhenDone`); this half is over as soon as git speaks.
     function absorbStashAnswer() {
-        const answer = repoTab.stashAnswer
-        if (answer < 0)
+        const answer = repoTab.stashAnswer()
+        if (answer === undefined)
             return
         if (repoTab.writeAnswerFailed(answer)) {
             page.tellRefusal(answer)
@@ -597,17 +597,17 @@ FocusScope {
         }
         page.readDiffForAnswer()
     }
-    /// The answer to a worktree a menu asked for — its own answer (`RepoTab.worktreeAnswer`, -1 for none). Made, the
-    /// tab goes and stands in it, as the box and the row said it would: the worktree is where the reader went to work
-    /// (デザイン規約 §worktree を作る). Refused, the yellow report comes down over the graph, the log left shut (user
+    /// The answer to a worktree a menu asked for — its own answer (`RepoTab.worktreeAnswer`, undefined for none).
+    /// Made, the tab goes and stands in it, as the box and the row said it would: the worktree is where the reader went
+    /// to work (デザイン規約 §worktree を作る). Refused, the yellow report comes down over the graph, the log left shut (user
     /// decision — ask before changing; its lines: `Words.writeReported` `worktree-*`). A failed
     /// `post-checkout` is both: git keeps the worktree, so the tab goes all the same, the report riding along — the bar
     /// is the page's, and the page is what stands anew. Both halves are user decisions (ask before changing): the tab
     /// stands in it as in any made worktree, since it is there and the reader made it to work in, and the report's
     /// heading says the tab went there — "opened" says "made" (`Words.writeReported` `worktree-hook`).
     function absorbWorktreeAnswer() {
-        const answer = repoTab.worktreeAnswer
-        if (answer < 0)
+        const answer = repoTab.worktreeAnswer()
+        if (answer === undefined)
             return
         if (repoTab.writeAnswerFailed(answer)) {
             const report = repoTab.writeAnswerReport(answer)
@@ -618,23 +618,23 @@ FocusScope {
         }
         page.openRepositoryPathRequested(repoTab.worktreeAnswerPath)
     }
-    /// The answer to a branch's push, the toolbar's or the branch row's — its own answer (`RepoTab.pushAnswer`, -1 for
-    /// none). Only a refusal is the page's; the button's mark is `PublishFlow.noteWriteAnswer`'s. **An answer with an
+    /// The answer to a branch's push, the toolbar's or the branch row's — its own answer (`RepoTab.pushAnswer`, undefined
+    /// for none). Only a refusal is the page's; the button's mark is `PublishFlow.noteWriteAnswer`'s. **An answer with an
     /// owner never falls to the group's `lastWriteError`**, so without this step neither `push-outdated`'s report nor
     /// `push --preset unreachable`'s log comes out. Headless: `push` / `push-retry`.
     function absorbPushAnswer() {
-        const answer = repoTab.pushAnswer
-        if (answer < 0 || !repoTab.writeAnswerFailed(answer))
+        const answer = repoTab.pushAnswer()
+        if (answer === undefined || !repoTab.writeAnswerFailed(answer))
             return
         page.tellRefusal(answer)
     }
     /// The answer to a push a **ref row** sent — the `push --delete`s, the replace, the pairs that do something here
-    /// as well as over there (`RepoTab.refPushAnswer`, -1 for none). **Its own answer**: read by word, a fetch in the
-    /// same drain would swallow the refusal. The rows a delete took come back through the delete's own owner; this
-    /// carries only why.
+    /// as well as over there (`RepoTab.refPushAnswer`, undefined for none). **Its own answer**: read by word, a fetch
+    /// in the same drain would swallow the refusal. The rows a delete took come back through the delete's own owner;
+    /// this carries only why.
     function absorbRefPushAnswer() {
-        const answer = repoTab.refPushAnswer
-        if (answer < 0 || !repoTab.writeAnswerFailed(answer))
+        const answer = repoTab.refPushAnswer()
+        if (answer === undefined || !repoTab.writeAnswerFailed(answer))
             return
         page.tellRefusal(answer)
     }
@@ -1276,16 +1276,16 @@ FocusScope {
         if (!page.worktreeMoveOut)
             page.noteRenameRefused()
     }
-    /// The answer to a worktree's rename (`RepoTab.worktreeMoveAnswer`, -1 for none): either box comes down on it, or —
-    /// refused — stays open holding the name with no refusal on it, so Enter tries again; the bar says why and points
-    /// at the log for git's words (デザイン規約 §答えの要らない報せ). Nothing goes into the box: the name's own faults were
+    /// The answer to a worktree's rename (`RepoTab.worktreeMoveAnswer`, undefined for none): either box comes down on
+    /// it, or — refused — stays open holding the name with no refusal on it, so Enter tries again; the bar says why and
+    /// points at the log for git's words (デザイン規約 §答えの要らない報せ). Nothing goes into the box: the name's own faults were
     /// turned down before the press, and what is left is git's alone — a worktree holding submodules is the usual one,
     /// which knowing beforehand would cost a read at every open. **A tab standing in that worktree stands again**: its
     /// session stood down for the move (`RepoSession::move_worktree`), so it takes up the new folder — or the old one,
     /// refused — on a session of its own, the graph staying (デザイン規約 §タブの所作「立ち位置を変えても、画面は建て直さない」).
     function absorbWorktreeMove() {
-        const answer = repoTab.worktreeMoveAnswer
-        if (answer < 0)
+        const answer = repoTab.worktreeMoveAnswer()
+        if (answer === undefined)
             return
         page.worktreeMoveOut = false
         const failed = repoTab.writeAnswerFailed(answer)
@@ -1422,11 +1422,11 @@ FocusScope {
     /// log yet (`absorbWriteResult`), spent by that row's own arrival. Counted, because the refusal and the write
     /// result arrive on separate paths, in no fixed order.
     property int answeredFailures: 0
-    /// The answer to the plain delete a menu stayed up for — its own answer (`RepoTab.branchDeleteAnswer`, -1 for
-    /// none), which no count of answers could tell from the delete before it.
+    /// The answer to the plain delete a menu stayed up for — its own answer (`RepoTab.branchDeleteAnswer`, undefined
+    /// for none), which no count of answers could tell from the delete before it.
     function absorbBranchDelete() {
-        const answer = repoTab.branchDeleteAnswer
-        if (answer < 0)
+        const answer = repoTab.branchDeleteAnswer()
+        if (answer === undefined)
             return
         // Landed: the menu goes by itself (`BranchDeleteRow`). Refused by git itself: the card turns the row into the
         // held `-D` and **the row is the answer** — nothing is raised over it (git measures against the upstream, so

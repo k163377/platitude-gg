@@ -44,7 +44,7 @@ fn a_commit_nobody_waits_for_falls_to_the_group() {
     let tab = settled(K::Commit, "nothing to commit, working tree clean");
     assert!(tab.write_refused);
     assert!(!tab.write_stale_diff, "a refusal asks for no re-read");
-    assert_eq!(tab.commit_answer, -1);
+    assert_eq!(*tab.commit_answer(), None);
 
     let tab = settled(K::Commit, "");
     assert!(tab.write_stale_diff);
@@ -106,7 +106,7 @@ fn a_push_answer_is_handed_to_the_press_that_sent_it_with_its_branch_and_words()
         answered(OURS, K::Push, "! [rejected] topic -> topic (fetch first)"),
         answered(SOMEBODY_ELSE, K::Fetch, ""),
     ]);
-    assert_eq!(tab.push_answer, 0, "the press's own answer, by id");
+    assert_eq!(*tab.push_answer(), Some(0), "the press's own answer, by id");
     assert_eq!(tab.push_answer_branch, "topic");
     assert!(tab.write_answers[0].failed);
     assert_eq!(
@@ -132,7 +132,7 @@ fn a_push_refused_with_a_report_hands_the_report_to_the_press() {
             "topic",
         )),
     )]);
-    assert_eq!(tab.push_answer, 0);
+    assert_eq!(*tab.push_answer(), Some(0));
     let answer = &tab.write_answers[0];
     assert!(answer.failed);
     assert_eq!(answer.report.as_ref().expect("a report").kind, "outdated");
@@ -156,7 +156,8 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
         answered(SOMEBODY_ELSE, K::Push, "! [rejected]"),
     ]);
     assert_eq!(
-        tab.push_answer, 1,
+        *tab.push_answer(),
+        Some(1),
         "the second press's answer, not the first's"
     );
     assert_eq!(tab.push_answer_branch, "other");
@@ -173,7 +174,7 @@ fn two_pushes_in_a_row_are_answered_by_id_and_neither_twice() {
 fn a_push_nobody_here_pressed_for_falls_to_the_group() {
     let mut tab = RepoTab::default();
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Push, "! [rejected]")]);
-    assert_eq!(tab.push_answer, -1);
+    assert_eq!(*tab.push_answer(), None);
     assert!(tab.write_refused);
     assert_eq!(tab.last_write_error, "! [rejected]");
 }
@@ -183,9 +184,9 @@ fn a_push_nobody_here_pressed_for_falls_to_the_group() {
 fn the_push_answer_is_this_notifys_own() {
     let mut tab = push_pressed();
     tab.absorb(vec![answered(OURS, K::Push, "! [rejected]")]);
-    assert_eq!(tab.push_answer, 0);
+    assert_eq!(*tab.push_answer(), Some(0));
     tab.absorb(vec![no_answer()]);
-    assert_eq!(tab.push_answer, -1);
+    assert_eq!(*tab.push_answer(), None);
     assert_eq!(
         tab.push_answer_branch, "topic",
         "the branch outlives the answer, for the refusal remembered against it"
@@ -347,7 +348,10 @@ fn a_plain_delete_git_took_names_the_branch_over_the_fetch_behind_it() {
     ]);
     assert_eq!(tab.branch_delete_landed, "feature");
     assert_eq!(tab.branch_delete_refused, "");
-    assert!(tab.branch_delete_answer >= 0, "and this notify carried it");
+    assert!(
+        tab.branch_delete_answer().is_some(),
+        "and this notify carried it"
+    );
     assert!(
         tab.write_fetched,
         "while the group is the fetch's, being the last answer nobody named"
@@ -385,11 +389,12 @@ fn a_branch_answer_nobody_stayed_up_for_names_nothing() {
 fn the_delete_answer_stands_but_says_which_notify_carried_it() {
     let mut tab = menu_standing();
     tab.absorb(vec![answered(OURS, K::Branch, "")]);
-    assert!(tab.branch_delete_answer >= 0);
+    assert!(tab.branch_delete_answer().is_some());
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
     assert_eq!(tab.branch_delete_landed, "feature", "the answer stands");
     assert_eq!(
-        tab.branch_delete_answer, -1,
+        *tab.branch_delete_answer(),
+        None,
         "and says this notify carried none of it"
     );
     tab.arm_branch_delete("other", Some(SOMEBODY_ELSE));
@@ -414,7 +419,8 @@ fn a_refusal_with_a_report_turns_no_row() {
     assert_eq!(tab.branch_delete_refused, "");
     assert_eq!(tab.branch_delete_landed, "");
     let answer = tab
-        .write_answer_at(tab.branch_delete_answer)
+        .branch_delete_answer()
+        .and_then(|at| tab.write_answer_at(at))
         .expect("the plain delete's own answer");
     assert_eq!(
         answer.report.as_ref().expect("a report").kind,
@@ -495,7 +501,7 @@ fn editor_pressed() -> RepoTab {
 
 /// What this notify carried for that editor, if anything.
 fn for_the_editor(tab: &RepoTab) -> Option<&WriteAnswer> {
-    tab.write_answer_at(tab.commit_answer)
+    tab.commit_answer().and_then(|at| tab.write_answer_at(at))
 }
 
 // Read off the group, the fetch's answer would be the one the page saw,
@@ -536,9 +542,9 @@ fn the_editor_is_told_once() {
     tab.absorb(vec![answered(OURS, K::Commit, "")]);
     assert!(for_the_editor(&tab).is_some());
     tab.absorb(vec![answered(SOMEBODY_ELSE, K::Fetch, "")]);
-    assert_eq!(tab.commit_answer, -1, "this drain carried none of it");
+    assert_eq!(*tab.commit_answer(), None, "this drain carried none of it");
     tab.absorb(vec![no_answer()]);
-    assert_eq!(tab.commit_answer, -1);
+    assert_eq!(*tab.commit_answer(), None);
 }
 
 // A hook refused the commit while a stash behind it landed: read off the
@@ -627,7 +633,8 @@ fn the_stash_that_emptied_the_tree_is_ours_over_the_fetch_behind_it() {
     ]);
     assert!(tab.stash_out.ours());
     let answer = tab
-        .write_answer_at(tab.stash_answer)
+        .stash_answer()
+        .and_then(|at| tab.write_answer_at(at))
         .expect("the press's own answer");
     assert_eq!(answer.kind, K::Stash);
     assert!(
@@ -651,7 +658,8 @@ fn the_landing_stands_until_the_tree_is_read() {
     tab.absorb(vec![no_answer()]);
     assert!(tab.stash_out.ours(), "nothing in between answered for it");
     assert_eq!(
-        tab.stash_answer, -1,
+        *tab.stash_answer(),
+        None,
         "while where it answered went with its own notify"
     );
     tab.tree_was_read(FENCE, EMPTIED);
@@ -673,7 +681,8 @@ fn a_refused_stash_claims_no_tree_and_keeps_its_words() {
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(tab.stash_landing_taken().is_none());
     assert!(
-        tab.write_answer_at(tab.stash_answer)
+        tab.stash_answer()
+            .and_then(|at| tab.write_answer_at(at))
             .is_some_and(|a| a.failed),
         "the press's own answer says git would not do it"
     );
@@ -691,7 +700,7 @@ fn somebody_elses_stash_answer_claims_no_tree() {
     tab.absorb(vec![fenced(SOMEBODY_ELSE, K::Stash, "")]);
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(tab.stash_landing_taken().is_none());
-    assert_eq!(tab.stash_answer, -1);
+    assert_eq!(*tab.stash_answer(), None);
     assert!(
         tab.write_stale_diff,
         "and it falls to the group like any other nobody named"
@@ -781,7 +790,8 @@ fn a_commit_that_left_files_or_was_refused_claims_no_tree() {
     tab.tree_was_read(FENCE, EMPTIED);
     assert!(tab.commit_landing_taken().is_none());
     assert!(
-        tab.write_answer_at(tab.commit_answer)
+        tab.commit_answer()
+            .and_then(|at| tab.write_answer_at(at))
             .is_some_and(|a| a.failed)
     );
 }
@@ -819,11 +829,9 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
             vec![refusal, fetch]
         });
 
-        let at = tab.ref_push_answer;
-        assert!(
-            at >= 0,
-            "the press's own answer, by id (fetch first: {fetch_first})"
-        );
+        let at = tab.ref_push_answer().unwrap_or_else(|| {
+            panic!("the press's own answer, by id (fetch first: {fetch_first})")
+        });
         let answer = tab.write_answer_at(at).expect("the answer it points at");
         assert!(answer.failed, "and it is the refusal, not the fetch");
         assert_eq!(
@@ -846,12 +854,13 @@ fn a_ref_rows_push_keeps_its_refusal_when_a_fetch_answers_beside_it() {
 fn a_ref_rows_push_does_not_hand_the_next_press_the_last_answer() {
     let mut tab = ref_push_pressed();
     tab.absorb(vec![answered(OURS, K::Push, "refused")]);
-    assert!(tab.ref_push_answer >= 0);
+    assert!(tab.ref_push_answer().is_some());
 
     tab.ref_push_asked("origin/other", Some(SOMEBODY_ELSE));
     tab.absorb(vec![answered(OURS, K::Push, "refused")]);
     assert_eq!(
-        tab.ref_push_answer, -1,
+        *tab.ref_push_answer(),
+        None,
         "the answer standing is the first press's, and that press is over"
     );
     assert_eq!(
