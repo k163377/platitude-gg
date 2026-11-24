@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import platitude
 import platitude.ui
 
 // Where a file list's arrows stand, and when the middle pane is asked to read what they walked onto (the arrows' shared
@@ -45,11 +46,11 @@ Item {
     /// Where the next walk sets off from: **the file being read** (the header says why). Empty with no
     /// diff up, and then the arrows move no file.
     readonly property string fromKey:
-        walk.readPath !== "" ? walk.readBucket + ":" + walk.readPath : ""
+        walk.readPath !== "" ? GitFacts.fileKey(walk.readBucket, walk.readPath) : ""
     onFromKeyChanged: {
-        const cut = walk.fromKey.indexOf(":")
-        walk.atBucket = cut < 0 ? "" : walk.fromKey.substring(0, cut)
-        walk.atPath = cut < 0 ? "" : walk.fromKey.substring(cut + 1)
+        const from = GitFacts.fileOfKey(walk.fromKey)
+        walk.atBucket = from.bucket
+        walk.atPath = from.path
     }
 
     /// The arrows moved onto another file — every press, so the light follows the key at its own rate.

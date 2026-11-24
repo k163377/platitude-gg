@@ -131,7 +131,7 @@ Item {
         const keys = []
         const paths = []
         for (let i = 0; i < rows.length; i++) {
-            keys.push(rows[i].bucket + ":" + rows[i].fullName)
+            keys.push(GitFacts.fileKey(rows[i].bucket, rows[i].fullName))
             paths.push(rows[i].fullName)
         }
         fileRowMenu.sendPaths(keys)

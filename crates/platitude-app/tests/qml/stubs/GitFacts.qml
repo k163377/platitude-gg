@@ -48,4 +48,14 @@ QtObject {
         const needle = line.toLowerCase()
         return shown.some(words => String(words).toLowerCase().indexOf(needle) >= 0)
     }
+    /// `encode::file_key`: `<bucket>:<path>`, the key a file row goes by in the pane.
+    function fileKey(bucket, path) {
+        return bucket + ":" + path
+    }
+    /// `encode::file_of_key`: that key taken apart at its first colon, both halves empty without one.
+    function fileOfKey(key) {
+        const cut = key.indexOf(":")
+        return cut < 0 ? { "bucket": "", "path": "" }
+                       : { "bucket": key.substring(0, cut), "path": key.substring(cut + 1) }
+    }
 }

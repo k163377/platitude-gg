@@ -65,6 +65,43 @@ impl Routing {
     }
 }
 
+/// `<bucket>:<path>` — the one spelling of the key a file row is chosen,
+/// walked and opened by in the pane (a commit's file goes under `commit`).
+pub fn file_key(bucket: &str, path: &str) -> String {
+    format!("{bucket}:{path}")
+}
+
+/// A file row's key taken apart, as QML reads it (`GitFacts.fileOfKey`):
+/// both halves empty for a key no colon divides.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeyedFile {
+    pub bucket: String,
+    pub path: String,
+}
+
+impl super::wire::Record for KeyedFile {
+    fn to_map(&self) -> qtbridge::qtbridge_type_lib::QVariantMap {
+        super::wire::Fields::new()
+            .put("bucket", &self.bucket)
+            .put("path", &self.path)
+            .done()
+    }
+
+    fn from_map(map: &qtbridge::qtbridge_type_lib::QVariantMap) -> Option<Self> {
+        Some(Self {
+            bucket: super::wire::field(map, "bucket")?,
+            path: super::wire::field(map, "path")?,
+        })
+    }
+}
+
+/// The bucket and the path back out of [`file_key`]: the first colon
+/// divides — buckets hold none, paths may. `None` for a key no colon
+/// divides.
+pub fn file_of_key(key: &str) -> Option<(&str, &str)> {
+    key.split_once(':')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,6 +119,14 @@ mod tests {
         assert_eq!(Routing::of_word("commit"), None);
         assert_eq!(Routing::of_word("whole"), None);
         assert_eq!(Routing::of_word(""), None);
+    }
+
+    #[test]
+    fn a_file_key_comes_apart_at_its_first_colon() {
+        let key = file_key("staged", "dir/a:b.txt");
+        assert_eq!(key, "staged:dir/a:b.txt");
+        assert_eq!(file_of_key(&key), Some(("staged", "dir/a:b.txt")));
+        assert_eq!(file_of_key("no-colon"), None);
     }
 
     #[test]

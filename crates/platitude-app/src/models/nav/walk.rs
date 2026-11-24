@@ -74,13 +74,11 @@ impl NavSectionModel {
             .unwrap_or_default()
     }
 
-    /// One row as `<bucket>:<path>`, the one spelling of the pane's key.
-    /// The first colon divides: buckets hold none, paths may.
+    /// One row as the pane keys it (`encode::file_key`).
     fn keyed(&self, row: Row) -> String {
-        format!(
-            "{}:{}",
+        crate::encode::file_key(
             self.field(row, Role::Bucket).as_str(),
-            self.field(row, Role::Full).as_str()
+            self.field(row, Role::Full).as_str(),
         )
     }
 

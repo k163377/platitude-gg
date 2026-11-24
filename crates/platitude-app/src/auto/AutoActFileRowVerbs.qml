@@ -103,8 +103,8 @@ Item {
                 return
             }
             if (bucketAllTimer.at("opened")) {
-                if (path !== "" && !Awaited.all("bucket_all_diff", { "open": page.diffKey === bucketAllTimer.from
-                                                                                 + ":" + path,
+                const opened = GitFacts.fileKey(bucketAllTimer.from, path)
+                if (path !== "" && !Awaited.all("bucket_all_diff", { "open": page.diffKey === opened,
                                                                      "rows": diffPane.view.count > 0,
                                                                      "settled": !page.diffSettling }))
                     return
@@ -509,7 +509,7 @@ Item {
                 wipPane.chooseOnly(head.bucket, head.fullName)
             const mate = wipPane.rowFor(arg)
             // Named before the press: afterwards the list may have taken the delegate away.
-            const moved = mate ? mate.bucket + ":" + mate.fullName : ""
+            const moved = mate ? GitFacts.fileKey(mate.bucket, mate.fullName) : ""
             if (mate)
                 wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
             lines.push("chosen count=" + wipPane.chosenCount)
@@ -528,7 +528,7 @@ Item {
                 wipPane.chooseOnly(first.bucket, first.fullName)
             const other = wipPane.rowFor(arg)
             // Read while the row is in hand, for the reason `stage-many` gives above.
-            const dropped = other ? other.bucket + ":" + other.fullName : ""
+            const dropped = other ? GitFacts.fileKey(other.bucket, other.fullName) : ""
             if (other)
                 wipPane.applyClick(other.bucket, other.fullName, Qt.ControlModifier)
             lines.push("chosen count=" + wipPane.chosenCount)
@@ -594,7 +594,7 @@ Item {
             lines.push("discard_row " + fileDiscardItem.text)
             if (act.endsWith("-go")) {
                 fileDiscardItem.completeHold()
-                driver.awaitTreeGone(bucket + ":" + arg)
+                driver.awaitTreeGone(GitFacts.fileKey(bucket, arg))
             }
         }
         fileRowsTimer.witness("lines", lines)

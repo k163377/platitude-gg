@@ -1551,7 +1551,7 @@ FocusScope {
     function openFileMenu(bucket, path) {
         // A right-click is a click: it walks away from a standing question, which may be about another row.
         page.stopRowAsk()
-        page.noteMenuDoor("files", bucket + ":" + path)
+        page.noteMenuDoor("files", GitFacts.fileKey(bucket, path))
         fileMenuSeat.active = true
         fileMenuSeat.item.offer(bucket, path)
     }
@@ -2326,7 +2326,7 @@ FocusScope {
     readonly property int sideColorOurs: page.sideColors.ours
     readonly property int sideColorTheirs: page.sideColors.theirs
     function toggleDiff(kind, path, origPath) {
-        if (page.diffShown && page.diffKey === kind + ":" + path) {
+        if (page.diffShown && page.diffKey === GitFacts.fileKey(kind, path)) {
             page.closeDiff()
             return
         }
@@ -2362,7 +2362,7 @@ FocusScope {
     /// landing ahead of git (`diffLeftFrom`).
     function standDiff(kind, path, origPath) {
         page.diffLeftFrom = ""
-        page.diffKey = kind + ":" + path
+        page.diffKey = GitFacts.fileKey(kind, path)
         page.diffKind = kind
         page.diffPath = path
         page.diffOrigPath = origPath
@@ -2476,12 +2476,10 @@ FocusScope {
             return
         if (page.stillHere(page.diffKind, page.diffPath))
             return
-        const cut = page.diffNeighbour.indexOf(":")
-        if (cut > 0) {
-            const bucket = page.diffNeighbour.substring(0, cut)
-            const path = page.diffNeighbour.substring(cut + 1)
-            if (page.stillHere(bucket, path)) {
-                page.openDiff(bucket, path, page.wipUnstaged.origOf(path))
+        const beside = GitFacts.fileOfKey(page.diffNeighbour)
+        if (beside.bucket !== "") {
+            if (page.stillHere(beside.bucket, beside.path)) {
+                page.openDiff(beside.bucket, beside.path, page.wipUnstaged.origOf(beside.path))
                 return
             }
         }

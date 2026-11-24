@@ -24,7 +24,7 @@ use super::*;
 /// each. A conflicted row is skipped: git refuses to restore it until told
 /// how it was resolved. An unknown bucket is a caller's bug.
 fn chosen_row(key: &str) -> Option<(String, DiscardSide)> {
-    let Some((bucket, path)) = key.split_once(':') else {
+    let Some((bucket, path)) = crate::encode::file_of_key(key) else {
         tracing::warn!(key, "a chosen row without a bucket");
         return None;
     };

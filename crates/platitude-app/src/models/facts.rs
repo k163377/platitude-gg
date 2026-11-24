@@ -489,6 +489,27 @@ impl GitFacts {
         One::new(crate::encode::Identity::typed(&text))
     }
 
+    /// The key a file row is chosen, walked and opened by in the pane
+    /// (`encode::file_key`: `<bucket>:<path>`).
+    #[qslot]
+    fn file_key(&self, bucket: String, path: String) -> String {
+        crate::encode::file_key(&bucket, &path)
+    }
+
+    /// That key taken apart (`encode::file_of_key`); both halves empty for
+    /// a key no colon divides.
+    #[qslot]
+    fn file_of_key(&self, key: String) -> One<crate::encode::KeyedFile> {
+        One::new(
+            crate::encode::file_of_key(&key)
+                .map(|(bucket, path)| crate::encode::KeyedFile {
+                    bucket: bucket.to_string(),
+                    path: path.to_string(),
+                })
+                .unwrap_or_default(),
+        )
+    }
+
     /// The last segment of a path, cut where the platform ends a folder.
     #[qslot]
     fn path_leaf(&self, path: String) -> String {

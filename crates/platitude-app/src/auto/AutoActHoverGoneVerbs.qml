@@ -295,7 +295,7 @@ Item {
                 // staged — asked for on the row each beat until it is out.
                 const written = !staged || (driver.wroteAndSettled() && marked.eolMarked(op.path))
                 if (written && !op.at("pointed"))
-                    op.input("pointed", () => driver.pointEolCard(op.bucket + ":" + op.path))
+                    op.input("pointed", () => driver.pointEolCard(GitFacts.fileKey(op.bucket, op.path)))
                 if (!Awaited.all("eol_change_held", { "written": written, "held": written && wipPane.eolCardOpen }))
                     return
                 // The card's sentence as the hand goes in (`before`). A failed save over the file is said with the

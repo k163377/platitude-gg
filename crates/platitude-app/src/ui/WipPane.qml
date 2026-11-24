@@ -48,7 +48,7 @@ ColumnLayout {
     /// halves come down separate bindings from one source, and a handler on one of them reads the other a beat late.
     readonly property string readKey:
         wipPane.readBucket === "" || wipPane.readPath === ""
-        ? "" : wipPane.readBucket + ":" + wipPane.readPath
+        ? "" : GitFacts.fileKey(wipPane.readBucket, wipPane.readPath)
     /// The row the reading was last on.
     property string wasRead: ""
     /// The reading going away, by any door — a second click, `✕`, Escape — takes its row out of the choice —
@@ -173,7 +173,7 @@ ColumnLayout {
         return ""
     }
     function isChosen(bucket, path) {
-        return wipPane.chosenKeys[bucket + ":" + path] === true
+        return wipPane.chosenKeys[GitFacts.fileKey(bucket, path)] === true
     }
     /// The chosen files across all buckets, in standing order, as `{ bucket, fullName }`. **Asked of the models**
     /// (`keyAt` → `NavSectionModel.fileKeyAt`), as are `rowIndexOf` / `chooseRange` and the numbering: the view builds
@@ -188,10 +188,10 @@ ColumnLayout {
         }
         return out
     }
-    /// The bucket never holds a colon, so the first one is the divide.
+    /// The row a key names (`GitFacts.fileOfKey`).
     function rowOfKey(key) {
-        const cut = key.indexOf(":")
-        return { bucket: key.substring(0, cut), fullName: key.substring(cut + 1) }
+        const file = GitFacts.fileOfKey(key)
+        return { bucket: file.bucket, fullName: file.path }
     }
     /// The pane's row numbering across standing buckets, counted off the models, and the key at a place in it (empty
     /// for a folder row).
@@ -236,7 +236,7 @@ ColumnLayout {
         let at = wipPane.anchorRow
         if (wipPane.chosenKeys[wipPane.keyAt(at)] !== true) {
             const first = wipPane.chosenRows()[0]
-            at = first === undefined ? -1 : wipPane.rowIndexOf(first.bucket + ":" + first.fullName)
+            at = first === undefined ? -1 : wipPane.rowIndexOf(GitFacts.fileKey(first.bucket, first.fullName))
         }
         const standing = wipPane.bucketPanes
         for (let i = 0; i < standing.length && at >= 0; i++) {
@@ -297,7 +297,7 @@ ColumnLayout {
     }
     /// Returns whether the diff should follow the click: adding to a choice is about the choice.
     function applyClick(bucket, path, modifiers) {
-        const key = bucket + ":" + path
+        const key = GitFacts.fileKey(bucket, path)
         const row = wipPane.rowIndexOf(key)
         if (modifiers & Qt.ShiftModifier && wipPane.anchorRow >= 0) {
             wipPane.chooseRange(wipPane.anchorRow, row)
@@ -363,7 +363,7 @@ ColumnLayout {
     // themselves. Held here, keyed like the choice, because delegates are recycled.
     property string stageHotKey: ""
     function showStageTools(bucket, path) {
-        wipPane.stageHotKey = bucket + ":" + path
+        wipPane.stageHotKey = GitFacts.fileKey(bucket, path)
     }
     /// A row's mark under the hand asks for the line-ending card, which speaks for the file `path` names in `bucket`
     /// — the same path in two buckets is two rows, each with a change of its own to say, so the target is the row's
@@ -379,7 +379,7 @@ ColumnLayout {
         eolKeep.unpoint(wipPane.eolKey(bucket, path))
     }
     function eolKey(bucket, path) {
-        return "eol:file:" + bucket + ":" + path
+        return "eol:file:" + GitFacts.fileKey(bucket, path)
     }
     /// Automation (hover cannot be injected): the row of `path` in the first bucket marking it, asked for as a hand
     /// on its mark asks, and asked again until the card is up — the marks arrive with the status read, and a re-ask
@@ -625,7 +625,7 @@ ColumnLayout {
     /// moves with no press, and a press on a waiting mark moves nothing (`stageTargets`, `moveStage`): neither puts
     /// a peer's mark out.
     function stagePeerOf(bucket, path) {
-        const key = bucket + ":" + path
+        const key = GitFacts.fileKey(bucket, path)
         if (wipPane.stageHotKey === "")
             return false
         // The pointed row answers too: a real pointer already shows its mark, and this is how a headless run does.
@@ -633,12 +633,10 @@ ColumnLayout {
             return true
         if (!wipPane.isChosen(bucket, path) || !wipPane.stageOpen(path))
             return false
-        const cut = wipPane.stageHotKey.indexOf(":")
-        const hotBucket = wipPane.stageHotKey.substring(0, cut)
-        const hotPath = wipPane.stageHotKey.substring(cut + 1)
-        if (!wipPane.isChosen(hotBucket, hotPath) || !wipPane.stageOpen(hotPath))
+        const hot = GitFacts.fileOfKey(wipPane.stageHotKey)
+        if (!wipPane.isChosen(hot.bucket, hot.path) || !wipPane.stageOpen(hot.path))
             return false
-        return (hotBucket === "staged") === (bucket === "staged")
+        return (hot.bucket === "staged") === (bucket === "staged")
     }
     /// The highlighted rows that would move with a press on `bucket`'s side — the whole of what one press takes. A row
     /// that was not highlighted takes only itself. **A row still waiting for git's answer to an earlier press stays
