@@ -1264,14 +1264,18 @@ impl RepoTab {
         self.ask_session(|s| s.set_remote_url(name, url));
     }
 
-    /// Asks what a push of `local` under this branch name would meet on
-    /// that remote. Reaches the network, so it is asked while the question
-    /// stands. The answer arrives as `remoteBranchAsked()` on the next
+    /// Asks what a push of `branch` as `remote_branch` would meet on
+    /// `remote` — the halves in `set_upstream` / `publish_branch`'s order.
+    /// Reaches the network, so it is asked while the question stands. The
+    /// answer arrives as `remoteBranchAsked()` on the next
     /// `remoteBranchRevision`, with `remoteBranchState`.
     #[qslot]
-    fn check_remote_branch(&mut self, remote: String, branch: String, local: String) {
-        let target = RemoteBranch { remote, branch };
-        self.look_up_remote_branch(target, local)
+    fn check_remote_branch(&mut self, branch: String, remote: String, remote_branch: String) {
+        let target = RemoteBranch {
+            remote,
+            branch: remote_branch,
+        };
+        self.look_up_remote_branch(target, branch)
     }
 
     /// What the last answer is about — what `checkRemoteBranch` was asked

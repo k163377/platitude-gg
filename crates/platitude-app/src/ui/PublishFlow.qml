@@ -232,8 +232,8 @@ Item {
         interval: Application.styleHints.keyboardInputInterval
         onTriggered: {
             if (publishFlow.publishAsking && publishFlow.publishRemote !== "" && publishFlow.publishBranch !== "")
-                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishRemote, publishFlow.publishBranch,
-                                                      publishFlow.publishLocal)
+                publishFlow.repoTab.checkRemoteBranch(publishFlow.publishLocal, publishFlow.publishRemote,
+                                                      publishFlow.publishBranch)
         }
     }
     function refreshPublishCheck() {
