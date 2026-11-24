@@ -146,8 +146,9 @@ fn current_names(query: &str) -> String {
             '@' => {
                 let start = at + 1;
                 let mut end = start;
+                // A capture name's characters, as tree-sitter reads them.
                 while let Some(&(i, s)) = chars.peek() {
-                    if !(s.is_ascii_alphanumeric() || s == '_' || s == '.') {
+                    if !(s.is_alphanumeric() || "_-.?!".contains(s)) {
                         break;
                     }
                     end = i + s.len_utf8();

@@ -712,10 +712,10 @@ fn swift_s_wildcard_is_plain() {
 fn an_older_capture_name_is_written_in_the_current_vocabulary() {
     let older = "(if) @conditional\n(call method: (_) @method.call)\n\
                  ((x) @include (#any-of? @include \"#include\"))\n\
-                 \"@try\" @exception ; @repeat\n(y) @conditionally\n";
+                 \"@try\" @exception ; @repeat\n(y) @conditionally\n(z) @method-call\n";
     let current = "(if) @keyword.conditional\n(call method: (_) @function.method.call)\n\
                    ((x) @keyword.import (#any-of? @keyword.import \"#include\"))\n\
-                   \"@try\" @keyword.exception ; @repeat\n(y) @conditionally\n";
+                   \"@try\" @keyword.exception ; @repeat\n(y) @conditionally\n(z) @method-call\n";
     assert_eq!(current_names(older), current);
 }
 
