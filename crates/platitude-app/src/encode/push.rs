@@ -8,7 +8,7 @@ use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, PushTrack, StatusP
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::counts::shown_count;
-use super::wire::{Fields, One, Record, field, optional_record, optional_text};
+use super::wire::{Fields, Record, field, optional_record, optional_text};
 
 /// What a branch's push stands on ([`PushFacts`]) as QML reads it, both
 /// doors' — the one place either answer is put in Qt's spellings of
@@ -168,6 +168,7 @@ impl Record for PushTrack {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::encode::One;
     use platitude_core::remote::PushStanding;
     use qtbridge::QVariantConvertible;
 

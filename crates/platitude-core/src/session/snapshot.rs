@@ -322,7 +322,7 @@ impl RefsSnapshot {
         } else {
             !branch.upstream.is_empty()
         };
-        let upstream_counts = Some(branch.counts).filter(|_| counted);
+        let upstream_counts = counted.then_some(branch.counts);
         let route = PushRoute::new(
             upstream,
             self.marks.marked(short),
