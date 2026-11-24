@@ -989,7 +989,7 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
         }),
         ..HeadBranch::default()
     });
-    let toolbar = remotes.head_push(crate::encode::Push::new(head), true, "origin".into());
+    let toolbar = remotes.head_push(crate::encode::Push::new(head), "origin".into(), true);
     assert_eq!(
         (
             toolbar.state.as_str(),

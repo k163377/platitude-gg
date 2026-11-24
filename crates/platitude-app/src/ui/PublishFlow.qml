@@ -65,8 +65,8 @@ Item {
     /// refused.
     readonly property var pushFacts: {
         publishFlow.remotesModel.refsRevision
-        return publishFlow.remotesModel.headPush(publishFlow.worktree.headPush, publishFlow.repoTab.state === "open",
-                                                 publishFlow.repoTab.defaultRemote)
+        return publishFlow.remotesModel.headPush(publishFlow.worktree.headPush, publishFlow.repoTab.defaultRemote,
+                                                 publishFlow.repoTab.state === "open")
     }
     /// Nothing this window asked git for is out — from the press, not from when the queue starts it (`settling` rises
     /// at the ask, `busyCount` only once the write runs). A push is answered by its one owner (`RepoTab.pushAnswer`),

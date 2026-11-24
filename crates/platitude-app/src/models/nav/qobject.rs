@@ -667,8 +667,8 @@ impl NavSectionModel {
     pub(super) fn head_push(
         &self,
         head: crate::encode::Push,
-        open: bool,
         fallback: String,
+        open: bool,
     ) -> One<crate::encode::PushRecord> {
         One::new(self.all.head_push(&head, &fallback, open))
     }
