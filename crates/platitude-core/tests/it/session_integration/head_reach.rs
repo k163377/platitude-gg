@@ -4,8 +4,8 @@
 //! `rebase.updateRefs`, under which git takes the branches on the tip
 //! along.
 
-use crate::support::TestRepo;
 use crate::support::session::{CaptureSink, TestSession, opened, poll_landed};
+use crate::support::{TestRepo, oid};
 use platitude_core::session::SessionEvent;
 
 /// A session's first answer about the tip; the session is closed after.
@@ -172,7 +172,9 @@ mod periodic {
         repo.git(&["config", "rebase.updateRefs", "true"]);
 
         let (sink, session) = opened(&repo).await;
-        let id = session.drop_commit(middle).expect("the drop is taken");
+        let id = session
+            .drop_commit(oid(&middle))
+            .expect("the drop is taken");
         assert_eq!(write_answer(&sink, id).await, None);
         let rewritten = repo.git(&["rev-parse", "HEAD"]);
         assert_ne!(rewritten, tip, "the tip was rewritten");
@@ -188,7 +190,7 @@ mod periodic {
         );
 
         let id = session
-            .drop_commit(rewritten.clone())
+            .drop_commit(oid(&rewritten))
             .expect("the drop is taken");
         assert_eq!(write_answer(&sink, id).await, None);
         assert_eq!(repo.git(&["log", "-1", "--format=%s"]), "root");

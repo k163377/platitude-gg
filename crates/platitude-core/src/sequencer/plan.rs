@@ -7,6 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::GitError;
 use crate::integrate::RebaseOptions;
+use crate::oid::Oid;
 use crate::process::GitExecutor;
 use crate::rebase_plan::RangeRead;
 use crate::report;
@@ -23,7 +24,7 @@ pub struct EditPlan {
     /// The tip `steps` was read against — what the replay checks HEAD
     /// against before it spawns ([`crate::session`]'s `Replay`). Taken from
     /// the last row (the range ends at HEAD), so pinning it costs no process.
-    pub tip: String,
+    pub tip: Oid,
 }
 
 impl EditPlan {
@@ -65,22 +66,20 @@ impl Edit {
 /// Refuses a range containing a merge, which a plain interactive rebase
 /// would flatten (`--rebase-merges` is not offered here).
 ///
-/// `oid` is the commit's object name: it is looked for among the range's
-/// rows (`decide_edit`), so a symbolic name such as `HEAD` is never found
-/// and comes back refused as off the branch. Callers (the single drop
-/// included) hand the hex.
+/// `oid` is looked for among the range's rows (`decide_edit`).
 pub async fn plan_edit(
     executor: &GitExecutor,
     workdir: &Path,
-    oid: &str,
+    oid: Oid,
     edit: Edit,
     cancel: &CancellationToken,
 ) -> Result<EditPlan, GitError> {
     // The oldest commit the plan takes in; what sits under it is the
     // upstream.
+    let hex = oid.to_hex();
     let bottom = match edit.depth() {
-        1 => oid.to_string(),
-        depth => format!("{oid}~{}", depth - 1),
+        1 => hex,
+        depth => format!("{hex}~{}", depth - 1),
     };
     let base = base_of(executor, workdir, &bottom, cancel).await?;
     // `decide_edit` checks this again, but refusing here spares the range
@@ -101,7 +100,7 @@ pub async fn plan_edit(
 /// the four refusals × three edits are unit-tested without shaped
 /// repositories. The order matters: the range is read before the commit is
 /// looked for, so a merge answers before off-branch.
-fn decide_edit(base: &Base, read: &RangeRead, oid: &str, edit: Edit) -> Result<EditPlan, GitError> {
+fn decide_edit(base: &Base, read: &RangeRead, oid: Oid, edit: Edit) -> Result<EditPlan, GitError> {
     let Some((upstream, root)) = base.upstream() else {
         return Err(report::rewrite_unfetched_base());
     };
@@ -113,19 +112,24 @@ fn decide_edit(base: &Base, read: &RangeRead, oid: &str, edit: Edit) -> Result<E
         .iter()
         .map(|row| RebaseStep::pick(row.oid.clone(), row.subject.clone()))
         .collect();
-    let Some(index) = steps.iter().position(|s| s.oid == oid) else {
-        return Err(report::rewrite_off_branch(short(oid)));
+    let hex = oid.to_hex();
+    let short = oid.short_hex(8);
+    let Some(index) = steps.iter().position(|s| s.oid == hex) else {
+        return Err(report::rewrite_off_branch(&short));
     };
-    // The position above proves the list non-empty; an empty tip would
-    // refuse the replay (`Replay::tip_still_stands`).
+    // The position above proves the list non-empty; the rows are git's
+    // `%H`, so a last one naming no object is git answering out of shape.
     let tip = steps
         .last()
-        .map(|step| step.oid.clone())
-        .unwrap_or_default();
+        .and_then(|step| Oid::from_hex_str(&step.oid).ok())
+        .ok_or_else(|| GitError::UnexpectedOutput {
+            command: "git log".to_string(),
+            message: "the range's newest row names no object".to_string(),
+        })?;
     match edit {
         Edit::SquashIntoParent => {
             if index == 0 {
-                return Err(report::fold_first_commit(short(oid)));
+                return Err(report::fold_first_commit(&short));
             }
             steps[index].action = TodoAction::Squash;
         }
@@ -141,10 +145,6 @@ fn decide_edit(base: &Base, read: &RangeRead, oid: &str, edit: Edit) -> Result<E
         steps,
         tip,
     })
-}
-
-fn short(oid: &str) -> &str {
-    oid.get(..8).unwrap_or(oid)
 }
 
 /// What a plan starting at `bottom` would replay onto.
@@ -299,13 +299,23 @@ pub(crate) fn range_arg(upstream: &str, root: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::{Base, Edit, RangeRead, TodoAction, decide_edit};
+    use crate::oid::Oid;
     use crate::rebase_plan::PlanRow;
     use crate::report::ReportKind;
 
-    fn row(oid: &str) -> PlanRow {
+    /// The object name spelled with one digit throughout.
+    fn hex(digit: char) -> String {
+        digit.to_string().repeat(40)
+    }
+
+    fn id(digit: char) -> Oid {
+        Oid::from_hex_str(&hex(digit)).expect("forty hex digits")
+    }
+
+    fn row(digit: char) -> PlanRow {
         PlanRow {
-            oid: oid.to_string(),
-            subject: format!("{oid} subject"),
+            oid: hex(digit),
+            subject: format!("{digit} subject"),
             author_name: "Ada".to_string(),
             author_email: "ada@example.com".to_string(),
         }
@@ -314,14 +324,14 @@ mod tests {
     /// A range read over three commits, oldest first, with no merge in it.
     fn three() -> RangeRead {
         RangeRead {
-            rows: vec![row("aaa"), row("bbb"), row("ccc")],
+            rows: vec![row('a'), row('b'), row('c')],
             merges: false,
         }
     }
 
     /// Compared by kind: the error's display is the sentence alone
     /// (`#[error("{message}")]`).
-    fn refusal(edit: Edit, base: &Base, read: &RangeRead, oid: &str) -> ReportKind {
+    fn refusal(edit: Edit, base: &Base, read: &RangeRead, oid: Oid) -> ReportKind {
         let err = decide_edit(base, read, oid, edit).expect_err("refused");
         err.report().expect("a refusal carries its report").kind
     }
@@ -329,7 +339,7 @@ mod tests {
     #[test]
     fn a_base_that_was_never_fetched_is_refused() {
         assert_eq!(
-            refusal(Edit::Drop, &Base::Unfetched, &three(), "bbb"),
+            refusal(Edit::Drop, &Base::Unfetched, &three(), id('b')),
             ReportKind::RewriteUnfetchedBase
         );
     }
@@ -341,7 +351,7 @@ mod tests {
             ..three()
         };
         assert_eq!(
-            refusal(Edit::Drop, &Base::Root, &read, "bbb"),
+            refusal(Edit::Drop, &Base::Root, &read, id('b')),
             ReportKind::RewriteAcrossMerge
         );
     }
@@ -354,11 +364,11 @@ mod tests {
             ..three()
         };
         assert_eq!(
-            refusal(Edit::Drop, &Base::Root, &read, "nowhere"),
+            refusal(Edit::Drop, &Base::Root, &read, id('e')),
             ReportKind::RewriteAcrossMerge
         );
         assert_eq!(
-            refusal(Edit::SquashIntoParent, &Base::Root, &read, "aaa"),
+            refusal(Edit::SquashIntoParent, &Base::Root, &read, id('a')),
             ReportKind::RewriteAcrossMerge,
             "and before the fold of a first commit, for the same reason"
         );
@@ -367,11 +377,11 @@ mod tests {
     #[test]
     fn a_commit_the_range_does_not_hold_is_refused() {
         assert_eq!(
-            refusal(Edit::Reword("nope".into()), &Base::Root, &three(), "zzz"),
+            refusal(Edit::Reword("nope".into()), &Base::Root, &three(), id('f')),
             ReportKind::RewriteOffBranch
         );
         assert_eq!(
-            refusal(Edit::Drop, &Base::Root, &RangeRead::default(), "aaa"),
+            refusal(Edit::Drop, &Base::Root, &RangeRead::default(), id('a')),
             ReportKind::RewriteOffBranch,
             "an empty range holds nothing, so it holds this commit least of all"
         );
@@ -380,22 +390,22 @@ mod tests {
     #[test]
     fn folding_the_oldest_commit_in_the_range_is_refused_and_the_others_are_not() {
         assert_eq!(
-            refusal(Edit::SquashIntoParent, &Base::Root, &three(), "aaa"),
+            refusal(Edit::SquashIntoParent, &Base::Root, &three(), id('a')),
             ReportKind::FoldFirstCommit
         );
         for edit in [Edit::Drop, Edit::Reword("new".into())] {
-            decide_edit(&Base::Root, &three(), "aaa", edit).expect("reaches only itself");
+            decide_edit(&Base::Root, &three(), id('a'), edit).expect("reaches only itself");
         }
     }
 
     /// The tip comes off the last row whatever the edit.
     #[test]
     fn a_plan_picks_the_whole_range_and_marks_the_one_commit() {
-        let plan = decide_edit(&Base::Root, &three(), "bbb", Edit::SquashIntoParent)
+        let plan = decide_edit(&Base::Root, &three(), id('b'), Edit::SquashIntoParent)
             .expect("the middle commit folds into the one before it");
         assert!(plan.root, "a root base needs --root and names no upstream");
         assert_eq!(plan.upstream, "");
-        assert_eq!(plan.tip, "ccc");
+        assert_eq!(plan.tip, id('c'));
         assert_eq!(
             plan.steps.iter().map(|s| s.action).collect::<Vec<_>>(),
             vec![TodoAction::Pick, TodoAction::Squash, TodoAction::Pick]
@@ -405,14 +415,18 @@ mod tests {
             "only a reword carries one"
         );
 
-        let plan = decide_edit(&Base::Commit("aaa".into()), &three(), "ccc", Edit::Drop)
+        let plan = decide_edit(&Base::Commit(hex('a')), &three(), id('c'), Edit::Drop)
             .expect("the tip is dropped");
         assert!(!plan.root);
-        assert_eq!(plan.upstream, "aaa", "named as the rebase's upstream");
-        assert_eq!(plan.tip, "ccc", "the tip is what was read, dropped or not");
+        assert_eq!(plan.upstream, hex('a'), "named as the rebase's upstream");
+        assert_eq!(
+            plan.tip,
+            id('c'),
+            "the tip is what was read, dropped or not"
+        );
         assert_eq!(plan.steps[2].action, TodoAction::Drop);
 
-        let plan = decide_edit(&Base::Root, &three(), "ccc", Edit::Reword("new".into()))
+        let plan = decide_edit(&Base::Root, &three(), id('c'), Edit::Reword("new".into()))
             .expect("the tip is reworded");
         assert_eq!(plan.steps[2].action, TodoAction::Reword);
         assert_eq!(plan.steps[2].message.as_deref(), Some("new"));

@@ -2,9 +2,9 @@
 
 use crate::support::TestRepo;
 use crate::support::exec::env;
-use crate::support::info;
 use crate::support::integrate::{apply, helper};
 use crate::support::remote::shallow_clone;
+use crate::support::{info, oid};
 use platitude_core::ReportKind;
 use platitude_core::integrate::{RebaseOptions, RebaseOutcome};
 use platitude_core::sequencer::{self, RebaseStep, TodoAction};
@@ -21,7 +21,7 @@ async fn squash_into_parent_folds_one_commit_and_keeps_the_rest() {
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &target,
+        oid(&target),
         sequencer::Edit::SquashIntoParent,
         &cancel,
     )
@@ -50,7 +50,7 @@ async fn squashing_the_second_commit_reaches_back_to_the_root() {
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &target,
+        oid(&target),
         sequencer::Edit::SquashIntoParent,
         &cancel,
     )
@@ -74,7 +74,7 @@ async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is
     let (_source, clone, held) = shallow_clone(6, 3);
     let (exec, cancel) = env();
 
-    let err = sequencer::plan_edit(&exec, &clone, &held[0], sequencer::Edit::Drop, &cancel)
+    let err = sequencer::plan_edit(&exec, &clone, oid(&held[0]), sequencer::Edit::Drop, &cancel)
         .await
         .expect_err("the edge has no parent this clone can name");
     assert!(
@@ -86,7 +86,7 @@ async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is
     let err = sequencer::plan_edit(
         &exec,
         &clone,
-        &held[1],
+        oid(&held[1]),
         sequencer::Edit::SquashIntoParent,
         &cancel,
     )
@@ -97,7 +97,7 @@ async fn the_shallow_edge_is_read_as_an_edge_and_only_an_edit_that_reaches_it_is
         "{err}"
     );
 
-    let plan = sequencer::plan_edit(&exec, &clone, &held[1], sequencer::Edit::Drop, &cancel)
+    let plan = sequencer::plan_edit(&exec, &clone, oid(&held[1]), sequencer::Edit::Drop, &cancel)
         .await
         .expect("a drop needs nothing under the commit itself");
     assert!(!plan.root);
@@ -119,7 +119,7 @@ async fn rewording_an_empty_older_commit_replaces_its_message() {
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &target,
+        oid(&target),
         sequencer::Edit::Reword("marker, renamed\n".into()),
         &cancel,
     )
@@ -149,7 +149,7 @@ async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into(
     let err = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &root,
+        oid(&root),
         sequencer::Edit::SquashIntoParent,
         &cancel,
     )
@@ -166,7 +166,7 @@ async fn the_root_commit_rewords_through_root_mode_and_has_nothing_to_fold_into(
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &root,
+        oid(&root),
         sequencer::Edit::Reword("renamed root\n".into()),
         &cancel,
     )
@@ -200,7 +200,7 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     let err = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &elsewhere,
+        oid(&elsewhere),
         sequencer::Edit::Reword("nope\n".into()),
         &cancel,
     )
@@ -214,13 +214,13 @@ async fn the_range_read_is_this_branchs_history_and_not_another() {
     let plan = sequencer::plan_edit(
         &exec,
         &repo.path,
-        &here,
+        oid(&here),
         sequencer::Edit::Reword("yes\n".into()),
         &cancel,
     )
     .await
     .expect("the tip of this branch is in this branch's range");
-    assert_eq!(plan.tip, here);
+    assert_eq!(plan.tip, oid(&here));
     assert!(
         plan.steps.iter().all(|step| step.oid != elsewhere),
         "and the side branch is not in what would be replayed: {:?}",

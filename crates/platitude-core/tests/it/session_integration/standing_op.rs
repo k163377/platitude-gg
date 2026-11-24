@@ -139,7 +139,7 @@ async fn a_squash_under_a_standing_merge_stops_at_the_carry() {
     let head = repo.git(&["rev-parse", "HEAD"]);
 
     let (sink, session) = opened(&repo).await;
-    session.squash_into_parent(head.clone());
+    session.squash_into_parent(oid(&head));
     let refusal = write_result(&sink, OperationKind::Squash)
         .await
         .expect("the squash is refused");

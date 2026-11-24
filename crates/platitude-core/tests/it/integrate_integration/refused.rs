@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::support::exec::{isolated_global, observed_env};
 use crate::support::integrate::{current_op, helper};
-use crate::support::{Said, TestRepo, info};
+use crate::support::{Said, TestRepo, info, oid};
 use platitude_core::GitError;
 use platitude_core::ReportKind;
 use platitude_core::integrate::{self, RebaseOptions};
@@ -48,7 +48,7 @@ async fn run_plan(
     said: &Arc<Said>,
 ) -> GitError {
     let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
-    let plan = sequencer::plan_edit(&exec, &repo.path, target, edit, &cancel)
+    let plan = sequencer::plan_edit(&exec, &repo.path, oid(target), edit, &cancel)
         .await
         .expect("plan");
     sequencer::rebase_interactive(
@@ -174,7 +174,7 @@ async fn a_brief_trace_setting_still_names_a_reworded_commits_hook() {
     let exec = isolated_global(repo.global_config());
     let cancel = tokio_util::sync::CancellationToken::new();
     let edit = sequencer::Edit::Reword("a subject the hook will not have\n".into());
-    let plan = sequencer::plan_edit(&exec, &repo.path, &middle, edit, &cancel)
+    let plan = sequencer::plan_edit(&exec, &repo.path, oid(&middle), edit, &cancel)
         .await
         .expect("plan");
     let err = sequencer::rebase_interactive(
@@ -223,9 +223,15 @@ async fn a_replay_another_gits_lock_turns_down_at_the_start_is_reported() {
 
     let said = Arc::new(Said::default());
     let (exec, cancel) = observed_env(said.clone(), Kept::Asked);
-    let plan = sequencer::plan_edit(&exec, &repo.path, &middle, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&middle),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     std::fs::write(&lock, "").expect("lock");
     let err = sequencer::rebase_interactive(
         &exec,
@@ -316,9 +322,15 @@ async fn a_rewrite_whose_first_checkout_would_overwrite_untracked_files_is_turne
 
     repo.write_file(".git/info/exclude", "old.txt\n");
     let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
-    let plan = sequencer::plan_edit(&exec, &repo.path, &dropping, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&dropping),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     sequencer::rebase_interactive(
         &exec,
         &info(&repo).await,
@@ -389,7 +401,7 @@ mod periodic {
 
         let (exec, cancel) = observed_env(Arc::new(Said::default()), Kept::Asked);
         let edit = sequencer::Edit::Reword("let old.txt go\n".to_string());
-        let plan = sequencer::plan_edit(&exec, &repo.path, &letting_go, edit, &cancel)
+        let plan = sequencer::plan_edit(&exec, &repo.path, oid(&letting_go), edit, &cancel)
             .await
             .expect("plan");
         sequencer::rebase_interactive(

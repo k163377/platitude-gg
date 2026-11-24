@@ -12,9 +12,8 @@ pub(super) struct Replay<'a> {
     upstream: &'a str,
     steps: &'a [sequencer::RebaseStep],
     options: integrate::RebaseOptions,
-    /// The tip `steps` was written against, full hex. There is no
-    /// unpinned replay: an empty one refuses ([`Replay::tip_still_stands`]).
-    expect_head: &'a str,
+    /// The tip `steps` was written against ([`Replay::tip_still_stands`]).
+    expect_head: Oid,
     /// The todo-editor binary.
     helper: PathBuf,
 }
@@ -25,7 +24,7 @@ impl Replay<'_> {
         upstream: &'a str,
         steps: &'a [sequencer::RebaseStep],
         options: integrate::RebaseOptions,
-        expect_head: &'a str,
+        expect_head: Oid,
     ) -> Result<Replay<'a>, GitError> {
         let helper = sequencer::helper_path().map_err(|source| GitError::Io {
             command: "git rebase --interactive".to_string(),
@@ -75,7 +74,7 @@ impl Replay<'_> {
         cancel: &CancellationToken,
     ) -> Result<(), GitError> {
         let head = commit::head_oid(executor, &repo.workdir, cancel).await?;
-        if head.to_hex() == self.expect_head {
+        if head == self.expect_head {
             return Ok(());
         }
         Err(report::rewrite_tip_moved())
@@ -122,7 +121,7 @@ pub(super) async fn run_plan(
     plan: &sequencer::EditPlan,
     cancel: &CancellationToken,
 ) -> Result<integrate::Landing, GitError> {
-    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options(), &plan.tip)?;
+    let replay = Replay::of(&plan.upstream, &plan.steps, plan.options(), plan.tip)?;
     rewrite_carrying(executor, repo, &Rewrite::Replay(&replay), cancel).await
 }
 

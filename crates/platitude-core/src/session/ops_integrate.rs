@@ -140,8 +140,7 @@ impl RepoSession {
                 }
                 let before = session.tips_before(&exec, &repo, &cancel).await?;
                 let head = session.moving_off(&exec, &repo, &head(), &cancel).await?;
-                let expect_head = expect_head.to_hex();
-                let replay = Replay::of(&upstream, &steps, options, &expect_head)?;
+                let replay = Replay::of(&upstream, &steps, options, expect_head)?;
                 let landing =
                     rewrite_carrying(&exec, &repo, &Rewrite::Replay(&replay), &cancel).await?;
                 session.note_landing(landing);
@@ -209,7 +208,7 @@ impl RepoSession {
     }
 
     /// Folds one commit into its parent.
-    pub fn squash_into_parent(self: &Arc<Self>, oid: String) -> Option<OperationId> {
+    pub fn squash_into_parent(self: &Arc<Self>, oid: Oid) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
             OperationKind::Squash,
@@ -218,7 +217,7 @@ impl RepoSession {
                 let plan = sequencer::plan_edit(
                     &exec,
                     &repo.workdir,
-                    &oid,
+                    oid,
                     sequencer::Edit::SquashIntoParent,
                     &cancel,
                 )
@@ -229,20 +228,15 @@ impl RepoSession {
     }
 
     /// Leaves one commit out of the history.
-    pub fn drop_commit(self: &Arc<Self>, oid: String) -> Option<OperationId> {
+    pub fn drop_commit(self: &Arc<Self>, oid: Oid) -> Option<OperationId> {
         let session = Arc::clone(self);
         self.write(
             OperationKind::Drop,
             AfterWrite::Graph,
             move |exec, repo, cancel| async move {
-                let plan = sequencer::plan_edit(
-                    &exec,
-                    &repo.workdir,
-                    &oid,
-                    sequencer::Edit::Drop,
-                    &cancel,
-                )
-                .await?;
+                let plan =
+                    sequencer::plan_edit(&exec, &repo.workdir, oid, sequencer::Edit::Drop, &cancel)
+                        .await?;
                 session.run_plan_told(&exec, &repo, &plan, &cancel).await
             },
         )
@@ -275,7 +269,7 @@ impl RepoSession {
                 let plan = sequencer::plan_edit(
                     &exec,
                     &repo.workdir,
-                    &oid.to_hex(),
+                    oid,
                     sequencer::Edit::Reword(message),
                     &cancel,
                 )

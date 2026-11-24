@@ -1,8 +1,8 @@
 //! Dropping a commit out from under the history that follows it.
 
-use crate::support::TestRepo;
 use crate::support::exec::{env, observed_env};
 use crate::support::integrate::{apply, current_op};
+use crate::support::{TestRepo, oid};
 use platitude_core::process::Kept;
 use platitude_core::sequencer;
 
@@ -15,9 +15,15 @@ async fn dropping_at_either_end_of_the_history() {
     let mut repo = TestRepo::init();
     repo.commit_file("a.txt", "one\n", "root");
     let newest = repo.commit_file_id("b.txt", "two\n", "the newest");
-    let plan = sequencer::plan_edit(&exec, &repo.path, &newest, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&newest),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     apply(&repo, &plan).await;
     assert_eq!(repo.git(&["log", "--format=%s"]), "root");
 
@@ -25,9 +31,15 @@ async fn dropping_at_either_end_of_the_history() {
     let mut repo = TestRepo::init();
     let first = repo.commit_file_id("a.txt", "one\n", "the first");
     repo.commit_file("b.txt", "two\n", "the second");
-    let plan = sequencer::plan_edit(&exec, &repo.path, &first, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&first),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     assert!(plan.root, "no parent, so the plan reaches the root");
     apply(&repo, &plan).await;
     assert_eq!(repo.git(&["log", "--format=%s"]), "the second");
@@ -52,7 +64,7 @@ async fn reaching_past_the_first_commit_is_an_answer_not_a_failure() {
     let plan = sequencer::plan_edit(
         &executor,
         &repo.path,
-        &first,
+        oid(&first),
         sequencer::Edit::Drop,
         &cancel,
     )
@@ -90,9 +102,15 @@ async fn a_merge_under_the_dropped_commit_is_left_alone() {
 
     // The newest commit, straight on the merge.
     let newest = repo.commit_file_id("b.txt", "two\n", "on top of the merge");
-    let plan = sequencer::plan_edit(&exec, &repo.path, &newest, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&newest),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     assert_eq!(plan.upstream, merge, "the merge is the ground, not a step");
     apply(&repo, &plan).await;
     assert_eq!(repo.git(&["rev-parse", "HEAD"]), merge);
@@ -101,9 +119,15 @@ async fn a_merge_under_the_dropped_commit_is_left_alone() {
     // And with a commit after it to replay.
     let doomed = repo.commit_file_id("c.txt", "three\n", "the one to go");
     repo.commit_file("d.txt", "four\n", "after it");
-    let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
-        .await
-        .expect("plan");
+    let plan = sequencer::plan_edit(
+        &exec,
+        &repo.path,
+        oid(&doomed),
+        sequencer::Edit::Drop,
+        &cancel,
+    )
+    .await
+    .expect("plan");
     apply(&repo, &plan).await;
 
     assert_eq!(
@@ -150,9 +174,15 @@ mod periodic {
         repo.git(&["config", "rebase.missingCommitsCheck", "error"]);
         let (exec, cancel) = env();
 
-        let plan = sequencer::plan_edit(&exec, &repo.path, &doomed, sequencer::Edit::Drop, &cancel)
-            .await
-            .expect("plan");
+        let plan = sequencer::plan_edit(
+            &exec,
+            &repo.path,
+            oid(&doomed),
+            sequencer::Edit::Drop,
+            &cancel,
+        )
+        .await
+        .expect("plan");
         apply(&repo, &plan).await;
 
         assert_eq!(

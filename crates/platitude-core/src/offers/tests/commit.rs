@@ -35,7 +35,6 @@ fn an_ordinary_commit_away_from_head_offers_the_whole_menu() {
     );
 }
 
-
 #[test]
 fn a_commit_the_discard_log_draws_offers_only_what_adds() {
     let adds = CommitMenuOffers {

@@ -16,7 +16,7 @@ use crate::support::exec::env;
 use crate::support::integrate::{current_op, helper};
 use crate::support::remote::{far, origin_and_clone};
 use crate::support::wait::bounded;
-use crate::support::{TestRepo, info};
+use crate::support::{TestRepo, info, oid};
 use platitude_core::commit::{self, CommitOptions};
 use platitude_core::integrate::RebaseOutcome;
 use platitude_core::remote::{self, PushForce, PushSpec};
@@ -128,7 +128,7 @@ async fn reword(
 ) -> Result<(), platitude_core::GitError> {
     let (exec, cancel) = env();
     let edit = sequencer::Edit::Reword("reworded\n".into());
-    let plan = sequencer::plan_edit(&exec, &repo.path, target, edit, &cancel)
+    let plan = sequencer::plan_edit(&exec, &repo.path, oid(target), edit, &cancel)
         .await
         .expect("plan");
     let repo_info = info(repo).await;

@@ -1378,13 +1378,13 @@ impl RepoTab {
     /// Folds a commit into its parent (one-commit interactive rebase).
     #[qslot]
     fn squash_into_parent(&mut self, oid: String) {
-        self.ask_session(|s| s.squash_into_parent(oid));
+        self.ask_leased("squash", &oid, |s, oid| s.squash_into_parent(oid));
     }
 
     /// Leaves one commit out of the history, replaying what came after it.
     #[qslot]
     fn drop_commit(&mut self, oid: String) {
-        self.ask_session(|s| s.drop_commit(oid));
+        self.ask_leased("drop", &oid, |s, oid| s.drop_commit(oid));
     }
 
     /// Replaces one commit's message (`reword_from_fields`).

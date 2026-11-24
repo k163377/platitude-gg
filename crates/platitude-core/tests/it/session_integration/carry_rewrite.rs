@@ -18,7 +18,7 @@ async fn squash_and_reword_run_through_the_write_queue() {
     let fold = repo.commit_file_id("c.txt", "three\n", "fold me in");
 
     let (sink, session) = opened(&repo).await;
-    session.squash_into_parent(fold);
+    session.squash_into_parent(oid(&fold));
     assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
     assert_eq!(repo.git(&["rev-list", "--count", "HEAD"]), "2");
 
@@ -83,7 +83,7 @@ async fn a_squash_over_a_dirty_tree_carries_the_work_across() {
     repo.write_file("u.txt", "untracked\n");
 
     let (sink, session) = opened(&repo).await;
-    session.squash_into_parent(fold);
+    session.squash_into_parent(oid(&fold));
     assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
 
     assert_eq!(
@@ -228,7 +228,7 @@ async fn a_restore_that_collides_lands_in_the_files_and_keeps_the_entry() {
     repo.write_file("file.txt", "a\nlocal\nc\n");
 
     let (sink, session) = opened(&repo).await;
-    session.drop_commit(gone);
+    session.drop_commit(oid(&gone));
     assert_eq!(
         write_result(&sink, OperationKind::Drop).await,
         None,
@@ -273,7 +273,7 @@ async fn a_replay_that_stops_part_way_leaves_the_work_in_the_stash() {
     repo.write_file("base.txt", "uncommitted\n");
 
     let (sink, session) = opened(&repo).await;
-    session.drop_commit(gone);
+    session.drop_commit(oid(&gone));
     assert_eq!(
         write_result(&sink, OperationKind::Drop).await,
         None,
@@ -418,7 +418,7 @@ async fn a_commit_landing_after_a_one_commit_edits_todo_is_refused() {
 
     let (sink, session) = opened(&repo).await;
     let release = sink.park_once("the edit", reached_the_tip_check);
-    session.drop_commit(doomed.clone());
+    session.drop_commit(oid(&doomed));
     sink.wait_for("the edit reaching its tip check", |events| {
         events.iter().any(reached_the_tip_check).then_some(())
     })
@@ -489,7 +489,7 @@ async fn a_commit_landing_inside_a_one_commit_edits_carry_is_refused() {
 
     let (sink, session) = opened(&repo).await;
     let release = sink.park_once("the carry", reached_the_stash);
-    session.drop_commit(doomed.clone());
+    session.drop_commit(oid(&doomed));
     sink.wait_for("the carry reaching its stash", |events| {
         events.iter().any(reached_the_stash).then_some(())
     })
@@ -555,7 +555,7 @@ mod periodic {
         repo.write_file("u.txt", "untracked\n");
 
         let (sink, session) = opened(&repo).await;
-        session.drop_commit(gone);
+        session.drop_commit(oid(&gone));
         assert_eq!(write_result(&sink, OperationKind::Drop).await, None);
 
         assert_eq!(
@@ -595,7 +595,7 @@ mod periodic {
         session.rebase("main".into(), rebase_onto());
         assert_eq!(write_result(&sink, OperationKind::Rebase).await, None);
         let fold = repo.git(&["rev-parse", "HEAD"]);
-        session.squash_into_parent(fold);
+        session.squash_into_parent(oid(&fold));
         assert_eq!(write_result(&sink, OperationKind::Squash).await, None);
 
         assert_eq!(
