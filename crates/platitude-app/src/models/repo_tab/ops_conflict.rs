@@ -34,10 +34,10 @@ impl RepoTab {
     /// Behind `pull`: the worktree's own branch where `branch` is empty, a
     /// fast-forward of the branch named otherwise.
     pub(super) fn pull_or_fast_forward(&mut self, branch: String) {
-        if branch.is_empty() {
-            self.ask_session(platitude_core::session::RepoSession::pull);
-        } else {
+        if let Some(branch) = crate::encode::optional_text(branch) {
             self.ask_session(|s| s.fast_forward(branch));
+        } else {
+            self.ask_session(platitude_core::session::RepoSession::pull);
         }
     }
 

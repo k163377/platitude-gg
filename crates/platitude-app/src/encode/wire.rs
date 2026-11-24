@@ -436,11 +436,14 @@ impl<T: platitude_core::mem::Footprint> platitude_core::mem::Footprint for Optio
 
 // ---------------------------------------------------------------------------
 
-/// A `#[qslot]`'s text argument that its QML callers leave empty for none
-/// (a start point, the remote to fetch, a rebase's `onto`, a renamed file's
-/// old path): empty is `None`.
-pub(crate) fn optional_text(text: String) -> Option<String> {
-    (!text.is_empty()).then_some(text)
+/// Qt's word for no text — an empty string — read as none, the one place
+/// it is: a `#[qslot]`'s text argument its QML callers leave empty for
+/// none (a start point, the remote to fetch, a rebase's `onto`, a renamed
+/// file's old path, the branch a pull fast-forwards), and a record's text
+/// field read back the same way (`Push`'s upstream, marks and tracking
+/// ref).
+pub(crate) fn optional_text<S: AsRef<str>>(text: S) -> Option<S> {
+    Some(text).filter(|text| !text.as_ref().is_empty())
 }
 
 /// An object name a `#[qslot]` is handed back: the hex a model spelled
@@ -676,6 +679,18 @@ mod tests {
         assert_eq!(ListWire::get_qmetatype().name(), "QVariantList");
         assert_eq!(MapWire::get_qmetatype().name(), "QVariantMap");
         assert_eq!(VariantWire::get_qmetatype().name(), "QVariant");
+    }
+
+    /// Only empty is none: a blank is text, for whoever reads it to judge.
+    #[test]
+    fn empty_text_is_none_and_any_other_is_itself() {
+        assert_eq!(optional_text(String::new()), None);
+        assert_eq!(optional_text(""), None);
+        assert_eq!(optional_text(" "), Some(" "));
+        assert_eq!(
+            optional_text(String::from("origin")),
+            Some("origin".to_string())
+        );
     }
 
     /// An object name comes back as the model spelled it; empty is no

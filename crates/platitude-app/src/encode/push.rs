@@ -7,7 +7,7 @@ use platitude_core::AheadBehind;
 use platitude_core::remote::{HeadBranch, HeadPush, PushFacts, PushTrack, StatusPush};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
-use super::wire::{Fields, One, Record, field};
+use super::wire::{Fields, One, Record, field, optional_text};
 
 /// What the toolbar's push slot takes (`NavSectionModel.headPush`).
 pub type Push = One<HeadPush>;
@@ -153,13 +153,13 @@ impl Record for HeadPush {
         Some(Self::Read(HeadBranch {
             name,
             unborn: field(map, "unborn")?,
-            upstream: named(field::<String>(map, "upstream")?),
+            upstream: optional_text(field::<String>(map, "upstream")?),
             upstream_counts: tracked.then_some(counts),
             status: StatusPush {
-                push_remote: named(field(map, "pushRemote")?),
-                push_default: named(field(map, "pushDefault")?),
+                push_remote: optional_text(field(map, "pushRemote")?),
+                push_default: optional_text(field(map, "pushDefault")?),
                 upstream_here: field(map, "upstreamHere")?,
-                track: named(field(map, "pushTracking")?).map(|tracking| PushTrack {
+                track: optional_text(field(map, "pushTracking")?).map(|tracking| PushTrack {
                     remote,
                     tracking,
                     counts: pushed,
@@ -167,13 +167,6 @@ impl Record for HeadPush {
             },
         }))
     }
-}
-
-/// Qt's word for no name — an empty string — read as none: the one place
-/// the push of the branch HEAD is on reads it so, for its upstream, its
-/// marks and the tracking ref over there.
-fn named<S: AsRef<str>>(name: S) -> Option<S> {
-    Some(name).filter(|name| !name.as_ref().is_empty())
 }
 
 fn shown(count: u32) -> i32 {

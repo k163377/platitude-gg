@@ -46,7 +46,7 @@ impl Routing {
         match self {
             Self::Staged => DiffTarget::Staged {
                 path,
-                orig_path: (!orig_path.is_empty()).then(|| orig_path.to_string()),
+                orig_path: super::wire::optional_text(orig_path).map(str::to_string),
             },
             Self::Untracked => DiffTarget::Untracked { path },
             Self::Conflicts | Self::Unstaged => DiffTarget::Unstaged { path },
