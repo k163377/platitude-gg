@@ -175,6 +175,8 @@ impl GitFacts {
     /// the same record: on a local branch's row, its far side is the row's
     /// own. `local_listed`: the local branch the row lands on is there —
     /// a remote row whose local one is takes its way through that row.
+    /// `oid_hex` is the row's commit, read as every object name is
+    /// (`encode::oid_arg`): an empty or malformed one is a row with none.
     #[qslot]
     fn ref_menu(
         &self,
@@ -186,7 +188,8 @@ impl GitFacts {
         local_listed: bool,
     ) -> One<RefMenu> {
         use platitude_core::offers;
-        let row = row_standing(&lead, &oid_hex, open, &tree);
+        let has_commit = crate::encode::oid_arg(&oid_hex).is_some();
+        let row = row_standing(&lead, has_commit, open, &tree);
         let far = card.as_ref().map_or(FarSide::Unread, CardRecord::far);
         let upstream = match &*card {
             Some(CardRecord::Branch(upstream)) => {
@@ -583,13 +586,13 @@ impl GitFacts {
 /// The row `refMenu` is asked about, standing on `tree`.
 fn row_standing<'a>(
     lead: &'a RowLead,
-    oid_hex: &str,
+    has_commit: bool,
     open: bool,
     tree: &'a TreeStanding,
 ) -> RowStanding<'a> {
     RowStanding {
         target: platitude_core::offers::RefTarget::from_words(&lead.kind, &lead.full),
-        has_commit: !oid_hex.is_empty(),
+        has_commit,
         open,
         tree,
         leads: lead.leads,
@@ -740,6 +743,31 @@ mod tests {
             (press.action.as_str(), press.checkout.clone()),
             ("holder", None),
             "the press opens the holder and sends no checkout"
+        );
+    }
+
+    /// The row's commit is read as an object name: an empty one and a
+    /// malformed one are alike a row with none, which makes no branch and
+    /// no worktree there; a commit makes both.
+    #[test]
+    fn a_ref_menu_reads_its_commit_as_an_object_name() {
+        let menu_on = |oid: &str| {
+            let menu = GitFacts.ref_menu(
+                oid.to_string(),
+                true,
+                tree(),
+                One::new(held_topic()),
+                topic_card(),
+                true,
+            );
+            (menu.branch_here, menu.making.here)
+        };
+        assert_eq!(menu_on(&"ab".repeat(20)), (true, true));
+        assert_eq!(menu_on(""), (false, false), "no commit");
+        assert_eq!(
+            menu_on("not-an-object"),
+            (false, false),
+            "a malformed name is none"
         );
     }
 
