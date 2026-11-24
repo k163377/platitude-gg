@@ -166,7 +166,7 @@ pub(super) struct CarriedRow {
     pub(super) path: String,
     /// The repository's own worktree, which wears the house.
     pub(super) home: bool,
-    pub(super) tally: Optional<Tally>,
+    pub(super) tally: Option<Tally>,
 }
 
 /// What `GraphModel.carriedAt` hands QML, under the same names.
@@ -176,7 +176,7 @@ impl crate::encode::Record for CarriedRow {
             .put("name", &self.name)
             .put("path", &self.path)
             .put("home", &self.home)
-            .put("tally", &self.tally)
+            .put_record("tally", self.tally.as_ref())
             .done()
     }
 
@@ -186,13 +186,13 @@ impl crate::encode::Record for CarriedRow {
             name: field(map, "name")?,
             path: field(map, "path")?,
             home: field(map, "home")?,
-            tally: field(map, "tally")?,
+            tally: crate::encode::optional_record(map, "tally")?,
         })
     }
 }
 
-/// The graph colour each side of a conflict is drawn in (`GraphModel.sideColors`),
-/// -1 for a side no lane colours.
+/// The graph colour each side of a conflict is drawn in (`GraphModel.sideColors`):
+/// always one of the palette's, the two apart (`encode::conflict_side_colors`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct SideColors {
     pub ours: i32,
