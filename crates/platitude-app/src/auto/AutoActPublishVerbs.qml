@@ -746,6 +746,15 @@ Item {
                    + " unsure=" + publishFlow.publishUnsure
                    + " answerable=" + graphPane.askAnswerable
         }
+        /// Where the question stands on either side of the press, for the reader of a run that stood: a press the bar
+        /// took has put it down by the time the press returns (`RepoPage.answerRowAsk`), and one it never heard leaves
+        /// it up with its run.
+        function standing(when) {
+            return "publish " + when + " asking=" + publishFlow.publishAsking
+                   + " open=" + graphPane.asking
+                   + " run=" + (page.rowAskRun !== null)
+                   + " hold=" + graphPane.askHold
+        }
         /// The gesture a person is given: a hold is not answered by a click. Each way in arms its own watch
         /// (`holdToEnd` / `pressWrite`); the hold's is at its end, ticks after this. Answers whether it went in.
         function answer() {
@@ -769,11 +778,12 @@ Item {
                 // write barrier's completion says (`publishLines`).
                 op.advance("read", () => op.answering())
                 op.witness("answering", op.answering())
+                op.say(() => op.standing("before"))
                 // The push is the write this run waits out — `publish-new-go` presses two. Said out loud: arming over
                 // a write still being waited out is a breach (`repo_tab::write_watch`).
                 driver.letWriteGo()
             }
-            if (!op.input("answered", () => op.answer()))
+            if (!op.input("answered", () => op.answer(), () => op.standing("after")))
                 return
             op.stop()
             writeBarrier.start()
