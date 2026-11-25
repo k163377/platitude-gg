@@ -97,6 +97,7 @@ impl GraphModel {
                     name: carried.name.to_string(),
                     path: carried.path.clone(),
                     home: carried.main,
+                    head: carried.head.to_hex(),
                     tally: Some(Tally {
                         added: count(k.added),
                         modified: count(k.modified),

@@ -179,14 +179,19 @@ impl Record for Tally {
 }
 
 /// What a row of another worktree's uncommitted work answers when the
-/// delegate asks: whose it is, where it is, and its six tallies. Beside
-/// the items, since `GraphRowItem` has spent all fifteen fields.
+/// delegate asks: whose it is, where it is, the commit it stands on, and its
+/// six tallies. Beside the items, since `GraphRowItem` has spent all fifteen
+/// fields.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct CarriedRow {
     pub(super) name: String,
     pub(super) path: String,
     /// The repository's own worktree, which wears the house.
     pub(super) home: bool,
+    /// That worktree's HEAD, the commit the row is drawn over — where a
+    /// reading of the row lands once the row is gone and the worktree stands
+    /// on nothing drawn (`RepoPage.settleCarriedAfterPass`).
+    pub(super) head: String,
     pub(super) tally: Option<Tally>,
 }
 
@@ -197,6 +202,7 @@ impl crate::encode::Record for CarriedRow {
             .put("name", &self.name)
             .put("path", &self.path)
             .put("home", &self.home)
+            .put("head", &self.head)
             .put_record("tally", self.tally.as_ref())
             .done()
     }
@@ -207,6 +213,7 @@ impl crate::encode::Record for CarriedRow {
             name: field(map, "name")?,
             path: field(map, "path")?,
             home: field(map, "home")?,
+            head: field(map, "head")?,
             tally: crate::encode::optional_record(map, "tally")?,
         })
     }
@@ -472,6 +479,7 @@ mod tests {
             name: "topic".into(),
             path: "C:/work/topic".into(),
             home: false,
+            head: "1".repeat(40),
             tally: Some(Tally {
                 added: 1,
                 modified: 2,

@@ -305,6 +305,7 @@ FocusScope {
             return
         page.carriedName = ""
         page.carriedHome = false
+        page.carriedOn = ""
         // Or the worktree's reads go on handing the pane a list nobody shows.
         repoTab.leaveCarriedStatus()
     }
@@ -330,6 +331,9 @@ FocusScope {
     property string carriedName: ""
     /// That worktree is the repository's own, whose name wears the house (規約 §ref の種別「名前の印」).
     property bool carriedHome: false
+    /// The commit that worktree's row stood on when last drawn (`GraphModel.carriedAt`'s `head`) — the row's parent,
+    /// kept for the pass that takes the row while the worktree stands on nothing drawn (`settleCarriedAfterPass`).
+    property string carriedOn: ""
     /// The last worktree whose changes were asked here, as it went by then (`NavSectionModel.worktreeName`) — the name
     /// such a report says, which carries the folder alone, and whether it was the repository's own, the mark that name
     /// wears (`showReport`); undefined before the first.
@@ -370,15 +374,16 @@ FocusScope {
             wipPane.clearChoice()
         page.showWip()
         if (at !== "")
-            page.standOnWorktree(at, carried.name, carried.home)
+            page.standOnWorktree(at, carried)
     }
     /// Points the pane at one worktree and reads its files; that worktree's paced reads keep them current while it
-    /// stands (`pollCarried`). `home` is whether it is the repository's own (`GraphModel.carriedAt`).
-    function standOnWorktree(at, name, home) {
+    /// stands (`pollCarried`). `carried` is its row's record (`GraphModel.carriedAt`).
+    function standOnWorktree(at, carried) {
         page.readRow(GitFacts.worktreeKey(at))
-        page.carriedName = name
-        page.carriedHome = home
-        repoTab.readCarriedStatus(at, name)
+        page.carriedName = carried.name
+        page.carriedHome = carried.home
+        page.carriedOn = carried.head
+        repoTab.readCarriedStatus(at, carried.name)
     }
     /// A pane on another worktree is about this window's own tree again (`leaveWorktree`).
     function dropCarried() {
@@ -396,23 +401,26 @@ FocusScope {
             // the pane: the bands take the row's name again.
             const carried = graphModel.carriedAt(row)
             if (carried.name !== page.carriedName)
-                page.standOnWorktree(page.carriedPath, carried.name, carried.home)
+                page.standOnWorktree(page.carriedPath, carried)
+            page.carriedOn = carried.head
             page.selectedRow = row
             graphPane.setCurrentRow(row)
             return
         }
         // The worktree committed or stashed: **land where that worktree now stands** — the row named a worktree, not
         // a branch (`NavSectionModel.headOfWorktree`). A listing a tick behind lands on its previous HEAD, still its
-        // own history. One on a branch with no commits yet stands on none.
+        // own history. One that stands on nothing drawn — a branch with no commits yet, or gone from the listing
+        // (removed, pruned) — lands on the commit its row stood on, the row's parent; that gone too, the opening
+        // default.
         const head = worktreesModel.headOfWorktree(page.carriedPath)
         const headRow = head === "" ? -1 : graphModel.rowOf(head)
+        const landRow = headRow >= 0 ? headRow : page.carriedOn === "" ? -1 : graphModel.rowOf(page.carriedOn)
         page.readRow(undefined)
-        if (headRow >= 0) {
-            graphPane.setCurrentRow(headRow)
-            page.activateRow(graphModel.oidAt(headRow), headRow, true)
+        if (landRow >= 0) {
+            graphPane.setCurrentRow(landRow)
+            page.activateRow(graphModel.oidAt(landRow), landRow, true)
             return
         }
-        // The worktree is gone from the listing (removed, pruned, or bare): fall back to the opening default.
         page.trySelectDefault()
     }
 
