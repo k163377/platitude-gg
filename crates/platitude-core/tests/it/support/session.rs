@@ -6,7 +6,8 @@ use std::sync::{Arc, Mutex};
 use crate::support::wait::bounded;
 use crate::support::{Patience, TestRepo};
 use platitude_core::session::{
-    FollowUp, PassHooks, PassStep, RepoSession, SessionEvent, SessionSink,
+    Carried, FollowUp, LogRow, PassHooks, PassStep, RelaidRow, RepoSession, RowNode, SessionEvent,
+    SessionSink, Whose,
 };
 use platitude_core::{GitError, OperationId, OperationKind};
 
@@ -56,6 +57,51 @@ pub fn pass_of(event: &SessionEvent) -> Option<Pass> {
             walked: *walked,
             truncated: *truncated,
         }),
+        _ => None,
+    }
+}
+
+/// The generation of a picture of the graph the event puts on screen: a pass
+/// landing ([`pass_of`]), or the graph laid again off the walk's record
+/// (`LogRelaid` — what another worktree's reading landing or going lays).
+pub fn picture_of(event: &SessionEvent) -> Option<u64> {
+    match event {
+        SessionEvent::LogRelaid { generation, .. } => Some(*generation),
+        _ => pass_of(event).map(|pass| pass.generation),
+    }
+}
+
+/// The other worktrees' rows a picture of the graph sends, with its
+/// generation: every row of a walk (`LogReplaced`; a stream's `LogChunk` is a
+/// part of one), or the synthetic rows of a graph laid again (`LogRelaid`,
+/// whose commit rows come by id) — a reading landing or going is laid so.
+pub fn other_worktree_rows(event: &SessionEvent) -> Option<(u64, Vec<&Carried>)> {
+    match event {
+        SessionEvent::LogChunk { generation, rows }
+        | SessionEvent::LogReplaced {
+            generation, rows, ..
+        } => Some((
+            *generation,
+            rows.iter().filter_map(other_worktree).collect(),
+        )),
+        SessionEvent::LogRelaid {
+            generation, rows, ..
+        } => Some((
+            *generation,
+            rows.iter()
+                .filter_map(|row| match row {
+                    RelaidRow::Made(row) => other_worktree(row),
+                    RelaidRow::Moved { .. } => None,
+                })
+                .collect(),
+        )),
+        _ => None,
+    }
+}
+
+fn other_worktree(row: &LogRow) -> Option<&Carried> {
+    match &row.node {
+        RowNode::Worktree(Whose::Other(carried)) => Some(carried),
         _ => None,
     }
 }
@@ -236,6 +282,25 @@ impl CaptureSink {
                 .find(|p| p.generation > after)
         })
         .await
+    }
+
+    /// [`Self::pass_after`] for any picture ([`picture_of`]): the graph laid
+    /// again counts — what another worktree's reading moving puts on screen.
+    pub async fn picture_after(&self, what: &str, after: u64) -> u64 {
+        self.wait_for(what, |evs| {
+            evs.iter().filter_map(picture_of).find(|at| *at > after)
+        })
+        .await
+    }
+
+    /// The newest picture's generation so far ([`picture_of`]).
+    pub fn newest_picture(&self) -> Option<u64> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(picture_of)
+            .max()
     }
 
     /// Waits for `pred` over the event list; each delivery wakes it, and

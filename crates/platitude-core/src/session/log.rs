@@ -346,6 +346,8 @@ impl RepoSession {
         answer: &PassAnswer,
     ) -> RefreshOutcome {
         let mut watch = PassWatch::operation(self);
+        // No older than what the stream lays its worktrees' rows from.
+        let readings = self.carried();
         // Before the lock, because reading them can go to git.
         let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
         let generation = {
@@ -439,9 +441,13 @@ impl RepoSession {
                     });
                 }
                 self.tell_graph_landed(answer);
-                // A stream cannot leave rows out as it goes, so a delete
-                // that is out takes its commits off the finished graph.
-                if self.deletes_out() {
+                // A stream can neither leave rows out nor lay a row again as
+                // it goes, and a laying asked for meanwhile has no finished
+                // graph to lay: a delete that is out takes its commits off it,
+                // and another worktree's reading that moved under it is laid
+                // on it (a swap pass does both before it publishes). This
+                // window's own row is drawn by the walk its status asks for.
+                if self.deletes_out() || !Arc::ptr_eq(&readings, &self.carried()) {
                     self.relay_screen();
                 }
                 watch.answered();

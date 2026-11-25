@@ -270,6 +270,11 @@ impl Pane {
 /// the worktrees were turned off cannot land after it. With a flag beside
 /// the rows, that read put its row back up with the reading stopped, and
 /// nothing took it down.
+///
+/// The rows are of worktrees the last listing names, and of no other: a
+/// listing takes the others' away ([`Self::list`]), and a read begun before
+/// a listing dropped its worktree lands nothing ([`Self::land_one`]) — put
+/// back up, its row would stand until the next listing.
 #[derive(Default)]
 pub(super) struct OtherWorktrees {
     state: std::sync::Mutex<WorktreesState>,
@@ -338,11 +343,15 @@ impl OtherWorktrees {
     }
 
     /// Puts one worktree's row as its read found it — up, replaced, or down
-    /// where it has nothing to show.
+    /// where it has nothing to show; nothing where the listing has dropped
+    /// the worktree since the read began.
     pub(super) fn land_one(&self, ticket: &PassTicket, key: &str, row: Option<Carried>) -> Landing {
         let mut state = super::relock(&self.state);
         if state.turned != ticket.turned {
             return Landing::Refused;
+        }
+        if !state.listed.iter().any(|c| c.key == key) {
+            return Landing::Same;
         }
         let at = state
             .rows
@@ -371,15 +380,15 @@ impl OtherWorktrees {
     }
 
     /// Takes the worktrees a listing named, dropping the rows of any it no
-    /// longer names. Those rows were drawn by nothing already: the walk
-    /// draws only worktrees the listing says stand where they did
-    /// (`relay::carried_current`).
-    pub(super) fn list(&self, listed: Vec<Listed>) {
+    /// longer names, and says whether one went — still on screen, which the
+    /// caller lays again (`relay::note_worktree_heads`).
+    pub(super) fn list(&self, listed: Vec<Listed>) -> bool {
         let mut state = super::relock(&self.state);
-        if state.rows.iter().any(|r| {
+        let went = state.rows.iter().any(|r| {
             let key = super::joins::same_path_key(&r.path);
             !listed.iter().any(|c| c.key == key)
-        }) {
+        });
+        if went {
             let kept: Vec<Carried> = state
                 .rows
                 .iter()
@@ -392,6 +401,7 @@ impl OtherWorktrees {
             state.rows = Arc::new(kept);
         }
         state.listed = Arc::new(listed);
+        went
     }
 
     pub(super) fn listed(&self) -> Arc<Vec<Listed>> {
@@ -445,7 +455,7 @@ impl CarriedPass {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CarriedOutcome {
     /// The rows are as the pass read them; `moved` says whether that
-    /// changed one, and asked for the walk again.
+    /// changed one, and asked for the graph to draw it.
     Landed { moved: bool },
     /// Nothing more landed: the session closed, or the worktrees were turned
     /// off, under the pass.
@@ -470,7 +480,10 @@ impl Drop for PassOut {
 
 impl super::RepoSession {
     /// Reads what every other worktree is carrying, one after another, and
-    /// asks for the rebuild if any came back different. Answers with the
+    /// has the graph draw it if any came back different: laid on the
+    /// history on screen again ([`Self::relay_screen`]), or walked where a
+    /// row stands on a commit that history does not hold
+    /// ([`Self::history_holds_the_readings`]). Answers with the
     /// pass; `None` where none begins now — the repository is not open,
     /// the worktrees are off, or a read of them is out, which then owes
     /// this pass and runs it as it ends (a follow ask — `session::asks`).
@@ -589,9 +602,14 @@ impl super::RepoSession {
         if ticket.cancel.is_cancelled() {
             return CarriedOutcome::Dropped;
         }
-        // These rows are drawn by the walk alone; one walk for the pass.
+        // One drawing for what the pass read; a reading its listing took
+        // away was laid off at once (`RepoSession::note_worktree_heads`).
         if moved {
-            self.refresh_log();
+            if self.history_holds_the_readings() {
+                self.relay_screen();
+            } else {
+                self.refresh_log();
+            }
         }
         CarriedOutcome::Landed { moved }
     }
@@ -622,8 +640,9 @@ impl super::RepoSession {
     }
 
     /// One worktree, read because the pace said so: its row landed, and the
-    /// walk that draws it run here when it moved, so the worktree's weight
-    /// holds what its change cost (a failed read's included, as in
+    /// graph drawn where it moved, as a pass draws it
+    /// ([`Self::refresh_carried`]) — a walk run here, so the worktree's
+    /// weight holds what its change cost (a failed read's included, as in
     /// [`Self::read_and_land`]). `None` where no read began — the worktree
     /// is not listed any more, a pass holds the worktrees, or they are off.
     pub(super) async fn read_paced_worktree(
@@ -652,7 +671,11 @@ impl super::RepoSession {
                 if let Ok(row) = read.await
                     && self.other_worktrees.land_one(&ticket, &worktree.key, row) == Landing::Moved
                 {
-                    self.walk_here(StashRead::default()).await;
+                    if self.history_holds_the_readings() {
+                        self.relay_screen();
+                    } else {
+                        self.walk_here(StashRead::default()).await;
+                    }
                 }
             })
             .await;
@@ -731,19 +754,21 @@ impl super::RepoSession {
         let read = pace != WorktreesPace::Off;
         let back_on = read && !self.other_worktrees.reads();
         if self.other_worktrees.turn(read) {
-            self.refresh_log();
+            // Off the caller's thread: laying out is a pass over the window.
+            let s = Arc::clone(self);
+            self.runtime.spawn(async move { s.relay_screen() });
         }
-        // Turned back on, the rows come back in one pass and one walk: read
-        // worktree by worktree at the pace, each row would walk the history
-        // again. Begun before the pace hears, so it starts no worktree's read
-        // of its own beside the pass.
+        // Turned back on, the rows come back together, in one pass and one
+        // laying: read at the pace, they would come back one turn at a time.
+        // Begun before the pace hears, so it starts no worktree's read of its
+        // own beside the pass.
         if back_on {
             drop(self.refresh_carried());
         }
         self.pacing.change(|rules, at| rules.set_pace(pace, at));
     }
 
-    /// The set as the reads left it, for the walk that draws it. Whole
+    /// The set as the reads left it, for the laying that draws it. Whole
     /// records compare: the tallies are drawn on the row, so a worktree that
     /// only staged another file has moved a row.
     pub(super) fn carried(&self) -> Arc<Vec<Carried>> {
@@ -970,20 +995,34 @@ mod tests {
         assert_eq!(worktrees.land_one(&ticket, &key("b"), None), Landing::Same);
     }
 
+    /// The rows are of worktrees the last listing names: one it no longer
+    /// names loses its row, which the listing says went — still on screen
+    /// for the caller to lay again — and a read begun before the listing
+    /// dropped the worktree lands nothing.
     #[test]
     fn a_worktree_the_listing_no_longer_names_loses_its_row() {
         let worktrees = OtherWorktrees::default();
-        worktrees.list(listed_as(&["a", "b"]));
+        assert!(!worktrees.list(listed_as(&["a", "b", "c"])));
         let root = CancellationToken::new();
         let ticket = worktrees.begin(&root).expect("read");
         worktrees.land_one(&ticket, &key("a"), Some(row("a")));
         worktrees.land_one(&ticket, &key("b"), Some(row("b")));
-        worktrees.list(listed_as(&["b"]));
+        assert!(
+            !worktrees.list(listed_as(&["a", "b"])),
+            "c had no row to lose"
+        );
+        assert!(worktrees.list(listed_as(&["b"])), "a's row went");
         let names: Vec<String> = worktrees
             .rows()
             .iter()
             .map(|r| r.name.to_string())
             .collect();
         assert_eq!(names, ["b"]);
+        assert_eq!(
+            worktrees.land_one(&ticket, &key("a"), Some(row("a"))),
+            Landing::Same,
+            "put back up, the row would stand until the next listing"
+        );
+        assert_eq!(worktrees.rows().len(), 1);
     }
 }

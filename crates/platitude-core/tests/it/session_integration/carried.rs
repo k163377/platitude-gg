@@ -24,29 +24,13 @@ fn a_worktree_beside(repo: &mut TestRepo) {
     std::fs::write(worktree.join("carried.txt"), "u\n").expect("a file in the worktree");
 }
 
-/// A graph pass's generation, and whether any of its rows is another worktree's.
+/// A picture's generation, and whether any of its rows is another worktree's.
 fn worktree_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
-    let (generation, rows) = match event {
-        SessionEvent::LogChunk { generation, rows }
-        | SessionEvent::LogReplaced {
-            generation, rows, ..
-        } => (*generation, rows),
-        _ => return None,
-    };
-    Some((
-        generation,
-        rows.iter().any(|r| {
-            matches!(
-                r.node,
-                platitude_core::session::RowNode::Worktree(platitude_core::session::Whose::Other(
-                    _
-                ))
-            )
-        }),
-    ))
+    crate::support::session::other_worktree_rows(event)
+        .map(|(generation, rows)| (generation, !rows.is_empty()))
 }
 
-/// The generation of the first graph pass whose rows draw another worktree.
+/// The generation of the first picture whose rows draw another worktree.
 fn draws_a_worktree(events: &[SessionEvent]) -> Option<u64> {
     events
         .iter()
@@ -84,15 +68,8 @@ async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() 
     .await;
     assert!(opened.landed());
     bounded("all opening graph passes", session.wait_for_graph_passes()).await;
-    let before = sink
-        .wait_for("the opening's last graph", |events| {
-            events
-                .iter()
-                .filter_map(crate::support::session::pass_of)
-                .max_by_key(|p| p.generation)
-        })
-        .await;
-    assert!(session.graph_settled_at(before.generation));
+    let before = sink.newest_picture().expect("the opening's last graph");
+    assert!(session.graph_settled_at(before));
 
     // A counted read is already pending while its git is queued. The old graph still has a finished pass and its
     // own WIP row still agrees with its status; neither closes the other worktree's outstanding read.
@@ -105,29 +82,26 @@ async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() 
     let path = repo.path.with_file_name("worktree").join("carried.txt");
     std::fs::remove_file(path).expect("the other worktree goes clean");
     let carried = session.refresh_carried().expect("a new carried pass");
-    assert!(!session.graph_settled_at(before.generation));
+    assert!(!session.graph_settled_at(before));
     drop(held);
     assert_eq!(
         bounded("the carried answer", carried.outcome()).await,
         CarriedOutcome::Landed { moved: true }
     );
     bounded("the carried owner leaving", session.wait_for_carried_pass()).await;
-    bounded(
-        "the graph requested by the carried read",
-        session.wait_for_graph_passes(),
-    )
-    .await;
+    // Laid again off the walk's record before the pass answered: no walk.
     let after = sink
-        .pass_after("the graph without the carried row", before.generation)
+        .picture_after("the graph without the carried row", before)
         .await;
     assert!(
-        !session.graph_settled_at(before.generation),
+        !session.graph_settled_at(before),
         "the consumer has not applied the replacement"
     );
-    assert!(session.graph_settled_at(after.generation));
+    assert!(session.graph_settled_at(after));
 
     // The other ordering: an unchanged rebuild is counted before its worker starts, and closes without publishing
-    // another generation. Its owner still has to leave before that same applied graph is settled again.
+    // another generation — the walk finds the graph laid again its own. Its owner still has to leave before that
+    // same applied graph is settled again.
     let held = bounded(
         "the test's git slot again",
         slots.acquire(Priority::Interactive, Pace::Here),
@@ -135,7 +109,7 @@ async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() 
     .await
     .expect("a free slot");
     let graph = session.refresh_log_tracked();
-    assert!(!session.graph_settled_at(after.generation));
+    assert!(!session.graph_settled_at(after));
     drop(held);
     assert!(
         bounded("the unchanged rebuild", graph.outcome())
@@ -143,7 +117,7 @@ async fn a_settled_graph_waits_for_carried_reads_and_their_applied_generation() 
             .landed()
     );
     bounded("the rebuild owner leaving", session.wait_for_graph_passes()).await;
-    assert!(session.graph_settled_at(after.generation));
+    assert!(session.graph_settled_at(after));
     session.close_and_wait().await;
 }
 
@@ -159,21 +133,17 @@ async fn a_pass_in_flight_when_the_worktrees_are_turned_off_lands_nothing() {
     }));
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
     let (sink, session) = opened_with(&repo, exec).await;
-    let with_worktree = sink
-        .wait_for("a graph drawing the worktree's row", draws_a_worktree)
+    sink.wait_for("a graph drawing the worktree's row", draws_a_worktree)
         .await;
-    // Let the opening's pass and the walk it asked for land, so what
-    // follows is the test's own subject.
+    // Let the opening's pass and its walks land, so what follows is the
+    // test's own subject.
     bounded(
         "the opening's pass over the worktrees",
         session.wait_for_carried_pass(),
     )
     .await;
-    sink.pass_after(
-        "the pass drawing the worktree's row",
-        with_worktree.saturating_sub(1),
-    )
-    .await;
+    bounded("the opening's walks", session.wait_for_graph_passes()).await;
+    let opened = sink.newest_picture().expect("the opening drew the graph");
 
     let held = bounded(
         "the test's own slot",
@@ -184,8 +154,8 @@ async fn a_pass_in_flight_when_the_worktrees_are_turned_off_lands_nothing() {
     let pass = session
         .refresh_carried()
         .expect("a pass begins: the worktrees are read and none is out");
-    // Both queued behind the held slot: the rows come down, the walk is
-    // asked for again.
+    // The pass queued behind the held slot: the rows come down, laid again
+    // off the walk's record with no git to wait for.
     session.set_worktrees_pace(WorktreesPace::Off);
     drop(held);
     assert_eq!(
@@ -194,12 +164,12 @@ async fn a_pass_in_flight_when_the_worktrees_are_turned_off_lands_nothing() {
         "the pass begun before the turning lands nothing"
     );
     let after = sink
-        .pass_after("the graph without the worktree's row", with_worktree)
+        .picture_after("the graph without the worktree's row", opened)
         .await;
     {
         let events = sink.events.lock().unwrap();
         assert!(
-            !pass_draws_a_worktree(&events, after.generation),
+            !pass_draws_a_worktree(&events, after),
             "the rows stayed down"
         );
     }

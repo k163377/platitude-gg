@@ -33,21 +33,7 @@ async fn worktrees_settled(sink: &CaptureSink, session: &Arc<RepoSession>, rows:
 
 /// How many worktree rows a picture draws.
 fn worktree_rows(event: &SessionEvent) -> Option<usize> {
-    match event {
-        SessionEvent::LogChunk { rows, .. } | SessionEvent::LogReplaced { rows, .. } => Some(
-            rows.iter()
-                .filter(|r| {
-                    matches!(
-                        r.node,
-                        platitude_core::session::RowNode::Worktree(
-                            platitude_core::session::Whose::Other(_)
-                        )
-                    )
-                })
-                .count(),
-        ),
-        _ => None,
-    }
+    crate::support::session::other_worktree_rows(event).map(|(_, rows)| rows.len())
 }
 
 /// Paces the page under bounds no read falls due within.
@@ -76,14 +62,7 @@ async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied
     let exec = crate::support::exec::isolated().scheduled(Arc::clone(&slots));
     let (sink, session) = opened_with(&repo, exec).await;
     worktrees_settled(&sink, &session, 1).await;
-    let before = sink
-        .wait_for("the opening's generation", |events| {
-            events
-                .iter()
-                .filter_map(crate::support::session::pass_of)
-                .max_by_key(|p| p.generation)
-        })
-        .await;
+    let before = sink.newest_picture().expect("the opening's generation");
 
     session.read_carried_status(listed_path(&mut repo, "worktree"), "worktree".into());
     sink.wait_for("the pane stands on the worktree", |events| {
@@ -100,12 +79,12 @@ async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied
     .await
     .expect("a free slot");
     paced_off_the_clock(&session);
-    assert!(session.graph_settled_at(before.generation));
+    assert!(session.graph_settled_at(before));
 
     // This current-thread task does not yield: poll_now marks the pane's worktree due before the driver runs.
     session.poll_now();
     assert!(
-        !session.graph_settled_at(before.generation),
+        !session.graph_settled_at(before),
         "the due read has not started yet"
     );
     bounded(
@@ -113,10 +92,7 @@ async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied
         slots.settled(|report| report.queued_background + report.queued_interactive > 0),
     )
     .await;
-    assert!(
-        !session.graph_settled_at(before.generation),
-        "the reads are queued"
-    );
+    assert!(!session.graph_settled_at(before), "the reads are queued");
     drop(held);
     sink.wait_for("the paced worktree's read", |events| {
         paced_reads(events)
@@ -127,20 +103,17 @@ async fn a_settled_graph_waits_from_a_paced_worktree_becoming_due_to_its_applied
     .await;
     bounded("the paced snapshots end", session.wait_for_snapshot_reads()).await;
     bounded("the paced graph ends", session.wait_for_graph_passes()).await;
+    // The walk for the worktree's commit, or the graph laid again for its
+    // reading — whichever came last.
     let after = sink
-        .wait_for("the paced worktree's last graph", |events| {
-            events
-                .iter()
-                .filter_map(crate::support::session::pass_of)
-                .max_by_key(|p| p.generation)
-        })
-        .await;
-    assert!(after.generation > before.generation);
+        .newest_picture()
+        .expect("the paced worktree's last picture");
+    assert!(after > before);
     assert!(
-        !session.graph_settled_at(before.generation),
+        !session.graph_settled_at(before),
         "the UI still holds the old generation"
     );
-    assert!(session.graph_settled_at(after.generation));
+    assert!(session.graph_settled_at(after));
     session.close_and_wait().await;
 }
 
@@ -155,18 +128,8 @@ fn paced_reads(events: &[SessionEvent]) -> Vec<Option<String>> {
 }
 
 fn worktree_row_head(event: &SessionEvent) -> Option<String> {
-    match event {
-        SessionEvent::LogChunk { rows, .. } | SessionEvent::LogReplaced { rows, .. } => rows
-            .iter()
-            .find_map(|r| match &r.node {
-                platitude_core::session::RowNode::Worktree(
-                    platitude_core::session::Whose::Other(carried),
-                ) => Some(carried),
-                _ => None,
-            })
-            .map(|c| c.head.to_hex()),
-        _ => None,
-    }
+    crate::support::session::other_worktree_rows(event)
+        .and_then(|(_, rows)| rows.first().map(|c| c.head.to_hex()))
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -295,10 +258,11 @@ async fn the_window_coming_back_reads_the_pane_s_worktree_and_hands_it_the_list(
     session.close_and_wait().await;
 }
 
-/// Worktrees turned back on come back in one pass and one walk: read
-/// worktree by worktree at the pace, each row would walk the history again.
+/// Worktrees turned back on come back together, in one pass laid on the
+/// graph once and walked for not at all — read at the pace, they would come
+/// back one turn at a time.
 #[tokio::test(flavor = "multi_thread")]
-async fn worktrees_turned_back_on_come_back_in_one_walk() {
+async fn worktrees_turned_back_on_come_back_in_one_laying() {
     let (mut repo, _head) = scenario();
     a_worktree_beside(&mut repo);
     let other = repo.path.with_file_name("other");
@@ -309,10 +273,13 @@ async fn worktrees_turned_back_on_come_back_in_one_walk() {
     worktrees_settled(&sink, &session, 2).await;
     paced_off_the_clock(&session);
     session.set_worktrees_pace(WorktreesPace::Off);
-    bounded(
-        "the walk taking the rows down",
-        session.wait_for_graph_passes(),
-    )
+    sink.wait_for("the rows taken down", |events| {
+        events
+            .iter()
+            .rev()
+            .find_map(worktree_rows)
+            .filter(|drawn| *drawn == 0)
+    })
     .await;
 
     session.set_recording(Recording::WithBackground);
@@ -323,14 +290,19 @@ async fn worktrees_turned_back_on_come_back_in_one_walk() {
         session.wait_for_carried_pass(),
     )
     .await;
-    bounded("its walk", session.wait_for_graph_passes()).await;
+    bounded("any walk beside it", session.wait_for_graph_passes()).await;
     {
         let events = sink.events.lock().unwrap();
         let walks = events[from..]
             .iter()
             .filter(|e| matches!(e, SessionEvent::CommandStarted { display, .. } if display.contains("log -z")))
             .count();
-        assert_eq!(walks, 1, "one walk for both rows");
+        assert_eq!(walks, 0, "the history was walked for the rows");
+        let layings = events[from..]
+            .iter()
+            .filter(|e| matches!(e, SessionEvent::LogRelaid { .. }))
+            .count();
+        assert_eq!(layings, 1, "one laying for both rows");
         let drawn = events[from..]
             .iter()
             .rev()

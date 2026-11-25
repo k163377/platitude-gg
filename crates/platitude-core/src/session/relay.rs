@@ -16,6 +16,13 @@
 //! rows their leash crosses. Not dropped at paint time instead: the rows
 //! below own that column's segments, and edges would be left leading
 //! nowhere.
+//!
+//! The same laying, off the walk's record, puts what moved between passes on
+//! screen (`RepoSession::relay_screen`): another worktree's reading going
+//! with the listing, or landing on a commit the history on screen holds.
+//! Neither moved the history, so neither is walked for; a reading landing on
+//! a commit the record does not hold is
+//! (`RepoSession::history_holds_the_readings`).
 
 use super::rows::CarriedRows;
 use super::*;
@@ -54,8 +61,14 @@ impl RepoSession {
     /// Every listing writes it, the worktree pass's own included
     /// (`carried::pass_over_worktrees`): a record older than a reading would
     /// drop the row of a worktree whose reading is the fresher of the two.
+    ///
+    /// A listing that no longer names a worktree — removed, pruned or moved
+    /// (its row is keyed by where it is) — takes that worktree's reading
+    /// with it, and the graph on screen is laid again at once
+    /// ([`Self::relay_screen`]): no history moved, so nothing is walked, and
+    /// no read of that worktree is coming to take its row down.
     pub(super) fn note_worktree_heads(
-        &self,
+        self: &Arc<Self>,
         worktrees: &[crate::worktrees::WorktreeEntry],
         workdir: &Path,
     ) {
@@ -71,8 +84,24 @@ impl RepoSession {
         *relock(&self.worktree_heads) = Arc::new(heads);
         let listed = super::carried::listed(worktrees, workdir);
         let keys: Vec<String> = listed.iter().map(|c| c.key.clone()).collect();
-        self.other_worktrees.list(listed);
+        let reading_went = self.other_worktrees.list(listed);
         self.pacing.change(|rules, at| rules.list(&keys, at));
+        if reading_went {
+            self.relay_screen();
+        }
+    }
+
+    /// Whether the history on screen holds the commit every reading drawn
+    /// stands on — all a laying again needs ([`Self::relay_screen`]). One it
+    /// does not hold is a worktree that has committed, seen by a listing
+    /// before this window's refs were read, or one standing below the
+    /// window: only a walk draws those.
+    pub(super) fn history_holds_the_readings(self: &Arc<Self>) -> bool {
+        let readings = self.carried_current();
+        let shared = self.lock_shared();
+        readings
+            .iter()
+            .all(|reading| shared.walked.holds(&reading.head))
     }
 
     /// The readings the rows may be drawn from — see [`Self::standing_rows`]

@@ -144,6 +144,11 @@ impl Walked {
         self.rows.len()
     }
 
+    /// Whether the walk gave `oid` a row of its own.
+    pub(super) fn holds(&self, oid: &Oid) -> bool {
+        self.rows.iter().any(|row| row.oid == *oid)
+    }
+
     /// Writes down a pass's commit rows, in the order they were walked.
     pub(super) fn extend(&mut self, rows: &[LogRow]) {
         for row in rows {
@@ -563,9 +568,15 @@ impl RepoSession {
         gone
     }
 
-    /// Lays the graph on screen out again for the deletes out now — taking
-    /// away what only they hold, or putting back what a refused one took —
-    /// and sends it where it moved ([`SessionEvent::LogRelaid`]).
+    /// Lays the graph on screen out again for what stands now, and sends it
+    /// where it moved ([`SessionEvent::LogRelaid`]): the deletes out —
+    /// taking away what only they hold, or putting back what a refused one
+    /// took — and the synthetic rows as the readings have them
+    /// ([`RepoSession::standing_rows`]). Asked for wherever either moves
+    /// with no history to walk: a delete accepted or refused, another
+    /// worktree's reading landed or taken off with the listing
+    /// (`session::relay`), and a stream that ended with either moved under
+    /// it.
     ///
     /// Numbered under the graph's lock like every pass
     /// (`run_direct_pass` / `run_swap_pass`), so a consumer never sees
