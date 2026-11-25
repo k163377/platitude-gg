@@ -454,9 +454,9 @@ Item {
             // Every row naming a commit goes there, a worktree row to the commit its checkout stands on — the `HEAD`
             // git writes in its entry (user decision — ask before changing): the row names a worktree, but a worktree
             // stands on a commit. One row answers two questions: the click "where is it", the double-click "go there"
-            // (`SidebarRowGestures.activateRow`; nowhere to go on the worktree this tab stands in). A bare entry names
-            // none and answers a click with nothing. A worktree standing where no ref reaches lands too: its commit is
-            // handed to the walk (`session::walk`).
+            // (`SidebarRowGestures.activateRow`; nowhere to go on the worktree this tab stands in). A worktree with
+            // no commit yet names none and answers a click with nothing. A worktree standing where no ref reaches
+            // lands too: its commit is handed to the walk (`session::walk`).
             navRow.refClicked(navRow.oid_hex)
         }
     }
@@ -614,8 +614,9 @@ Item {
     function rowPressed(button, modifiers, aim) {
         if (button === Qt.RightButton) {
             // Only rows with operations behind them open a menu. A worktree's is the ref menu too: the branch it has
-            // out, or its commit, and its own card (`RefRowMenu.offerOn`).
-            if (!navRow.folder && navRow.oid_hex !== ""
+            // out, or its commit, and its own card (`RefRowMenu.offerOn`) — one with no commit yet has its branch and
+            // its card, and what is made on a commit is not offered there (`offers::ref_menu`).
+            if (!navRow.folder && (navRow.oid_hex !== "" || navRow.kindHint === "worktree")
                     && (navRow.kindHint === "branch"
                         || navRow.kindHint === "remote"
                         || navRow.kindHint === "tag"

@@ -190,7 +190,8 @@ pub struct RefMenuOffers {
     /// (デザイン規約 §ブランチ・コミットへの移動).
     pub branch_here: bool,
     /// merge / rebase with this row as the far side: needs a current
-    /// branch to move, and a row that is neither it nor on its commit.
+    /// branch to move, and a row that is neither it nor on its commit —
+    /// on a commit at all: a branch with no commits yet brings nothing in.
     pub integrate_from: bool,
     /// An operation stands: [`Self::branch_here`] and
     /// [`Self::integrate_from`] keep their seats, greyed until it is
@@ -375,9 +376,9 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
         integrate_from: row.open
             && tree.on_branch()
             && !current
-            && !row
+            && row
                 .commit
-                .is_some_and(|commit| tree.is_head(&commit.to_hex())),
+                .is_some_and(|commit| !tree.is_head(&commit.to_hex())),
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).

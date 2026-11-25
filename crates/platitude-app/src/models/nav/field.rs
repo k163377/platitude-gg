@@ -59,7 +59,8 @@ impl NavSectionModel {
                 // then shows the stashed changes.
                 Entry::Stash(stash) => Value::Spelled(stash.oid.to_hex()),
                 // Where that checkout stands — what a click on the row
-                // jumps to. Empty on a bare entry.
+                // jumps to. Empty on a bare entry and on one with no
+                // commit yet.
                 Entry::Worktree { entry, .. } => {
                     Value::Said(entry.head_hex.as_deref().unwrap_or(""))
                 }

@@ -201,6 +201,30 @@ fn there_is_nothing_to_be_measured_against_without_a_remote() {
     assert!(!offers.set_upstream, "no remote is no question to ask");
 }
 
+/// The branch a worktree with no commits yet has out: nothing stands under
+/// it to start a branch, a tag or a worktree on, or to bring in. The row
+/// still opens that worktree.
+#[test]
+fn a_branch_with_no_commit_yet_offers_nothing_made_on_a_commit() {
+    let main = TreeStanding::on("main");
+    let row = RowStanding {
+        commit: None,
+        leads: Leads::Holder,
+        ..standing(Some(target(RefKind::Branch, "side/empty")), &main)
+    };
+    let offers = ref_menu(&row, FarSide::Unread);
+    assert!(
+        offers.switch_to,
+        "the row opens the worktree that has it out"
+    );
+    assert!(!offers.branch_here, "no commit to start a branch on");
+    assert!(!offers.integrate_from, "no commit to bring in");
+    assert!(
+        !worktree_rows(&row, false, true).here,
+        "no commit to start a worktree on"
+    );
+}
+
 #[test]
 fn the_current_branch_keeps_its_rows_but_moves_and_deletes_nowhere() {
     let offers = offers_on(RefKind::Branch, "main");
