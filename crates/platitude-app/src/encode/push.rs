@@ -165,6 +165,7 @@ impl Record for PushTrack {
         })
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,6 +258,7 @@ mod tests {
         );
         assert_eq!(HeadPush::from_map(&map), None);
     }
+
     /// Either door's answer carries core's press rules, the Qt spellings of
     /// "nothing", and reads back whole.
     #[test]

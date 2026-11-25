@@ -127,7 +127,8 @@ impl NavSectionModel {
     /// and for an empty name.
     ///
     /// The folder is looked at on disk here, once per ask: the box asks per
-    /// keystroke and the menu as it opens, which is when the answer is read.
+    /// keystroke, and a row's lead (`leadOf`) as its menu opens and as it
+    /// is pressed — one lookup of one path, beside the git a press runs.
     pub(super) fn new_worktree(&self, branch: &str) -> Option<NewWorktree> {
         let rows = self.worktree_rows();
         let main = rows.iter().find(|row| row.change == MAIN)?;

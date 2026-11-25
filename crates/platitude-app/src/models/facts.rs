@@ -285,8 +285,9 @@ impl GitFacts {
     }
 
     /// The local branch `local` moved to `start` before HEAD lands on it —
-    /// what the question a move that loses commits answers to. Always one:
-    /// a record's slot answers through `Optional`, which asks no default.
+    /// what the question a move that loses commits answers to. Always one,
+    /// through `Optional` all the same, since `One` asks its record for a
+    /// default and a checkout has none.
     #[qslot]
     fn move_onto(
         &self,
@@ -295,6 +296,7 @@ impl GitFacts {
     ) -> Optional<platitude_core::branch::CheckoutTarget> {
         Optional::some(platitude_core::branch::CheckoutTarget::ForceCreate { local, start })
     }
+
     /// Whether the move a press already sent has reached the screen —
     /// `RepoPage` holds the next press until it has, so a double press
     /// sends one command. `landing_listed`: the branch it lands on is

@@ -32,6 +32,7 @@ impl Record for SwitchMove {
         })
     }
 }
+
 /// `kind` — `branch` lands on a local branch, `remote` makes `local`
 /// tracking the remote-tracking ref, `force` moves `local` to `start`
 /// first — and `local`, the branch every move lands on,

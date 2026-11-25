@@ -362,8 +362,9 @@ impl NavSectionModel {
         WorktreeRows::new(self.worktree_rows())
     }
 
-    /// The worktree at `path` as its row says it (`worktree_of`) — what the
-    /// WORKTREE card of a menu stands on, read as the menu opens.
+    /// The worktree at `path` as its row says it (`worktree_of`) — asked by
+    /// the press and the menu that weigh a worktree row by its path; a
+    /// menu's WORKTREE card reads the same off its row's lead (`leadOf`).
     /// `undefined` for a path not listed, or listed as going.
     #[qslot]
     fn worktree_facts(&self, path: String) -> Optional<WorktreeRow> {
@@ -380,8 +381,9 @@ impl NavSectionModel {
     }
 
     /// Where a new worktree for `branch` would be made and whether git would
-    /// make it there (`new_worktree`) — what `Create worktree here…`'s box and
-    /// the `worktree add` row stand on. `undefined` before the listing
+    /// make it there (`new_worktree`) — what `Create worktree here…`'s box
+    /// stands on, asked per keystroke; a menu's `worktree add` row reads
+    /// the same off its row's lead (`leadOf`). `undefined` before the listing
     /// names the repository's own worktree.
     #[qslot]
     fn new_worktree_for(&self, branch: String) -> Optional<NewWorktree> {
