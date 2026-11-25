@@ -118,7 +118,7 @@ impl GraphModel {
             self.first_matched = false;
             self.tail_matched = false;
             self.max_lanes = 1;
-            self.first_chunk_ms = None;
+            self.first_chunk_timed = false;
             self.total_ms = None;
             self.truncated = false;
             // A restart is not the graph the press was made in; it
@@ -134,11 +134,11 @@ impl GraphModel {
         if generation != self.generation {
             return;
         }
-        if self.first_chunk_ms.is_none()
+        if !self.first_chunk_timed
             && let Some(t0) = self.started_at
         {
             let first_chunk_ms = u64::try_from(t0.elapsed().as_millis()).unwrap_or(u64::MAX);
-            self.first_chunk_ms = Some(first_chunk_ms);
+            self.first_chunk_timed = true;
             tracing::info!(first_chunk_ms, "graph first chunk");
         }
         let avatars = crate::hub::AvatarUrls::current();
@@ -247,7 +247,7 @@ impl GraphModel {
         self.settle_footer(loaded, elapsed_ms, walked, truncated);
         // Only a replacement zeroes these: one message has no first chunk
         // to time, and it answers whatever failed last.
-        self.first_chunk_ms = Some(0);
+        self.first_chunk_timed = true;
         self.error = String::new();
         self.failed = false;
         tracing::info!(
