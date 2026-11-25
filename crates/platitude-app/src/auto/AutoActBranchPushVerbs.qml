@@ -64,7 +64,8 @@ Item {
     }
     /// What the branch's row reads of its push now, off the listing (`NavSectionModel.branchPushFacts`).
     function landed() {
-        return branchesModel.branchPushFacts(acts.branch, repoTab.defaultRemote, repoTab.state === "open", worktree.standing)
+        return branchesModel.branchPushFacts(acts.branch, repoTab.defaultRemote, repoTab.state === "open",
+                                             worktree.standing)
     }
     /// The row as the menu stands. The free words last: a claim is one substring.
     function rowLine() {

@@ -10,7 +10,7 @@ import platitude.ui
 /// there is** (user decision — ask before changing): `↑2`, `↓1`, `↑1 ↓1`. Only a nonzero leg is drawn, as git spells
 /// `[ahead 2]` and never `[ahead 2, behind 0]`, and as other products drop the 0 beside an inline name; a 0 belongs
 /// only in a table where the count has a column of its own. Whoever seats this leaves it empty when both are zero, and
-/// with no upstream or a gone one: it is built only where `counts.level` is false. Level and "no upstream" look alike
+/// with no upstream or a gone one: it shows only where `counts.level` is false. Level and "no upstream" look alike
 /// on the row — accepted (git's short `trackshort` has `=` for level; here it is empty). Every local branch with an
 /// upstream draws it, a branch behind too.
 RowLayout {

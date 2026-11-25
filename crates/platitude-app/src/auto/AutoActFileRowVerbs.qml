@@ -133,7 +133,8 @@ Item {
                 "when": () => ({ "written": driver.wroteAndSettled(), "emptied": bucketAllTimer.left() === 0,
                                  "shown": !repoTab.stagingUnseen,
                                  "followed": Harness.autoActArg === ""
-                                             || page.diffKey !== GitFacts.fileKey(bucketAllTimer.from, Harness.autoActArg),
+                                             || page.diffKey !== GitFacts.fileKey(bucketAllTimer.from,
+                                                                                  Harness.autoActArg),
                                  "diff": Harness.autoActArg === "" || !page.diffSettling,
                                  "page": PageSettled.settled(page) }),
                 "report": () => "wip_heads from=" + bucketAllTimer.from
@@ -653,10 +654,10 @@ Item {
         onTriggered: {
             // The rows; the fetch being over and read back (`RepoTab.fetching`), so the count is settled and the button
             // at rest (seeing it turn is optional — it can end before this page exists; verify-ui verbs.md
-            // §通信中(リング)と起動直後の狙い方); and
-            // `headCounts.behind`: the refs are a feed of their own and land after the rows, and under `--preset behind`
-            // only the fetch moves it off zero. The fetched row arrives chipless and takes the remote name a pass
-            // later. Row zero is that row: the preset opens on a clean tree, so no worktree row stands above it.
+            // §通信中(リング)と起動直後の狙い方); and `headCounts.behind`: the refs are a feed of their own and land
+            // after the rows, and under `--preset behind` only the fetch moves it off zero. The fetched row arrives
+            // chipless and takes the remote name a pass later. Row zero is that row: the preset opens on a clean tree,
+            // so no worktree row stands above it.
             openFetchTimer.complete({
                 "name": "open_fetch_ready",
                 "when": () => ({

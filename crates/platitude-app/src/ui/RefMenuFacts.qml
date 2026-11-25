@@ -17,7 +17,8 @@ QtObject {
     required property GraphModel graphModel
     /// Where the row leads (`leadOf`), the WORKTREE card's worktree and where a new one would go.
     required property NavSectionModel worktreesModel
-    /// What a branch's card reads of its upstream, its push, and whether the row's local branch is there.
+    /// What a branch's or a tag's card stands on (`cardOf`), a branch's push, and whether the row's local branch is
+    /// there.
     required property NavSectionModel branchesModel
     /// The local branch the row lands on (`landsOn` — the one entrance for it).
     required property NavSectionModel remotesModel
@@ -68,7 +69,7 @@ QtObject {
         return refMenuFacts.worktreesModel.leadOf(kind, full, refMenuFacts.remotesModel.landsOn(kind, full), opened)
     }
     /// Whether the local branch that lead lands on is there — a remote row whose local one is takes its way through
-    /// that row (`GitFacts.refMenu` / `switchAction`).
+    /// that row (`GitFacts.refMenu` / `switchMove`).
     function landsListed(lead) {
         return lead.local !== "" && refMenuFacts.branchesModel.oidOfName(lead.local) !== ""
     }

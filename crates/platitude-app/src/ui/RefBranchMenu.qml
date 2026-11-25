@@ -154,9 +154,10 @@ AppMenu {
         /// The name git's early check was asked under (`checkDeleteRequested`), which its answer comes back by
         /// (`checkedBranch`): a rename with the menu up leaves it, the commits being the same (`renamed`).
         property string askedAs: ""
-        /// What the push row stands on, whole (`NavSectionModel.branchPushFacts` — the toolbar's record, `encode::PushRecord`:
-        /// its standing, where it goes, the commit an overwrite is leased to, the upstream the first push's question
-        /// opens on, and what a press does there); `undefined` where the row has no seat (core's `offered`).
+        /// What the push row stands on, whole (`NavSectionModel.branchPushFacts` — the toolbar's record,
+        /// `encode::PushRecord`: its standing, where it goes, the commit an overwrite is leased to, the upstream the
+        /// first push's question opens on, and what a press does there); `undefined` where the row has no seat (core's
+        /// `offered`).
         property var push: undefined
         /// The menu stood again on a reading where the push's far side has moved from the commit the row is leased to
         /// or names another place: the row keeps what it showed and greys asking for the menu to be opened again
@@ -172,9 +173,9 @@ AppMenu {
     /// reading answers no `deleteRemote`, which is what greys the rows that reach it — and `upstreamWhere`, where that
     /// upstream stands); `open` whether the tab is, `merged` what the drawn rows say about the plain delete (`yes` /
     /// `no`, empty for a tip or a reference older than the window, whose answer only git has), and `push` what the push
-    /// row stands on (`NavSectionModel.branchPushFacts`, the record `state.push` holds). Every `facts` a branch card stands
-    /// on carries all of them, a QML test's hand-built ones too: they are written below as they come, and the unset row
-    /// stands on `upstream` / `upstreamWhere`.
+    /// row stands on (`NavSectionModel.branchPushFacts`, the record `state.push` holds). Every `facts` a branch card
+    /// stands on carries all of them, a QML test's hand-built ones too: they are written below as they come, and the
+    /// unset row stands on `upstream` / `upstreamWhere`.
     ///
     /// `again`: why the menu stands again with the card up — `follow`, on what moved while it stood
     /// (`RefRowMenu.follow`, `CommitMenuState.follow`), or `wait`, on what the command it waited for left
@@ -308,7 +309,7 @@ AppMenu {
         qsTr("Switch away first — this is the branch you are on")
     readonly property string blockedByWorktree: Words.checkedOutElsewhere(state.holderLeaf)
     /// The sentence a row of the table greys with for core's word `out` (`state.deleteOut` and its pair); empty for
-    /// none. A reading not read says what a drifted one does, as it did before the two were told apart.
+    /// none. A reading not read says what a drifted one does.
     function deleteWhy(out) {
         return out === "current" ? branchCard.deleteBlockedOnCurrent
              : out === "held" ? branchCard.blockedByWorktree

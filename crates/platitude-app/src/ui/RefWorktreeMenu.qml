@@ -22,8 +22,8 @@ import platitude.ui.words
 // branch another worktree holds — all reach this one card through `RefRowMenu` and `CommitRowMenu`. A new door carries
 // this card too: rows written per door would come to disagree.
 //
-// It reads no model and runs no write: the carrying menu hands it what it read — the worktree the row names
-// (`NavSectionModel.worktreeFacts`) and where a new one would go (`NavSectionModel.newWorktreeFor`) — and runs the
+// It reads no model and runs no write: the carrying menu hands it what it read off the row's lead
+// (`NavSectionModel.leadOf` — the worktree the row names, `card`, and where a new one would go, `place`) — and runs the
 // requests.
 AppMenu {
     id: worktreeMenu

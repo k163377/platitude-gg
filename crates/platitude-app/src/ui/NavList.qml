@@ -419,7 +419,7 @@ AppListView {
         const row = navList.openRow()
         // The free fields (`why=` lock reason, then `path=`) come last: a claim is read as one substring
         // (`verify/verbs/nav.rs`), so everything judged stands ahead of them. `track=` is what the lines draw — on
-        // a worktree's row, the branch it holds (`NavItemDelegate.factsAhead`).
+        // a worktree's row, the branch it holds (`NavItemDelegate.factsCounts`).
         return row === null ? ""
              : row.factsName + " local=" + row.factsLocal
                + " track=" + (row.factsBranch !== "" ? row.factsCounts : row.counts).ahead

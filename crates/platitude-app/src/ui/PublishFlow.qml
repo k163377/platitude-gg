@@ -355,12 +355,12 @@ Item {
 
     /// Asks where `branch` goes, opening on `upstream` — the remote branch it is configured for, fetched or not; "" for
     /// none, or for a branch here, which names no remote — and marking the row `oidHex` ("" for none: the toolbar's is
-    /// the worktree's own). The toolbar hands `pushFacts`' `upstream`, a branch row `branchPushFacts`'s — the same field off
-    /// the same reading (`remote::Upstream::remote_branch`). A press that asks (`publish`) is both "no upstream" and
-    /// "no tracking ref"; the second has its destination written already, and the question opens on it (user decision —
-    /// ask before changing): opening on the default remote and the branch's own name would ask again for the answer
-    /// just given, and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it. Otherwise the
-    /// field defaults to the branch's own name. Net: `publish-upstream`.
+    /// the worktree's own). The toolbar hands `pushFacts`' `upstream`, a branch row `branchPushFacts`'s — the same
+    /// field off the same reading (`remote::Upstream::remote_branch`). A press that asks (`publish`) is both "no
+    /// upstream" and "no tracking ref"; the second has its destination written already, and the question opens on it
+    /// (user decision — ask before changing): opening on the default remote and the branch's own name would ask again
+    /// for the answer just given, and throw it away. Right after `UpstreamFlow` took a name not here, this opens on it.
+    /// Otherwise the field defaults to the branch's own name. Net: `publish-upstream`.
     function startPublishAsk(branch, upstream, oidHex) {
         // Open on the upstream where there is one, even with no tracking ref — but only on a remote still configured:
         // `remoteBranchOf` cuts a lost name at the first slash, and the chooser cannot pick back a row it does not hold.

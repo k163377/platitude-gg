@@ -32,7 +32,7 @@ Item {
     required property bool eol_mark
     /// The path the pane's line-ending card is out for; the card's own close clears it (`WipPane`).
     property string pointedEolPath: ""
-    /// How far a local branch stands from its upstream as of the last fetch; 0 on every other row (`HeadTrack`).
+    /// How far a local branch stands from its upstream as of the last fetch; level on every other row (`HeadTrack`).
     required property var counts
     /// The hand arrived at a row carrying the mark (`on`), or left it — the hand walking off, or the row's path
     /// changing under it (a recycled delegate). The path is the one that asked (`eolAskFor`); which list the row

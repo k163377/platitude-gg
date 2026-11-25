@@ -276,7 +276,7 @@ pub(super) const TABLE: &[Verb] = &[
     // are read by `tests/qml/tst_branchcard.qml`; only `:remote` claims its
     // own here. A window adds the two lookups the rows are told apart by,
     // one run each: `:remote` that the card's record named the reading it
-    // greys on (`branchUpstream`'s `remoteCounterpart`), `worktrees` that
+    // greys on (`cardOf`'s `remoteCounterpart`), `worktrees` that
     // the worktree holding the branch did. `:remote` does not tell a
     // drifted reading from a far side that never arrived — both grey the
     // row in the same words —, so the drift is `offers::ref_menu`'s tests'
@@ -790,8 +790,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             // The current branch's stand-in builds its own row's worth of
             // answers (`HeadPinRow.gatherFacts`) — a second way in, and the
-            // only one whose counts are the section's `headAhead` /
-            // `headBehind`.
+            // only one whose counts are the section's `headCounts`.
             (
                 Arg::Is("head:topic"),
                 "says=main local= track=1/0 held= up=origin/main gone=false",

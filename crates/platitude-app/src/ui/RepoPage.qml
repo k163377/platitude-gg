@@ -618,10 +618,10 @@ FocusScope {
         }
         page.openRepositoryPathRequested(repoTab.worktreeAnswerPath)
     }
-    /// The answer to a branch's push, the toolbar's or the branch row's — its own answer (`RepoTab.pushAnswer`, undefined
-    /// for none). Only a refusal is the page's; the button's mark is `PublishFlow.noteWriteAnswer`'s. **An answer with an
-    /// owner never falls to the group's `lastWriteError`**, so without this step neither `push-outdated`'s report nor
-    /// `push --preset unreachable`'s log comes out. Headless: `push` / `push-retry`.
+    /// The answer to a branch's push, the toolbar's or the branch row's — its own answer (`RepoTab.pushAnswer`,
+    /// undefined for none). Only a refusal is the page's; the button's mark is `PublishFlow.noteWriteAnswer`'s. **An
+    /// answer with an owner never falls to the group's `lastWriteError`**, so without this step neither
+    /// `push-outdated`'s report nor `push --preset unreachable`'s log comes out. Headless: `push` / `push-retry`.
     function absorbPushAnswer() {
         const answer = repoTab.pushAnswer()
         if (answer === undefined || !repoTab.writeAnswerFailed(answer))
