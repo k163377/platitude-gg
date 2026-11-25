@@ -19,7 +19,8 @@ CheckBox {
         appCheck.indicator.width + appCheck.spacing + Math.ceil(boxWords.markWidth) + appCheck.rightPadding
 
     font.pixelSize: Theme.fontMd
-    // Users keep this default; only the band's `Background reads` (`CommandsPane`) drops to `iconLg`.
+    // Users keep this default; the band's `Background reads` (`CommandsPane`) and the commit block's amend and author
+    // boxes (`WipCommitBlock.boxGroup`) drop to `iconLg`.
     implicitHeight: Theme.controlHeight
     // The box's seat: whatever holds the box keeps its step on the left, and the same step comes before the words —
     // the style's own 6 on the left would stack on it (デザイン規約 §アイコンの席「④ の席」— the box's seat is

@@ -46,11 +46,10 @@ Flickable {
     /// What the block would take with nothing in its way — the pane holds it against `blockRoom`.
     readonly property real wants: blockCol.implicitHeight
     /// What stands in the block beside the message pair (`MessageEditor.besidePair`): the column's margins and each row
-    /// under the pair with its step — a row the column gains under the pair goes in here too, or the block scrolls
-    /// with the description still at rest.
+    /// under the pair with its margins and step — a row the column gains under the pair goes in here too, or the block
+    /// scrolls with the description still at rest.
     readonly property real besidePair: 2 * Theme.spaceXs
-        + (amendRow.visible ? amendRow.implicitHeight + Theme.spaceXs : 0)
-        + (authorBox.visible ? authorBox.implicitHeight + Theme.spaceXs : 0)
+        + (block.boxesStand ? boxGroup.implicitHeight + 2 * boxGroup.air + Theme.spaceXs : 0)
         + (commitButton.visible ? commitButton.implicitHeight + Theme.spaceXs : 0)
         + (opExitSeat.visible ? opExitSeat.implicitHeight + Theme.spaceXs : 0)
     /// A rebase, cherry-pick or revert standing anywhere but an `edit` step: the message pair, the amend row and the
@@ -75,6 +74,12 @@ Flickable {
     /// amend of an empty HEAD is not this and goes through (`commit::commit`).
     readonly property bool amendEmpties: block.amending && block.worktree.stagedCount > 0
                                          && block.repoTab.amendEmpties
+    /// Whether the amend row stands: nothing to amend before the first commit, nor in a stopped merge. Kept here with
+    /// `authorOffered`, not read off the boxes: the group that holds them stands on these, and a group reading its
+    /// children's `visible` would never stand again once hidden — a child under a hidden parent reads false.
+    readonly property bool amendOffered: block.worktree.headOid !== "" && !block.composeHidden && !block.amendBarred
+    readonly property bool authorOffered: block.amending && block.repoTab.headAuthorDiffers && !block.composeHidden
+    readonly property bool boxesStand: block.amendOffered || block.authorOffered
     // Writing `checked = false` emits no `toggled`, so the pane is told outright — else `RepoPage.amending` stays and
     // the button sends `--amend`. Headless: `amend-row` (`--preset conflict-staged`: `shown=false barred=true`).
     onAmendBarredChanged: {
@@ -182,65 +187,85 @@ Flickable {
                 besidePair: block.besidePair
                 onWheelPastEnd: pixels => block.rollBlock(pixels)
             }
-            RowLayout {
-                id: amendRow
+            // The amend row and the box that hangs off it, one group as the summary and the description are one pair:
+            // box to box the pair's step (`spaceXs`), the box's own air counted in it (規約 §余白「印が自分で持って
+            // いる余白は、隣の詰めに数える」). Rows of `controlHeight` would hold the boxes four steps apart, and they
+            // would read as two rows of the column rather than one choice and the one that hangs off it.
+            ColumnLayout {
+                id: boxGroup
+                /// The boxes' rows, below `controlHeight` so that box to box can come down to the pair's step.
+                readonly property real rowHeight: Theme.iconLg
+                /// What a `controlHeight` row keeps over and under a `rowHeight` one, kept as the group's margins: the
+                /// group stands off the pair and the button as one control-height row would, and a lone amend row
+                /// stands where it would at `controlHeight`.
+                readonly property real air: (Theme.controlHeight - boxGroup.rowHeight) / 2
+                visible: block.boxesStand
                 Layout.fillWidth: true
-                spacing: Theme.spaceXs
-                // Nothing to amend before the first commit, nor in a stopped merge.
-                visible: block.worktree.headOid !== "" && !block.composeHidden && !block.amendBarred
-                // The words give way before the note does, cut at their end (`AppCheckBox`): at the right pane's floor
-                // the note's warning is the one thing on the row that may not go unread.
-                AppCheckBox {
-                    id: amendBox
-                    text: qsTr("Amend the last commit")
-                    font.pixelSize: Theme.fontSm
+                Layout.topMargin: boxGroup.air
+                Layout.bottomMargin: boxGroup.air
+                // The pair's step less the air each row keeps over and under its box, the box's size asked of the box.
+                spacing: Theme.spaceXs - (boxGroup.rowHeight - amendBox.indicator.height)
+                RowLayout {
+                    id: amendRow
+                    visible: block.amendOffered
                     Layout.fillWidth: true
-                    Layout.maximumWidth: amendBox.implicitWidth
-                    Layout.minimumWidth: amendBox.leastWidth
-                    onToggled: block.amendToggled(checked)
+                    spacing: Theme.spaceXs
+                    // The words give way before the note does, cut at their end (`AppCheckBox`): at the right pane's
+                    // floor the note's warning is the one thing on the row that may not go unread.
+                    AppCheckBox {
+                        id: amendBox
+                        text: qsTr("Amend the last commit")
+                        font.pixelSize: Theme.fontSm
+                        implicitHeight: boxGroup.rowHeight
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: amendBox.implicitWidth
+                        Layout.minimumWidth: amendBox.leastWidth
+                        onToggled: block.amendToggled(checked)
+                    }
+                    Item { Layout.fillWidth: true }
+                    // A tag, not a confirmation: rewriting a pushed commit is undone by a switch or a reset.
+                    Label {
+                        id: pushedNote
+                        visible: block.amending && block.headPublished
+                        text: qsTr("already pushed")
+                        color: Theme.warning
+                        font.pixelSize: Theme.fontSm
+                        readonly property TipAsk pushedTip: TipAsk {
+                            target: pushedNote
+                            asked: amendPushedHover.containsMouse
+                            words: qsTr("Already on a remote — anyone who has it will be out of step")
+                        }
+                        MouseArea {
+                            id: amendPushedHover
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
+                    }
                 }
-                Item { Layout.fillWidth: true }
-                // A tag, not a confirmation: rewriting a pushed commit is undone by a switch or a reset.
-                Label {
-                    id: pushedNote
-                    visible: block.amending && block.headPublished
-                    text: qsTr("already pushed")
-                    color: Theme.warning
+                // An amend keeps the commit's author (git rewrites the committer only); offered only where that
+                // identity differs from the user's — someone else's commit, or one written under another identity, is
+                // the only place it means anything — and unchecked whenever it goes away. Checked, the author date is
+                // now too (`commit --amend --reset-author`). On its own line: beside the amend box, the row's three
+                // labels touch the default 400 pane and run past the right pane's floor — and as a `RowLayout`'s floor
+                // becomes the `ColumnLayout`'s implicit width, what overflows is the whole block (summary, description
+                // and the commit button's right edge past the pane, as in `details-fit`). A dependent choice stacks
+                // under the box it hangs off, in its group, with no indent. No preset stands all three at once: to
+                // judge the room, shoot with a throwaway patch that pins `visible` true.
+                AppCheckBox {
+                    id: authorBox
+                    visible: block.authorOffered
+                    text: qsTr("Make me the author")
                     font.pixelSize: Theme.fontSm
-                    readonly property TipAsk pushedTip: TipAsk {
-                        target: pushedNote
-                        asked: amendPushedHover.containsMouse
-                        words: qsTr("Already on a remote — anyone who has it will be out of step")
+                    implicitHeight: boxGroup.rowHeight
+                    onVisibleChanged: if (!visible) checked = false
+                    readonly property TipAsk authorTip: TipAsk {
+                        target: authorBox
+                        asked: authorBox.hovered
+                        words: qsTr("Replaces the author %1 <%2> with you, dated now")
+                               .arg(block.repoTab.headAuthorName)
+                               .arg(block.repoTab.headAuthorEmail)
                     }
-                    MouseArea {
-                        id: amendPushedHover
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        acceptedButtons: Qt.NoButton
-                    }
-                }
-            }
-            // An amend keeps the commit's author (git rewrites the committer only); offered only where that identity
-            // differs from the user's — someone else's commit, or one written under another identity, is the only
-            // place it means anything — and unchecked whenever it goes away. Checked, the author date is now too
-            // (`commit --amend --reset-author`). On its own line: beside the amend box, the row's three labels touch
-            // the default 400 pane and run past the right pane's floor — and as a `RowLayout`'s floor becomes the
-            // `ColumnLayout`'s implicit width, what overflows is the whole block (summary, description and the commit
-            // button's right edge past the pane, as in `details-fit`). A dependent choice stacks under
-            // the box it hangs off (`spaceXs`, no indent). No preset stands all three at once: to judge the room,
-            // shoot with a throwaway patch that pins `visible` true.
-            AppCheckBox {
-                id: authorBox
-                visible: block.amending && block.repoTab.headAuthorDiffers && !block.composeHidden
-                text: qsTr("Make me the author")
-                font.pixelSize: Theme.fontSm
-                onVisibleChanged: if (!visible) checked = false
-                readonly property TipAsk authorTip: TipAsk {
-                    target: authorBox
-                    asked: authorBox.hovered
-                    words: qsTr("Replaces the author %1 <%2> with you, dated now")
-                           .arg(block.repoTab.headAuthorName)
-                           .arg(block.repoTab.headAuthorEmail)
                 }
             }
             // The toolbar's framed button, so its frame, tone and `!` say its state in a vocabulary already read.
