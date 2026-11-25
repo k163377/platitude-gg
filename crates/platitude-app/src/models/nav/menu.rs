@@ -138,19 +138,21 @@ impl NavSectionModel {
     /// no name, or before the refs are read, it reaches nothing beyond
     /// `against`.
     pub(super) fn tag_card(&self, name: &str, against: String, aim: &str) -> TagMenu {
-        self.all
-            .tag_menu(name, &against, aim)
-            .filter(|_| !name.is_empty())
-            .unwrap_or_else(|| {
-                platitude_core::session::TagMenuFacts {
-                    far: platitude_core::offers::TagFar {
-                        push_remote: against,
-                        ..Default::default()
-                    },
+        let found = if name.is_empty() {
+            None
+        } else {
+            self.all.tag_menu(name, &against, aim)
+        };
+        found.unwrap_or_else(|| {
+            platitude_core::session::TagMenuFacts {
+                far: platitude_core::offers::TagFar {
+                    push_remote: against,
                     ..Default::default()
-                }
-                .into()
-            })
+                },
+                ..Default::default()
+            }
+            .into()
+        })
     }
 }
 
