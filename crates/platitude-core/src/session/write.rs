@@ -216,7 +216,7 @@ impl RepoSession {
         if stands_in {
             // Off the caller's thread: laying out is a pass over the window.
             let s = Arc::clone(self);
-            self.runtime.spawn(async move { s.relay_leaving() });
+            self.runtime.spawn(async move { s.relay_screen() });
         }
         Some(operation.id)
     }

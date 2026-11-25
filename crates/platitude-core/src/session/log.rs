@@ -442,7 +442,7 @@ impl RepoSession {
                 // A stream cannot leave rows out as it goes, so a delete
                 // that is out takes its commits off the finished graph.
                 if self.deletes_out() {
-                    self.relay_leaving();
+                    self.relay_screen();
                 }
                 watch.answered();
                 RefreshOutcome::Changed

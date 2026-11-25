@@ -437,7 +437,7 @@ impl RepoSession {
     /// back now, so the refusal is about rows on screen.
     pub(super) fn leaving_refused(self: &Arc<Self>, write: OperationId) {
         if self.leaving_done(write) {
-            self.relay_leaving();
+            self.relay_screen();
         }
     }
 
@@ -570,7 +570,7 @@ impl RepoSession {
     /// Numbered under the graph's lock like every pass
     /// (`run_direct_pass` / `run_swap_pass`), so a consumer never sees
     /// generations out of the order they were installed in.
-    pub(super) fn relay_leaving(self: &Arc<Self>) {
+    pub(super) fn relay_screen(self: &Arc<Self>) {
         let standing = self.standing_rows();
         let holders = self.holders();
         let Some(mut guard) = self.store_shared() else {
