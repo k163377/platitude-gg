@@ -34,8 +34,11 @@ Item {
         if (act === "switch") {
             // Over a stopped operation or a tree with conflicts nothing is written, and the run waits out the
             // watchdog: those two trees are `switch-stopped` / `switch-conflicted`'s.
+            // A branch the press sends no checkout for (the one HEAD is on) sends nothing here either.
             const lead = page.refFacts.leadOf("branch", arg, "")
-            page.switchTo(GitFacts.switchMove(lead, worktree.standing, true).checkout)
+            const move = GitFacts.switchMove(lead, worktree.standing, true).checkout
+            if (move !== undefined)
+                page.switchTo(move)
         } else if (act === "move-ask") {
             // The question a move raises landing on a remote branch whose local one holds commits of its own
             // (`move-branch` is the same road past the bar). Waited on at `AskBar.settled` like `switch-stopped`:

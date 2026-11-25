@@ -684,8 +684,6 @@ FocusScope {
     }
 
     function switchTo(move, leaving) {
-        if (move === undefined)
-            return
         if (page.standsInTheWay(leaving)) {
             leaveFlow.startAsk(move.local, function (leave) { page.switchTo(move, leave) })
             return
