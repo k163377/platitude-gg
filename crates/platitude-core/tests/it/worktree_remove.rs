@@ -104,11 +104,12 @@ async fn uncommitted_work_keeps_the_worktree_and_the_reason_is_the_screens() {
     assert!(listed(&mut repo, &worktree));
 }
 
-/// A lock the menu did not see (taken after it opened) keeps the worktree;
-/// the report carries the reason it was locked with — its owner's words,
-/// not git's.
+/// A lock the menu did not see (taken after it opened) keeps the worktree,
+/// with a reason or none; the report carries no fact — the reason is its
+/// owner's words, and the screen's line is its own — while the log keeps
+/// git's sentence with the reason in it.
 #[tokio::test]
-async fn a_lock_keeps_the_worktree_and_says_its_reason() {
+async fn a_lock_keeps_the_worktree_and_the_line_is_the_screens() {
     let (mut repo, worktree) = with_worktree("locked");
     repo.git(&[
         "worktree",
@@ -130,8 +131,15 @@ async fn a_lock_keeps_the_worktree_and_says_its_reason() {
     .expect_err("git keeps a locked worktree");
 
     let report = err.report().expect("a refusal is a report");
-    assert_eq!(report.kind, ReportKind::WorktreeLocked, "{err}");
-    assert_eq!(report.fact, "held", "the lock's own reason");
+    assert_eq!(
+        (report.kind, report.fact.as_str()),
+        (ReportKind::WorktreeLocked, ""),
+        "{err}"
+    );
+    assert!(
+        err.to_string().contains("lock reason: held"),
+        "the log keeps git's words: {err}"
+    );
     assert!(worktree.exists());
 
     repo.git(&["worktree", "unlock", &worktree.to_string_lossy()]);

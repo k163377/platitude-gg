@@ -417,24 +417,8 @@ pub async fn remove(
         name,
         command,
         &out,
-        lock_reason(&said),
+        relied_messages::WORKTREE_LOCKED.found_in(&said),
     ))
-}
-
-/// The reason a worktree was locked with, out of git's refusal to remove
-/// it — the owner's own words, which git sets between its two halves
-/// (builtin/worktree.c `remove_worktree`): `Some("")` for a lock without
-/// one, `None` for no lock. A full stop the owner ended it with is left
-/// off: the screen's sentence closes it (`It is locked: …`).
-fn lock_reason(said: &str) -> Option<&str> {
-    let (_, rest) = said.split_once(relied_messages::WORKTREE_LOCKED.text())?;
-    let Some(reason) = rest.strip_prefix(relied_messages::LOCK_REASON.text()) else {
-        return Some("");
-    };
-    let reason = reason
-        .rsplit_once(relied_messages::REMOVE_ADVICE.text())
-        .map_or(reason, |(reason, _)| reason);
-    Some(reason.trim_suffix('.'))
 }
 
 /// Where the worktree at `from` goes when its folder is renamed `name`:
@@ -773,45 +757,6 @@ mod tests {
         assert_eq!(
             worktrees_folder("C:/work/repo").as_deref(),
             Some("C:/work/repo.worktrees")
-        );
-    }
-
-    /// git's two refusals of a locked worktree (the minimum and 2.55), a
-    /// reason over two lines, and a refusal for something else.
-    #[test]
-    fn a_locks_reason_is_read_out_of_gits_refusal() {
-        assert_eq!(
-            lock_reason(
-                "fatal: cannot remove a locked working tree, lock reason: on a stick\n\
-                 use 'remove -f -f' to override or unlock first"
-            ),
-            Some("on a stick")
-        );
-        assert_eq!(
-            lock_reason(
-                "fatal: cannot remove a locked working tree, lock reason: one\ntwo\n\
-                 use 'remove -f -f' to override or unlock first"
-            ),
-            Some("one\ntwo")
-        );
-        assert_eq!(
-            lock_reason(
-                "fatal: cannot remove a locked working tree, lock reason: on a stick.\n\
-                 use 'remove -f -f' to override or unlock first"
-            ),
-            Some("on a stick"),
-            "the screen's sentence closes it, so its own full stop goes"
-        );
-        assert_eq!(
-            lock_reason(
-                "fatal: cannot remove a locked working tree;\n\
-                 use 'remove -f -f' to override or unlock first"
-            ),
-            Some("")
-        );
-        assert_eq!(
-            lock_reason("fatal: 'C:/t/wt' contains modified or untracked files"),
-            None
         );
     }
 

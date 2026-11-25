@@ -594,11 +594,11 @@ QtObject {
         case "worktree-refused":
         case "worktree-not-added":
             return qsTr("git turned it down — see %1").arg(Words.commandsTitle)
-        // Locked after the menu opened. The reason is the lock's owner's own words (`worktree lock --reason`), as the
-        // row's tip says it before the press.
-        //: %1 is the reason the worktree was locked with.
+        // Locked after the menu opened. Not the lock's reason: that is its owner's own words (`worktree lock --reason`),
+        // which this line never carries (デザイン規約 §答えの要らない報せ) — the row's tip says them before the press, and
+        // git's sentence with them is in the log.
         case "worktree-locked":
-            return fact === "" ? qsTr("It is locked.") : qsTr("It is locked: %1.").arg(fact)
+            return qsTr("It is locked.")
         // git goes on past what it could not delete — in the worktree's folder (a file held open on Windows, a path
         // too long) or its own record of it — and names the folder, not the file.
         //: %1 is the command log's own title.

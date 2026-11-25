@@ -58,18 +58,6 @@ era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu
 held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
 held	builtin/worktree.c	die: "cannot remove a locked working tree;\\nuse 'remove -f -f' to override or unlock first"
 
-form	LOCK_REASON	, lock reason: 
-source	git	builtin/worktree.c	lock reason:
-era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
-held	builtin/worktree.c	die: "cannot move a locked working tree, lock reason: %s\\nuse 'move -f -f' to override or unlock first"
-held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
-
-form	REMOVE_ADVICE	\nuse 'remove -f -f'
-source	git	builtin/worktree.c	use 'remove -f -f'
-era	upstream v2.43.0..master, gfw v2.43.0.windows.1..main, apple Git-155, ubuntu noble-updates
-held	builtin/worktree.c	die: "cannot remove a locked working tree, lock reason: %s\\nuse 'remove -f -f' to override or unlock first"
-held	builtin/worktree.c	die: "cannot remove a locked working tree;\\nuse 'remove -f -f' to override or unlock first"
-
 form	INDEX_UNWRITTEN	could not write index
 source	git	builtin/stash.c	could not write index
 era	upstream v2.43.0..v2.43.1, gfw v2.43.0.windows.1, ubuntu noble-updates

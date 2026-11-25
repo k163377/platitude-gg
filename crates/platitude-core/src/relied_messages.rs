@@ -146,21 +146,8 @@ pub(crate) const NOT_A_WORKTREE: Words = Words("' is not a working tree");
 /// `worktree remove` turned down over a lock.
 ///
 /// - git: `builtin/worktree.c` `cannot remove a locked working tree`
-/// - witness: `worktree_remove::a_lock_keeps_the_worktree_and_says_its_reason`
+/// - witness: `worktree_remove::a_lock_keeps_the_worktree_and_the_line_is_the_screens`
 pub(crate) const WORKTREE_LOCKED: Words = Words("cannot remove a locked working tree");
-
-/// What sets the lock's reason off after [`WORKTREE_LOCKED`] — the reason
-/// is the owner's own words, which the screen sets in a sentence.
-///
-/// - git: `builtin/worktree.c` `lock reason:`
-/// - witness: `worktree_remove::a_lock_keeps_the_worktree_and_says_its_reason`
-pub(crate) const LOCK_REASON: Words = Words(", lock reason: ");
-
-/// git's advice after the reason, which the screen's sentence leaves out.
-///
-/// - git: `builtin/worktree.c` `use 'remove -f -f'`
-/// - witness: `worktree_remove::a_lock_keeps_the_worktree_and_says_its_reason`
-pub(crate) const REMOVE_ADVICE: Words = Words("\nuse 'remove -f -f'");
 
 // ---- Another worktree's work applied here (`session::carried_apply`, `report::carried_refused`)
 

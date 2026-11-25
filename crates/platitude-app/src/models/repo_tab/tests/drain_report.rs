@@ -240,9 +240,9 @@ fn the_refusals_only_gits_run_tells_reach_the_page_under_their_names() {
         (report::stash_not_renamed(failed), "stash-rename-locked", ""),
         (report::stash_gone("9f4a21c0"), "stash-gone", ""),
         (
-            report::worktree_not_removed("wt", "git".into(), &out(128, ""), Some("on a stick")),
+            report::worktree_not_removed("wt", "git".into(), &out(128, ""), true),
             "worktree-locked",
-            "on a stick",
+            "",
         ),
         (
             report::worktree_not_added("wt", "git".into(), &out(128, ""), Some("topic")),

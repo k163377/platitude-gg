@@ -14,9 +14,10 @@ Item {
     width: 420
     height: 200
 
-    /// A lock's reason as its owner wrote it, wider than the bar — the one thing of somebody else's a line carries.
-    readonly property string longReason: "kept on the release laptop until the 2.0 build is signed off"
-                                         + " by the whole team, then moved to the archive disk"
+    /// The longest second line the screen says with no name in it, wider than the bar (`stale-stage`), and the
+    /// sentence as `Words` gives it.
+    readonly property string longLine: "The file changed on disk since these rows were read. It has been read again —"
+                                       + " make the selection on the rows that are there now."
 
     NoticeBar {
         id: bar
@@ -174,14 +175,13 @@ Item {
             compare(bar.detail, "The branch hotfix/patch was made anyway — see GIT COMMANDS")
         }
 
-        /// A worktree git would not remove, by what kept it: changes, a lock — with its owner's reason, or none —
-        /// anything else, and a removal that stopped part way. Each line the screen's own.
+        /// A worktree git would not remove, by what kept it: changes, a lock — never its owner's reason —, anything
+        /// else, and a removal that stopped part way. Each line the screen's own.
         function test_a_worktree_kept_says_what_kept_it() {
             for (const kind of ["worktree-kept", "worktree-locked", "worktree-refused"]) {
                 compare(Words.writeReported(kind, "", "topic"), "topic was not removed", kind)
                 compare(Words.reportTone(kind), "warning", kind)
             }
-            compare(Words.writeReportedWhy("worktree-locked", "", "topic", "on a stick"), "It is locked: on a stick.")
             compare(Words.writeReportedWhy("worktree-locked", "", "topic", ""), "It is locked.")
             compare(Words.writeReportedWhy("worktree-refused", "", "topic", ""),
                     "git turned it down — see GIT COMMANDS")
@@ -427,12 +427,11 @@ Item {
             compare(rule.color, Theme.borderSubtle, "a report in no state at all still closes with an edge")
         }
 
-        /// The one thing of somebody else's a line carries — a lock's reason — is plain text: a `<` in it is a
-        /// character, not markup that takes the rest of the line away.
+        /// A line with no place to go and no name in it is drawn as plain text, the screen's sentence whole.
         function test_a_line_without_a_place_is_drawn_as_plain_text() {
-            dress("worktree-locked", "", "topic", "held <b>until</b> Friday")
+            dress("worktree-locked", "", "topic", "")
             tryVerify(() => bar.settled)
-            compare(bar.detail, "It is locked: held <b>until</b> Friday.")
+            compare(bar.detail, "It is locked.")
             const field = findDetail()
             compare(field.textFormat, Text.PlainText)
             compare(field.text, bar.detail)
@@ -441,27 +440,27 @@ Item {
         /// Quoted whole (デザイン規約 §答えの要らない報せ). Both halves are the claim: `wordsCut` for the words, and
         /// the height, since a bar wrapping inside a height it never grew shows as much as one that elided.
         function test_a_long_line_wraps_and_the_bar_grows_by_it() {
-            dress("worktree-locked", "", "topic", "on a stick")
+            dress("worktree-locked", "", "topic", "")
             tryVerify(() => bar.settled)
             const oneLine = bar.openHeight
             verify(!bar.wordsCut, "a line that fits is not cut either")
 
-            dress("worktree-locked", "", "topic", root.longReason)
+            dress("stale-stage", "", "", "")
             // Both: the words ask for their room a frame before the bar gets it, and the bar animates there.
             tryVerify(() => bar.openHeight > oneLine && bar.settled)
             verify(!bar.wordsCut, "and not one word of it was cut")
-            compare(bar.detail, "It is locked: " + root.longReason + ".", "with the whole of it still in the field")
+            compare(bar.detail, root.longLine, "with the whole of it still in the field")
         }
 
         /// `OK` keeps the middle of the bar (`NoticeBar`). Asked on a bar the words made taller
         /// than the pill: on one line, every rule about the pill's place answers the same.
         function test_the_pill_keeps_the_middle_however_many_lines_the_words_take() {
-            dress("worktree-locked", "", "topic", "on a stick")
+            dress("worktree-locked", "", "topic", "")
             tryVerify(() => bar.settled)
             fuzzyCompare(pillMiddle(), bar.height / 2, 1, "centred while the line is one line")
             const oneLine = bar.openHeight
 
-            dress("worktree-locked", "", "topic", root.longReason)
+            dress("stale-stage", "", "", "")
             tryVerify(() => bar.openHeight > oneLine && bar.settled)
             verify(bar.height > bar.pill.height + 2 * Theme.spaceMd,
                    "the words, not the pill, are what the bar is now as tall as: " + bar.height)
@@ -486,14 +485,14 @@ Item {
         /// Other words in a standing bar start at their first line, wherever the reader had scrolled the last ones to:
         /// the heading is what says what the report is about.
         function test_new_words_open_at_their_first_line() {
-            dress("worktree-locked", "", "topic", root.longReason)
+            dress("stale-stage", "", "", "")
             tryVerify(() => bar.settled && bar.openHeight > bar.leastHeight + 10)
             bar.room = bar.leastHeight
             const view = under(bar, item => item.contentY !== undefined && item.contentHeight !== undefined)
             tryVerify(() => bar.settled && bar.wordsScroll && view.contentHeight > view.height + 10)
             view.contentY = 10
             compare(view.contentY, 10)
-            dress("worktree-locked", "", "parked", root.longReason)
+            dress("conflicted-part", "", "", "")
             tryCompare(view, "contentY", 0, undefined, "the new report's first line")
         }
 
@@ -501,11 +500,11 @@ Item {
         /// it and the words scroll inside, never cut, down to a line of the heading beside the `OK`, which keeps the
         /// bar's middle. The least is the same whatever the bar says: the window's floor is built on it.
         function test_a_short_column_scrolls_the_words_and_keeps_the_ok() {
-            dress("worktree-locked", "", "topic", "on a stick")
+            dress("worktree-locked", "", "topic", "")
             tryVerify(() => bar.settled)
             const least = bar.leastHeight
-            // The heading and two lines of the reason at the least, taller than the room handed below.
-            dress("worktree-locked", "", "topic", root.longReason)
+            // The heading and two lines of the words at the least, taller than the room handed below.
+            dress("stale-stage", "", "", "")
             tryVerify(() => bar.settled && bar.openHeight > least + 10)
             compare(bar.leastHeight, least, "the least does not move with the words")
 

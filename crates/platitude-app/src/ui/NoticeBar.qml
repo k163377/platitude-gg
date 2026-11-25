@@ -209,9 +209,9 @@ Rectangle {
                     pixelSize: Theme.fontMd
                     weight: Theme.fontWeightStrong
                 }
-                // Wrapped, never cut (デザイン規約 §答えの要らない報せ). A line can carry somebody's own words (a lock's reason) and
-                // run long; the bar grows by the words and the middle of the page goes down by as much, up to what the
-                // column has, past which they scroll. Plain text: a `<` in those words is a character, not markup.
+                // Wrapped, never cut (デザイン規約 §答えの要らない報せ): the bar grows by the words and the middle of the page
+                // goes down by as much, up to what the column has, past which they scroll. Plain text: the line is `Words`'
+                // sentence, and a name set in it is its characters, never markup.
                 PlainTextLabel {
                     id: detailWord
                     Layout.fillWidth: true

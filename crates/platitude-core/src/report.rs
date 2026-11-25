@@ -122,8 +122,9 @@ pub enum ReportKind {
     /// its uncommitted changes — nothing was deleted. git's words end in
     /// advice to force it, which the screen does not offer.
     WorktreeKept,
-    /// The same, because it is locked; the report's fact is the reason it
-    /// was locked with (`worktree lock --reason`), empty for none.
+    /// The same, because it is locked. No fact: the lock's reason is its
+    /// owner's words, which the second line never carries (デザイン規約
+    /// §答えの要らない報せ) — the row's tip says them before the press.
     WorktreeLocked,
     /// The same, for anything else git turned down (submodules in it, its
     /// `.git` not what git expects).
@@ -303,9 +304,8 @@ pub struct WriteReport {
     /// for none.
     pub name: String,
     /// The one thing the screen's second line names beside the heading's
-    /// names, for the two kinds that have one: the reason a worktree was
-    /// locked with ([`ReportKind::WorktreeLocked`]) and the branch a failed
-    /// add left ([`ReportKind::WorktreeBranchLeft`]). Empty for the rest.
+    /// names, for the one kind that has one: the branch a failed add left
+    /// ([`ReportKind::WorktreeBranchLeft`]). Empty for the rest.
     ///
     /// Never git's or anybody's message: the sentence is the screen's
     /// (`Words.writeReportedWhy`, rules-refs/app-ui.md「Rust に文言を置かない」),
@@ -484,23 +484,21 @@ pub fn stash_gone(oid: &str) -> crate::error::GitError {
 /// `tests/it/worktree_remove.rs` and this module's unit tests, the half
 /// removal copied off a real run.
 ///
-/// `locked` is the reason git said the worktree is locked with (empty for
-/// none), where a lock is what it said no for — the first thing it checks.
+/// `locked` is whether a lock is what git said no for — the first thing it
+/// checks.
 #[must_use]
 pub fn worktree_not_removed(
     name: &str,
     command: String,
     out: &crate::process::GitOutput,
-    locked: Option<&str>,
+    locked: bool,
 ) -> crate::error::GitError {
     let report = match (out.code, locked) {
-        (128, Some(reason)) => {
-            WriteReport::about(ReportKind::WorktreeLocked, name).with_fact(reason)
-        }
-        (128, None) if crate::relied_messages::WORKTREE_UNCLEAN.found_in(&out.stderr_utf8()) => {
+        (128, true) => WriteReport::about(ReportKind::WorktreeLocked, name),
+        (128, false) if crate::relied_messages::WORKTREE_UNCLEAN.found_in(&out.stderr_utf8()) => {
             WriteReport::about(ReportKind::WorktreeKept, name)
         }
-        (128, None) => WriteReport::about(ReportKind::WorktreeRemoveRefused, name),
+        (128, false) => WriteReport::about(ReportKind::WorktreeRemoveRefused, name),
         _ => WriteReport::about(ReportKind::WorktreeHalfRemoved, name),
     };
     reported(report, command, out)
@@ -845,7 +843,7 @@ mod tests {
             "worktree-cur",
             "git worktree remove".to_string(),
             &out(255, said),
-            None,
+            false,
         );
 
         let report = err.report().expect("a report");
@@ -856,11 +854,11 @@ mod tests {
     }
 
     /// git's 128s before anything is deleted (builtin/worktree.c at the
-    /// minimum and 2.55): the lock the listing shows, checked first, then
-    /// changes, then the rest.
+    /// minimum and 2.55): the lock the listing shows, checked first — its
+    /// reason never the report's —, then changes, then the rest.
     #[test]
     fn a_removal_git_turned_down_is_told_by_the_lock_and_the_changes() {
-        let removal = |said: &str, locked: Option<&str>| {
+        let removal = |said: &str, locked: bool| {
             let err = worktree_not_removed("wt", "git".to_string(), &out(128, said), locked);
             let report = err.report().expect("a report").clone();
             (report.kind, report.fact)
@@ -869,29 +867,29 @@ mod tests {
             removal(
                 "fatal: cannot remove a locked working tree, lock reason: on a stick\n\
                  use 'remove -f -f' to override or unlock first",
-                Some("on a stick")
+                true
             ),
-            (ReportKind::WorktreeLocked, "on a stick".to_string())
+            (ReportKind::WorktreeLocked, String::new())
         );
         assert_eq!(
             removal(
                 "fatal: cannot remove a locked working tree;\n\
                  use 'remove -f -f' to override or unlock first",
-                Some("")
+                true
             ),
             (ReportKind::WorktreeLocked, String::new())
         );
         assert_eq!(
             removal(
                 "fatal: 'C:/t/wt' contains modified or untracked files, use --force to delete it",
-                None
+                false
             ),
             (ReportKind::WorktreeKept, String::new())
         );
         assert_eq!(
             removal(
                 "fatal: working trees containing submodules cannot be moved or removed",
-                None
+                false
             ),
             (ReportKind::WorktreeRemoveRefused, String::new())
         );
