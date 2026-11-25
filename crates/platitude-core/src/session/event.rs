@@ -525,9 +525,8 @@ pub enum SessionEvent {
     /// having looked after it — the last of its three boundaries: nothing
     /// more is said under this id. Read by now: the tree and refs as the
     /// write's [`AfterWrite`] asks, the graph where either moved, the
-    /// stash and worktree listings and the reads they asked for, and the
-    /// author configuration after an identity write. Not the reachability
-    /// walk (`settle_head_reach`), which answers when it can.
+    /// stash and worktree listings and the reads they asked for. Not the
+    /// reachability walk (`settle_head_reach`), which answers when it can.
     ///
     /// The reads are made once behind a burst of writes (`session::write`):
     /// the writes of a burst settle one after another behind the same reads,

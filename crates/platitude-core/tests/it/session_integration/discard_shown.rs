@@ -21,7 +21,7 @@ fn subjects(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<String> {
 fn drawn(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<Oid> {
     rows.values()
         .map(|row| row.oid)
-        .filter(|oid| !Oid::hex_is_zero(&oid.to_hex()))
+        .filter(|oid| !oid.is_zero())
         .collect()
 }
 

@@ -109,10 +109,11 @@ impl AvatarError {
     }
 }
 
-/// The key a picture is filed under — the one fold the log parser, the
-/// details pane and the store share. git returns addresses as each commit
-/// spelled them (mailmap matches case-insensitively but does not rewrite
-/// what it did not map), so without it one person files under two keys.
+/// The key a picture is filed under — the one fold every lookup of a face
+/// goes through, while rows keep the address as written. git returns
+/// addresses as each commit spelled them (mailmap matches
+/// case-insensitively but does not rewrite what it did not map), so
+/// without it one person files under two keys.
 pub fn key(email: &str) -> String {
     email.trim().to_lowercase()
 }

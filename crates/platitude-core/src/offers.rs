@@ -11,9 +11,9 @@
 //!
 //! **These are the rules, and the app holds no copy.** It asks by value
 //! through `GitFacts` (`refMenu` — one answer per stand, read by both
-//! entrances through `RefMenuFacts` — and `commitMenuOffers`, frozen into
+//! entrances through `RefMenuFacts` — and `commitMenu`, frozen into
 //! the menus' `can*` as `RefRowMenu.offerOn` / `CommitMenuState.openRowMenu`
-//! open; `switchAction` for `RepoPage.switchToRef`), and what follows from
+//! open; `switchMove` for `RepoPage.switchToRef`), and what follows from
 //! the standing state arrives as `WorktreeModel` properties derived at
 //! drain (`movesBlocked` / `leaveUndoes` / `leaveCode` / `opSkipFree`).
 //! QML keeps only the lookups that feed them, the `qsTr` wording and each

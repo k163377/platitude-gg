@@ -44,13 +44,14 @@ pub fn join_message(subject: &str, body: &str) -> String {
 }
 
 /// A recorded message as a reader is shown it, in the two fields: the
-/// first line, and the rest from past the blank lines that part it from
-/// the first (git's `%b`) — each as written, a subject's indent and a
-/// body's own blanks and blank lines kept (デザイン規約
+/// first line, and the rest from past the empty lines that part it from
+/// the first — each as written, a subject's indent and a body's own
+/// blanks and blank lines kept (デザイン規約
 /// §リポジトリの文は原文で描く). Line endings are only line breaks:
 /// `\r\n` and a lone `\r` read as `\n`, all a text box keeps of them. A
 /// field a caret comes into takes [`split_message`]'s cut instead, the
-/// one a save writes.
+/// one a save writes. Not git's `%s` / `%b`: those take the whole first
+/// paragraph as the subject, and the subject field holds one line.
 pub fn shown_message(message: &str) -> (String, String) {
     let message = message.replace("\r\n", "\n").replace('\r', "\n");
     let (subject, rest) = message.split_once('\n').unwrap_or((&message, ""));

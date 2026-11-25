@@ -54,13 +54,15 @@ impl Oid {
         }
     }
 
-    /// Whether this is the all-zero sentinel [`Oid::zero_like`] writes.
+    /// Whether this is the all-zero sentinel [`Oid::zero_like`] and
+    /// [`Oid::zero_unsized`] write.
     pub fn is_zero(&self) -> bool {
         self.as_bytes().iter().all(|b| *b == 0)
     }
 
-    /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`]
-    /// writes. Empty is not a sentinel: it is "no id at all".
+    /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`] and
+    /// [`Oid::zero_unsized`] write. Empty is not a sentinel: it is "no id
+    /// at all".
     pub fn hex_is_zero(hex: &str) -> bool {
         !hex.is_empty() && hex.bytes().all(|b| b == b'0')
     }

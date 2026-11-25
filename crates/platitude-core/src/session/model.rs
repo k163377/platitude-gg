@@ -293,13 +293,14 @@ pub enum RelaidRow {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {
     pub row: u32,
-    /// The commit; the all-zero id (`Oid::zero_like`) on an uncommitted
-    /// row, this worktree's or another's.
+    /// The commit; the all-zero id (`Oid::zero_like` / `zero_unsized`) on an
+    /// uncommitted row, this worktree's or another's.
     pub oid: Oid,
     pub short_sha: String,
     pub author: String,
-    /// The author's address, lowercased and mailmapped — what a locally
-    /// assigned picture is filed under. Empty on the WIP row.
+    /// The author's address, mailmapped, as the commit spells it — a locally
+    /// assigned picture is looked up by its [`crate::avatar::key`]. Empty on
+    /// the WIP row.
     pub author_email: String,
     /// Whoever the message credits alongside the author, in its order.
     /// Empty on the WIP and stash rows.

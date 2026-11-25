@@ -116,9 +116,10 @@ impl PushStanding {
     }
 }
 
-/// Where a mark sends the push to another remote than the upstream's
-/// ([`PushRoute::goes_elsewhere`]): the tracking ref of the branch over there, and
-/// the branch's counts against it ([`super::push_track`] on the status
+/// Where a mark sends the push to another remote than the upstream's, the
+/// upstream there to count against ([`PushRoute::counts_elsewhere`]): the
+/// tracking ref of the branch over there, and the branch's counts against
+/// it ([`super::push_track`] on the status
 /// tick, [`super::push_tracks`] on the refs read for the other branches).
 /// The upstream's counts are about the other remote.
 ///
@@ -170,7 +171,8 @@ pub struct StatusPush {
     /// it can read like a remote branch's.
     pub upstream_here: bool,
     /// The counts against where a mark sends the push, when that is not
-    /// the upstream's remote ([`PushRoute::goes_elsewhere`]); none
+    /// the upstream's remote and the upstream is there to count against
+    /// ([`PushRoute::counts_elsewhere`]); none
     /// everywhere else, and where nothing here tracks the branch over
     /// there.
     pub track: Option<PushTrack>,

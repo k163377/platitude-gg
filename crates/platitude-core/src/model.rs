@@ -90,8 +90,8 @@ pub struct CommitMeta {
     pub parents: Box<[Oid]>,
     /// Author name id in the session's [`StrPool`].
     pub author: u32,
-    /// Author address id in the same pool, lowercased — the key a locally
-    /// assigned picture is filed under (names change and collide).
+    /// Author address id in the same pool, as the commit spells it — a locally
+    /// assigned picture is looked up by its [`crate::avatar::key`].
     pub author_email: u32,
     /// `Co-authored-by` trailers as (name, address) pool ids, in message
     /// order. Not mailmapped — a trailer is message text, so the same
