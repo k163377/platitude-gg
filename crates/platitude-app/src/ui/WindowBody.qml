@@ -120,7 +120,7 @@ Item {
             sourceComponent: Component {
                 RepoPage {
                     index: -1
-                    tab_id: -1
+                    tab_id: undefined
                     onOpenRepositoryPicker: mainUi.window.openRepositoryPicker()
                 }
             }

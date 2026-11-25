@@ -18,9 +18,9 @@ Item {
     required property ListView view
     required property var tabsModel
 
-    /// The tab in hand — by id, since the order changes under a drag — where inside it the hand took hold, and where
-    /// its left edge has been carried to in the strip's coordinates.
-    property int heldId: -1
+    /// The tab in hand — by id, since the order changes under a drag; undefined with nothing in hand — where inside it
+    /// the hand took hold, and where its left edge has been carried to in the strip's coordinates.
+    property var heldId: undefined
     property real heldGrabX: 0
     property real heldX: 0
     /// Where the hand last reported in the scene, and how far past the run it is asking — the distance the strip
@@ -133,7 +133,7 @@ Item {
 
     /// Set down: the order is already final, so the tab only returns to its row and the strip stops travelling.
     function dropTab() {
-        carry.heldId = -1
+        carry.heldId = undefined
         carry.heldPush = 0
     }
 
@@ -143,7 +143,7 @@ Item {
     // steadying a tab on the last place.
     FrameAnimation {
         id: run
-        running: carry.heldId >= 0 && carry.heldPush !== 0 && carry.view.contentWidth > carry.view.width
+        running: carry.heldId !== undefined && carry.heldPush !== 0 && carry.view.contentWidth > carry.view.width
         onTriggered: carry.driftRun(run.frameTime * 1000)
     }
 }

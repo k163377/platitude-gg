@@ -34,8 +34,9 @@ import platitude.ui.words
 FocusScope {
     id: page
     required property int index
-    required property int tab_id
-    readonly property bool blank: tab_id < 0
+    /// The tab this page stands on (`Hub`'s key for its session); undefined on the blank page, which stands on none.
+    required property var tab_id
+    readonly property bool blank: tab_id === undefined
 
     /// The blank page's "Open repository…" button (folder picker).
     signal openRepositoryPicker()

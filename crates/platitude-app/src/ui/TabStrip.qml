@@ -514,7 +514,7 @@ Item {
         runX: tabs.x
         runWidth: tabs.width
         runOffset: tabs.contentX
-        carrying: tabCarry.heldId >= 0
+        carrying: tabCarry.heldId !== undefined
         stripHeight: tabStrip.height
         onActivated: tabStrip.showFrontTab()
     }
