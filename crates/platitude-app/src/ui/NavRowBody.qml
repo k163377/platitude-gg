@@ -154,8 +154,8 @@ RowLayout {
     Loader {
         id: remoteSeat
         /// An upstream that is gone (`models::nav::field` の `Role::Bucket`), kept as a badge: `has_remote` is false
-        /// once the far side deleted the ref. A role, not a slot (`upstreamGoneOf`): a slot read in a binding freezes,
-        /// and the badge would not follow a fetch.
+        /// once the far side deleted the ref. A role, not a slot (`readingOf`): a slot read in a binding freezes, and
+        /// the badge would not follow a fetch.
         readonly property bool gone: body.row.kindHint === "branch" && body.row.bucket !== ""
         // Stays while the row is open, unlike the seat mark: the counts beside it measure from this cloud and would
         // shift (user decision — ask before changing; デザイン規約 §左メニューの所作).

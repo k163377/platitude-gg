@@ -44,18 +44,13 @@ QtObject {
         const local = kind === "remote" && leaf && row.sectionModel !== null
                     ? row.sectionModel.trackedBy(row.fullName) : ""
         const branch = kind === "worktree" && leaf ? row.bucket : ""
-        // What that branch reads, and whether git can reach it. A branch row reads the slot its badge is drawn from
-        // (`Role::Bucket`), so the mark and the line cannot disagree; a row naming another's branch asks its section.
-        // **Two doors**: `upstreamOf` answers only a reading that is there (`BranchItem.upstream`), so a gone one is
-        // asked for apart — read through the first alone, a gone branch would never say so.
+        // What that branch reads, and whether git can reach it (`readingOf`): a branch row asks its own section, a row
+        // naming another's branch asks that branch's.
         const asked = kind === "worktree" && branch !== "" && row.branchesModel !== null ? branch : ""
         // The branch's measure: its own row carries it as a role (a fetch moves it); a row naming another's asks.
         const counts = asked !== "" ? row.branchesModel.countsOf(asked) : row.counts
-        const upstream = kind === "branch" && row.sectionModel !== null
-                       ? row.sectionModel.upstreamOf(row.fullName)
-                       : asked !== "" ? row.branchesModel.upstreamOf(asked) : ""
-        const gone = kind === "branch" ? row.bucket
-                   : asked !== "" ? row.branchesModel.upstreamGoneOf(asked) : ""
+        const reads = kind === "branch" ? navFacts.readingOf(row.sectionModel, row.fullName)
+                    : navFacts.readingOf(asked !== "" ? row.branchesModel : null, asked)
         // The remotes carrying this tag, each `{remote, apart}` — apart from where the remote this window acts on has
         // it (`NavSectionModel.tagRemotes`). One call for both halves, so they cannot disagree. Not
         // `remoteTagDrift`, which measures against the copy here. Headless: `nav-open-tag` on `--preset tagremotes`.
@@ -75,11 +70,7 @@ QtObject {
         const holds = kind === "branch" ? row.fullName : kind === "remote" ? local : ""
         const held = row.folder || holds === "" || row.worktreesModel === null ? ""
                    : row.worktreesModel.worktreeHolding(holds)
-        // The commit each named line stands on — where a press on it takes the graph. A gone reading, or a name
-        // whose section this row was not handed, goes nowhere.
-        const reading = gone !== "" || upstream === "" ? ""
-                      : kind === "branch" && row.sectionModel !== null ? row.sectionModel.upstreamOidOf(row.fullName)
-                      : asked !== "" ? row.branchesModel.upstreamOidOf(asked) : ""
+        // The commit each named line stands on — where a press on it takes the graph.
         const named = local !== "" ? local : branch
         const tip = named === "" || row.branchesModel === null ? "" : row.branchesModel.oidOfName(named)
         return {
@@ -107,14 +98,15 @@ QtObject {
             "heldBy": held === "" ? "" : GitFacts.pathLeaf(held),
             // The holder is the repository's own worktree, which wears the house (`NavSectionModel.homeBranch`).
             "heldHome": held !== "" && holds === row.worktreesModel.homeBranch,
-            "upstream": gone !== "" ? gone : upstream,
-            "gone": gone !== "",
+            "upstream": reads.upstream,
+            "gone": reads.gone,
+            "upstreamHere": reads.upstreamHere,
             // The commit the row itself stands on — a line going there is the row's own (`joined`).
             "at": row.oid_hex,
             // Where a press on the line naming each of them goes (`place`).
             "branchTo": navFacts.place("branch", named, tip),
             "heldTo": held === "" ? null : navFacts.place("worktree", held, row.worktreesModel.headOfWorktree(held)),
-            "upstreamTo": navFacts.place("remote", upstream, reading),
+            "upstreamTo": reads.upstreamTo,
             "counts": counts,
             // The state git noted on a checkout, and the words that came with it (`Role::Change` / `Role::OrigPath`).
             "state": kind === "worktree" && leaf ? row.change : "",
@@ -172,16 +164,31 @@ QtObject {
              : { "mark": a.heldHome ? "home" : "tree", "markTint": Theme.success, "text": a.heldBy,
                  "tone": Theme.textSecondary, "note": "", "to": a.heldTo }
     }
-    /// What that branch is measured against. One git cannot reach says so in git's word (`gone`), the whole line in
-    /// `warning`, and goes nowhere: the row's far-end mark wears `!`, but a mark cannot tell "nothing to follow" from
-    /// "something to follow", so the line says it in words. Name first, since every line's words start in one column.
+    /// What branch `name` is measured against, asked of the branches' section `model` (`NavSectionModel.readingOf`),
+    /// wherever it stands: a reading listed on a remote, a branch here (`remote = .`), or gone from the listing.
+    /// `upstreamHere` names the section the upstream is a row of: its mark, and where a press goes (`readingLine`). A
+    /// null `model`, or a branch measured against nothing, reads an empty `upstream`.
+    function readingOf(model, name) {
+        const read = model === null ? undefined : model.readingOf(name)
+        if (read === undefined)
+            return { "upstream": "", "gone": false, "upstreamHere": false, "upstreamTo": null }
+        const section = read.upstreamHere ? "branch" : "remote"
+        return { "upstream": read.upstream, "gone": read.gone, "upstreamHere": read.upstreamHere,
+                 "upstreamTo": navFacts.place(section, read.upstream, read.upstreamOid) }
+    }
+    /// What that branch is measured against (`readingOf`), in the mark and colour of the section it is a row of — a
+    /// remote's reading, or a branch here in BRANCHES' (規約 §ref の種別). One git cannot reach says so in git's word
+    /// (`gone`), the whole line in `warning`, and goes nowhere: the row's far-end mark wears `!`, but a mark cannot
+    /// tell "nothing to follow" from "something to follow", so the line says it in words. Name first, since every
+    /// line's words start in one column.
     function readingLine(a) {
         if (a.upstream === "")
             return null
-        const tint = a.gone ? Theme.warning : Theme.textSecondary
-        return { "mark": "remote", "markTint": tint,
+        const tone = a.gone ? Theme.warning : Theme.textSecondary
+        return { "mark": a.upstreamHere ? "branch" : "remote",
+                 "markTint": a.gone ? Theme.warning : a.upstreamHere ? Theme.accent : Theme.textSecondary,
                  "text": a.gone ? qsTr("%1 is gone").arg(a.upstream) : a.upstream,
-                 "tone": tint, "note": "", "to": a.gone ? null : a.upstreamTo }
+                 "tone": tone, "note": "", "to": a.gone ? null : a.upstreamTo }
     }
     /// One remote carrying this tag, by name alone. Whether it stands on the right reading is said by colour, `warning`
     /// (user decision; デザイン規約 §状態), and why by the note a rest opens — a clause on one line would make

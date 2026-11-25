@@ -231,13 +231,12 @@ Rectangle {
     }
     function gatherFacts() {
         const branch = headPin.branchesModel.headName
-        // The rows' table (`NavFacts`), handed a BRANCHES row's worth of answers; `bucket` is git's own `[gone]`.
+        // The rows' table (`NavFacts`), handed a BRANCHES row's worth of answers.
         const said = NavFacts.answers({
             "kindHint": "branch",
             "folder": false,
             "name": branch,
             "fullName": branch,
-            "bucket": headPin.branchesModel.headUpstreamGone,
             "oid_hex": headPin.branchesModel.headOid,
             "change": "",
             "orig_path": "",

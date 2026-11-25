@@ -298,8 +298,7 @@ Item {
         graphPane: pane
         // The stacked rows' second lines: none, every branch standing alone.
         branchesModel: QtObject {
-            function upstreamGoneOf(name) { return "" }
-            function upstreamOf(name) { return "" }
+            function readingOf(name) { return undefined }
         }
         remotesModel: QtObject {
             function trackedBy(name) { return "" }

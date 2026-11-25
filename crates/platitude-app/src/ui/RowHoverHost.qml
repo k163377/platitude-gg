@@ -447,15 +447,11 @@ Item {
                  ? NavFacts.apartLine(NavFacts.apartNote(host.tagsModel.tagWeighedAgainst(name, host.tagAgainst)))
                  : null
         if (chip.kind === "branch") {
-            const gone = host.branchesModel.upstreamGoneOf(name)
-            const reads = gone !== ""
-                        ? gone : host.branchesModel.upstreamOf(name)
-            if (reads === "" || (gone === "" && here[reads] === 1))
+            // Wherever it stands, as the left panel's row reads it (`NavFacts.readingOf`).
+            const reads = NavFacts.readingOf(host.branchesModel, name)
+            if (reads.upstream === "" || (!reads.gone && here[reads.upstream] === 1))
                 return null
-            // Where a press on the name goes (`NavFacts.place`).
-            const line = NavFacts.readingLine(
-                { "upstream": reads, "gone": gone !== "",
-                  "upstreamTo": NavFacts.place("remote", reads, host.branchesModel.upstreamOidOf(name)) })
+            const line = NavFacts.readingLine(reads)
             // The counts are the branch's, so the chip draws them on the name (`RefChip.trackOnName`).
             line.counts = host.branchesModel.countsOf(name)
             return line

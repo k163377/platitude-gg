@@ -952,11 +952,12 @@ Item {
     PageStage {
         id: pullBranchTimer
         name: "pull_branch"
-        /// Whether the branch stands level with its upstream. Both slots answer "" for a name the listing lost, which
+        /// Whether the branch stands level with its upstream. A name the listing lost has no tip and no reading, which
         /// must not read as level.
         function level() {
             const tip = branchesModel.oidOfName(pullPressTimer.branch)
-            return tip !== "" && tip === branchesModel.upstreamOidOf(pullPressTimer.branch)
+            const read = branchesModel.readingOf(pullPressTimer.branch)
+            return tip !== "" && read !== undefined && tip === read.upstreamOid
         }
         onTriggered: pullBranchTimer.complete({
             "name": "pull_branch_ready",

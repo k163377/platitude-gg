@@ -26,14 +26,8 @@ Item {
             }
             return -1
         }
-        function upstreamOf(name) {
-            return "origin/" + name
-        }
-        function upstreamOidOf(name) {
-            return ""
-        }
-        function upstreamGoneOf(name) {
-            return ""
+        function readingOf(name) {
+            return { "upstream": "origin/" + name, "gone": false, "upstreamHere": false, "upstreamOid": "" }
         }
         function countsOf(name) {
             return { "ahead": 0, "behind": 0, "level": true }

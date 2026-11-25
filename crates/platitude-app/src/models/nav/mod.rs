@@ -248,6 +248,7 @@ mod item;
 mod menu;
 mod qmodel;
 mod qobject;
+mod reading;
 mod role;
 mod source;
 #[cfg(test)]
@@ -264,6 +265,7 @@ use item::{FOLDED, HELD, NavItem, fold_state};
 /// The worktree rows' state words, which `GitFacts` hands to core's card rule.
 pub(crate) use item::{LOCKED, MAIN, PRUNABLE};
 pub(crate) use menu::{CardRecord, RowLead};
+use reading::UpstreamReading;
 use role::{Arranged, Role, Row, Value};
 use source::{Bucket, Entry, Source, letters_of, pr_key};
 pub(crate) use worktree_card::{NewWorktree, WorktreeName, WorktreeRow, WorktreeRows};

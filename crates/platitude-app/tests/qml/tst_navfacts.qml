@@ -21,6 +21,11 @@ Item {
     height: 240
 
     property string sectionUpstream: ""
+    /// A branch here the row's branch is measured against (`remote = .`), and whether its upstream is here at all.
+    property string sectionLocal: ""
+    property bool sectionHere: false
+    /// The upstream the row's branch is configured with while nothing in the listing answers to it (git's `[gone]`).
+    property string sectionGone: ""
     property string sectionTracked: ""
     property var sectionCarried: []
     property bool sectionHereApart: false
@@ -41,8 +46,10 @@ Item {
     /// the remotes carrying the name.
     readonly property QtObject sections: QtObject {
         id: sections
-        function upstreamOf(name) { return root.sectionUpstream }
-        function upstreamOidOf(name) { return root.sectionReadingAt }
+        function readingOf(name) {
+            return root.readingFrom(root.sectionGone, root.sectionUpstream, root.sectionLocal, root.sectionHere,
+                                    root.sectionReadingAt)
+        }
         function trackedBy(full) { return root.sectionTracked }
         function tagRemotes(name, against) { return root.sectionCarried }
         function tagWeighedAgainst(name, against) { return root.sectionBy }
@@ -55,9 +62,9 @@ Item {
     /// stands.
     readonly property QtObject branches: QtObject {
         id: branches
-        function upstreamOf(name) { return root.branchUpstream }
-        function upstreamOidOf(name) { return root.branchReadingAt }
-        function upstreamGoneOf(name) { return root.branchGone }
+        function readingOf(name) {
+            return root.readingFrom(root.branchGone, root.branchUpstream, "", false, root.branchReadingAt)
+        }
         function countsOf(name) { return root.pair(root.branchAhead, root.branchBehind) }
         function oidOfName(name) { return root.branchAt }
     }
@@ -92,6 +99,14 @@ Item {
     /// A pair as the sections hand it (`encode::counts`), standing in for Rust.
     function pair(ahead, behind) {
         return { "ahead": ahead, "behind": behind, "level": ahead === 0 && behind === 0 }
+    }
+
+    /// What `NavSectionModel.readingOf` answers off one section's stand-ins (`UpstreamReading`): at most one of the
+    /// three places filled, a gone one on no commit, and `undefined` where there is none.
+    function readingFrom(gone, listed, local, here, at) {
+        const upstream = gone !== "" ? gone : listed !== "" ? listed : local
+        return upstream === "" ? undefined
+             : { "upstream": upstream, "gone": gone !== "", "upstreamHere": here, "upstreamOid": gone !== "" ? "" : at }
     }
 
     /// One row, off the fields a case names over empty defaults. Closed, so a case that wants the lines drawn says so
@@ -172,10 +187,11 @@ Item {
             row.destroy()
         }
 
-        /// The gone state is a role, not a lookup: `upstreamOf` answers only refs that exist, so a row reading only
-        /// that would lose the `[gone]` reading entirely.
+        /// The gone state comes off the same lookup as the reading (`readingOf`), which names the upstream wherever it
+        /// stands: a row reading only the listed refs would lose the `[gone]` reading entirely.
         function test_a_branch_whose_reading_is_gone_wears_the_state_whole() {
             root.sectionUpstream = ""
+            root.sectionGone = "origin/release-1.2"
             const row = root.rowOf({ "kindHint": "branch", "name": "release-1.2",
                                      "full": "release-1.2", "bucket": "origin/release-1.2" })
             verify(row.gatherFacts())
@@ -187,6 +203,41 @@ Item {
             compare(row.factsLines[0].markTint, Theme.warning)
             compare(row.factsLines[0].to, null, "a reading git cannot reach is not anywhere to go")
             row.destroy()
+            root.sectionGone = ""
+        }
+
+        /// A branch measured against a branch here (`remote = .`) names it as BRANCHES does — its mark, its colour —
+        /// and a press goes to that row: the row draws its measure against that branch, so the line says which.
+        function test_a_branch_measured_against_one_here_names_it_as_a_branch() {
+            root.sectionUpstream = ""
+            root.sectionLocal = "main"
+            root.sectionHere = true
+            const row = root.rowOf({ "kindHint": "branch", "name": "stacked", "full": "stacked",
+                                     "counts": root.pair(1, 0) })
+            verify(row.gatherFacts())
+            compare(row.factsUpstream, "main")
+            compare(row.factsLines.length, 1)
+            compare(row.factsLines[0].mark, "branch")
+            compare(row.factsLines[0].markTint, Theme.accent, "the BRANCHES section's own colour")
+            compare(row.factsLines[0].text, "main")
+            compare(row.factsLines[0].tone, Theme.textSecondary)
+            compare(row.factsLines[0].to.key, "branch:main", "that branch's row, not a remote's")
+            compare(row.factsLines[0].to.oid, "a1")
+            row.destroy()
+
+            // Gone, it is still a branch here: the mark stays BRANCHES', the warning colours the whole line.
+            root.sectionLocal = ""
+            root.sectionGone = "base"
+            const lost = root.rowOf({ "kindHint": "branch", "name": "stacked", "full": "stacked", "bucket": "base" })
+            verify(lost.gatherFacts())
+            compare(lost.factsLines.length, 1)
+            compare(lost.factsLines[0].mark, "branch")
+            compare(lost.factsLines[0].markTint, Theme.warning)
+            compare(lost.factsLines[0].text, "base is gone")
+            compare(lost.factsLines[0].to, null)
+            lost.destroy()
+            root.sectionGone = ""
+            root.sectionHere = false
         }
 
         /// Asked of the table itself: a row here cannot reach `heldBy` (the note at the top). What it pins is the

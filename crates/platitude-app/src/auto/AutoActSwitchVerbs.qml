@@ -151,8 +151,10 @@ Item {
             const local = worktree.branch
             // Read before the rename, as `RepoPage.renameRow` reads its own: afterwards the row answers to the new
             // name.
-            localUpstreamAskTimer.spokenFor = branchesModel.upstreamOf(local)
-            localUpstreamAskTimer.lost = branchesModel.upstreamGoneOf(local) !== ""
+            const read = branchesModel.readingOf(local)
+            const remote = read !== undefined && !read.gone && !read.upstreamHere
+            localUpstreamAskTimer.spokenFor = remote ? read.upstream : ""
+            localUpstreamAskTimer.lost = read !== undefined && read.gone
             localUpstreamAskTimer.comes = !gone ? ""
                 : GitFacts.remoteRefBeside(localUpstreamAskTimer.spokenFor, want[0], repoTab.remoteNames)
             sidebarPane.beginRename("branch", local, local)
@@ -318,8 +320,10 @@ Item {
         /// What the answer to the turned bar wrote, read off the listing behind it: the upstream the branch names
         /// now — no row answers to it, so it is the gone one's seat —, and whether anything went up.
         function written() {
-            return !localUpstreamAskTimer.gone ? ""
-                 : " upstream=" + branchesModel.upstreamGoneOf(worktree.branch)
+            if (!localUpstreamAskTimer.gone)
+                return ""
+            const read = branchesModel.readingOf(worktree.branch)
+            return " upstream=" + (read !== undefined && read.gone ? read.upstream : "")
                    + " sent=" + (acts.remotesModel.oidOfName(localUpstreamAskTimer.comes) !== "")
         }
         function line() {

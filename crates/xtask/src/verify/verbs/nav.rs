@@ -771,19 +771,18 @@ pub(super) const TABLE: &[Verb] = &[
     Verb {
         name: "nav-open",
         when: &[
-            // The ordinary branch row: the only claim reaching the
-            // section's own lookup (`upstreamOf`) — the row below reads a
-            // gone upstream, which is a role.
+            // The ordinary branch row: the section's own lookup
+            // (`readingOf`) answering a reading listed on a remote.
             (
                 Arg::Is("branch:2"),
                 "says=main local= track=1/0 held= up=origin/main gone=false",
             ),
             // A reading git can no longer reach (`--preset gone`, the one
             // repository with a `[gone]` upstream; the row wears the
-            // warning colour and `!`): the role (`Role::Bucket`) reaching
-            // the row. `gone` is a role and `upstreamOf` answers only refs
-            // that exist, so a row reading just one of the two loses this
-            // state (`up=` empty, `gone=false`).
+            // warning colour and `!`): the same lookup answering a gone one,
+            // off the `BranchItem` the row's badge (`Role::Bucket`) is drawn
+            // from. A lookup answering only refs that exist loses this state
+            // (`up=` empty, `gone=false`).
             (
                 Arg::Is("branch:1"),
                 "says=release-1.2 local= track=0/0 held= up=origin/release-1.2 gone=true",

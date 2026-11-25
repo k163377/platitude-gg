@@ -414,18 +414,20 @@ impl NavSectionModel {
         self.row_of(&name)
     }
 
-    /// The remote branch this one speaks for (`origin/main`); empty when
-    /// it speaks for none, and for every section but the branches.
+    /// What branch `name` is measured against, wherever it stands
+    /// ([`UpstreamReading`]) — the line an opened row and a chip's card
+    /// name it on (`NavFacts.readingOf`), and the commit a press on it
+    /// goes to. Off the same `BranchItem` the row's badge is drawn from
+    /// (`Role::Bucket`), so the two cannot disagree. `undefined` where it
+    /// is measured against nothing, for a name this section does not list,
+    /// and for every section but the branches.
     ///
     /// The configured upstream only, never a remote branch of the same name
     /// (user decision — ask before changing): a fallback would seat the
     /// delete table's remote rows on a branch with no upstream (`topic-a`).
     #[qslot]
-    fn upstream_of(&self, name: String) -> String {
-        self.all
-            .branch_named(&name)
-            .map(|branch| branch.upstream.as_str().to_string())
-            .unwrap_or_default()
+    fn reading_of(&self, name: String) -> Optional<UpstreamReading> {
+        Optional::new(self.all.branch_named(&name).and_then(UpstreamReading::of))
     }
 
     /// The other way round: the local branch measured against this
@@ -438,23 +440,6 @@ impl NavSectionModel {
         self.all
             .branch_named(&name)
             .map(|branch| branch.tracked_by.as_str().to_string())
-            .unwrap_or_default()
-    }
-
-    /// The reading this branch is measured against and cannot reach —
-    /// git's `[gone]` (`BranchItem::upstream_gone`). Empty where the branch
-    /// tracks nothing or what it tracks is here, and for every section but
-    /// the branches.
-    ///
-    /// A name, as the row's own slot carries it (`models::nav::field` の
-    /// `Role::Bucket`). Asked by rows naming somebody else's branch — a
-    /// worktree's row says of its branch what the BRANCHES row would
-    /// (デザイン規約 §左メニューの所作).
-    #[qslot]
-    pub(super) fn upstream_gone_of(&self, name: String) -> String {
-        self.all
-            .branch_named(&name)
-            .map(|branch| branch.upstream_gone.as_str().to_string())
             .unwrap_or_default()
     }
 
@@ -527,21 +512,6 @@ impl NavSectionModel {
                 .branch_named(&name)
                 .map(|branch| branch.counts)
                 .unwrap_or_default(),
-        )
-    }
-
-    /// The commit this branch's configured upstream stands on, hex — the
-    /// reference point `branch --delete` measures the tip against
-    /// (`BranchItem::upstream_oid`); empty where there is none, and git
-    /// then measures against HEAD. Where a press on an opened row's
-    /// upstream line goes (`NavFacts`, `RowHoverHost`); a menu reads the
-    /// same off its BRANCH card's record (`upstreamOid`).
-    #[qslot]
-    fn upstream_oid_of(&self, name: String) -> String {
-        crate::encode::oid_text(
-            self.all
-                .branch_named(&name)
-                .and_then(|branch| branch.upstream_oid),
         )
     }
 

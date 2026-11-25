@@ -685,12 +685,12 @@ Item {
     function followFact(to) {
         navRow.factsFollowed(navRow.rowKey, to.oid)
     }
-    /// Where this row's answers come off: its own section's model (`upstreamOf`) and the worktrees' section
+    /// Where this row's answers come off: its own section's model (`readingOf`) and the worktrees' section
     /// (`worktreeHolding`), the only one holding the worktrees.
     property var sectionModel: null
     property var worktreesModel: null
-    /// The branches' own section, which a worktree's row asks about the branch it holds (`upstreamOf` /
-    /// `upstreamGoneOf`) — what that branch's own row would say of itself. Null in every other list.
+    /// The branches' own section, which a worktree's row asks about the branch it holds (`readingOf` / `countsOf`) —
+    /// what that branch's own row would say of itself. Null in every other list.
     property var branchesModel: null
     /// TAGS only: the remote this window's tag rows act on, the reading a tag's open lines are read against
     /// (`NavList.pushRemote`).
