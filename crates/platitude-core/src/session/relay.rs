@@ -172,18 +172,18 @@ pub(super) fn lay_without(
     let mut out: Vec<LogRow> = Vec::with_capacity(rows.len() + 1);
     out.extend(laying.top());
     for row in rows {
-        if is_synthetic(&row) {
+        // Uncommitted rows are made fresh from the readings, above.
+        let Some(commit) = row.commit() else {
             continue;
-        }
-        let oid = row.oid;
-        if gone.contains(&oid) {
+        };
+        if gone.contains(&commit.oid) {
             continue;
         }
         let (made, g) = laying.commit(
-            &oid,
-            &row.parents,
-            !row.stash_ref.is_empty(),
-            row.provisional,
+            &commit.oid,
+            &commit.parents,
+            !commit.stash_ref.is_empty(),
+            commit.provisional,
         );
         out.extend(made);
         out.push(LogRow {
@@ -262,12 +262,6 @@ impl Laying {
             self.builder.push_ids(oid, parents, stash || provisional),
         )
     }
-}
-
-/// Every worktree's uncommitted row carries the all-zero id, which no
-/// commit can.
-fn is_synthetic(row: &LogRow) -> bool {
-    row.oid.is_zero()
 }
 
 /// The readings still describing where the listing says each worktree is.

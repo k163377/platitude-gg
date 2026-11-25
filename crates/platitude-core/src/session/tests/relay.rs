@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use super::super::relay::{Standing, lay, still_where_the_listing_says};
-use super::super::{Carried, LogRow};
+use super::super::{Carried, CommitNode, LogRow, RowNode, Whose};
 use crate::graph::GraphBuilder;
 use crate::oid::Oid;
 use crate::status::Kinds;
@@ -20,25 +20,30 @@ fn walked(id: u8, parents: &[u8], builder: &mut GraphBuilder) -> LogRow {
     let g = builder.push_ids(&mine, &parents, false);
     LogRow {
         row: g.row,
-        oid: mine,
-        short_sha: mine.short_hex(8),
-        author: "Test".to_string(),
-        author_email: "test@example.com".to_string(),
-        co_authors: Vec::new(),
-        time: 1_700_000_000 + i64::from(id),
-        subject: format!("commit {id:02x}"),
-        body: String::new(),
         node_lane: g.node_lane,
         node_color: g.node_color,
         width: g.width,
         segments: g.segments,
-        labels: Vec::new(),
-        stash_ref: String::new(),
-        published: false,
-        carried: None,
-        parents,
-        provisional: false,
+        node: RowNode::Commit(CommitNode {
+            oid: mine,
+            short_sha: mine.short_hex(8),
+            author: "Test".to_string(),
+            author_email: "test@example.com".to_string(),
+            co_authors: Vec::new(),
+            time: 1_700_000_000 + i64::from(id),
+            subject: format!("commit {id:02x}"),
+            body: String::new(),
+            labels: Vec::new(),
+            stash_ref: String::new(),
+            published: false,
+            parents,
+            provisional: false,
+        }),
     }
+}
+
+fn is_another_worktrees(row: &LogRow) -> bool {
+    matches!(row.node, RowNode::Worktree(Whose::Other(_)))
 }
 
 fn history() -> Vec<LogRow> {
@@ -52,7 +57,13 @@ fn history() -> Vec<LogRow> {
 
 fn where_they_sit(rows: &[LogRow]) -> Vec<(String, u16, u8)> {
     rows.iter()
-        .map(|r| (r.oid.to_hex(), r.node_lane, r.node_color))
+        .map(|r| {
+            (
+                r.oid().expect("a commit's row").to_hex(),
+                r.node_lane,
+                r.node_color,
+            )
+        })
         .collect()
 }
 
@@ -77,10 +88,10 @@ fn the_uncommitted_row_can_be_put_on_a_graph_that_was_walked_without_it() {
     );
 
     assert_eq!(laid.len(), 4, "the row was not put on");
-    assert!(
-        laid[0].oid.is_zero(),
-        "the row is not the one at the top: {}",
-        laid[0].oid.to_hex()
+    assert_eq!(
+        laid[0].node,
+        RowNode::Worktree(Whose::Here),
+        "the row is not the one at the top"
     );
     assert_eq!(
         where_they_sit(&laid[1..]),
@@ -117,26 +128,26 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
     let (was, _) = lay(history(), &standing(None, vec![worktree(1)]), Some(oid(3)));
     let at_one = was
         .iter()
-        .position(|r| r.carried.is_some())
+        .position(is_another_worktrees)
         .expect("the worktree drew no row");
     assert_eq!(
-        was[at_one + 1].oid.to_hex(),
-        oid(1).to_hex(),
+        was[at_one + 1].oid(),
+        Some(oid(1)),
         "the row is not above the commit its reading names"
     );
 
     let (now, _) = lay(was, &standing(None, vec![worktree(3)]), Some(oid(3)));
     let at_three = now
         .iter()
-        .position(|r| r.carried.is_some())
+        .position(is_another_worktrees)
         .expect("the worktree drew no row after it moved");
     assert_eq!(
-        now[at_three + 1].oid.to_hex(),
-        oid(3).to_hex(),
+        now[at_three + 1].oid(),
+        Some(oid(3)),
         "the row stayed on the commit the worktree left"
     );
     assert_eq!(
-        now.iter().filter(|r| r.carried.is_some()).count(),
+        now.iter().filter(|r| is_another_worktrees(r)).count(),
         1,
         "the row the last reading drew was kept as well"
     );
@@ -147,7 +158,7 @@ fn a_worktree_is_laid_where_its_reading_puts_it_now() {
 fn the_row_stands_alone_where_there_is_no_commit_to_leash_to() {
     let (laid, _) = lay(Vec::new(), &standing(Some(Vec::new()), Vec::new()), None);
     assert_eq!(laid.len(), 1);
-    assert!(laid[0].oid.is_zero());
+    assert_eq!(laid[0].node, RowNode::Worktree(Whose::Here));
     assert!(
         laid[0].segments.is_empty(),
         "a leash was drawn to nothing: {:?}",
@@ -189,8 +200,9 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
 #[test]
 fn laying_out_again_rewrites_the_lanes_and_nothing_a_row_says() {
     let mut walked_rows = history();
-    walked_rows[1].published = true;
-    walked_rows[1].subject = "the subject the walk read".to_string();
+    let read = walked_rows[1].commit_mut().expect("a commit's row");
+    read.published = true;
+    read.subject = "the subject the walk read".to_string();
 
     let (laid, _) = lay(
         walked_rows,
@@ -200,6 +212,7 @@ fn laying_out_again_rewrites_the_lanes_and_nothing_a_row_says() {
 
     let same = laid
         .iter()
+        .filter_map(LogRow::commit)
         .find(|r| r.oid == oid(2))
         .expect("the commit was lost");
     assert!(same.published, "the published mark was dropped");

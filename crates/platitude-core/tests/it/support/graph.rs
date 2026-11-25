@@ -8,6 +8,7 @@ use platitude_core::session::{LogRow, RefLabel, SessionEvent};
 /// One row as a consumer of the event stream ends up showing it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SeenRow {
+    /// Empty on a row of uncommitted work, as the UI's row has it.
     pub oid_hex: String,
     pub labels: Vec<RefLabel>,
 }
@@ -57,8 +58,8 @@ pub fn replay_graph(events: &[SessionEvent]) -> BTreeMap<u32, SeenRow> {
             into.insert(
                 r.row,
                 SeenRow {
-                    oid_hex: r.oid.to_hex(),
-                    labels: r.labels.clone(),
+                    oid_hex: r.oid().map(|oid| oid.to_hex()).unwrap_or_default(),
+                    labels: r.commit().map(|c| c.labels.clone()).unwrap_or_default(),
                 },
             );
         }

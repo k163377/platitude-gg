@@ -8,7 +8,8 @@ use super::super::leaving::{Going, Holders, Walked, doomed, footer_without, lay_
 use super::super::model::LabelIndex;
 use super::super::relay::Standing;
 use super::super::{
-    BranchItem, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowPrint,
+    BranchItem, CommitNode, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowNode,
+    RowPrint, Whose,
 };
 use crate::graph::GraphBuilder;
 use crate::oid::Oid;
@@ -27,28 +28,29 @@ fn walk(rows: &[(u8, &[u8], bool)]) -> Vec<LogRow> {
             let g = builder.push_ids(&mine, &parents, *stash);
             LogRow {
                 row: g.row,
-                oid: mine,
-                short_sha: mine.short_hex(8),
-                author: "Test".to_string(),
-                author_email: "test@example.com".to_string(),
-                co_authors: Vec::new(),
-                time: 1_700_000_000 + i64::from(*id),
-                subject: format!("commit {id:02x}"),
-                body: String::new(),
                 node_lane: g.node_lane,
                 node_color: g.node_color,
                 width: g.width,
                 segments: g.segments,
-                labels: Vec::new(),
-                stash_ref: if *stash {
-                    "stash@{0}".to_string()
-                } else {
-                    String::new()
-                },
-                published: false,
-                carried: None,
-                parents,
-                provisional: false,
+                node: RowNode::Commit(CommitNode {
+                    oid: mine,
+                    short_sha: mine.short_hex(8),
+                    author: "Test".to_string(),
+                    author_email: "test@example.com".to_string(),
+                    co_authors: Vec::new(),
+                    time: 1_700_000_000 + i64::from(*id),
+                    subject: format!("commit {id:02x}"),
+                    body: String::new(),
+                    labels: Vec::new(),
+                    stash_ref: if *stash {
+                        "stash@{0}".to_string()
+                    } else {
+                        String::new()
+                    },
+                    published: false,
+                    parents,
+                    provisional: false,
+                }),
             }
         })
         .collect()
@@ -401,7 +403,7 @@ fn what_stays_is_laid_as_if_the_commits_had_never_been_walked() {
         .iter()
         .map(|row| {
             (
-                row.oid.to_hex(),
+                row.oid().expect("a commit's row").to_hex(),
                 row.row,
                 row.node_lane,
                 row.node_color,
@@ -453,7 +455,7 @@ fn the_uncommitted_row_is_made_again_on_top() {
         true,
     );
     assert!(
-        matches!(&laid.rows[0], RelaidRow::Made(row) if row.oid.is_zero()),
+        matches!(&laid.rows[0], RelaidRow::Made(row) if row.node == RowNode::Worktree(Whose::Here)),
         "{:?}",
         laid.rows[0]
     );

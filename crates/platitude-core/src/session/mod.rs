@@ -127,8 +127,8 @@ pub use graph_refresh::{
 pub use joins::same_path_key;
 use latest::Latest;
 use leaving::{Leaving, LeavingRef, Walked};
+pub use model::{CommitNode, LabelKind, LogOptions, LogRow, RefLabel, RelaidRow, RowNode, Whose};
 pub(crate) use model::{HeadMarks, LabelIndex};
-pub use model::{LabelKind, LogOptions, LogRow, RefLabel, RelaidRow};
 pub use open::{DrawnGraph, FirstPass};
 pub use pace::{
     OWN_CEILING, OWN_FLOOR, OWN_REST, PACE_MAX_SECS, PACE_MIN_SECS, PaceBounds, PaceSecs,

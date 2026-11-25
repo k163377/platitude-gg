@@ -30,7 +30,6 @@ impl GraphModel {
     qproperty!("growing", Member = growing, Notify = stats_changed);
     qproperty!("finishCount", Member = finish_count, Notify = stats_changed);
     qproperty!("wipRow", Member = wip_row, Notify = stats_changed);
-    qproperty!("carriedTop", Member = carried_top, Notify = stats_changed);
     qproperty!("resetCount", Member = reset_count, Notify = stats_changed);
     // How many loaded rows the find bar's line is in. A property because a
     // background refresh re-marks the rows with nobody typing
@@ -289,10 +288,11 @@ impl GraphModel {
         self.row_of_hex(&oid_hex).map_or(-1, |i| i as i32)
     }
 
-    /// The ids of the rows between two places, ends included, in walk
-    /// order — what a Shift click reaches. One crossing: a range can be the
-    /// whole window, and asking per row would put a walk of the history on
-    /// a click (internal-docs/性能.md §設計規則).
+    /// The ids of the commits between two places, ends included, in walk
+    /// order — what a Shift click reaches; a row of uncommitted work between
+    /// them is no commit to choose. One crossing: a range can be the whole
+    /// window, and asking per row would put a walk of the history on a click
+    /// (internal-docs/性能.md §設計規則).
     #[qslot]
     fn oids_between(&self, from: i32, to: i32) -> Vec<String> {
         let (lo, hi) = if from <= to { (from, to) } else { (to, from) };
@@ -304,6 +304,7 @@ impl GraphModel {
             .get(lo..=hi.min(self.rows.len().saturating_sub(1)))
             .unwrap_or_default()
             .iter()
+            .filter(|r| r.names_a_commit())
             .map(|r| r.oid_hex.clone())
             .collect()
     }
@@ -360,7 +361,8 @@ impl GraphModel {
     /// the repository's own (`home` — the house its name wears instead of
     /// the tree, デザイン規約 §ref の種別「名前の印」) and the six `tally`s it
     /// shows beside its words. By row index, not off the view — the view's
-    /// tallies are this window's own. `undefined` for every other row.
+    /// tallies are this window's own. `undefined` for every other row. Which
+    /// row a worktree's is now is `rowOfKey`'s to say.
     #[qslot]
     fn carried_at(&self, row: i32) -> Optional<CarriedRow> {
         Optional::new(
@@ -371,16 +373,22 @@ impl GraphModel {
         )
     }
 
-    /// Which row a worktree's uncommitted work stands on now, or -1
-    /// (the worktree has gone clean). Every such row carries git's all-zero id,
-    /// as this window's own does, so a pane on one follows it across a
-    /// rebuild by path (`RepoPage.settleCarriedAfterPass`).
+    /// What row `row` is, as a page holds it across passes (`key.rs`):
+    /// `undefined` past the rows.
     #[qslot]
-    fn carried_row_of(&self, path: String) -> i32 {
-        self.carried
-            .iter()
-            .find(|(_, carried)| carried.path == path)
-            .and_then(|(row, _)| i32::try_from(*row).ok())
+    fn key_at(&self, row: i32) -> Optional<RowKey> {
+        Optional::new(usize::try_from(row).ok().and_then(|row| self.key_of(row)))
+    }
+
+    /// Which row `key` names now, or -1 where this pass draws none of it — a
+    /// commit gone or outside the window, a worktree gone clean, this
+    /// window's tree with nothing to commit. One question for every kind of
+    /// row (`RepoPage.readKey`, `GraphRowWalk.handKey`).
+    #[qslot]
+    fn row_of_key(&self, key: Optional<RowKey>) -> i32 {
+        key.as_ref()
+            .and_then(|key| self.row_by_key(key))
+            .and_then(|row| i32::try_from(row).ok())
             .unwrap_or(-1)
     }
 

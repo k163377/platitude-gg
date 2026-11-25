@@ -594,7 +594,7 @@ Item {
         /// shift the row number between the hover and this read.
         property string oidHex: ""
         /// The row number instead, for a row with no commit of its own (`byNumber`): the worktree's and every
-        /// other worktree's row share the all-zero id.
+        /// other worktree's row name none.
         property int row: 0
         property bool byNumber: false
         /// The row the card was asked of, as it stands now.

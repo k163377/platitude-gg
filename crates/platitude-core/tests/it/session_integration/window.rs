@@ -79,7 +79,8 @@ async fn tag_only_commits_follow_the_include_tags_option() {
 
 fn chips_of(rows: &[platitude_core::session::LogRow]) -> Vec<LabelKind> {
     rows.iter()
-        .flat_map(|row| row.labels.iter().map(|label| label.kind))
+        .filter_map(platitude_core::session::LogRow::commit)
+        .flat_map(|commit| commit.labels.iter().map(|label| label.kind))
         .collect()
 }
 

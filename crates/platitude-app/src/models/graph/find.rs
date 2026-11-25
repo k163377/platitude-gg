@@ -152,13 +152,11 @@ mod tests {
 
     #[test]
     fn a_worktree_row_answers_nothing() {
-        // As the walk lays it: git's all-zero id, ours and another worktree's alike.
-        let row = GraphRowItem {
-            oid_hex: "0".repeat(40),
-            ..GraphRowItem::default()
-        };
+        // As `to_row_item` lays it, ours and another worktree's alike: no id
+        // and no words — the words it shows are the screen's.
+        let row = GraphRowItem::default();
         assert!(!hits("0000", &row));
-        assert!(!hits(&"0".repeat(40), &row));
+        assert!(!hits("uncommitted", &row));
     }
 
     /// The stand-in reads HEAD's mark off the model (its row is off screen

@@ -1,6 +1,6 @@
 //! What the walk knew about each drawn row that no delegate draws: the
-//! marks it left, the parenthood the lanes only picture, and the index
-//! a row is found by.
+//! marks it left, the parenthood the lanes only picture, the index a commit
+//! is found by, and which row a key names (`key.rs`).
 //!
 //! Beside the rows: `GraphRowItem` is at the fifteen fields
 //! `#[derive(QModelItem)]` allows, and none of this is a role — menus ask
@@ -14,11 +14,12 @@ use platitude_core::publish::WalkedRow;
 
 use super::*;
 
-/// One row's share: its id, whether a remote already has it, and where
-/// its parents end in [`GraphModel::parent_oids`].
+/// One row's share: its commit's id — none on a row of uncommitted work —
+/// whether a remote already has it, and where its parents end in
+/// [`GraphModel::parent_oids`].
 #[derive(Clone, Copy)]
 pub(super) struct RowMark {
-    oid: Oid,
+    oid: Option<Oid>,
     published: bool,
     /// One past this row's last parent; the row before says where they
     /// start (zero for the first). A span, not a list per row: two
@@ -27,8 +28,34 @@ pub(super) struct RowMark {
 }
 
 impl RowMark {
-    pub(super) fn oid(&self) -> Oid {
+    pub(super) fn oid(&self) -> Option<Oid> {
         self.oid
+    }
+}
+
+/// What one row comes in marked with: its commit's, or whose uncommitted
+/// work it is.
+pub(super) enum Incoming<'a> {
+    Commit {
+        oid: Oid,
+        published: bool,
+        parents: &'a [Oid],
+    },
+    Here,
+    Other(&'a platitude_core::session::Carried),
+}
+
+impl<'a> Incoming<'a> {
+    pub(super) fn of(row: &'a LogRow) -> Self {
+        match &row.node {
+            RowNode::Commit(commit) => Self::Commit {
+                oid: commit.oid,
+                published: commit.published,
+                parents: &commit.parents,
+            },
+            RowNode::Worktree(Whose::Here) => Self::Here,
+            RowNode::Worktree(Whose::Other(carried)) => Self::Other(carried),
+        }
     }
 }
 
@@ -46,7 +73,7 @@ impl GraphModel {
         self.marks.reserve(rows.len());
         self.index.reserve(rows.len());
         for row in rows {
-            self.push_mark(row.oid, row.published, &row.parents, row.carried.as_ref());
+            self.push_mark(Incoming::of(row));
         }
         // Once per chunk (a handful per walk). The stable sort: it finds
         // everything before this chunk already in order and merges the
@@ -56,19 +83,13 @@ impl GraphModel {
 
     /// One row's marks, after the ones already kept — a walked row's, or a
     /// row a relaying keeps (`relay.rs`). The caller sorts the index.
-    pub(super) fn push_mark(
-        &mut self,
-        oid: Oid,
-        published: bool,
-        parents: &[Oid],
-        carried: Option<&platitude_core::session::Carried>,
-    ) {
+    pub(super) fn push_mark(&mut self, incoming: Incoming<'_>) {
         // A tally is a count of files; one past `i32` is not a working
         // tree anybody has.
         let count = |n: usize| i32::try_from(n).unwrap_or(i32::MAX);
         // Filed by the index the delegate asks with; a row with no entry is
         // not another worktree's (`carried_at` answers `undefined`).
-        if let Some(carried) = carried {
+        if let Incoming::Other(carried) = incoming {
             let k = &carried.kinds;
             self.carried.insert(
                 self.marks.len(),
@@ -88,8 +109,20 @@ impl GraphModel {
             );
             self.carried_revision = self.carried_revision.wrapping_add(1);
         }
-        self.parent_oids.extend(parents.iter().copied());
-        self.index.push((oid, self.marks.len() as u32));
+        let (oid, published) = match incoming {
+            Incoming::Commit {
+                oid,
+                published,
+                parents,
+            } => {
+                self.parent_oids.extend(parents.iter().copied());
+                // Only a commit is found by its id: a row of uncommitted work
+                // names no object, and is found by whose it is (`row_by_key`).
+                self.index.push((oid, self.marks.len() as u32));
+                (Some(oid), published)
+            }
+            Incoming::Here | Incoming::Other(_) => (None, false),
+        };
         self.marks.push(RowMark {
             oid,
             published,
@@ -125,7 +158,8 @@ impl GraphModel {
     pub(super) fn is_parent_of(&self, parent: usize, child: usize) -> bool {
         self.marks
             .get(parent)
-            .is_some_and(|mark| self.parents_of(child).contains(&mark.oid))
+            .and_then(RowMark::oid)
+            .is_some_and(|oid| self.parents_of(child).contains(&oid))
     }
 
     /// The lanes a list of drawn rows (walk order) draws between neighbours,
@@ -157,13 +191,45 @@ impl GraphModel {
             .collect()
     }
 
-    /// The drawn rows as the range questions read them, in walk order.
+    /// The drawn commits as the range questions read them, in walk order.
     pub(super) fn walked_rows(&self) -> impl Iterator<Item = WalkedRow<'_>> {
-        self.marks.iter().enumerate().map(|(row, mark)| WalkedRow {
-            oid: mark.oid,
-            parents: self.parents_of(row),
-            published: mark.published,
+        self.marks.iter().enumerate().filter_map(|(row, mark)| {
+            Some(WalkedRow {
+                oid: mark.oid?,
+                parents: self.parents_of(row),
+                published: mark.published,
+            })
         })
+    }
+
+    /// The key of the row at `row`; `None` past the rows.
+    pub(super) fn key_of(&self, row: usize) -> Option<RowKey> {
+        let mark = self.marks.get(row)?;
+        Some(match (mark.oid, self.carried.get(&row)) {
+            (Some(oid), _) => RowKey::Commit(oid),
+            (None, Some(carried)) => RowKey::Other(carried.path.clone()),
+            (None, None) => RowKey::Here,
+        })
+    }
+
+    /// Which row a key names now; `None` when this pass draws none.
+    pub(super) fn row_by_key(&self, key: &RowKey) -> Option<usize> {
+        match key {
+            RowKey::Commit(oid) => self.row_at(oid),
+            // Only ever the top row, where the walk lays it
+            // (`session::walk`); a pass whose top is another worktree's row
+            // has none.
+            RowKey::Here => self
+                .marks
+                .first()
+                .filter(|mark| mark.oid.is_none() && !self.carried.contains_key(&0))
+                .map(|_| 0),
+            RowKey::Other(path) => self
+                .carried
+                .iter()
+                .find(|(_, carried)| carried.path == *path)
+                .map(|(row, _)| *row),
+        }
     }
 
     /// Which row an id is drawn on; `None` when none is.
@@ -201,14 +267,22 @@ mod tests {
         Oid::from_hex_str(&format!("{n:02x}").repeat(20)).unwrap()
     }
 
+    fn commit(oid: Oid, parents: &[Oid]) -> Incoming<'_> {
+        Incoming::Commit {
+            oid,
+            published: false,
+            parents,
+        }
+    }
+
     /// 3 ─ 2 ─ 1, with 4 forked off 1 and drawn between them.
     #[test]
     fn a_row_is_joined_to_the_parents_it_names_and_to_nothing_else() {
         let mut model = GraphModel::default();
-        model.push_mark(oid(3), false, &[oid(2)], None);
-        model.push_mark(oid(4), false, &[oid(1)], None);
-        model.push_mark(oid(2), false, &[oid(1)], None);
-        model.push_mark(oid(1), false, &[], None);
+        model.push_mark(commit(oid(3), &[oid(2)]));
+        model.push_mark(commit(oid(4), &[oid(1)]));
+        model.push_mark(commit(oid(2), &[oid(1)]));
+        model.push_mark(commit(oid(1), &[]));
 
         assert!(model.is_parent_of(2, 0), "2 is 3's parent");
         assert!(model.is_parent_of(3, 2), "1 is 2's parent");
@@ -224,10 +298,10 @@ mod tests {
     #[test]
     fn a_choice_draws_solid_lanes_to_parents_and_dashed_ones_elsewhere() {
         let mut model = GraphModel::default();
-        model.push_mark(oid(3), false, &[oid(2)], None);
-        model.push_mark(oid(4), false, &[oid(1)], None);
-        model.push_mark(oid(2), false, &[oid(1)], None);
-        model.push_mark(oid(1), false, &[], None);
+        model.push_mark(commit(oid(3), &[oid(2)]));
+        model.push_mark(commit(oid(4), &[oid(1)]));
+        model.push_mark(commit(oid(2), &[oid(1)]));
+        model.push_mark(commit(oid(1), &[]));
 
         assert_eq!(
             model.chosen_lanes(&[0, 2, 3]),
@@ -251,8 +325,8 @@ mod tests {
     #[test]
     fn a_stash_is_dashed_to_its_base() {
         let mut model = GraphModel::default();
-        model.push_mark(oid(5), false, &[oid(1)], None);
-        model.push_mark(oid(1), false, &[], None);
+        model.push_mark(commit(oid(5), &[oid(1)]));
+        model.push_mark(commit(oid(1), &[]));
         model.rows = vec![
             GraphRowItem {
                 stash_ref: "stash@{0}".into(),

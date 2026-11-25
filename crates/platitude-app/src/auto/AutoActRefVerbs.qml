@@ -116,7 +116,7 @@ Item {
                 // The drop takes the entry's row off the graph at the press, through the stand-in (logged `graph laid
                 // out again in place`); the write barrier alone would photograph the graph still holding it (the same
                 // edge `stash-pop-row` waits on).
-                driver.awaitGraphGone(dropOid)
+                driver.awaitGraphGone(GitFacts.commitKey(dropOid))
                 refStashDropItem.completeHold()
             }
         } else if (act === "delete-remote" || act === "delete-remote-go" || act === "remote-refused") {

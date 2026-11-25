@@ -318,7 +318,7 @@ Item {
     // A window verb, because the page never settles while the hold is up (`PageSettled` refuses rows that disagree
     // with the status), so a page verb would wait out its watchdog (`AutoActDriver`'s baseline).
     //
-    // Every worktree's row wears the same all-zero id, so a reader that took row 0 for ours stands the page on a
+    // Every worktree's row is uncommitted work, so a reader that took a row of it on top for ours stands the page on a
     // worktree nobody asked for — `early=` / `earlyWorktree=`, read before the hold comes down. Read after the chance
     // to misread, or a misreading passes. The preset is what puts that worktree on top: in `carried`, `here` stands on
     // this window's commit. Under another preset `otherTop` never holds and the run waits silently to the watchdog.
@@ -334,12 +334,14 @@ Item {
             if (op.at("start")) {
                 // Not the settled page: `early=` is read while the hold keeps the page arriving, by design. The raced
                 // pass: the tree is dirty, a pass has finished, and its top row is a neighbour worktree's
-                // (`GraphModel.carriedTop`). Over a pass with no all-zero row, row 0 reads correctly and the verb
-                // would pass without the misreading ever in front of the page.
+                // (`GraphModel.keyAt`). Over a pass led by no row of uncommitted work, row 0 reads correctly and the
+                // verb would pass without the misreading ever in front of the page.
+                const top = graph !== null ? graph.keyAt(0) : undefined
                 if (!Awaited.all("wip_landing_ready", {
                         "ready": page,
                         "raced": page !== null && page.pageWorktree.loaded && page.pageWorktree.wipRowStands
-                            && !graph.loading && graph.finishCount > 0 && !graph.wipRow && graph.carriedTop }))
+                            && !graph.loading && graph.finishCount > 0 && !graph.wipRow
+                            && top !== undefined && top.kind === "worktree" }))
                     return
                 // Where the page stood before the hold came down, and whether the hold answered the letting through
                 // (`GraphModel.letTheWorktreeRowThrough`), kept.

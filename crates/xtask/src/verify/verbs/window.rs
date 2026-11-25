@@ -586,7 +586,7 @@ pub(super) const TABLE: &[Verb] = &[
     // answering for itself, so a run in the ordinary order cannot pass as
     // this one. `otherTop=true`: the held-back pass led with a neighbour
     // worktree's row, the row the misreading takes — without it a graph with
-    // no all-zero row on top passes without asking the question. `row=` is
+    // no row of uncommitted work on top passes without asking the question. `row=` is
     // where the landing put the reader.
     Verb {
         name: "wip-landing",

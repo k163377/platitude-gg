@@ -113,7 +113,7 @@ Item {
         } else if (act === "text-bar" || act === "text-bar-away") {
             // The argument picks a commit whose body runs past the box — one that fits never moves, and the run waits
             // out its watchdog.
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
             textBarTimer.order = act === "text-bar-away" ? ["rolled", "lit", "left"] : ["rolled", "lit"]
             textBarTimer.start()
         } else if (act === "graph-min") {

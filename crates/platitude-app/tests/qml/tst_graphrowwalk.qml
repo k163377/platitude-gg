@@ -17,28 +17,34 @@ Item {
     /// What the rows heard of the view as they moved: putting itself back over them, or laying out a reread it does
     /// not take back.
     property var laidOut: []
-    readonly property string worktree: "0000000000000000000000000000000000000000"
 
     ListModel {
         id: rows
+    }
+    /// A row as the graph's key names it (`GraphModel.keyAt`): a commit by its id; this window's uncommitted row
+    /// (`here`) and another worktree's (`worktree`, by its path) name no commit, so their id is empty.
+    function commit(oid) {
+        return { "oid_hex": oid, "kind": "commit", "path": "" }
     }
     /// `n` commits, `c0` the newest.
     function fill(n) {
         rows.clear()
         for (let i = 0; i < n; i++)
-            rows.append({ "oid_hex": "c" + i })
+            rows.append(root.commit("c" + i))
     }
     /// `n` commits written in at row `at` as the graph's reread writes them (`splice_notified`): `n` rows more at the
     /// end, then every row from `at` down rewritten in place, from the last up — no row is inserted, so no row the view
     /// had built moves for it.
     function writeIn(at, n) {
         const before = []
-        for (let i = 0; i < rows.count; i++)
-            before.push(rows.get(i).oid_hex)
+        for (let i = 0; i < rows.count; i++) {
+            const row = rows.get(i)
+            before.push({ "oid_hex": row.oid_hex, "kind": row.kind, "path": row.path })
+        }
         for (let i = 0; i < n; i++)
-            rows.append({ "oid_hex": "" })
+            rows.append(root.commit(""))
         for (let i = rows.count - 1; i >= at; i--)
-            rows.setProperty(i, "oid_hex", i >= at + n ? before[i - n] : "n" + (i - at))
+            rows.set(i, i >= at + n ? before[i - n] : root.commit("n" + (i - at)))
     }
     /// The middle of row `row`'s place, in the scene.
     function over(row) {
@@ -123,6 +129,23 @@ Item {
                 }
                 return -1
             }
+            /// `GraphModel.keyAt` / `rowOfKey`, off each row's own kind: `undefined` / -1 past the rows.
+            function keyAt(row) {
+                if (row < 0 || row >= rows.count)
+                    return undefined
+                const at = rows.get(row)
+                return { "kind": at.kind, "oid": at.oid_hex, "path": at.path }
+            }
+            function rowOfKey(key) {
+                if (key === undefined)
+                    return -1
+                for (let i = 0; i < rows.count; i++) {
+                    const at = rows.get(i)
+                    if (at.kind === key.kind && at.oid_hex === key.oid && at.path === key.path)
+                        return i
+                }
+                return -1
+            }
         }
         asking: false
     }
@@ -141,7 +164,7 @@ Item {
             fill(40)
             list.forceLayout()
             hand.stillHeld = false
-            walk.handOid = ""
+            walk.handKey = undefined
             walk.handRow = -1
             pin.headRow = -1
             root.shifted = []
@@ -233,7 +256,7 @@ Item {
         function test_commits_written_in_above_the_hands_row_are_its_shift() {
             hand.at = root.over(3)
             walk.noteHand()
-            compare(walk.handOid, "c3", "the hand is over the fourth commit")
+            compare(walk.handKey.oid, "c3", "the hand is over the fourth commit")
             root.writeIn(1, 1)
             compare(walk.handShift(), 1, "one commit written in above it")
         }
@@ -244,13 +267,24 @@ Item {
             root.writeIn(5, 1)
             compare(walk.handShift(), 0)
         }
-        /// The worktree's row stays at the top whatever is written in under it.
-        function test_the_worktrees_row_under_the_hand_never_moves() {
-            rows.set(0, { "oid_hex": root.worktree })
+        /// This window's uncommitted row stays at the top whatever is written in under it…
+        function test_this_windows_row_under_the_hand_never_moves() {
+            rows.set(0, { "oid_hex": "", "kind": "here", "path": "" })
             hand.at = root.over(0)
             walk.noteHand()
+            compare(walk.handKey.kind, "here", "the hand is over this window's row")
             root.writeIn(1, 1)
             compare(walk.handShift(), 0)
+        }
+        /// …and another worktree's stands over that worktree's commit, so commits written in above it move it as they
+        /// move a commit — the hand's row is found by its key, not by an id it does not have.
+        function test_another_worktrees_row_under_the_hand_moves_with_what_is_written_above_it() {
+            rows.set(2, { "oid_hex": "", "kind": "worktree", "path": "C:/work/topic" })
+            hand.at = root.over(2)
+            walk.noteHand()
+            compare(walk.handKey.path, "C:/work/topic", "the hand is over that worktree's row")
+            root.writeIn(1, 1)
+            compare(walk.handShift(), 1, "one commit written in above it")
         }
         /// A hand gone into a card is weighed by the row it was last heard over, which each pass finds again.
         function test_a_hand_in_a_card_is_weighed_by_the_row_it_was_last_heard_over() {

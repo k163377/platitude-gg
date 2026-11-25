@@ -117,24 +117,30 @@ fn told_behind(events: &[SessionEvent], id: OperationId) -> Vec<Told> {
 }
 
 /// The graphs swapped in from event `from` on: where each stands, and its
-/// rows' ids, the worktree row's being all zeros.
-fn graphs(events: &[SessionEvent], from: usize) -> Vec<(usize, Vec<String>)> {
+/// rows' ids, `None` on the worktree's row.
+fn graphs(events: &[SessionEvent], from: usize) -> Vec<(usize, Vec<Option<String>>)> {
     events
         .iter()
         .enumerate()
         .skip(from)
         .filter_map(|(at, e)| match e {
-            SessionEvent::LogReplaced { rows, .. } => {
-                Some((at, rows.iter().map(|row| row.oid.to_hex()).collect()))
-            }
+            SessionEvent::LogReplaced { rows, .. } => Some((
+                at,
+                rows.iter()
+                    .map(|row| row.oid().map(|oid| oid.to_hex()))
+                    .collect(),
+            )),
             _ => None,
         })
         .collect()
 }
 
-fn is_worktree_row(oid: &str) -> bool {
-    oid.bytes().all(|b| b == b'0')
+fn is_worktree_row(oid: &Option<String>) -> bool {
+    oid.is_none()
 }
+
+/// A graph's rows as `graphs` reads them, each with the lane its node is on.
+type LanedIds = Vec<(Option<String>, u16)>;
 
 fn is_status_spawn(event: &SessionEvent) -> bool {
     matches!(event, SessionEvent::CommandStarted { display, .. } if display.starts_with("git status"))
@@ -299,9 +305,9 @@ async fn a_commit_of_everything_is_on_the_graph_before_its_status_is_read() {
         })
         .await;
     let head = repo.git(&["rev-parse", "HEAD"]);
-    assert_eq!(rows.first(), Some(&head), "the commit's row leads");
+    assert_eq!(rows.first(), Some(&Some(head)), "the commit's row leads");
     assert!(
-        !rows.iter().any(|oid| is_worktree_row(oid)),
+        !rows.iter().any(is_worktree_row),
         "and the worktree row is gone: {rows:?}"
     );
     {
@@ -351,7 +357,7 @@ async fn a_status_told_wrong_is_put_right_by_the_read_and_walked_again() {
         })
         .await;
     assert!(
-        !first.iter().any(|oid| is_worktree_row(oid)),
+        !first.iter().any(is_worktree_row),
         "told clean, walked without the worktree row: {first:?}"
     );
 
@@ -366,7 +372,7 @@ async fn a_status_told_wrong_is_put_right_by_the_read_and_walked_again() {
         let walked = graphs(&events, from);
         assert_eq!(walked.len(), 2, "walked again for the row: {walked:?}");
         assert!(
-            walked[1].1.first().is_some_and(|oid| is_worktree_row(oid)),
+            walked[1].1.first().is_some_and(is_worktree_row),
             "the worktree row is back: {:?}",
             walked[1].1
         );
@@ -497,7 +503,7 @@ async fn a_commit_whose_refs_read_failed_is_walked_behind_its_status() {
             .find(|told| told.looked > answered.reads_from)
             .expect("the status read behind the commit");
         let settled = settled_at(&events, id);
-        let walked: Vec<(usize, Vec<(String, u16)>)> = events
+        let walked: Vec<(usize, LanedIds)> = events
             .iter()
             .enumerate()
             .take(settled)
@@ -506,7 +512,7 @@ async fn a_commit_whose_refs_read_failed_is_walked_behind_its_status() {
                 SessionEvent::LogReplaced { rows, .. } => Some((
                     at,
                     rows.iter()
-                        .map(|row| (row.oid.to_hex(), row.node_lane))
+                        .map(|row| (row.oid().map(|oid| oid.to_hex()), row.node_lane))
                         .collect(),
                 )),
                 _ => None,
@@ -515,7 +521,7 @@ async fn a_commit_whose_refs_read_failed_is_walked_behind_its_status() {
         assert_eq!(walked.len(), 1, "one walk behind the commit: {walked:?}");
         let (at, rows) = &walked[0];
         assert!(
-            rows.len() >= 2 && is_worktree_row(&rows[0].0) && rows[1].0 == head,
+            rows.len() >= 2 && is_worktree_row(&rows[0].0) && rows[1].0.as_ref() == Some(&head),
             "the worktree row over the commit: {rows:?}"
         );
         assert_eq!(rows[1].1, rows[0].1, "and on its lane: {rows:?}");
@@ -920,7 +926,7 @@ async fn a_status_that_looked_before_the_commit_records_nothing_over_what_it_lef
         assert!(
             walked
                 .iter()
-                .all(|(_, rows)| !rows.iter().any(|oid| is_worktree_row(oid))),
+                .all(|(_, rows)| !rows.iter().any(is_worktree_row)),
             "and no worktree row on the graph: {walked:?}"
         );
     }

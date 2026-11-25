@@ -14,15 +14,15 @@ use platitude_core::graph::SegmentKind;
 use platitude_core::session::{LogRow, SessionEvent, ShownDiscard};
 
 fn subjects(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<String> {
-    rows.values().map(|row| row.subject.clone()).collect()
+    rows.values()
+        .filter_map(LogRow::commit)
+        .map(|commit| commit.subject.clone())
+        .collect()
 }
 
-/// The commits drawn, the uncommitted row (its id all zero) left out.
+/// The commits drawn, the uncommitted row left out.
 fn drawn(rows: &std::collections::BTreeMap<u32, LogRow>) -> Vec<Oid> {
-    rows.values()
-        .map(|row| row.oid)
-        .filter(|oid| !oid.is_zero())
-        .collect()
+    rows.values().filter_map(LogRow::oid).collect()
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -64,8 +64,9 @@ async fn a_picked_entry_walks_what_only_its_tip_reaches_dashed() {
     })
     .await;
     for row in rows.values() {
-        let taken = row.subject != "c1";
-        assert_eq!(row.provisional, taken, "{}", row.subject);
+        let commit = row.commit().expect("a clean tree draws commits");
+        let taken = commit.subject != "c1";
+        assert_eq!(commit.provisional, taken, "{}", commit.subject);
         let sent: Vec<bool> = row
             .segments
             .iter()
@@ -75,7 +76,7 @@ async fn a_picked_entry_walks_what_only_its_tip_reaches_dashed() {
         assert!(
             sent.iter().all(|dashed| *dashed == taken),
             "{}: {sent:?}",
-            row.subject
+            commit.subject
         );
     }
 
@@ -190,6 +191,7 @@ async fn a_copy_on_a_base_of_its_own_draws_on_head() {
     assert_eq!(drawn(&rows), vec![oid(&copy), oid(&head)]);
     let row = rows
         .values()
+        .filter_map(LogRow::commit)
         .find(|row| row.oid == oid(&copy))
         .expect("the copy's row");
     assert_eq!(row.parents.to_vec(), vec![oid(&head)]);

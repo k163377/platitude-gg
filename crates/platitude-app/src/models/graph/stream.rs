@@ -111,7 +111,6 @@ impl GraphModel {
             // standing; the last pass's answer would claim agreement with
             // a status never walked from.
             self.wip_row = false;
-            self.carried_top = false;
             // The query stands; its answers went with the rows, and the
             // chunks re-count them.
             self.match_count = 0;
@@ -340,15 +339,10 @@ impl GraphModel {
         self.truncated = truncated;
         self.finish_count += 1;
         // Read off the rows: only they say which of the overtaking passes
-        // is on screen. Not by the zero id alone — another worktree's row
-        // carries it too (`GraphModel::carried_row_of`), and a pass that put
-        // one first would read as up to date while one read behind.
-        self.carried_top = self.carried.contains_key(&0);
-        self.wip_row = !self.carried_top
-            && self
-                .rows
-                .first()
-                .is_some_and(|row| platitude_core::oid::Oid::hex_is_zero(&row.oid_hex));
+        // is on screen. By whose the row is, not by its being uncommitted —
+        // another worktree's row is too, and a pass that put one first would
+        // read as up to date while one read behind.
+        self.wip_row = self.row_by_key(&RowKey::Here).is_some();
         // Asked here, so a window the settings widen moves the step.
         // Written only where the session answered: a walk that settled
         // just before its tab closed drains with no session, and a 0 would
@@ -371,34 +365,69 @@ impl GraphModel {
 
 #[cfg(test)]
 mod tests {
-    use super::super::item::GraphRowItem;
-    use super::super::{CarriedRow, GraphModel};
+    use platitude_core::Oid;
+    use platitude_core::session::{Carried, CommitNode, LogRow, RowNode, Whose};
 
-    /// A row wearing git's all-zero id, as every worktree's
-    /// uncommitted row does.
-    fn zero_row() -> GraphRowItem {
-        GraphRowItem {
-            oid_hex: "0".repeat(40),
-            ..GraphRowItem::default()
+    use super::super::{GraphModel, RowKey};
+
+    fn row(node: RowNode) -> LogRow {
+        LogRow {
+            row: 0,
+            node_lane: 0,
+            node_color: 0,
+            width: 1,
+            segments: Vec::new(),
+            node,
         }
     }
 
-    fn commit_row(oid_hex: &str) -> GraphRowItem {
-        GraphRowItem {
-            oid_hex: oid_hex.into(),
-            ..GraphRowItem::default()
-        }
+    fn oid() -> Oid {
+        Oid::from_hex_str(&"a1".repeat(20)).unwrap()
     }
 
-    /// Settles one pass over `rows`; `worktrees` are the indexes
-    /// `extend_marks` would file as a neighbour's.
-    fn pass(model: &mut GraphModel, rows: Vec<GraphRowItem>, worktrees: &[usize]) {
-        let total = rows.len();
+    fn commit() -> LogRow {
+        row(RowNode::Commit(CommitNode {
+            oid: oid(),
+            short_sha: String::new(),
+            author: String::new(),
+            author_email: String::new(),
+            co_authors: Vec::new(),
+            time: 0,
+            subject: String::new(),
+            body: String::new(),
+            labels: Vec::new(),
+            stash_ref: String::new(),
+            published: false,
+            parents: Box::default(),
+            provisional: false,
+        }))
+    }
+
+    fn here() -> LogRow {
+        row(RowNode::Worktree(Whose::Here))
+    }
+
+    fn other(path: &str) -> LogRow {
+        row(RowNode::Worktree(Whose::Other(Carried {
+            name: "seat".into(),
+            path: path.into(),
+            head: oid(),
+            kinds: platitude_core::status::Kinds::default(),
+            main: false,
+        })))
+    }
+
+    /// Settles one pass over `rows`, marked as a walk marks them.
+    fn pass(model: &mut GraphModel, rows: &[LogRow]) {
+        let avatars = crate::hub::AvatarUrls::default();
+        let pr = std::collections::HashSet::new();
         model.clear_marks();
-        model.rows = rows;
-        for at in worktrees {
-            model.carried.insert(*at, CarriedRow::default());
-        }
+        model.rows = rows
+            .iter()
+            .map(|row| super::super::to_row_item(row, &avatars, &pr))
+            .collect();
+        model.extend_marks(rows);
+        let total = rows.len();
         model.settle_footer(
             i32::try_from(total).unwrap_or_default(),
             0,
@@ -409,8 +438,8 @@ mod tests {
 
     /// A landing on this window's uncommitted work waits for the pass that
     /// carries its row. A pass that beat the first status carries the
-    /// neighbours' zero-id rows and not ours; read by the id alone, it
-    /// would let the landings (`RepoPage.trySelectDefault`,
+    /// neighbours' rows and not ours; read as "a row of uncommitted work on
+    /// top", it would let the landings (`RepoPage.trySelectDefault`,
     /// `RepoPage.tryPendingWipSelect`) take another worktree's row.
     #[test]
     fn a_pass_that_beat_the_status_carries_no_row_this_window_can_land_on() {
@@ -418,26 +447,33 @@ mod tests {
 
         // The walk, ahead of this window's first status: the other
         // worktrees have rows and we have none.
-        pass(
-            &mut model,
-            vec![zero_row(), zero_row(), commit_row("a1")],
-            &[0, 1],
-        );
+        pass(&mut model, &[other("/a"), other("/b"), commit()]);
         assert!(!model.wip_row, "another worktree's row stood in for ours");
-        assert!(model.carried_top, "whose the leading row was went unsaid");
+        assert_eq!(model.key_of(0), Some(RowKey::Other("/a".into())));
 
         // The status lands and asks for the walk again. Ours is prepended,
         // and the other worktrees' rows are still there under it.
-        pass(
-            &mut model,
-            vec![zero_row(), zero_row(), zero_row(), commit_row("a1")],
-            &[1, 2],
-        );
+        pass(&mut model, &[here(), other("/a"), other("/b"), commit()]);
         assert!(model.wip_row, "the pass that carries our row was refused");
-        assert!(!model.carried_top, "ours was filed as a neighbour's");
+        assert_eq!(model.row_by_key(&RowKey::Here), Some(0));
+        assert_eq!(model.row_by_key(&RowKey::Other("/b".into())), Some(2));
+        assert_eq!(model.row_by_key(&RowKey::Commit(oid())), Some(3));
 
         // And a tree gone clean takes ours away while theirs stand.
-        pass(&mut model, vec![zero_row(), commit_row("a1")], &[0]);
+        pass(&mut model, &[other("/a"), commit()]);
         assert!(!model.wip_row, "ours was reported over a clean tree");
+        assert_eq!(model.row_by_key(&RowKey::Here), None);
+    }
+
+    /// A row of uncommitted work names no commit: it is in no index, so no
+    /// id finds it, and the rows' ids leave it empty.
+    #[test]
+    fn a_row_of_uncommitted_work_is_found_by_whose_it_is_alone() {
+        let mut model = GraphModel::default();
+        pass(&mut model, &[here(), other("/a"), commit()]);
+        assert_eq!(model.index.len(), 1, "only the commit is indexed");
+        assert!(model.rows[0].oid_hex.is_empty() && model.rows[1].oid_hex.is_empty());
+        assert_eq!(model.key_of(1), Some(RowKey::Other("/a".into())));
+        assert_eq!(model.key_of(3), None, "past the rows");
     }
 }

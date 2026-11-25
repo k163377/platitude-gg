@@ -724,10 +724,14 @@ impl Drop for Asking {
 fn wear_chips(rows: &mut [LogRow], labels: &LabelIndex, tags: bool) -> HashMap<u32, Vec<RefLabel>> {
     let mut applied = HashMap::new();
     for row in rows {
-        let chips = labels.labels_of(&row.oid, tags);
+        let at = row.row;
+        let Some(commit) = row.commit_mut() else {
+            continue;
+        };
+        let chips = labels.labels_of(&commit.oid, tags);
         if !chips.is_empty() {
-            row.labels = chips.to_vec();
-            applied.insert(row.row, chips.to_vec());
+            commit.labels = chips.to_vec();
+            applied.insert(at, chips.to_vec());
         }
     }
     applied

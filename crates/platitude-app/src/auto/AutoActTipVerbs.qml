@@ -28,7 +28,7 @@ Item {
     /// Runs `act` if it is this family's and says whether it was; each verb belongs to one family (`AutoActDriver`).
     function run(act, arg) {
         if (act === "signature") {
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
             signatureTimer.start()
         } else if (act === "signature-tip") {
             // `<row>[:<width>]`, as `details-parents`.
@@ -41,12 +41,12 @@ Item {
             // one that lands on HEAD leaves the box writable, so no refusal comes and the run is silent to the
             // watchdog. Pair `older` with a preset without stashes (`--preset co-authors`); a stash there shows the
             // other refusal. `why=` is the sentence itself.
-            page.activateRow(graphModel.oidAt(
-                arg === "older" ? graphModel.rowOf(worktree.headOid) + 1 : Number(arg)))
+            const tipRow = arg === "older" ? graphModel.rowOf(worktree.headOid) + 1 : Number(arg)
+            page.activateRow(graphModel.oidAt(tipRow), tipRow)
             stashTipTimer.start()
         } else if (act === "path-tip") {
             // Row 0 is the elided leaf, or the folder chain with `-tree`. The argument picks the pane as `corner`
-            // does, plus `carried:<worktree>`, named because its rows share the all-zero id (`driver.rowOfWorktree`).
+            // does, plus `carried:<worktree>`, named by the worktree's name (`driver.rowOfWorktree`).
             // A worktree whose folder ends in `-tree` would be misread; the presets hold none. `@<row>` points at a
             // later row, one with rows on both sides.
             const rowAt = ("" + arg).indexOf("@")
@@ -64,7 +64,7 @@ Item {
                 page.showWip()
                 unstagedModel.setTreeView(wantsTree)
             } else {
-                page.activateRow(graphModel.oidAt(Number(pane)))
+                page.activateRow(graphModel.oidAt(Number(pane)), Number(pane))
                 detailsModel.setTreeView(wantsTree)
             }
             pathTipTimer.start()

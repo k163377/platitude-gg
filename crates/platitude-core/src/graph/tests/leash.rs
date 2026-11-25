@@ -4,7 +4,6 @@
 use super::super::testkit::{commit, oid};
 use super::super::*;
 use crate::model::StrPool;
-use crate::oid::Oid;
 use crate::opstate::OpState;
 use crate::status::{StatusItem, WorktreeStatus};
 
@@ -34,20 +33,19 @@ fn the_wip_row_stands_for_a_clean_tree_under_an_operation_but_not_under_a_bisect
     assert!(!wip_row_stands(&clean, &bisecting));
 }
 
-/// A synthetic row carries the all-zero id, which more than one row can
-/// share, so it is no address; neither reader of the map (`row_of`, the
-/// out-of-order guard for parents) ever asks about one.
+/// A row of uncommitted work names no object, so the map from commit to
+/// row (`row_of`, the out-of-order guard for parents) holds nothing for it:
+/// only the lane it leaves waiting for HEAD.
 #[test]
 fn a_row_with_no_object_is_not_in_the_map_from_commit_to_row() {
     let mut b = GraphBuilder::new();
     let head = oid(1);
     b.push_virtual(&head);
-    assert_eq!(b.row_of(&Oid::zero_like(&head)), None);
+    assert_eq!(b.row_of(&head), None, "HEAD is waited for, not drawn");
     assert_eq!(b.tracked_oids(), 1, "only the lane waiting for HEAD");
 
     let mut unborn = GraphBuilder::new();
     unborn.push_virtual_root();
-    assert_eq!(unborn.row_of(&Oid::zero_unsized()), None);
     assert_eq!(unborn.tracked_oids(), 0, "nothing to wait for either");
 }
 

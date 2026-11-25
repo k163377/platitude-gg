@@ -31,9 +31,9 @@ pub struct GraphBuilder {
     expects: HashMap<Oid, Vec<u16>>,
     /// Emitted commit id → row index (also serves the out-of-order guard).
     ///
-    /// Commits only: a synthetic row's all-zero id is no address — more
-    /// than one row may carry it — and neither reader asks for one (the
-    /// guard asks about parents, `row_of` about ref targets).
+    /// Commits only: a row of uncommitted work names no object, and
+    /// neither reader asks for one (the guard asks about parents, `row_of`
+    /// about ref targets).
     rows: HashMap<Oid, u32>,
     next_row: u32,
     next_color: u32,

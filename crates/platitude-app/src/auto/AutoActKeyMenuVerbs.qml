@@ -50,7 +50,7 @@ Item {
     /// Puts the press in, once what it lands on is there; says whether it went in.
     function press(surface, rest) {
         if (surface === "graph") {
-            acts.page.activateRow(acts.graphModel.oidAt(acts.headRow() + 1))
+            acts.page.activateRow(acts.graphModel.oidAt(acts.headRow() + 1), acts.headRow() + 1)
             // The door every press inside the pane takes (`GraphList.takeKeyboard`).
             acts.graphPane.takeKeyboard()
             return true

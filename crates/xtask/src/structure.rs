@@ -18,14 +18,13 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Ten other questions of how the tree is divided are counted here too:
+//! Nine other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), a
 //! singleton past the tokens stands in a module of its own that only its
 //! readers import ([`singletons`]), the app's
 //! Rust may not look a `_PGG_*` variable up outside the module that owns
 //! them ([`env`]), the product's QML closes no popup but its own
-//! ([`popups`]), QML asks the graph, not a row's id, which row is this
-//! window's worktree ([`wiprow`]), every text box the product declares
+//! ([`popups`]), every text box the product declares
 //! hands its right-click and its menu key to the product's menu
 //! ([`textboxes`]), every mark drawn by hand stands on `InkCanvas`
 //! ([`canvases`]), the repository's words are drawn by `PlainTextLabel`
@@ -45,7 +44,6 @@ mod relied_messages;
 pub(crate) mod singletons;
 mod textboxes;
 mod throwaway;
-mod wiprow;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -151,7 +149,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (out_of_step, imports_read) = singletons::check(&root)?;
     let (looked_up, app_files) = env::check(&root)?;
     let (closed_for, product_files) = popups::check(&root)?;
-    let (asked_the_id, qml_files) = wiprow::check(&root)?;
     let (styled_boxes, text_boxes) = textboxes::check(&root)?;
     let (bare_canvases, canvas_files) = canvases::check(&root)?;
     let (guessed_formats, label_files) = labels::check(&root)?;
@@ -177,7 +174,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
     failures.extend(out_of_step);
     failures.extend(looked_up);
     failures.extend(closed_for);
-    failures.extend(asked_the_id);
     failures.extend(styled_boxes);
     failures.extend(bare_canvases);
     failures.extend(guessed_formats);
@@ -197,7 +193,6 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {imports_read} QML files importing the singletons they read and no others, \
              {app_files} app files off the environment, \
              {product_files} product files closing nothing but their own, \
-             {qml_files} QML files asking the graph which row is this window's, \
              {text_boxes} text boxes handing their menu and their key to the product's, \
              {canvas_files} product files drawing their marks on InkCanvas alone, \
              {label_files} product files drawing input with PlainTextLabel alone, \

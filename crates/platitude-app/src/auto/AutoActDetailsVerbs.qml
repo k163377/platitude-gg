@@ -39,14 +39,16 @@ Item {
             const rest = away && plus > 0 ? arg.substring(plus + 1) : arg
             const cut = rest.indexOf(":")
             detailsSelectTimer.which = cut > 0 ? rest.substring(0, cut) : rest
-            page.activateRow(graphModel.oidAt(cut > 0 ? Number(rest.substring(cut + 1)) : 0))
+            const selectRow = cut > 0 ? Number(rest.substring(cut + 1)) : 0
+            page.activateRow(graphModel.oidAt(selectRow), selectRow)
             detailsSelectTimer.start()
         } else if (act === "field-menu") {
             // `empty` (and none) / `typed` / `selected` in the commit box, `readonly` on the summary of the commit
             // under HEAD.
             fieldMenuTimer.boxState = arg === "" ? "empty" : arg
+            const olderRow = graphModel.rowOf(driver.worktree.headOid) + 1
             if (arg === "readonly")
-                page.activateRow(graphModel.oidAt(graphModel.rowOf(driver.worktree.headOid) + 1))
+                page.activateRow(graphModel.oidAt(olderRow), olderRow)
             else
                 page.showWip()
             fieldMenuTimer.start()
@@ -58,15 +60,16 @@ Item {
             hashTipTimer.order = hashTipTimer.counting ? ["asked"] : ["asked", "tapped"]
             hashTipTimer.start()
         } else if (act === "details-hand") {
-            page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)))
+            page.activateRow(graphModel.oidAt(arg === "" ? 0 : Number(arg)), arg === "" ? 0 : Number(arg))
             detailsHandTimer.start()
         } else if (act === "details-sweep") {
             const sweepCut = arg.indexOf(":")
             detailsSweepTimer.which = sweepCut > 0 ? arg.substring(0, sweepCut) : arg
-            page.activateRow(graphModel.oidAt(sweepCut > 0 ? Number(arg.substring(sweepCut + 1)) : 0))
+            const sweepRow = sweepCut > 0 ? Number(arg.substring(sweepCut + 1)) : 0
+            page.activateRow(graphModel.oidAt(sweepRow), sweepRow)
             detailsSweepTimer.start()
         } else if (act === "details-grow" || act === "details-grow-squeeze") {
-            page.activateRow(graphModel.oidAt(Number(arg)))
+            page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
             descGrowTimer.pane = detailsPane
             descGrowTimer.paneName = "details"
             descGrowTimer.squeeze = act === "details-grow-squeeze"
@@ -100,7 +103,7 @@ Item {
             // presets this verb runs on) is the worktree's — the card never settles and the run waits out the
             // watchdog.
             if (arg !== "")
-                page.activateRow(graphModel.oidAt(Number(arg)))
+                page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
             detailsFitTimer.start()
         } else if (act === "corner") {
             // Presets `basic` (corner bare) and `long` (rows run into it) are read as a pair — one half alone frames
@@ -109,7 +112,7 @@ Item {
             if (arg === "wip")
                 page.showWip()
             else
-                page.activateRow(graphModel.oidAt(Number(arg)))
+                page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
             cornerTimer.start()
         } else if (act === "divider-refuse") {
             // The nine bounds a drag can be refused at, the argument naming place and way: `graph-max` / `graph-min` /
@@ -125,7 +128,7 @@ Item {
             } else if (arg === "desc-max" || arg === "desc-min") {
                 // Row 1: row 0 of every preset is the uncommitted row, which puts the worktree in the right-hand
                 // pane and the box this pulls on off screen.
-                page.activateRow(graphModel.oidAt(1))
+                page.activateRow(graphModel.oidAt(1), 1)
                 descGrowTimer.pane = detailsPane
                 descGrowTimer.paneName = "details"
                 descGrowTimer.squeeze = false

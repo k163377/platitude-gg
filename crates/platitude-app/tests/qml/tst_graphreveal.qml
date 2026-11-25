@@ -66,6 +66,14 @@ Item {
             function rowOf(oidHex) {
                 return -1
             }
+            /// `GraphModel.keyAt` / `rowOfKey`: every row here is a commit.
+            function keyAt(row) {
+                const oid = oidAt(row)
+                return oid === "" ? undefined : { "kind": "commit", "oid": oid, "path": "" }
+            }
+            function rowOfKey(key) {
+                return key === undefined ? -1 : rowOf(key.oid)
+            }
             function laneAt(row) {
                 return 0
             }

@@ -33,7 +33,17 @@ fn worktree_drawn(event: &SessionEvent) -> Option<(u64, bool)> {
         } => (*generation, rows),
         _ => return None,
     };
-    Some((generation, rows.iter().any(|r| r.carried.is_some())))
+    Some((
+        generation,
+        rows.iter().any(|r| {
+            matches!(
+                r.node,
+                platitude_core::session::RowNode::Worktree(platitude_core::session::Whose::Other(
+                    _
+                ))
+            )
+        }),
+    ))
 }
 
 /// The generation of the first graph pass whose rows draw another worktree.

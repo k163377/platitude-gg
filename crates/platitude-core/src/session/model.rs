@@ -289,51 +289,96 @@ pub enum RelaidRow {
     Made(Box<LogRow>),
 }
 
-/// Display-ready row of the commit graph.
+/// Display-ready row of the commit graph: where its node is drawn, and what
+/// stands there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogRow {
     pub row: u32,
-    /// The commit; the all-zero id (`Oid::zero_like` / `zero_unsized`) on an
-    /// uncommitted row, this worktree's or another's.
+    pub node_lane: u16,
+    pub node_color: u8,
+    pub width: u16,
+    pub segments: Vec<Segment>,
+    pub node: RowNode,
+}
+
+impl LogRow {
+    /// The commit standing on the row; `None` on uncommitted work.
+    #[must_use]
+    pub fn commit(&self) -> Option<&CommitNode> {
+        match &self.node {
+            RowNode::Commit(commit) => Some(commit),
+            RowNode::Worktree(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn commit_mut(&mut self) -> Option<&mut CommitNode> {
+        match &mut self.node {
+            RowNode::Commit(commit) => Some(commit),
+            RowNode::Worktree(_) => None,
+        }
+    }
+
+    /// The commit's id; `None` on uncommitted work, which names no object.
+    #[must_use]
+    pub fn oid(&self) -> Option<Oid> {
+        self.commit().map(|commit| commit.oid)
+    }
+}
+
+/// What a row of the graph stands for. Uncommitted work is a row of its own
+/// kind, not a commit with a made-up id: it has no author, parents, chips or
+/// remote, and is told apart from another worktree's by whose it is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowNode {
+    /// A commit — a stash and the discard log's provisional commit too.
+    Commit(CommitNode),
+    /// A worktree's uncommitted work, drawn above the commit it stands on.
+    Worktree(Whose),
+}
+
+/// Whose uncommitted work a row is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Whose {
+    /// This window's own tree — the one row it can write
+    /// (`session::rows::wip_row`).
+    Here,
+    /// Another worktree's, by what its reading said (`session::carried`).
+    Other(super::Carried),
+}
+
+/// The commit a row stands for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitNode {
     pub oid: Oid,
     pub short_sha: String,
     pub author: String,
     /// The author's address, mailmapped, as the commit spells it — a locally
-    /// assigned picture is looked up by its [`crate::avatar::key`]. Empty on
-    /// the WIP row.
+    /// assigned picture is looked up by its [`crate::avatar::key`].
     pub author_email: String,
     /// Whoever the message credits alongside the author, in its order.
-    /// Empty on the WIP and stash rows.
+    /// Empty on a stash.
     pub co_authors: Vec<crate::details::CoAuthor>,
     /// Author time (unix seconds); formatting is presentation.
     pub time: i64,
     pub subject: String,
     /// Everything after the subject, minus the co-author trailers — what
-    /// the row's hover reads out. Empty on the WIP and stash rows.
+    /// the row's hover reads out. Empty on a stash.
     pub body: String,
-    pub node_lane: u16,
-    pub node_color: u8,
-    pub width: u16,
-    pub segments: Vec<Segment>,
     pub labels: Vec<RefLabel>,
     /// Reflog selector (`stash@{n}`) when this row is a stash; empty for
-    /// ordinary commits and the WIP row.
+    /// ordinary commits.
     pub stash_ref: String,
     /// Whether a remote-tracking branch already reaches this commit —
     /// what every "this rewrites published history" warning reads
-    /// (`session::published`). False on the WIP and stash rows. Carried on
-    /// the row so a menu has it the moment it opens (デザイン規約 §メニュー).
+    /// (`session::published`). False on a stash. Carried on the row so a
+    /// menu has it the moment it opens (デザイン規約 §メニュー).
     pub published: bool,
     /// The commit's parents as the walk sifted them — a stash keeps only
-    /// the base it was built on (`rows::sift_batch`). Empty on the WIP
-    /// row. Not for drawing (`segments` is): for asking about a range
+    /// the base it was built on (`rows::sift_batch`). Not for drawing
+    /// (`segments` is): for asking about a range
     /// ([`crate::publish::range_rewrites_published`]).
     pub parents: Box<[Oid]>,
-    /// The other worktree this uncommitted row is about; `None` on
-    /// commits, stashes and this window's own uncommitted row. This is the
-    /// row's identity, since every uncommitted row carries the all-zero id
-    /// (`session::carried`).
-    pub carried: Option<super::Carried>,
     /// A commit only the discard log's picked entry reaches — drawn for
     /// that entry, not because the repository holds it
     /// ([`super::ShownDiscard`]). Its edges draw dashed. False everywhere

@@ -147,15 +147,14 @@ impl Walked {
     /// Writes down a pass's commit rows, in the order they were walked.
     pub(super) fn extend(&mut self, rows: &[LogRow]) {
         for row in rows {
-            if row.oid.is_zero() {
+            let Some(commit) = row.commit() else {
                 continue;
-            }
-            let oid = row.oid;
-            self.parents.extend(row.parents.iter().copied());
+            };
+            self.parents.extend(commit.parents.iter().copied());
             self.rows.push(WalkedRow {
-                oid,
-                stash: !row.stash_ref.is_empty(),
-                provisional: row.provisional,
+                oid: commit.oid,
+                stash: !commit.stash_ref.is_empty(),
+                provisional: commit.provisional,
                 content: RowPrint::content_of(row),
                 parents_end: self.parents.len() as u32,
             });

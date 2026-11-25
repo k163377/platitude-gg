@@ -304,7 +304,7 @@ Item {
                 return
             }
             // The strip did not grow, and the page in front reads the asked worktree — neither shows in a picture.
-            // `rows`: the graph no longer draws the arrived worktree as another's (`GraphModel.carriedRowOf`) —
+            // `rows`: the graph no longer draws the arrived worktree as another's (`GraphModel.rowOfKey`) —
             // settled cannot see it, as both worktrees are dirty in this preset.
             op.complete({
                 "name": "carried_open_landed",
@@ -315,7 +315,8 @@ Item {
                              "open": front !== null && front.pageTab.state === "open",
                              "page": front !== null && PageSettled.settled(front),
                              "stood": front !== null && acts.standsIn(front, wanted),
-                             "rows": front !== null && front.pageGraph.carriedRowOf(wanted) < 0 }
+                             "rows": front !== null
+                                     && front.pageGraph.rowOfKey(GitFacts.worktreeKey(wanted)) < 0 }
                 },
                 "report": () => {
                     const front = window.curPage

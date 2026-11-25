@@ -117,6 +117,14 @@ Item {
             function laneAt(row) {
                 return row >= 0 && row < root.walkLanes.length ? root.walkLanes[row] : -1
             }
+            /// `GraphModel.keyAt` / `rowOfKey`: every row here is a commit.
+            function keyAt(row) {
+                const oid = oidAt(row)
+                return oid === "" ? undefined : { "kind": "commit", "oid": oid, "path": "" }
+            }
+            function rowOfKey(key) {
+                return key === undefined ? -1 : Number(key.oid.substring(1))
+            }
         }
         asking: false
     }

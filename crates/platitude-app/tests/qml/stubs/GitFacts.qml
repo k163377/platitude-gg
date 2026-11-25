@@ -8,10 +8,6 @@ import QtQuick
 // at all. The rules are Rust's
 // (`models::facts`, `encode`, tested there); a test that leans on an answer here is testing this stand-in, not the app.
 QtObject {
-    /// `Oid::hex_is_zero`: the uncommitted row's all-zero id; empty is no id at all.
-    function wipOid(hex) {
-        return typeof hex === "string" && hex.length > 0 && /^0+$/.test(hex)
-    }
     /// `encode::chips_shown`: the chips less the ones `gone` names by key, a held mark gone with its worktree
     /// taken off. `gone` is left undefined by a stand-in view with no model behind it.
     function chipsShown(chips, gone) {

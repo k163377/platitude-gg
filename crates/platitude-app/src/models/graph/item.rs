@@ -71,31 +71,51 @@ impl platitude_core::mem::Footprint for GraphRowItem {
 /// can stand over the first commit.
 pub(super) fn newest_commit_row(rows: &[GraphRowItem]) -> Option<usize> {
     rows.iter()
-        .position(|r| r.stash_ref.is_empty() && !Oid::hex_is_zero(&r.oid_hex))
+        .position(|r| r.stash_ref.is_empty() && r.names_a_commit())
 }
 
+impl GraphRowItem {
+    /// Whether a commit stands on the row: a row of uncommitted work names
+    /// none, and its id is empty — the bridge's word for none
+    /// (`encode::oid_text`).
+    pub(super) fn names_a_commit(&self) -> bool {
+        !self.oid_hex.is_empty()
+    }
+}
+
+/// A row as the delegate reads it. A row of uncommitted work carries its
+/// place and nothing else: whose it is is asked of the model
+/// (`GraphModel.carriedAt` / `keyAt`), as `GraphRowItem` has spent its
+/// fifteen fields.
 pub(super) fn to_row_item(
     row: &LogRow,
     avatars: &crate::hub::AvatarUrls,
     pr: &std::collections::HashSet<String>,
 ) -> GraphRowItem {
-    GraphRowItem {
-        oid_hex: row.oid.to_hex(),
-        author: row.author.clone(),
-        author_email: row.author_email.clone(),
-        author_time: row.time,
-        subject: row.subject.clone(),
+    let placed = GraphRowItem {
         node_lane: i32::from(row.node_lane),
         node_color: i32::from(row.node_color),
-        avatar: crate::encode::avatar_code(&row.author),
-        avatar_url: avatars.url_of(&row.author_email),
-        co_authors: crate::encode::mates_of(&row.co_authors),
-        body: row.body.clone(),
         geometry: crate::encode::lanes_of(&row.segments),
-        labels: crate::encode::chips_of(&row.labels, pr),
-        stash_ref: row.stash_ref.clone(),
         // Set by `mark_incoming` before anyone sees the row.
         matched: false,
+        ..GraphRowItem::default()
+    };
+    let Some(commit) = row.commit() else {
+        return placed;
+    };
+    GraphRowItem {
+        oid_hex: commit.oid.to_hex(),
+        author: commit.author.clone(),
+        author_email: commit.author_email.clone(),
+        author_time: commit.time,
+        subject: commit.subject.clone(),
+        avatar: crate::encode::avatar_code(&commit.author),
+        avatar_url: avatars.url_of(&commit.author_email),
+        co_authors: crate::encode::mates_of(&commit.co_authors),
+        body: commit.body.clone(),
+        labels: crate::encode::chips_of(&commit.labels, pr),
+        stash_ref: commit.stash_ref.clone(),
+        ..placed
     }
 }
 
@@ -389,7 +409,7 @@ mod tests {
     }
 
     fn wip() -> GraphRowItem {
-        commit("0000000000000000000000000000000000000000")
+        GraphRowItem::default()
     }
 
     #[test]

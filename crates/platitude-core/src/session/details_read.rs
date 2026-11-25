@@ -107,13 +107,15 @@ impl RepoSession {
                 DetailsOutcome::Sent
             }
             Err(error) => {
-                self.sink.event(SessionEvent::DetailsFailed {
-                    generation,
-                    // Named by the newest of the choice, as the app names
-                    // the request; an empty choice cannot fail.
-                    oid: oids.first().copied().unwrap_or_else(Oid::zero_unsized),
-                    error,
-                });
+                // Named by the newest of the choice, as the app names the
+                // request. An empty choice runs no git, so it cannot fail.
+                if let Some(&oid) = oids.first() {
+                    self.sink.event(SessionEvent::DetailsFailed {
+                        generation,
+                        oid,
+                        error,
+                    });
+                }
                 DetailsOutcome::Failed
             }
         }

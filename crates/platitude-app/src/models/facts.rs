@@ -16,6 +16,7 @@ use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
 use crate::encode::{Chips, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field};
+use crate::models::graph::RowKey;
 use crate::models::nav::{CardRecord, RowLead};
 
 /// The singleton every QML file can ask a rule of without wiring a model
@@ -32,11 +33,27 @@ impl GitFacts {
         platitude_core::find::MIN_OID_PREFIX as i32
     }
 
-    /// Whether a hex id is the WIP row's all-zero sentinel
-    /// (`Oid::zero_like`). Empty is "no id at all".
+    /// The key of the row a commit stands on (`GraphModel.rowOfKey`), for a
+    /// landing named only by its id; `undefined` for a string that is no id.
     #[qslot]
-    fn wip_oid(&self, hex: String) -> bool {
-        platitude_core::oid::Oid::hex_is_zero(&hex)
+    fn commit_key(&self, oid_hex: String) -> Optional<RowKey> {
+        Optional::new(crate::encode::oid_arg(&oid_hex).map(RowKey::Commit))
+    }
+
+    /// The key of this window's uncommitted row. `Optional` though always
+    /// there, as the other keys: `One` answers a record that does not read
+    /// with its default, and no key is one — a key that does not read names
+    /// no row.
+    #[qslot]
+    fn here_key(&self) -> Optional<RowKey> {
+        Optional::some(RowKey::Here)
+    }
+
+    /// The key of another worktree's uncommitted row, by its path as git
+    /// printed it (`GraphModel.carriedAt`'s `path`); `undefined` for none.
+    #[qslot]
+    fn worktree_key(&self, path: String) -> Optional<RowKey> {
+        Optional::new((!path.is_empty()).then_some(RowKey::Other(path)))
     }
 
     /// Whether the discard log's filter line is in any of the words an

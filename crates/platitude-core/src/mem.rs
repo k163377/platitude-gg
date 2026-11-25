@@ -219,16 +219,25 @@ impl Footprint for crate::details::CoAuthor {
 
 impl Footprint for crate::session::LogRow {
     fn heap_bytes(&self) -> usize {
-        self.short_sha.heap_bytes()
-            + self.author.heap_bytes()
-            + self.author_email.heap_bytes()
-            + self.co_authors.heap_bytes()
-            + self.subject.heap_bytes()
-            + self.body.heap_bytes()
-            + self.segments.heap_bytes()
-            + self.labels.heap_bytes()
-            + self.stash_ref.heap_bytes()
-            + self.parents.heap_bytes()
+        use crate::session::{RowNode, Whose};
+        self.segments.heap_bytes()
+            + match &self.node {
+                RowNode::Commit(commit) => {
+                    commit.short_sha.heap_bytes()
+                        + commit.author.heap_bytes()
+                        + commit.author_email.heap_bytes()
+                        + commit.co_authors.heap_bytes()
+                        + commit.subject.heap_bytes()
+                        + commit.body.heap_bytes()
+                        + commit.labels.heap_bytes()
+                        + commit.stash_ref.heap_bytes()
+                        + commit.parents.heap_bytes()
+                }
+                RowNode::Worktree(Whose::Here) => 0,
+                RowNode::Worktree(Whose::Other(carried)) => {
+                    carried.name.heap_bytes() + carried.path.heap_bytes()
+                }
+            }
     }
 }
 

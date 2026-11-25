@@ -830,7 +830,7 @@ Item {
     }
     // Both moments of the stop's landing in one line, since neither means anything alone: `owed=` / `early=` are the
     // page after a pass that beat the status was offered the landing and turned it down; `wip=` is the pass carrying
-    // ours landing on this window's tree. Every worktree's row wears the same all-zero id, so taking row 0's id for
+    // ours landing on this window's tree. Every worktree's row is uncommitted work, so taking "uncommitted on top" for
     // ours lands the press on another worktree's. No `order`: a run not started with the hold up (both harness calls
     // answer whether it was) ends on whichever call said so. On `--preset carried-clashing`: `clashing` stands on
     // `side/clash`, where the replay stops, so the pass leads with its row (`otherTop`); under another preset the run
@@ -865,11 +865,13 @@ Item {
                 return
             }
             if (op.at("asked")) {
-                // Then that pass, led by a neighbour worktree's row (`GraphModel.carriedTop`); a pass without one on
-                // top cannot catch the misreading, so it is read past.
+                // Then that pass, led by a neighbour worktree's row (`GraphModel.keyAt`); a pass without one on top
+                // cannot catch the misreading, so it is read past.
+                const top = graphModel.keyAt(0)
                 if (!Awaited.all("wip_stop_landing_pass", { "walked": !graphModel.loading,
                                                             "after": graphModel.finishCount > op.witnessed("owedAt"),
-                                                            "carried": !graphModel.wipRow && graphModel.carriedTop }))
+                                                            "carried": !graphModel.wipRow && top !== undefined
+                                                                       && top.kind === "worktree" }))
                     return
                 const through = op.input("let_through", () => {
                     op.witness("owed", page.pageLanding)
@@ -1225,7 +1227,8 @@ Item {
             // own message. "edit-message" stops here, with the save row on screen.
             if (Harness.autoAct === "edit-message-leave") {
                 op.input("left", () => {
-                    page.activateRow(graphModel.oidAt(graphModel.rowOf(page.selectedOid) + 1))
+                    const below = graphModel.rowOf(page.selectedOid) + 1
+                    page.activateRow(graphModel.oidAt(below), below)
                 })
             }
             op.complete({ "name": "reword_typed", "when": () => ({}), "report": () => "" })

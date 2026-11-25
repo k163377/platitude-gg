@@ -17,8 +17,8 @@ Item {
     property var standIn: null
     /// A question is standing over a row.
     required property bool asking
-    /// A step came to rest on a row: read it. The row travels with the id, since every worktree's uncommitted row
-    /// carries the all-zero one (`RepoPage.openWipFor`).
+    /// A step came to rest on a row: read it. The row travels with the id, since a worktree's uncommitted row names
+    /// no commit (`RepoPage.openWipFor`).
     signal activated(string oidHex, int atRow)
 
     /// Moves the selection one row (`delta` = ∓1) and brings it into view; answers whether it moved. Keys and runs
@@ -162,9 +162,9 @@ Item {
         // Read the row as it stands now: a background rebuild during the settle rewrites rows in place.
         const row = walk.view.currentIndex
         walk.revealNode(row)
-        const oidHex = walk.graphModel.oidAt(row)
-        if (oidHex !== "")
-            walk.activated(oidHex, row)
+        // Whether a row stands there is the key's to say: a row of uncommitted work lands too, its id empty.
+        if (walk.graphModel.keyAt(row) !== undefined)
+            walk.activated(walk.graphModel.oidAt(row), row)
     }
     /// Sends the lanes to `row`'s node as a click on it does (`GraphColumnMetrics.revealLane`): where the arrows read
     /// a row (`landStep`) and where a jump lands (`jumpToRow`, `revealRow`). The menu key's comes with the row's own
@@ -242,9 +242,9 @@ Item {
     /// A hand's row the band covered before the reread stays where it is (`handUnderBand`).
     function keptRows(rows, from) {
         const pin = walk.standIn
-        if (pin === null || walk.handOid === "" || !walk.view.hand.present || walk.handUnderBand)
+        if (pin === null || walk.handKey === undefined || !walk.view.hand.present || walk.handUnderBand)
             return rows
-        const row = walk.graphModel.rowOf(walk.handOid)
+        const row = walk.graphModel.rowOfKey(walk.handKey)
         if (row < 0)
             return rows
         let kept = rows
@@ -255,38 +255,38 @@ Item {
             kept--
         }
     }
-    /// The commit the hand is over and its row — where it was last heard over the rows, kept while the hand is in a
-    /// card hung off them, found again after every pass (`noteHand`) — by which a reread is weighed (`handShift`).
-    property string handOid: ""
+    /// The row the hand is over, by its key (`GraphModel.keyAt` — a commit, or whose uncommitted work), and its number
+    /// — where it was last heard over the rows, kept while the hand is in a card hung off them, found again after every
+    /// pass (`noteHand`) — by which a reread is weighed (`handShift`). Undefined with no row under the hand.
+    property var handKey: undefined
     property int handRow: -1
     /// …and whether the current branch's stand-in covered that row then (`keptRows`).
     property bool handUnderBand: false
-    /// Notes the row under the hand; for a hand the rows do not hear now (in a card, under a menu), where the commit
-    /// it was last over stands now.
+    /// Notes the row under the hand; for a hand the rows do not hear now (in a card, under a menu), where the row it
+    /// was last over stands now.
     function noteHand() {
         const hand = walk.view.hand
         if (hand.known) {
             const p = walk.view.contentItem.mapFromItem(null, hand.at)
             walk.handRow = walk.view.indexAt(p.x, p.y)
-            walk.handOid = walk.handRow >= 0 ? walk.graphModel.oidAt(walk.handRow) : ""
+            walk.handKey = walk.handRow >= 0 ? walk.graphModel.keyAt(walk.handRow) : undefined
         } else {
-            walk.handRow = walk.handOid === "" ? -1 : walk.graphModel.rowOf(walk.handOid)
+            walk.handRow = walk.handKey === undefined ? -1 : walk.graphModel.rowOfKey(walk.handKey)
             if (walk.handRow < 0)
-                walk.handOid = ""
+                walk.handKey = undefined
         }
         const pin = walk.standIn
         walk.handUnderBand = pin !== null && walk.handRow >= 0 && pin.aboveAt(walk.view.contentY)
             && walk.view.originY + walk.handRow * Theme.graphRowHeight - walk.view.contentY < pin.topBand
     }
     /// How far a reread moved the row the hand is over (デザイン規約 §hover のツールチップ「外乱では閉じない」), or
-    /// `undefined` for no answer: no hand over the rows, the commit it was over gone. A worktree's row stays at the top
-    /// whatever is written in under it — and every worktree's row wears the same all-zero id.
+    /// `undefined` for no answer: no hand over the rows, the row it was over gone. Every kind of row is followed alike
+    /// — a commit, this window's uncommitted row (which stays at the top), another worktree's (which stands above the
+    /// commit that worktree is on, wherever new commits put it).
     function handShift() {
-        if (!walk.view.hand.present || walk.handOid === "")
+        if (!walk.view.hand.present || walk.handKey === undefined)
             return undefined
-        if (GitFacts.wipOid(walk.handOid))
-            return 0
-        const now = walk.graphModel.rowOf(walk.handOid)
+        const now = walk.graphModel.rowOfKey(walk.handKey)
         return now < 0 ? undefined : now - walk.handRow
     }
     // Every place the hand is heard at, and every move of the rows under it.

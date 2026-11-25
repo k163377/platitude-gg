@@ -56,7 +56,13 @@ FocusScope {
     /// instead (`RepoTab.standHomeAsked`). The strip is what moves the tab.
     signal standHomeRequested()
 
-    property string selectedOid: ""
+    /// What the right pane is reading, keyed as the graph tells its rows apart (`GraphModel.keyAt` / `rowOfKey`): a
+    /// commit (`kind` `commit`, its `oid`), this window's uncommitted changes (`here`) or another worktree's
+    /// (`worktree`, its `path`); undefined while a landing is owed. **Every landing writes it through `readRow`**, and
+    /// `selectedOid` / `wipShown` / `carriedPath` are read off it, so the pane is about one thing at a time.
+    property var readKey: undefined
+    readonly property string selectedOid: page.readKey !== undefined && page.readKey.kind === "commit"
+                                          ? page.readKey.oid : ""
 
     /// The reader's fold, which is remembered (and the diff's and the plan's, given back below). What stands on screen is
     /// `listFolded`.
@@ -285,18 +291,29 @@ FocusScope {
     /// The right pane is the uncommitted changes. The question bar stands over the graph, not here, so this going down
     /// by itself — the tree emptied, outside or by a commit or stash — leaves a standing question up, saying the tree
     /// as it now is (`LeaveFlow`); the presses that leave it put the question down themselves (`activateRow`,
-    /// `jumpToRef`).
-    property bool wipShown: false
+    /// `jumpToRef`). This window's or another worktree's (`readKey`).
+    readonly property bool wipShown: page.readKey !== undefined && page.readKey.kind !== "commit"
     // Selected stash row's reflog selector ("" = not a stash).
     property string selectedStashRef: ""
+    /// Reads `key` (`readKey`; undefined for nothing until a landing is taken). **What the pane was about is let go of
+    /// here and nowhere else**: a worktree being read stops handing the pane its list the moment the pane is about
+    /// anything else, whichever road it left by.
+    function readRow(key) {
+        const leaving = page.carriedPath
+        page.readKey = key
+        if (leaving === "" || page.carriedPath === leaving)
+            return
+        page.carriedName = ""
+        page.carriedHome = false
+        // Or the worktree's reads go on handing the pane a list nobody shows.
+        repoTab.leaveCarriedStatus()
+    }
     function showWip() {
         // This window's tree: every road here is about it, and `openWipFor` alone puts a worktree back afterwards.
-        page.dropCarried()
-        page.wipShown = true
+        page.readRow(GitFacts.hereKey())
         page.pendingHeadSelect = false
         page.pendingHeadAsked = false
         page.pendingWipSelect = false
-        page.selectedOid = ""
         page.selectedStashRef = ""
         // The worktree's row is not a commit, so nothing is held; the rows light the current one
         // (`GraphRowDelegate.selected`).
@@ -306,10 +323,10 @@ FocusScope {
 
     // ---- which worktree the WIP pane is about ---------------------
     //
-    // **Every uncommitted row carries git's all-zero id**, ours and other worktrees' alike
-    // (rules-refs/app-ui.md「worktree の行は全部 git の all-zero id を着ている」), so the worktree is named by its
-    // path. **Empty means this window's own tree, and only then can anything here be written.**
-    property string carriedPath: ""
+    // Another worktree's uncommitted row is keyed by that worktree's path (`readKey`). **Empty means this window's own
+    // tree, and only then can anything here be written.**
+    readonly property string carriedPath: page.readKey !== undefined && page.readKey.kind === "worktree"
+                                          ? page.readKey.path : ""
     property string carriedName: ""
     /// That worktree is the repository's own, whose name wears the house (規約 §ref の種別「名前の印」).
     property bool carriedHome: false
@@ -345,10 +362,8 @@ FocusScope {
         const at = carried !== undefined ? carried.path : ""
         // Already the worktree being read: clearing the pane would close the file opened from it under the clicking
         // hand.
-        if (at !== "" && at === page.carriedPath) {
-            page.wipShown = true
+        if (at !== "" && at === page.carriedPath)
             return
-        }
         // The list's light names a file of the worktree being left, which the arriving worktree may also have. Our
         // own row to itself is not a step.
         if (at !== page.carriedPath)
@@ -360,25 +375,22 @@ FocusScope {
     /// Points the pane at one worktree and reads its files; that worktree's paced reads keep them current while it
     /// stands (`pollCarried`). `home` is whether it is the repository's own (`GraphModel.carriedAt`).
     function standOnWorktree(at, name, home) {
-        page.carriedPath = at
+        page.readRow(GitFacts.worktreeKey(at))
         page.carriedName = name
         page.carriedHome = home
         repoTab.readCarriedStatus(at, name)
     }
-    /// The pane is about this window's own tree again — every road to a commit and to our own row comes through here.
+    /// A pane on another worktree is about this window's own tree again (`leaveWorktree`).
     function dropCarried() {
-        page.carriedPath = ""
-        page.carriedName = ""
-        page.carriedHome = false
-        // Or the worktree's reads go on handing the pane a list nobody shows.
-        repoTab.leaveCarriedStatus()
+        if (page.carriedPath !== "")
+            page.readRow(GitFacts.hereKey())
     }
     /// Follows the worktree being read across a graph pass, and lets go where the worktree has gone clean and taken
-    /// its row. **Addressed by the worktree**: rows move under a rebuild, and all of them wear the all-zero id.
+    /// its row. **Addressed by its key**: rows move under a rebuild (`GraphModel.rowOfKey`).
     function settleCarriedAfterPass() {
         if (page.carriedPath === "")
             return
-        const row = graphModel.carriedRowOf(page.carriedPath)
+        const row = graphModel.rowOfKey(page.readKey)
         if (row >= 0) {
             // The repository's own worktree goes by the branch it has out, which a switch over there changes under
             // the pane: the bands take the row's name again.
@@ -391,12 +403,10 @@ FocusScope {
         }
         // The worktree committed or stashed: **land where that worktree now stands** — the row named a worktree, not
         // a branch (`NavSectionModel.headOfWorktree`). A listing a tick behind lands on its previous HEAD, still its
-        // own history.
+        // own history. One on a branch with no commits yet stands on none.
         const head = worktreesModel.headOfWorktree(page.carriedPath)
         const headRow = head === "" ? -1 : graphModel.rowOf(head)
-        page.dropCarried()
-        page.wipShown = false
-        page.selectedOid = ""
+        page.readRow(undefined)
         if (headRow >= 0) {
             graphPane.setCurrentRow(headRow)
             page.activateRow(graphModel.oidAt(headRow), headRow, true)
@@ -3324,7 +3334,8 @@ FocusScope {
     /// — a plain click, an arrow key, a landing, the find bar.
     function chooseOnly(oidHex) {
         const only = ({})
-        if (oidHex !== "" && !GitFacts.wipOid(oidHex))
+        // A row of uncommitted work names no commit (its id is empty), so nothing is held for it.
+        if (oidHex !== "")
             only[oidHex] = true
         page.chosenOids = only
         page.chosenCount = Object.keys(only).length
@@ -3335,8 +3346,9 @@ FocusScope {
     /// click makes one commit both, a modified one moves only the choice (デザイン規約 §複数のコミットを選ぶ).
     function pickRow(oidHex, atRow, modifiers) {
         const mods = modifiers === undefined ? Qt.NoModifier : modifiers
-        // The worktree's row is not a commit: a modifier on it is the plain click it would be without one.
-        if (mods === Qt.NoModifier || oidHex === "" || GitFacts.wipOid(oidHex)) {
+        // A row of uncommitted work is not a commit (its id is empty): a modifier on it is the plain click it would be
+        // without one.
+        if (mods === Qt.NoModifier || oidHex === "") {
             page.activateRow(oidHex, atRow)
             return
         }
@@ -3400,10 +3412,9 @@ FocusScope {
         if (from < 0 || to < 0)
             return
         const next = ({})
-        for (const oidHex of graphModel.oidsBetween(from, to)) {
-            if (oidHex !== "" && !GitFacts.wipOid(oidHex))
-                next[oidHex] = true
-        }
+        // The commits alone: a row of uncommitted work between the two is none to hold.
+        for (const oidHex of graphModel.oidsBetween(from, to))
+            next[oidHex] = true
         // A range that swept nothing but the worktree's row is not a choice; the anchor stays where it was.
         if (Object.keys(next).length === 0)
             return
@@ -3467,8 +3478,8 @@ FocusScope {
     property string anchorOid: ""
     property int anchorRow: -1
     function rememberAnchor() {
-        // Past however many worktree rows stand over it — ours and one per other worktree, all with the all-zero
-        // id, so skipping one leaves the anchor on another (`GraphModel.newestCommitRow` holds the rule).
+        // Past however many worktree rows stand over it — ours and one per other worktree, none a commit — and the
+        // stashes (`GraphModel.newestCommitRow` holds the rule).
         const row = graphModel.newestCommitRow()
         page.anchorOid = row < 0 ? "" : graphModel.oidAt(row)
         page.anchorRow = row
@@ -3547,7 +3558,7 @@ FocusScope {
             return
         if (ours === 0 && (wipPane.subjectText !== "" || wipPane.bodyText !== ""))
             return
-        page.wipShown = false
+        page.readRow(undefined)
         page.pendingHeadSelect = true
         // Ours lands on HEAD as the write left it — the first report after the write, whatever report is in hand: an
         // amend of nothing leaves the counts as they were, and the report in hand may be of the commit it replaced. A
@@ -3590,14 +3601,15 @@ FocusScope {
     function tryPendingWipSelect() {
         if (!page.pendingWipSelect)
             return
-        // Until the walk has prepended our row, row 0 is the commit that was on top or a neighbour worktree's row with
-        // the same all-zero id — so ask the graph (`GraphModel.wipRow`, the one place ours is told from theirs).
-        if (!graphModel.wipRow)
+        // Until the walk has prepended our row there is none to land on: ours is asked for by its key, not as "a row of
+        // uncommitted work on top" — a neighbour worktree's row is one too.
+        const row = graphModel.rowOfKey(GitFacts.hereKey())
+        if (row < 0)
             return
         page.pendingWipSelect = false
-        graphPane.setCurrentRow(0)
+        graphPane.setCurrentRow(row)
         page.showWip()
-        graphPane.showRowSoon(0)
+        graphPane.showRowSoon(row)
     }
 
     // The selected commit is gone from the graph and no landing of this page's accounts for it: an amend or a rebase in
@@ -3607,13 +3619,14 @@ FocusScope {
     // the same parent can be the date-order neighbour (P3-確認事項 §参照していた行が消えた時の着地). A landing owed
     // first wins: while a stopped operation borrows the WIP row (`pendingWipSelect`), this does not follow.
     function followVanishedCommit() {
+        // A row of uncommitted work names no commit (its id is empty), and is no commit to stand in for this one.
         const oidHex = graphModel.oidAt(page.selectedRow)
-        if (oidHex !== "" && !GitFacts.wipOid(oidHex)) {
+        if (oidHex !== "") {
             graphPane.setCurrentRow(page.selectedRow)
             page.activateRow(oidHex, page.selectedRow, true)
             return
         }
-        page.selectedOid = ""
+        page.readRow(undefined)
         page.pendingHeadSelect = true
         // The graph that let the commit go was rebuilt behind a read that had already reported where HEAD went, so
         // the report in hand is the one to land on.
@@ -3625,8 +3638,8 @@ FocusScope {
     function followRewrittenCommit() {
         const row = page.rewordRow
         const oidHex = graphModel.oidAt(row)
-        // Nothing there, or the worktree row moved under it.
-        if (oidHex === "" || GitFacts.wipOid(oidHex)) {
+        // Nothing there, or a worktree's row moved under it — neither names a commit.
+        if (oidHex === "") {
             page.rewordRow = -1
             return
         }
@@ -3664,21 +3677,20 @@ FocusScope {
             page.selectedRow = row
             page.chosenAnchorOid = oidHex
         }
-        // **The worktree's row is not a hash**: nothing can be skipped for it, it shows whatever the tree is now.
-        // Which tree is the row's answer — several worktrees' rows wear the same all-zero id (`openWipFor`).
-        if (GitFacts.wipOid(oidHex)) {
+        // **A row of uncommitted work is not a hash**: nothing can be skipped for it, it shows whatever the tree is
+        // now. Which tree is the row's to say (`GraphModel.keyAt`, `openWipFor`).
+        const key = row >= 0 ? graphModel.keyAt(row) : GitFacts.commitKey(oidHex)
+        if (key !== undefined && key.kind !== "commit") {
             page.openWipFor(row)
             return
         }
-        // A commit is nobody's worktree, so the pane stops being about one.
-        page.dropCarried()
         // The commit already open: its details and signature answer a hash, which cannot change, so nothing is asked
         // again (`git show`, `merge-base`, gpg) — the rename gesture's second click is exactly this click
         // (デザイン規約 §グラフ行のダブルクリック).
         if (!page.wipShown && !wasChoice && page.selectedOid === oidHex)
             return
-        page.wipShown = false
-        page.selectedOid = oidHex
+        // A commit is nobody's worktree, so the pane stops being about one (`readRow`).
+        page.readRow(GitFacts.commitKey(oidHex))
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)
         page.askSignature(oidHex)
@@ -3705,10 +3717,10 @@ FocusScope {
             // **Uncommitted work is the landing, branch or not**: the work standing there is where the reader came back
             // to — a dirty tree, or one where an operation with an exit card stands. Asked of the status
             // (`graph::wip_row_stands`) — whether the opening walk carries the row races the first status — and of the
-            // graph (`GraphModel.wipRow`), for the reason `tryPendingWipSelect` gives. Every pass calls this again.
-            if (!graphModel.wipRow)
+            // graph by its key, for the reason `tryPendingWipSelect` gives. Every pass calls this again.
+            row = graphModel.rowOfKey(GitFacts.hereKey())
+            if (row < 0)
                 return
-            row = 0
         } else {
             // Where HEAD stands, branch or not (`WorktreeModel.headOid` — what `tryPendingHeadSelect` lands on too).
             row = worktree.headOid !== "" ? graphModel.rowOf(worktree.headOid) : -1
@@ -4436,11 +4448,11 @@ FocusScope {
         // (a row's click puts it down either way — `activateRow`).
         if (page.wipShown)
             page.stopRowAsk()
-        page.wipShown = false
         // The row travels with the oid: `followVanishedCommit` reads `selectedRow`, and a stale one lands on whatever
-        // now stands at the previous selection's row.
+        // now stands at the previous selection's row. A worktree being read is let go of here as on every road to a
+        // commit (`readRow`).
         page.selectedRow = row
-        page.selectedOid = oidHex
+        page.readRow(GitFacts.commitKey(oidHex))
         page.selectedStashRef = graphModel.stashRefOf(oidHex)
         detailsModel.request(oidHex)
         page.askSignature(oidHex)

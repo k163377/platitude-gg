@@ -328,7 +328,7 @@ mod tests {
     }
 
     fn entry(kind: DiscardKind, branches: &[&str]) -> Discard {
-        let tip = Oid::zero_unsized();
+        let tip = Oid::from_hex_str(&"1".repeat(40)).unwrap();
         let parts = branches
             .iter()
             .map(|name| Part {

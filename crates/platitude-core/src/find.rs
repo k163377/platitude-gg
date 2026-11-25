@@ -42,8 +42,6 @@
 //! whether the word is common in that tree, unknowable before typing. A
 //! search that names its field closes the gap (デザイン規約 §アドバンス検索).
 
-use crate::oid::Oid;
-
 /// One typed line, ready to be asked of a row.
 ///
 /// Built once per keystroke; the folding and the shape tests are done
@@ -94,11 +92,6 @@ impl Query {
         addresses: impl IntoIterator<Item = &'a str>,
         tokens: impl IntoIterator<Item = &'a str>,
     ) -> bool {
-        // A worktree's row wears the all-zero id and matches nothing,
-        // including `0000` and its displayed subject.
-        if Oid::hex_is_zero(oid_hex) {
-            return false;
-        }
         self.at_start_of(oid_hex)
             || self.inside(subject)
             || people.into_iter().any(|p| self.inside(p))
@@ -217,7 +210,6 @@ mod tests {
             [],
             std::iter::once("topic/needle").chain(unread()),
         ));
-        assert!(!query.matches(&"0".repeat(40), "needle", unread(), unread(), unread()));
     }
 
     #[test]
@@ -347,19 +339,6 @@ mod tests {
         // "added" is all hex; reading it as an object name can only add rows.
         let r = plain("feat: added the thing");
         assert!(hits("added", &r));
-    }
-
-    #[test]
-    fn a_row_that_is_not_a_commit_matches_nothing() {
-        // Every worktree's row wears git's all-zero id.
-        let zero = "0".repeat(40);
-        let wip = Row {
-            oid_hex: &zero,
-            subject: "Uncommitted changes",
-            ..Row::default()
-        };
-        assert!(!hits("uncommitted", &wip));
-        assert!(!hits("0000", &wip));
     }
 
     #[test]

@@ -63,7 +63,7 @@ Item {
             // next — read in the same turn, before any beat could run.
             authorSwapTimer.from = head === "" ? "author" : head
             authorSwapTimer.to = tail === "" ? "mates" : tail
-            page.activateRow(graphModel.oidAt(0))
+            page.activateRow(graphModel.oidAt(0), 0)
             authorSwapTimer.start()
         } else {
             return false
@@ -224,9 +224,9 @@ Item {
             else if (owner === "recover" && !page.recoverOpen)
                 page.toggleRecover()
             else if (owner === "author" || owner === "tip")
-                page.activateRow(graphModel.oidAt(owner === "tip" ? 1 : 4))
+                page.activateRow(graphModel.oidAt(owner === "tip" ? 1 : 4), owner === "tip" ? 1 : 4)
             else if (owner === "author-files")
-                page.activateRow(graphModel.oidAt(1))
+                page.activateRow(graphModel.oidAt(1), 1)
             return (!eol || wipPane.rowIn("unstaged", menuBlockTimer.first) !== null)
                 && (!eol || wipPane.rowIn("unstaged", menuBlockTimer.second) !== null)
                 && (owner !== "recover" || page.recoverAnswered)

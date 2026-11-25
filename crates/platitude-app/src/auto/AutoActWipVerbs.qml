@@ -118,7 +118,7 @@ Item {
             // Through the band's button with the WIP pane left alone — the button does not need it
             // (デザイン規約 §変更を退避する). `stash-lands` opens it: where the reader stands is its subject, shot on
             // `--preset conflict-staged` — a stopped merge, the one shape whose commit box git filled. The worktree
-            // row going is the rebuild's edge (`graphGoneOid`). `named` leaves a summary in the commit box to name the
+            // row going is the rebuild's edge (`graphGoneKey`). `named` leaves a summary in the commit box to name the
             // entry; the words are the driver's, as the argument cannot carry spaces.
             if (arg === "named") {
                 driver.expectStashNamed("feat: write the summary")
@@ -148,7 +148,7 @@ Item {
             driver.reportAtCompletion(() => "row_menu stash=" + driver.act.witnessed("menuStash"))
             if (act === "delete-stash-row" && arg === "go") {
                 // The drop takes this row off the graph — the same edge stash-pop-row waits on.
-                driver.awaitGraphGone(menuOid)
+                driver.awaitGraphGone(GitFacts.commitKey(menuOid))
                 stashDeleteItem.completeHold()
             }
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
@@ -158,7 +158,7 @@ Item {
                 repoTab.applyStash(commitMenuState.menuStashRef)
             } else {
                 // A pop's row leaves the graph, the rebuild's edge; an apply keeps the plain write barrier.
-                driver.awaitGraphGone(stashOid)
+                driver.awaitGraphGone(GitFacts.commitKey(stashOid))
                 // Through the page, the menu's road, which reads the entry's name before it goes (`popStash`);
                 // `back=` checks the box at the barrier — no picture answers it. Fired with the box empty: a
                 // sentence already in it is kept over the name. Every stash of `--preset stashes` / `basic` is named,
@@ -871,7 +871,7 @@ Item {
                                                     "band": page.pageBand !== null }))
                 return
             const pressed = stashPressTimer.input("pressed", () => {
-                const going = graphModel.oidAt(0)
+                const going = graphModel.keyAt(0)
                 if (stashPressTimer.fromWip) {
                     graphPane.setCurrentRow(0)
                     page.showWip()

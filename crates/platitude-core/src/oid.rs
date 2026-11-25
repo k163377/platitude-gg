@@ -36,37 +36,6 @@ impl Oid {
         Self::from_hex(hex.as_bytes())
     }
 
-    /// The all-zero id of the same length as `other` (sentinel for
-    /// synthetic rows such as the uncommitted-changes node).
-    pub fn zero_like(other: &Oid) -> Self {
-        Self {
-            len: other.len,
-            bytes: [0u8; 32],
-        }
-    }
-
-    /// The all-zero id where there is no object to take a length from yet
-    /// (an unborn branch); [`Oid::hex_is_zero`] reads it at any length.
-    pub fn zero_unsized() -> Self {
-        Self {
-            len: 20,
-            bytes: [0u8; 32],
-        }
-    }
-
-    /// Whether this is the all-zero sentinel [`Oid::zero_like`] and
-    /// [`Oid::zero_unsized`] write.
-    pub fn is_zero(&self) -> bool {
-        self.as_bytes().iter().all(|b| *b == 0)
-    }
-
-    /// Whether a hex id is the all-zero sentinel [`Oid::zero_like`] and
-    /// [`Oid::zero_unsized`] write. Empty is not a sentinel: it is "no id
-    /// at all".
-    pub fn hex_is_zero(hex: &str) -> bool {
-        !hex.is_empty() && hex.bytes().all(|b| b == b'0')
-    }
-
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.len as usize]
     }
@@ -161,13 +130,5 @@ mod tests {
         let sha1 = Oid::from_hex_str(&"0".repeat(40)).unwrap();
         let sha256 = Oid::from_hex_str(&"0".repeat(64)).unwrap();
         assert_ne!(sha1, sha256);
-    }
-
-    #[test]
-    fn the_zero_sentinel_is_read_off_the_hex() {
-        let head = Oid::from_hex_str(&"ab".repeat(20)).unwrap();
-        assert!(Oid::hex_is_zero(&Oid::zero_like(&head).to_hex()));
-        assert!(!Oid::hex_is_zero(&head.to_hex()));
-        assert!(!Oid::hex_is_zero(""), "no id at all is not the sentinel");
     }
 }

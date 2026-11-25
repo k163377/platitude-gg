@@ -103,8 +103,8 @@ Item {
     readonly property bool cardSettled: page.selectedOid !== "" && detailsModel.shaHex === page.selectedOid
 
     /// The graph row another worktree's uncommitted work stands on, or -1 while the graph holds none of it.
-    /// Asked of the model by the worktree's name (`GraphModel.carriedAt`): a row off screen has no delegate, and all
-    /// these rows answer to the same all-zero id.
+    /// Asked of the model by the worktree's name (`GraphModel.carriedAt`): a row off screen has no delegate, and the
+    /// runs name a worktree by its name, not its path.
     function rowOfWorktree(name) {
         for (let row = 0; row < graphModel.rowTotal; row++) {
             const carried = graphModel.carriedAt(row)
@@ -211,11 +211,19 @@ Item {
         const named = head === "staged" || head === "unstaged" || head === "untracked" || head === "conflicts"
         return { "bucket": named ? head : "unstaged", "path": named ? arg.substring(cut + 1) : arg }
     }
+    /// Reads the branch's tip — or, on no branch, the top row, by its row: an uncommitted row names no commit.
+    function readBranchTip() {
+        if (worktree.branchOid !== "")
+            page.activateRow(worktree.branchOid)
+        else
+            page.activateRow(graphModel.oidAt(0), 0)
+    }
     /// A details argument, `[<row>][:<width>]`: reads the commit on that graph row (row 0 when it is left out), the
     /// pane at that width — `min` asks for nothing, which the split view holds at the pane's floor.
     function readRowAt(arg) {
         const widthAt = arg.indexOf(":")
-        page.activateRow(graphModel.oidAt(Number(widthAt >= 0 ? arg.substring(0, widthAt) : arg)))
+        const row = Number(widthAt >= 0 ? arg.substring(0, widthAt) : arg)
+        page.activateRow(graphModel.oidAt(row), row)
         if (widthAt >= 0) {
             const width = arg.substring(widthAt + 1)
             page.setDetailsWidth(width === "min" ? 0 : Number(width))
@@ -306,14 +314,15 @@ Item {
     /// row (verify-ui verbs.md「は着地まで待って撮る」), not a counter: a counter also moves for statuses nobody here
     /// asked for.
     property string treeGoneRow: ""
-    /// The graph row this run's write takes off the graph, or "" for the verbs the write barrier alone answers for.
+    /// The graph row this run's write takes off the graph, by its key (`GraphModel.keyAt` — a stash's commit, or
+    /// this window's uncommitted row), or undefined for the verbs the write barrier alone answers for.
     /// Until the row is gone from the model, rows can wear each other's marks (a popped stash's box on the
     /// worktree row); a pass counter would also move for passes nobody here asked for. The write barrier's settle
     /// is no proof the row went: it also comes for a refused write and a failed re-read (see `treeGoneRow`).
     ///
     /// **Stash verbs only as it stands**: `graphBarrier` also holds for the stash total moving, so a non-stash write
     /// that set this would wait out the watchdog. Widen the barrier before pointing a new verb at it.
-    property string graphGoneOid: ""
+    property var graphGoneKey: undefined
     /// The menu this run took down on the product's behalf, or null. A verb firing a row's write past the item closes
     /// nothing by itself, and a closing menu stays `visible` through its exit transition, which the census counts
     /// (`WindowCensus`) — so `complete` holds until it has gone.
@@ -336,8 +345,8 @@ Item {
         driver.treeGoneRow = row
     }
     // reach(beat, press)
-    function awaitGraphGone(oid) {
-        driver.graphGoneOid = oid
+    function awaitGraphGone(key) {
+        driver.graphGoneKey = key
     }
     // reach(beat, press)
     function menuLeaving(menu) {
@@ -380,7 +389,7 @@ Item {
         // presses later from a sampler re-arms there (`pressWrite`) — allowed over a watch that caught nothing.
         driver.beginWrite(act)
         driver.treeGoneRow = ""
-        driver.graphGoneOid = ""
+        driver.graphGoneKey = undefined
         driver.stashTotalBefore = stashesModel.total
         driver.stashWanted = ""
         driver.popWanted = ""
@@ -397,18 +406,17 @@ Item {
         return driver.popWanted !== "" && wipPane.subjectText === driver.popWanted
     }
 
-    /// What the graph's leading row is, for the runs that are about the mark it wears.
+    /// What the graph's leading row is, for the runs that are about the mark it wears — the row's own key
+    /// (`GraphModel.keyAt`).
     function graphTopKind() {
-        const oid = graphModel.oidAt(0)
-        if (oid === "")
+        const key = graphModel.keyAt(0)
+        if (key === undefined)
             return "none"
-        // The graph's own word, not the id: every worktree's row wears the all-zero id
-        // (rules-refs/app-ui.md「worktree の行は全部 git の all-zero id を着ている」).
-        if (graphModel.wipRow)
+        if (key.kind === "here")
             return "wip"
-        if (graphModel.carriedTop)
+        if (key.kind === "worktree")
             return "carried"
-        return graphModel.stashRefOf(oid) !== "" ? "stash" : "commit"
+        return graphModel.stashRefOf(key.oid) !== "" ? "stash" : "commit"
     }
 
     /// The row a word names in the rename's remote chooser while it offers its three answers
@@ -644,7 +652,7 @@ Item {
             // This sampler can be what is still ticking at the ceiling, so it keeps that line current.
             if (!driver.wroteAndSettled())
                 driver.noteWrite()
-            if (driver.treeGoneRow === "" && driver.graphGoneOid === "") {
+            if (driver.treeGoneRow === "" && driver.graphGoneKey === undefined) {
                 writeBarrier.complete({ "name": "write_settled", "when": () => writeBarrier.settled(),
                                         "report": () => driver.writeLines().concat(driver.verbReport()) })
                 return
@@ -727,7 +735,7 @@ Item {
     /// row is owed too, else the completion from `op`.
     // reach(beat)
     function afterTreeSettled(op) {
-        if (driver.graphGoneOid === "") {
+        if (driver.graphGoneKey === undefined) {
             op.complete({ "when": () => ({}), "report": () => driver.verbReport() })
             return
         }
@@ -754,7 +762,7 @@ Item {
             return { "ready": !unstagedModel.holdsPath(gone.bucket, gone.path) }
         }
         onTriggered: {
-            if (driver.graphGoneOid === "") {
+            if (driver.graphGoneKey === undefined) {
                 treeBarrier.complete({ "name": "tree_barrier_ready", "when": () => treeBarrier.gone(),
                                        "report": () => [treeBarrier.settledLine()].concat(driver.verbReport()) })
                 return
@@ -766,7 +774,7 @@ Item {
             graphBarrier.start()
         }
     }
-    // Waits `graphGoneOid` off the graph and the stash total off its old value (see `graphGoneOid`).
+    // Waits `graphGoneKey` off the graph and the stash total off its old value (see `graphGoneKey`).
     PageStage {
         id: graphBarrier
         name: "graph_barrier"
@@ -781,7 +789,7 @@ Item {
         }
         /// The row off the graph and the stash total off its old value.
         function gone() {
-            return { "ready": !(graphModel.rowOf(driver.graphGoneOid) >= 0
+            return { "ready": !(graphModel.rowOfKey(driver.graphGoneKey) >= 0
                                 || stashesModel.total === driver.stashTotalBefore) }
         }
         onTriggered: {

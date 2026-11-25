@@ -82,6 +82,14 @@ Item {
                     return row >= 0 && row < liveRows.count ? liveRows.get(row).oid_hex : ""
                 return row >= 0 && row < root.rows.length ? root.oid(row) : ""
             }
+            /// `GraphModel.keyAt` / `rowOfKey`: every row here is a commit.
+            function keyAt(row) {
+                const oid = oidAt(row)
+                return oid === "" ? undefined : { "kind": "commit", "oid": oid, "path": "" }
+            }
+            function rowOfKey(key) {
+                return key === undefined ? -1 : rowOf(key.oid)
+            }
             /// Where `oidHex`'s commit stands in the rows the list shows, -1 for one gone (`root.gone`).
             function rowOf(oidHex) {
                 if (root.gone[oidHex] === true)
@@ -183,6 +191,7 @@ Item {
             property string namingRefusedWhy: ""
             property string namingRefusedMark: ""
             property string askOid: ""
+            property bool askShown: false
             property color askTone: Theme.warning
             property bool findOn: false
             property var chosenOids: ({})
@@ -334,6 +343,7 @@ Item {
             chosenList.forceLayout()
             tryVerify(() => chosenList.itemAtIndex(0) !== null && chosenList.itemAtIndex(0).oid_hex === root.oid(2),
                       undefined, "the choice's rows are up")
+            list.askShown = false
             list.reuseItems = false
             root.liveModel = false
             list.reuseItems = true
@@ -443,6 +453,25 @@ Item {
             root.menuKey = root.oid(index)
             root.menuArea = "graph"
             KeyMenu.ask(at, () => rowMenu.offer())
+        }
+
+        /// A row of uncommitted work names no commit, and its empty id is the list's word for none too: with no box
+        /// open and a question standing about nothing, it is neither the row named nor the row asked about.
+        function test_a_row_of_uncommitted_work_is_not_named_while_nothing_is() {
+            liveRows.clear()
+            liveRows.append(Object.assign(root.liveCommit(0), { "oid_hex": "", "subject": "" }))
+            for (let n = 1; n < 8; n++)
+                liveRows.append(root.liveCommit(n))
+            list.reuseItems = false
+            root.liveModel = true
+            list.forceLayout()
+            tryVerify(() => list.itemAtIndex(0) !== null && list.itemAtIndex(0).oid_hex === "", undefined,
+                      "the uncommitted row is up")
+            list.askShown = true
+            const row = list.itemAtIndex(0)
+            verify(row.isWip, "a row of uncommitted work")
+            verify(!row.naming, "no box is open on it")
+            verify(!row.marked, "the question is about no row")
         }
 
         function test_a_hand_that_walks_to_a_row_lights_it_and_opens_its_card_after_the_rest() {

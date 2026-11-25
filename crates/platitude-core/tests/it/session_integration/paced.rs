@@ -34,9 +34,18 @@ async fn worktrees_settled(sink: &CaptureSink, session: &Arc<RepoSession>, rows:
 /// How many worktree rows a picture draws.
 fn worktree_rows(event: &SessionEvent) -> Option<usize> {
     match event {
-        SessionEvent::LogChunk { rows, .. } | SessionEvent::LogReplaced { rows, .. } => {
-            Some(rows.iter().filter(|r| r.carried.is_some()).count())
-        }
+        SessionEvent::LogChunk { rows, .. } | SessionEvent::LogReplaced { rows, .. } => Some(
+            rows.iter()
+                .filter(|r| {
+                    matches!(
+                        r.node,
+                        platitude_core::session::RowNode::Worktree(
+                            platitude_core::session::Whose::Other(_)
+                        )
+                    )
+                })
+                .count(),
+        ),
         _ => None,
     }
 }
@@ -149,7 +158,12 @@ fn worktree_row_head(event: &SessionEvent) -> Option<String> {
     match event {
         SessionEvent::LogChunk { rows, .. } | SessionEvent::LogReplaced { rows, .. } => rows
             .iter()
-            .find_map(|r| r.carried.as_ref())
+            .find_map(|r| match &r.node {
+                platitude_core::session::RowNode::Worktree(
+                    platitude_core::session::Whose::Other(carried),
+                ) => Some(carried),
+                _ => None,
+            })
             .map(|c| c.head.to_hex()),
         _ => None,
     }

@@ -18,7 +18,6 @@ Item {
     readonly property var detailsModel: driver.detailsModel
     readonly property var branchesModel: driver.branchesModel
     readonly property var unstagedModel: driver.unstagedModel
-    readonly property var worktree: driver.worktree
     readonly property var graphPane: driver.graphPane
     readonly property var detailsPane: driver.detailsPane
     readonly property var diffPane: driver.diffPane
@@ -40,8 +39,10 @@ Item {
             // centred only where half a view lies above it, which near the tip it never does on a window standing on
             // its floor (`adrift`); under `basic` a view sent to its end still shows the tip, so the shape cannot be
             // made at all.
-            page.activateRow(act === "graph-step-far" && arg !== "" ? graphModel.oidAt(Number(arg))
-                             : worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
+            if (act === "graph-step-far" && arg !== "")
+                page.activateRow(graphModel.oidAt(Number(arg)), Number(arg))
+            else
+                driver.readBranchTip()
             graphStepTimer.named = act === "graph-step-named"
             graphStepTimer.dirty = act === "graph-step-dirty"
             graphStepTimer.away = act === "graph-step-far"
@@ -51,7 +52,7 @@ Item {
                                  : act === "graph-step-diff" ? 1 : arg === "" ? 1 : Number(arg)
             graphStepTimer.start()
         } else if (act === "graph-step-hold") {
-            page.activateRow(worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
+            driver.readBranchTip()
             graphHoldTimer.steps = arg === "" ? 6 : Number(arg)
             graphHoldTimer.start()
         } else if (act === "changes-step" || act === "changes-step-edge"
@@ -66,7 +67,7 @@ Item {
                 fileStepTimer.bucket = file.bucket
                 fileStepTimer.path = file.path
             } else {
-                page.activateRow(worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
+                driver.readBranchTip()
                 fileStepTimer.pane = "changes"
                 fileStepTimer.bucket = ""
                 fileStepTimer.path = arg
@@ -79,7 +80,7 @@ Item {
             // The argument is the directory as the row is keyed (a lone chain is one row, `a/b/c`), and must be a row
             // the list has built (`itemAtIndex`). The default is the first row, the one a picture can hold: a folder
             // shut below the fold frames like one left open.
-            page.activateRow(worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
+            driver.readBranchTip()
             // Said outright: a run that inherited the paths view would wait out the watchdog for a folder row.
             detailsModel.setTreeView(true)
             changesFoldTimer.path = arg === "" ? "assets/icons" : arg
@@ -142,7 +143,7 @@ Item {
         function walked() {
             const row = graphPane.view.currentIndex
             return {
-                "ready": !(row < 0 || (graphStepTimer.diffPath === "" && page.selectedOid !== graphModel.oidAt(row))
+                "ready": !(row < 0 || (graphStepTimer.diffPath === "" && graphModel.rowOfKey(page.readKey) !== row)
                     || !driver.cardSettled),
                 "walked": !graphPane.stepSettling,
                 "page": PageSettled.settled(page) }
@@ -161,7 +162,7 @@ Item {
                    + " focused=" + graphPane.view.activeFocus
                    + " diff=" + page.diffShown
                    + " onscreen=" + graphPane.rowOnScreen(at)
-                   + " selected=" + (page.selectedOid === graphModel.oidAt(at))
+                   + " selected=" + (graphModel.rowOfKey(page.readKey) === at)
                    + " card=" + (detailsModel.shaHex === page.selectedOid)
         }
         onTriggered: {
@@ -234,7 +235,7 @@ Item {
             return {
                 "row": row >= 0,
                 "settled": !graphPane.stepSettling,
-                "selected": row >= 0 && page.selectedOid === graphModel.oidAt(row),
+                "selected": row >= 0 && graphModel.rowOfKey(page.readKey) === row,
                 "card": driver.cardSettled }
         }
         /// The run's line. Witnessed as the walk went: the row it set off from (`from`), `holdReads` as the hold set
@@ -249,7 +250,7 @@ Item {
                    + " reads=" + (acts.holdReads - op.witnessed("readsFrom"))
                    + " refused=" + op.witnessed("refused")
                    + " lit=" + op.witnessed("lit")
-                   + " selected=" + (page.selectedOid === graphModel.oidAt(at))
+                   + " selected=" + (graphModel.rowOfKey(page.readKey) === at)
                    + " card=" + (detailsModel.shaHex === page.selectedOid)
         }
         onTriggered: {

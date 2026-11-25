@@ -280,7 +280,7 @@ impl RepoSession {
                             out.push(row);
                         }
                         let row = item.row(parser.pool(), builder, marks);
-                        totals.note_row(&item.meta.oid, row.published);
+                        totals.note_row(&row);
                         out.push(row);
                     }
                 },
@@ -298,7 +298,7 @@ impl RepoSession {
                 out.push(row);
             }
             let row = item.row(parser.pool(), builder, marks);
-            totals.note_row(&item.meta.oid, row.published);
+            totals.note_row(&row);
             out.push(row);
         }
         totals.shown = out.len() as u32;
@@ -396,11 +396,14 @@ impl RepoSession {
                 rows.push(row);
             }
             let mut row = item.row(pool, &mut shared.builder, &mut shared.publish_marks);
-            totals.note_row(&item.meta.oid, row.published);
+            totals.note_row(&row);
             let labels = shared.label_map.labels_of(&item.meta.oid, tags).to_vec();
-            if !labels.is_empty() {
-                row.labels = labels.clone();
-                shared.applied.insert(row.row, labels);
+            let at = row.row;
+            if !labels.is_empty()
+                && let Some(commit) = row.commit_mut()
+            {
+                commit.labels = labels.clone();
+                shared.applied.insert(at, labels);
             }
             rows.push(row);
         }

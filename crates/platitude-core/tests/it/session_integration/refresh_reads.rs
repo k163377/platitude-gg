@@ -68,7 +68,7 @@ fn drawn_stashes(sink: &CaptureSink) -> Vec<String> {
         }
     }
     rows.into_iter()
-        .map(|row| row.stash_ref)
+        .filter_map(|row| row.commit().map(|commit| commit.stash_ref.clone()))
         .filter(|stash| !stash.is_empty())
         .collect()
 }

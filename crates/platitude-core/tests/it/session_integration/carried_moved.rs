@@ -34,7 +34,12 @@ fn worktree_row_anchor(event: &SessionEvent) -> Option<(u64, Option<String>)> {
     Some((
         generation,
         rows.iter()
-            .find_map(|r| r.carried.as_ref())
+            .find_map(|r| match &r.node {
+                platitude_core::session::RowNode::Worktree(
+                    platitude_core::session::Whose::Other(carried),
+                ) => Some(carried),
+                _ => None,
+            })
             .map(|c| c.head.to_hex()),
     ))
 }

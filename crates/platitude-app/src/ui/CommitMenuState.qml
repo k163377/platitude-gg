@@ -105,10 +105,14 @@ QtObject {
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         menu.carriedPath = path
         menu.carriedName = name
-        const carried = menuState.graphModel.carriedAt(menuState.graphModel.carriedRowOf(path))
+        const carried = menuState.graphModel.carriedAt(menuState.carriedRow())
         menu.carriedHome = carried !== undefined && carried.home
         menuState.standCarried()
         menu.offerCarried()
+    }
+    /// The row the menu's worktree is drawn on now, or -1 where it is gone (`GraphModel.rowOfKey`).
+    function carriedRow() {
+        return menuState.graphModel.rowOfKey(GitFacts.worktreeKey(menuState.menu.carriedPath))
     }
     /// Whether that worktree's work has an apply row — false where the row is gone — and what greys it: a conflict
     /// standing on either side (デザイン規約 §メニュー「「今できない」行は無効で残す」; user decision — ask before changing).
@@ -117,7 +121,7 @@ QtObject {
     /// write reads the tree afresh when its turn comes (`RepoSession::apply_carried`).
     function standCarried() {
         const menu = menuState.menu
-        const carried = menuState.graphModel.carriedAt(menuState.graphModel.carriedRowOf(menu.carriedPath))
+        const carried = menuState.graphModel.carriedAt(menuState.carriedRow())
         const tally = carried !== undefined ? carried.tally : undefined
         menu.carriedApplyOffered = menuState.repoTab.state === "open" && tally !== undefined
         menu.carriedApplyOut = !menu.carriedApplyOffered ? ""
@@ -164,7 +168,7 @@ QtObject {
         // No test reaches this branch: `tst_commitrowmenu` covers the menu's side (the wait, the shape,
         // `withdraw`), and choosing between withdrawing and reading again needs a graph model with the row.
         if (menu.carriedShowing) {
-            if (menuState.graphModel.carriedRowOf(menu.carriedPath) < 0) {
+            if (menuState.carriedRow() < 0) {
                 menu.withdraw()
                 return
             }

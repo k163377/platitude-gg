@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use platitude_core::Oid;
 use platitude_core::find::Query;
-use platitude_core::session::{LogRow, RelaidRow};
+use platitude_core::session::{LogRow, RelaidRow, RowNode, Whose};
 use qtbridge::{QListModel, QListModelBase, QModelItem, QObjectHolder, qobject};
 
 use crate::encode::{Chips, Lanes, Listed, One, Optional};
@@ -16,6 +16,7 @@ use super::{impl_extend_notified, impl_notify_runs, push_run, qml_register};
 mod find;
 mod head;
 mod item;
+mod key;
 mod marks;
 mod provisional;
 mod qobject;
@@ -25,7 +26,8 @@ mod stream;
 use item::{
     CarriedRow, ChosenRow, ChosenRows, GraphRowItem, RemoteTip, SideColors, Tally, to_row_item,
 };
-use marks::RowMark;
+pub(crate) use key::RowKey;
+use marks::{Incoming, RowMark};
 
 #[derive(Default)]
 pub struct GraphModel {
@@ -42,8 +44,9 @@ pub struct GraphModel {
     /// spliced into a rebuilt graph keeps the answer for whatever stood at
     /// its index before.
     carried_revision: i32,
-    /// Every drawn row by its id, in id order, for a binary search per ask
-    /// (`marks::row_at`). Kept in step with `marks` at the same places.
+    /// Every drawn commit by its id, in id order, for a binary search per
+    /// ask (`marks::row_at`). Kept in step with `marks` at the same places.
+    /// A row of uncommitted work names no object and is not in it.
     index: Vec<(Oid, u32)>,
     /// Rows a relaying took off the graph (`relay.rs`), by id: a refused
     /// delete lays them out again by id, and nothing else holds them. A
@@ -96,15 +99,12 @@ pub struct GraphModel {
     /// Completed stream passes (direct + replacements + reloads). QML
     /// watches this edge to re-resolve the selection by oid.
     finish_count: i32,
-    /// Whether the rows this pass left start with this window's
-    /// worktree row (`session::rows::wip_row`). Read against what the
-    /// status says (`WorktreeModel.wipRowStands`): the opening walks before
-    /// the first status, so the two disagreeing means the graph is one read
-    /// behind. Settled with the footer, once the pass is whole.
+    /// Whether the rows this pass left hold this window's worktree row
+    /// (`session::rows::wip_row`). Read against what the status says
+    /// (`WorktreeModel.wipRowStands`): the opening walks before the first
+    /// status, so the two disagreeing means the graph is one read behind.
+    /// Settled with the footer, once the pass is whole.
     wip_row: bool,
-    /// Whether the row this pass left first is another worktree's —
-    /// the other half of [`Self::wip_row`]'s answer.
-    carried_top: bool,
     /// Model resets (streaming restarts only — in-place replacements do
     /// not reset). QML re-anchors the viewport only when this moves,
     /// because only a reset zeroes the scroll position.

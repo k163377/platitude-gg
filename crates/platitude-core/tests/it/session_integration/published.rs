@@ -5,7 +5,7 @@
 use crate::support::remote::origin_and_clone;
 use crate::support::session::{CaptureSink, open_unawaited};
 use crate::support::{TestRepo, replay_rows};
-use platitude_core::session::SessionEvent;
+use platitude_core::session::{CommitNode, LogRow, SessionEvent};
 
 /// What `git rev-list --count <oid>^! --not --remotes` says: no commits
 /// outside the remotes means a remote already has this one.
@@ -19,10 +19,16 @@ fn git_says_published(repo: &mut TestRepo, oid: &str) -> bool {
     ]) == "0"
 }
 
-async fn rows_of(sink: &CaptureSink, want: usize) -> Vec<platitude_core::session::LogRow> {
+/// The commits of the first pass with `want` rows; every fixture here has a
+/// clean tree, so every row is one.
+async fn rows_of(sink: &CaptureSink, want: usize) -> Vec<CommitNode> {
     sink.wait_for("the rows", |evs| {
         let rows = replay_rows(evs);
-        (rows.len() == want).then(|| rows.into_values().collect())
+        (rows.len() == want).then(|| {
+            rows.into_values()
+                .map(|row| row.commit().expect("a clean tree draws commits").clone())
+                .collect()
+        })
     })
     .await
 }
@@ -49,8 +55,7 @@ async fn a_row_is_marked_exactly_when_a_remote_reaches_it() {
         assert_eq!(
             row.published,
             git_says_published(&mut work, &row.oid.to_hex()),
-            "row {} ({}) disagrees with `rev-list --not --remotes`",
-            row.row,
+            "{} disagrees with `rev-list --not --remotes`",
             row.subject,
         );
     }
@@ -106,6 +111,7 @@ async fn a_push_from_outside_publishes_the_rows_it_reached() {
         (rows.len() == 2
             && rows
                 .values()
+                .filter_map(LogRow::commit)
                 .find(|r| r.oid.to_hex() == mine)
                 .is_some_and(|r| r.published))
         .then_some(())

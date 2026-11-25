@@ -90,8 +90,11 @@ Item {
     // The top row's highlight and hit area bleed over the list's top margin: hovering or selecting the first commit
     // shows one unbroken band level with the neighbouring header bands.
     readonly property real topBleed: index === 0 && ListView.view ? ListView.view.topMargin : 0
-    // The all-zero id marks the synthetic uncommitted-changes row (the sentinel is core's — `Oid::zero_like`).
-    readonly property bool isWip: GitFacts.wipOid(oid_hex)
+    // A row of uncommitted work — this window's or another worktree's — names no commit, so its id is empty (the
+    // bridge's word for none). Whose it is the model keeps (`carriedAt` below, `GraphModel.keyAt`). **Empty is the
+    // list's word for none too** (`namingOid`, `askOid`, `withheldOid`): what is asked about a commit asks
+    // `isWip` first, or every such row is the one named while nothing is.
+    readonly property bool isWip: oid_hex === ""
     // The discard log's entry is a copy of thrown-away work, and this is it: drawn as an uncommitted row is — the ring,
     // the words. A left press reads the commit it is; nothing else takes it (`movable`, `menuShut`).
     // `provisionalRevision` is touched for the reason `carriedRevision` is below.
@@ -102,8 +105,8 @@ Item {
         view.model.provisionalRevision
         return view.model.provisionalWipAt(rowItem.index)
     }
-    // **Whose uncommitted row this is** — every such row carries the same all-zero id. Empty on every commit and on
-    // this window's own row.
+    // **Whose uncommitted row this is** — no such row names a commit, so it is asked of the model by row. Empty on
+    // every commit and on this window's own row.
     //
     // The worktree's row as the model holds it (`GraphModel.carriedAt`), undefined on every other row.
     // **`carriedRevision` is touched on purpose**: a slot call is not made again when the map behind it is rewritten,
@@ -178,12 +181,13 @@ Item {
     /// (_PGG_AUTO_ACT=graph-divider).
     readonly property var groundLines: lineSeat.item
     // This row's chip column is a name box right now.
-    readonly property bool naming: rowItem.ListView.view ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
+    readonly property bool naming: rowItem.ListView.view && !rowItem.isWip
+                                   ? rowItem.ListView.view.namingOid === rowItem.oid_hex : false
     // The standing question is about this row. Its words are on the bar above the graph; the row answers "which one"
     // and nothing else, while those words are on screen (`GraphList.askShown`).
-    readonly property bool marked: rowItem.ListView.view ? rowItem.ListView.view.askShown
-                                                           && rowItem.ListView.view.askOid === rowItem.oid_hex
-                                                         : false
+    readonly property bool marked: rowItem.ListView.view && !rowItem.isWip
+                                   ? rowItem.ListView.view.askShown && rowItem.ListView.view.askOid === rowItem.oid_hex
+                                   : false
     /// The three grounds below as they add up over the pane's (`Qt.tint` folds a wash over what is under it): what the
     /// lanes sink into at the column's edge (`GraphLaneCell.ground`). Change a ground there, change it here.
     readonly property color laneGround: {
@@ -288,7 +292,8 @@ Item {
             namingRefusedWhy: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedWhy : ""
             namingRefusedMark: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedMark : ""
             namingRefusedMarks: rowItem.ListView.view ? rowItem.ListView.view.namingRefusedMarks : []
-            withheldWhy: rowItem.ListView.view && rowItem.ListView.view.withheldOid === rowItem.oid_hex
+            withheldWhy: rowItem.ListView.view && !rowItem.isWip
+                         && rowItem.ListView.view.withheldOid === rowItem.oid_hex
                          ? rowItem.ListView.view.withheldWhy : ""
             withheldMark: rowItem.ListView.view ? rowItem.ListView.view.withheldMark : ""
             onNamingSubmitted: name => rowItem.ListView.view.namingSubmitted(
@@ -536,7 +541,7 @@ Item {
     /// which owns both.
     readonly property bool listOnThisChip:
         rowItem.ListView.view ? rowItem.ListView.view.listKey === rowItem.chipKey : false
-    readonly property bool cardOnThisRow: rowItem.ListView.view && rowItem.oid_hex !== ""
+    readonly property bool cardOnThisRow: rowItem.ListView.view && !rowItem.isWip
                                           ? rowItem.ListView.view.cardKey === rowItem.cardKey : false
     /// The row wears the hover band while the hand is on it and while what it opened stands — both popups take the
     /// pointer off the row (`RowHoverHost`). The hand is the pane's reading (`pointerRowX`): a row the graph brought
@@ -586,8 +591,8 @@ Item {
     /// The choice half of a press, without the node: the lane strip answers its press with this and brings the node on
     /// only at a release that did not travel — a press there may be a pan's grab (`GraphLanePan.releaseLanded`).
     function pickAtPress(modifiers) {
-        // Another worktree's row: the page is handed the row number, since every uncommitted row carries the same
-        // all-zero id (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
+        // Another worktree's row: the page is handed the row number, since no uncommitted row names a commit
+        // (`RepoPage.openWipFor`). A held modifier chooses nothing — these rows are not commits.
         if (rowItem.carried) {
             rowItem.claimRow(Qt.NoModifier)
             return
@@ -679,8 +684,8 @@ Item {
         // left highlighted would offer to act on all of them (デザイン規約 §複数のコミットを選ぶ).
         rowItem.claimRow(Qt.NoModifier)
         // Another worktree's uncommitted row has a menu of its own: its door and its work brought here
-        // (デザイン規約 §別の worktree を読む). Asked of the model by row, as the double-click does — every uncommitted row
-        // carries the same all-zero id.
+        // (デザイン規約 §別の worktree を読む). Asked of the model by row, as the double-click does — no uncommitted row
+        // names a commit.
         if (rowItem.carried) {
             const path = rowItem.carriedRow.path
             if (path !== "")

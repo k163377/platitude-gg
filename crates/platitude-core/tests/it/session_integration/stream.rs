@@ -26,20 +26,24 @@ async fn open_streams_the_full_pipeline() {
             (rows.len() == 5).then_some(rows)
         })
         .await;
-    assert_eq!(rows[&0].stash_ref, "stash@{0}", "stash row leads");
+    let commits: Vec<&platitude_core::session::CommitNode> = rows
+        .values()
+        .map(|row| row.commit().expect("a clean tree draws commits"))
+        .collect();
+    assert_eq!(commits[0].stash_ref, "stash@{0}", "stash row leads");
     assert!(
-        rows[&0].subject.contains("wip stash"),
+        commits[0].subject.contains("wip stash"),
         "stash subject is its reflog message: {:?}",
-        rows[&0].subject
+        commits[0].subject
     );
     assert_eq!(
-        rows[&1].oid.to_hex(),
+        commits[1].oid.to_hex(),
         head,
         "merge commit is the newest commit"
     );
-    assert!(rows.values().skip(1).all(|r| r.stash_ref.is_empty()));
-    assert!(rows.values().all(|r| !r.subject.is_empty()));
-    assert!(rows.values().all(|r| r.author == "Test User"));
+    assert!(commits.iter().skip(1).all(|r| r.stash_ref.is_empty()));
+    assert!(commits.iter().all(|r| !r.subject.is_empty()));
+    assert!(commits.iter().all(|r| r.author == "Test User"));
 
     // The head row ends up carrying main + v1, inline or via `LabelsChanged`.
     sink.wait_for("labels on head row", |evs| {
@@ -275,10 +279,10 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
         .await;
 
     let wip = &rows[&0];
-    assert!(
-        wip.oid.is_zero(),
-        "the uncommitted row leads: {:?}",
-        wip.oid.to_hex()
+    assert_eq!(
+        wip.node,
+        platitude_core::session::RowNode::Worktree(platitude_core::session::Whose::Here),
+        "the uncommitted row leads"
     );
     let outs: Vec<(u16, bool)> = wip
         .segments
@@ -292,7 +296,11 @@ async fn a_merge_resolved_as_ours_keeps_the_row_a_clean_tree_would_not() {
         "both parents of the pending merge leave the row dotted: {:?}",
         wip.segments
     );
-    assert_eq!(rows[&2].oid.to_hex(), theirs, "the side the leash reaches");
+    assert_eq!(
+        rows[&2].oid().map(|oid| oid.to_hex()),
+        Some(theirs),
+        "the side the leash reaches"
+    );
     session.close_and_wait().await;
 }
 
@@ -317,7 +325,11 @@ async fn a_side_only_merge_head_names_is_never_on_screen_unleashed() {
             (rows.len() == 4).then_some(rows)
         })
         .await;
-    assert_eq!(rows[&2].oid.to_hex(), theirs, "the side is on screen");
+    assert_eq!(
+        rows[&2].oid().map(|oid| oid.to_hex()),
+        Some(theirs),
+        "the side is on screen"
+    );
     assert!(
         rows[&2]
             .segments

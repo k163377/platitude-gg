@@ -40,7 +40,7 @@ Item {
             // The first ordinary commit — row 0 is WIP. `avatar-rest` is the identicon; `-hover` the pen badge
             // (`DetailsPane.avatarPointedAt`); `-badge` the badge pressed, opening the settings card with that author
             // in the box and the focus on `Choose avatar…`.
-            page.activateRow(graphModel.oidAt(1))
+            page.activateRow(graphModel.oidAt(1), 1)
             if (act === "avatar-assign") {
                 detailsPane.avatarPointedAt = true
                 avatarAssignTimer.start()
@@ -65,7 +65,7 @@ Item {
             // file picker's answer is. A path given by hand is one OS's (the container sees only `/work` and `/out`;
             // Git Bash rewrites `/work/…` into a Windows path — spell it `//work/…`), so such a run is no registered
             // line; xtask makes the picture when the argument is left out (`verify::repos`).
-            page.activateRow(graphModel.oidAt(1))
+            page.activateRow(graphModel.oidAt(1), 1)
             if (arg !== "")
                 avatarSeedTimer.start()
             else

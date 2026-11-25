@@ -36,11 +36,51 @@ pub(super) struct SetAside {
 
 /// What a relaid row is marked with, held apart from the rows it is read
 /// off: those are replaced in the same step.
-struct Marked {
-    oid: Oid,
-    published: bool,
-    parents: Box<[Oid]>,
-    carried: Option<Carried>,
+enum Marked {
+    Commit {
+        oid: Oid,
+        published: bool,
+        parents: Box<[Oid]>,
+    },
+    Here,
+    Other(Carried),
+}
+
+impl Marked {
+    fn of(row: &LogRow) -> Self {
+        match &row.node {
+            RowNode::Commit(commit) => Self::Commit {
+                oid: commit.oid,
+                published: commit.published,
+                parents: commit.parents.clone(),
+            },
+            RowNode::Worktree(Whose::Here) => Self::Here,
+            RowNode::Worktree(Whose::Other(carried)) => Self::Other(carried.clone()),
+        }
+    }
+
+    fn incoming(&self) -> Incoming<'_> {
+        match self {
+            Self::Commit {
+                oid,
+                published,
+                parents,
+            } => Incoming::Commit {
+                oid: *oid,
+                published: *published,
+                parents,
+            },
+            Self::Here => Incoming::Here,
+            Self::Other(carried) => Incoming::Other(carried),
+        }
+    }
+
+    fn oid(&self) -> Option<Oid> {
+        match self {
+            Self::Commit { oid, .. } => Some(*oid),
+            Self::Here | Self::Other(_) => None,
+        }
+    }
 }
 
 impl GraphModel {
@@ -76,12 +116,7 @@ impl GraphModel {
         self.max_lanes = rows.iter().map(relaid_width).max().unwrap_or(1).max(1);
         self.clear_marks();
         for mark in &marked {
-            self.push_mark(
-                mark.oid,
-                mark.published,
-                &mark.parents,
-                mark.carried.as_ref(),
-            );
+            self.push_mark(mark.incoming());
         }
         self.index.sort();
         self.splice_notified(items);
@@ -127,21 +162,15 @@ impl GraphModel {
                     item.geometry = crate::encode::lanes_of(&lanes.segments);
                     item.labels = crate::encode::chips_of(labels, pr);
                     items.push(item);
-                    marked.push(Marked {
+                    marked.push(Marked::Commit {
                         oid: *oid,
                         published,
                         parents,
-                        carried: None,
                     });
                 }
                 RelaidRow::Made(row) => {
                     items.push(to_row_item(row, &avatars, pr));
-                    marked.push(Marked {
-                        oid: row.oid,
-                        published: row.published,
-                        parents: row.parents.clone(),
-                        carried: row.carried.clone(),
-                    });
+                    marked.push(Marked::of(row));
                 }
             }
         }
@@ -151,7 +180,7 @@ impl GraphModel {
     /// Keeps what the rows on screen held that the new rows do not, and
     /// hands back what they take up again.
     fn set_aside_the_rest(&mut self, kept: &[Marked]) {
-        let staying: HashSet<Oid> = kept.iter().map(|mark| mark.oid).collect();
+        let staying: HashSet<Oid> = kept.iter().filter_map(Marked::oid).collect();
         for oid in &staying {
             self.set_aside.remove(oid);
         }
@@ -159,8 +188,12 @@ impl GraphModel {
             let Some(mark) = self.marks.get(at) else {
                 continue;
             };
-            let oid = mark.oid();
-            if staying.contains(&oid) || Oid::hex_is_zero(&item.oid_hex) {
+            // A row of uncommitted work is made again from the readings,
+            // never laid back by id.
+            let Some(oid) = mark.oid() else {
+                continue;
+            };
+            if staying.contains(&oid) {
                 continue;
             }
             self.set_aside.insert(
@@ -196,7 +229,7 @@ fn relaid_width(row: &RelaidRow) -> i32 {
 #[cfg(test)]
 mod tests {
     use platitude_core::graph::{GraphBuilder, GraphRow};
-    use platitude_core::session::{LogRow, RelaidRow};
+    use platitude_core::session::{LogRow, RelaidRow, RowNode};
 
     use super::super::GraphModel;
     use super::Oid;
@@ -215,24 +248,25 @@ mod tests {
                 let g = builder.push_ids(&mine, &parents, false);
                 LogRow {
                     row: g.row,
-                    oid: mine,
-                    short_sha: mine.short_hex(8),
-                    author: "Test".to_string(),
-                    author_email: "test@example.com".to_string(),
-                    co_authors: Vec::new(),
-                    time: 1_700_000_000 + i64::from(*id),
-                    subject: format!("commit {id:02x}"),
-                    body: String::new(),
                     node_lane: g.node_lane,
                     node_color: g.node_color,
                     width: g.width,
                     segments: g.segments,
-                    labels: Vec::new(),
-                    stash_ref: String::new(),
-                    published: *id == 1,
-                    carried: None,
-                    parents,
-                    provisional: false,
+                    node: RowNode::Commit(platitude_core::session::CommitNode {
+                        oid: mine,
+                        short_sha: mine.short_hex(8),
+                        author: "Test".to_string(),
+                        author_email: "test@example.com".to_string(),
+                        co_authors: Vec::new(),
+                        time: 1_700_000_000 + i64::from(*id),
+                        subject: format!("commit {id:02x}"),
+                        body: String::new(),
+                        labels: Vec::new(),
+                        stash_ref: String::new(),
+                        published: *id == 1,
+                        parents,
+                        provisional: false,
+                    }),
                 }
             })
             .collect()
@@ -248,7 +282,7 @@ mod tests {
         walk(rows)
             .into_iter()
             .map(|row| RelaidRow::Moved {
-                oid: row.oid,
+                oid: row.oid().expect("a walk of commits"),
                 lanes: GraphRow {
                     row: row.row,
                     node_lane: row.node_lane,
@@ -286,7 +320,7 @@ mod tests {
             .iter()
             .map(|r| {
                 (
-                    r.subject.clone(),
+                    r.commit().expect("a walk of commits").subject.clone(),
                     i32::from(r.node_lane),
                     i32::from(r.node_color),
                 )

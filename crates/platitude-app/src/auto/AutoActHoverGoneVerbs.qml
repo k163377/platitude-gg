@@ -18,7 +18,6 @@ Item {
 
     readonly property var page: driver.page
     readonly property var repoTab: driver.repoTab
-    readonly property var worktree: driver.worktree
     readonly property var graphModel: driver.graphModel
     readonly property var graphPane: driver.graphPane
     readonly property var wipPane: driver.wipPane
@@ -572,7 +571,7 @@ Item {
             if (op.at("start")) {
                 // The run stands on the commit's list, in the tree view.
                 op.input("stood", () => {
-                    page.activateRow(worktree.branchOid !== "" ? worktree.branchOid : graphModel.oidAt(0))
+                    driver.readBranchTip()
                     detailsModel.setTreeView(true)
                 })
                 return

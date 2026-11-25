@@ -8,63 +8,25 @@ use crate::discards::Stands;
 /// yet: nothing to reach down to, so the node stands alone where the first
 /// commit will.
 pub(super) fn wip_root_row(builder: &mut GraphBuilder) -> LogRow {
-    let zero = Oid::zero_unsized();
-    let g = builder.push_virtual_root();
-    // Uncommitted work is on no remote.
-    let published = false;
-    LogRow {
-        row: g.row,
-        oid: zero,
-        short_sha: zero.short_hex(8),
-        author: String::new(),
-        author_email: String::new(),
-        co_authors: Vec::new(),
-        time: 0,
-        subject: String::new(),
-        body: String::new(),
-        node_lane: g.node_lane,
-        node_color: g.node_color,
-        width: g.width,
-        segments: g.segments,
-        labels: Vec::new(),
-        stash_ref: String::new(),
-        published,
-        carried: None,
-        // The edges this row draws are leashes, not parents.
-        parents: Box::default(),
-        provisional: false,
-    }
+    worktree_row(builder.push_virtual_root(), Whose::Here)
 }
 
-/// The synthetic row for uncommitted changes: zero id (what the UI
-/// recognizes it by), no author, a dashed edge down to HEAD and one to
-/// each side a standing merge brings in (`incoming`, from `MERGE_HEAD`),
-/// so the row already draws the fork the merge commit will have.
+/// The row for this window's uncommitted changes: a dashed edge down to
+/// HEAD and one to each side a standing merge brings in (`incoming`, from
+/// `MERGE_HEAD`), so the row already draws the fork the merge commit will
+/// have. The edges are leashes, not parents.
 pub(super) fn wip_row(head: &Oid, incoming: &[Oid], builder: &mut GraphBuilder) -> LogRow {
-    let zero = Oid::zero_like(head);
-    let g = builder.push_virtual_merging(head, incoming);
-    let published = false;
+    worktree_row(builder.push_virtual_merging(head, incoming), Whose::Here)
+}
+
+fn worktree_row(g: GraphRow, whose: Whose) -> LogRow {
     LogRow {
         row: g.row,
-        oid: zero,
-        short_sha: zero.short_hex(8),
-        author: String::new(),
-        author_email: String::new(),
-        co_authors: Vec::new(),
-        time: 0,
-        subject: String::new(),
-        body: String::new(),
         node_lane: g.node_lane,
         node_color: g.node_color,
         width: g.width,
         segments: g.segments,
-        labels: Vec::new(),
-        stash_ref: String::new(),
-        published,
-        carried: None,
-        // Leashes, not parents.
-        parents: Box::default(),
-        provisional: false,
+        node: RowNode::Worktree(whose),
     }
 }
 
@@ -90,9 +52,11 @@ pub(super) struct LogTotals {
 }
 
 impl LogTotals {
-    pub(super) fn note_row(&mut self, oid: &Oid, published: bool) {
-        if self.head == Some(*oid) {
-            self.head_published = Some(published);
+    pub(super) fn note_row(&mut self, row: &LogRow) {
+        if let Some(commit) = row.commit()
+            && self.head == Some(commit.oid)
+        {
+            self.head_published = Some(commit.published);
         }
     }
 }
@@ -115,15 +79,7 @@ impl StreamItem {
         builder: &mut GraphBuilder,
         marks: &mut PublishMarks,
     ) -> LogRow {
-        let dashed = self.stash_ref.is_some() || self.provisional;
-        let mut row = make_row(&self.meta, pool, builder, marks, dashed);
-        if let Some(stash_ref) = &self.stash_ref {
-            row.stash_ref = stash_ref.clone();
-            // No remote carries a stash, whatever its base.
-            row.published = false;
-        }
-        row.provisional = self.provisional;
-        row
+        make_row(self, pool, builder, marks)
     }
 }
 
@@ -216,47 +172,49 @@ impl<'a> Sifter<'a> {
     }
 }
 
-/// Labels are the caller's to attach; `dashed_edge` is for stash rows and
-/// provisional ones.
+/// Labels are the caller's to attach. A stash row and a provisional one
+/// draw their edges dashed.
 fn make_row(
-    commit: &CommitMeta,
+    item: &StreamItem,
     pool: &crate::model::StrPool,
     builder: &mut GraphBuilder,
     marks: &mut PublishMarks,
-    dashed_edge: bool,
 ) -> LogRow {
-    let g = builder.push_with_edge_style(commit, dashed_edge);
+    let commit = &item.meta;
+    let g = builder.push_with_edge_style(commit, item.stash_ref.is_some() || item.provisional);
     // Asked here, where the parents are: the mark is carried down the walk
     // from the rows a remote branch stands on (`session::published`).
     let published = marks.mark(commit);
     LogRow {
         row: g.row,
-        oid: commit.oid,
-        short_sha: commit.oid.short_hex(8),
-        author: pool.get(commit.author).to_string(),
-        author_email: pool.get(commit.author_email).to_string(),
-        co_authors: commit
-            .co_authors
-            .iter()
-            .map(|(name, email)| crate::details::CoAuthor {
-                name: pool.get(*name).to_string(),
-                email: pool.get(*email).to_string(),
-            })
-            .collect(),
-        time: commit.time,
-        subject: commit.subject.to_string(),
-        body: commit.body.to_string(),
         node_lane: g.node_lane,
         node_color: g.node_color,
         width: g.width,
         segments: g.segments,
-        labels: Vec::new(),
-        stash_ref: String::new(),
-        published,
-        // Sifted, so a stash carries the one edge it draws (`sift_batch`).
-        parents: commit.parents.clone(),
-        carried: None,
-        provisional: false,
+        node: RowNode::Commit(CommitNode {
+            oid: commit.oid,
+            short_sha: commit.oid.short_hex(8),
+            author: pool.get(commit.author).to_string(),
+            author_email: pool.get(commit.author_email).to_string(),
+            co_authors: commit
+                .co_authors
+                .iter()
+                .map(|(name, email)| crate::details::CoAuthor {
+                    name: pool.get(*name).to_string(),
+                    email: pool.get(*email).to_string(),
+                })
+                .collect(),
+            time: commit.time,
+            subject: commit.subject.to_string(),
+            body: commit.body.to_string(),
+            labels: Vec::new(),
+            stash_ref: item.stash_ref.clone().unwrap_or_default(),
+            // No remote carries a stash, whatever its base.
+            published: published && item.stash_ref.is_none(),
+            // Sifted, so a stash carries the one edge it draws (`sift_batch`).
+            parents: commit.parents.clone(),
+            provisional: item.provisional,
+        }),
     }
 }
 
@@ -305,9 +263,10 @@ impl CarriedRows {
             }
             // No chip (why: `GraphRowDelegate.qml`): the worktree rides on
             // the row, for its words and for the pane it opens.
-            let mut row = wip_row(&wip.head, &[], builder);
-            row.carried = Some(wip.clone());
-            out.push(row);
+            out.push(worktree_row(
+                builder.push_virtual_merging(&wip.head, &[]),
+                Whose::Other(wip.clone()),
+            ));
             false
         });
         out

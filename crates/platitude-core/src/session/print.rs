@@ -34,7 +34,7 @@ impl RowPrint {
     pub(super) fn of(row: &LogRow) -> Self {
         Self {
             rest: Self::rest_of(row),
-            labels: Self::labels_of(&row.labels),
+            labels: Self::labels_of(row.commit().map_or(&[], |commit| &commit.labels)),
         }
     }
 
@@ -101,53 +101,66 @@ impl RowPrint {
         use std::hash::{Hash, Hasher};
         let LogRow {
             row: _,
-            oid,
-            short_sha,
-            author,
-            author_email,
-            co_authors,
-            time,
-            subject,
-            body,
             node_lane: _,
             node_color: _,
             width: _,
             segments: _,
-            labels: _,
-            published,
-            stash_ref,
-            parents,
-            carried,
-            provisional,
+            node,
         } = row;
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        oid.hash(&mut h);
-        short_sha.hash(&mut h);
-        author.hash(&mut h);
-        author_email.hash(&mut h);
-        for a in co_authors {
-            a.name.hash(&mut h);
-            a.email.hash(&mut h);
+        match node {
+            RowNode::Commit(CommitNode {
+                oid,
+                short_sha,
+                author,
+                author_email,
+                co_authors,
+                time,
+                subject,
+                body,
+                labels: _,
+                stash_ref,
+                published,
+                parents,
+                provisional,
+            }) => {
+                0u8.hash(&mut h);
+                oid.hash(&mut h);
+                short_sha.hash(&mut h);
+                author.hash(&mut h);
+                author_email.hash(&mut h);
+                for a in co_authors {
+                    a.name.hash(&mut h);
+                    a.email.hash(&mut h);
+                }
+                co_authors.len().hash(&mut h);
+                time.hash(&mut h);
+                subject.hash(&mut h);
+                body.hash(&mut h);
+                stash_ref.hash(&mut h);
+                published.hash(&mut h);
+                parents.hash(&mut h);
+                provisional.hash(&mut h);
+            }
+            RowNode::Worktree(Whose::Here) => 1u8.hash(&mut h),
+            // Another worktree staging one more file moves nothing else on
+            // its row.
+            RowNode::Worktree(Whose::Other(Carried {
+                name,
+                path,
+                head,
+                kinds,
+                main,
+            })) => {
+                2u8.hash(&mut h);
+                name.hash(&mut h);
+                path.hash(&mut h);
+                head.hash(&mut h);
+                (kinds.added, kinds.modified, kinds.deleted).hash(&mut h);
+                (kinds.renamed, kinds.copied, kinds.conflicted).hash(&mut h);
+                main.hash(&mut h);
+            }
         }
-        co_authors.len().hash(&mut h);
-        time.hash(&mut h);
-        subject.hash(&mut h);
-        body.hash(&mut h);
-        stash_ref.hash(&mut h);
-        published.hash(&mut h);
-        parents.hash(&mut h);
-        provisional.hash(&mut h);
-        // Another worktree staging one more file moves nothing else on its row
-        // (its id is all-zero whatever it holds).
-        if let Some(carried) = carried {
-            carried.name.hash(&mut h);
-            carried.path.hash(&mut h);
-            carried.head.hash(&mut h);
-            let k = &carried.kinds;
-            (k.added, k.modified, k.deleted).hash(&mut h);
-            (k.renamed, k.copied, k.conflicted).hash(&mut h);
-        }
-        carried.is_some().hash(&mut h);
         h.finish()
     }
 
@@ -178,17 +191,6 @@ mod tests {
     fn a_row() -> LogRow {
         LogRow {
             row: 3,
-            oid: crate::oid::Oid::from_hex_str(&"a".repeat(40)).unwrap(),
-            short_sha: "aaaaaaa".into(),
-            author: "Ada".into(),
-            author_email: "ada@example.com".into(),
-            co_authors: vec![crate::details::CoAuthor {
-                name: "Bo".into(),
-                email: "bo@example.com".into(),
-            }],
-            time: 1_700_000_000,
-            subject: "a subject".into(),
-            body: "a body".into(),
             node_lane: 1,
             node_color: 2,
             width: 4,
@@ -198,23 +200,53 @@ mod tests {
                 color: 2,
                 dashed: false,
             }],
-            labels: vec![RefLabel {
-                text: "main".into(),
-                kind: LabelKind::LocalBranch,
-                has_remote: false,
-                is_head: true,
-                here: true,
-                remote: String::new(),
-                held_elsewhere: false,
-                locked: false,
-                main: false,
-            }],
-            stash_ref: String::new(),
-            published: false,
-            parents: Box::from([oid('b')]),
-            carried: None,
-            provisional: false,
+            node: RowNode::Commit(CommitNode {
+                oid: crate::oid::Oid::from_hex_str(&"a".repeat(40)).unwrap(),
+                short_sha: "aaaaaaa".into(),
+                author: "Ada".into(),
+                author_email: "ada@example.com".into(),
+                co_authors: vec![crate::details::CoAuthor {
+                    name: "Bo".into(),
+                    email: "bo@example.com".into(),
+                }],
+                time: 1_700_000_000,
+                subject: "a subject".into(),
+                body: "a body".into(),
+                labels: vec![RefLabel {
+                    text: "main".into(),
+                    kind: LabelKind::LocalBranch,
+                    has_remote: false,
+                    is_head: true,
+                    here: true,
+                    remote: String::new(),
+                    held_elsewhere: false,
+                    locked: false,
+                    main: false,
+                }],
+                stash_ref: String::new(),
+                published: false,
+                parents: Box::from([oid('b')]),
+                provisional: false,
+            }),
         }
+    }
+
+    fn carried(path: &str) -> Carried {
+        Carried {
+            name: "worktree".into(),
+            path: path.into(),
+            head: oid('d'),
+            kinds: crate::status::Kinds {
+                modified: 1,
+                ..crate::status::Kinds::default()
+            },
+            main: false,
+        }
+    }
+
+    /// The commit standing on a row the tests built as one.
+    fn commit(row: &mut LogRow) -> &mut CommitNode {
+        row.commit_mut().unwrap()
     }
 
     /// Every field is moved one at a time, so a field the print forgets
@@ -229,40 +261,47 @@ mod tests {
             ("row", Box::new(|r: &mut LogRow| r.row = 4)),
             (
                 "oid",
-                Box::new(|r| r.oid = crate::oid::Oid::from_hex_str(&"b".repeat(40)).unwrap()),
+                Box::new(|r| {
+                    commit(r).oid = crate::oid::Oid::from_hex_str(&"b".repeat(40)).unwrap();
+                }),
             ),
-            ("short_sha", Box::new(|r| r.short_sha = "bbbbbbb".into())),
-            ("author", Box::new(|r| r.author = "Bo".into())),
+            (
+                "short_sha",
+                Box::new(|r| commit(r).short_sha = "bbbbbbb".into()),
+            ),
+            ("author", Box::new(|r| commit(r).author = "Bo".into())),
             (
                 "author_email",
-                Box::new(|r| r.author_email = "b@e.com".into()),
+                Box::new(|r| commit(r).author_email = "b@e.com".into()),
             ),
-            ("co_authors", Box::new(|r| r.co_authors.clear())),
-            ("time", Box::new(|r| r.time += 1)),
-            ("subject", Box::new(|r| r.subject = "another".into())),
-            ("body", Box::new(|r| r.body = "another".into())),
+            ("co_authors", Box::new(|r| commit(r).co_authors.clear())),
+            ("time", Box::new(|r| commit(r).time += 1)),
+            (
+                "subject",
+                Box::new(|r| commit(r).subject = "another".into()),
+            ),
+            ("body", Box::new(|r| commit(r).body = "another".into())),
             ("node_lane", Box::new(|r| r.node_lane = 5)),
             ("node_color", Box::new(|r| r.node_color = 5)),
             ("width", Box::new(|r| r.width = 9)),
             ("segments", Box::new(|r| r.segments[0].dashed = true)),
-            ("stash_ref", Box::new(|r| r.stash_ref = "stash@{0}".into())),
-            ("published", Box::new(|r| r.published = true)),
-            ("parents", Box::new(|r| r.parents = Box::from([oid('c')]))),
-            ("provisional", Box::new(|r| r.provisional = true)),
             (
-                "carried",
-                Box::new(|r| {
-                    r.carried = Some(crate::session::Carried {
-                        name: "worktree".into(),
-                        path: "/tmp/worktree".into(),
-                        head: oid('d'),
-                        kinds: crate::status::Kinds {
-                            modified: 1,
-                            ..crate::status::Kinds::default()
-                        },
-                        main: false,
-                    })
-                }),
+                "stash_ref",
+                Box::new(|r| commit(r).stash_ref = "stash@{0}".into()),
+            ),
+            ("published", Box::new(|r| commit(r).published = true)),
+            (
+                "parents",
+                Box::new(|r| commit(r).parents = Box::from([oid('c')])),
+            ),
+            ("provisional", Box::new(|r| commit(r).provisional = true)),
+            (
+                "this window's uncommitted row",
+                Box::new(|r| r.node = RowNode::Worktree(Whose::Here)),
+            ),
+            (
+                "another worktree's",
+                Box::new(|r| r.node = RowNode::Worktree(Whose::Other(carried("/tmp/other")))),
             ),
         ];
         for (field, change) in moved {
@@ -280,11 +319,11 @@ mod tests {
         // The chips are the other half, and the half a refs read restates
         // on its own (`apply_refs`).
         let mut chipped = base.clone();
-        chipped.labels[0].is_head = false;
+        commit(&mut chipped).labels[0].is_head = false;
         assert_eq!(RowPrint::of(&chipped).rest, print.rest, "the same row");
         assert_ne!(RowPrint::of(&chipped).labels, print.labels);
         assert_eq!(
-            RowPrint::labels_of(&chipped.labels),
+            RowPrint::labels_of(&commit(&mut chipped).labels),
             RowPrint::of(&chipped).labels,
             "what `apply_refs` writes back is what a rebuild computes"
         );
@@ -304,7 +343,11 @@ mod tests {
             width: base.width,
         };
         assert_eq!(
-            RowPrint::laid(RowPrint::content_of(&base), &lanes, &base.labels),
+            RowPrint::laid(
+                RowPrint::content_of(&base),
+                &lanes,
+                &base.commit().unwrap().labels
+            ),
             print,
             "a stand-in's print would call the walk that follows it a change"
         );
