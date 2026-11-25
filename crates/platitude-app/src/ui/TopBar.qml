@@ -858,10 +858,11 @@ Rectangle {
                             required property int index
                             required property string title
                             required property string worktree_name
+                            required property bool current
                             text: repoRow.title
                             textNames: true
                             trail: repoRow.worktree_name
-                            offered: repoRow.index !== topBar.tabsModel.currentIndex
+                            offered: !repoRow.current
                             onTriggered: topBar.tabsModel.setCurrentIndex(repoRow.index)
                         }
                         onObjectAdded: (at, object) => repoSub.insertItem(at, object)

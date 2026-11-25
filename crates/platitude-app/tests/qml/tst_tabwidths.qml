@@ -34,10 +34,9 @@ Item {
         id: metrics
     }
 
-    /// The strip's own model, as much of it as a tab reads.
+    /// The strip's own model, which a tab calls only from its `✕`.
     readonly property QtObject tabsModel: QtObject {
         id: tabsModel
-        property int currentIndex: -1
     }
 
     TabItemDelegate {
@@ -47,6 +46,7 @@ Item {
         title: "platitude-gg"
         worktree_path: "/home/someone/src/platitude-gg"
         worktree_name: ""
+        current: false
         tabsModel: tabsModel
         metrics: metrics
         bandColor: Theme.bgBase
@@ -67,6 +67,7 @@ Item {
         title: "platitude-gg"
         worktree_path: "/home/someone/src/trees/topic"
         worktree_name: "topic"
+        current: false
         tabsModel: tabsModel
         metrics: metrics
         bandColor: Theme.bgBase
@@ -217,7 +218,7 @@ Item {
         // ---- the tab drawn under the answer -------------------------------------
 
         function init() {
-            tabsModel.currentIndex = -1
+            tab.current = false
             tab.title = "platitude-gg"
             tab.titleCap = 400
             // The real object's costs: below is a tab drawn under an answer, not the answer.
@@ -288,10 +289,10 @@ Item {
             verify(!name.cutting, "and the name is whole in the column it grew into")
             verify(tab.nameKept)
 
-            tabsModel.currentIndex = 0
-            verify(tab.current, "in front, where the name is set heavier")
+            // In front, where the name is set heavier.
+            tab.current = true
             verify(tab.nameKept)
-            tabsModel.currentIndex = -1
+            tab.current = false
             verify(tab.nameKept)
         }
 

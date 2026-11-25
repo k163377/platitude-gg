@@ -19,8 +19,8 @@ impl TabsModel {
     }
 
     pub(super) fn leave_front(&mut self) {
-        if self.current_index >= 0 {
-            self.leaving_tab(self.current_index);
+        if self.current_tab.is_some() {
+            self.leaving_tab();
         }
     }
 
@@ -143,22 +143,22 @@ impl TabsModel {
         self.push(TabItem::standing(tab_id, title, repo, worktree));
         self.settle_titles();
         self.leave_front();
-        self.current_index = self.items.len() as i32 - 1;
+        self.current_tab = Some(tab_id);
         self.report();
-        self.current_index_changed();
-        self.front_tab_asked();
+        self.ask_front();
     }
 
     /// Stands the tab at `at` in another worktree of the repository
     /// it shows, and moves to it
     /// (デザイン規約 §タブの所作「同じリポジトリのタブは 1 枚」).
     ///
-    /// The row is rewritten in place and keeps its id, which keeps the
-    /// page (`RepoPageStack`): the worktrees share every commit and ref, so
-    /// the graph stands while the session under it is swapped
-    /// (`Hub::restand_tab`). The title stays; only `TabItem::worktree_name`
-    /// moves. Headless: `worktree-stand` / `carried-open`, whose `kept=`
-    /// says the page was not built again.
+    /// The row is rewritten in place. A tab already in front stays in front,
+    /// which keeps its page (`RepoPageStack`): the worktrees share every
+    /// commit and ref, so the graph stands while the session under it is
+    /// swapped (`Hub::restand_tab`). One that was not comes forward and is
+    /// built a page as any tab is. The title stays; only
+    /// `TabItem::worktree_name` moves. Headless: `worktree-stand` /
+    /// `carried-open`, whose `kept=` says the page was not built again.
     pub(super) fn switch_worktree(&mut self, at: usize, worktree: String) {
         self.stand_at(at, worktree, false);
     }
@@ -167,28 +167,33 @@ impl TabsModel {
     /// with it (`Hub::close_tab`).
     pub(super) fn close(&mut self, tab_id: i32) {
         let closing = self.items.iter().position(|t| t.tab_id == tab_id);
+        let front = closing.is_some() && self.current_tab == Some(tab_id);
         // The front tab says its goodbyes (`leaving_tab`) before the hub
         // closes its session, while the page is still whole.
-        if closing.is_some() && closing == usize::try_from(self.current_index).ok() {
+        if front {
             self.leave_front();
         }
         Hub::with(|hub| hub.close_tab(tab_id));
-        if let Some(pos) = closing {
-            self.remove(pos);
-            // The closed tab may have been another's namesake.
-            self.settle_titles();
-            // A close to the left shifts the active row down; the index
-            // follows, or the front silently becomes its right neighbour.
-            if (pos as i32) < self.current_index {
-                self.current_index -= 1;
+        let Some(pos) = closing else {
+            return;
+        };
+        if front {
+            // Its row lets go of the front before it goes: its delegates are
+            // deleted later, and until then a page and a tab still flagged
+            // would answer for a tab already closed.
+            if let Some(item) = self.items.get_mut(pos) {
+                item.current = false;
             }
-            let len = self.items.len() as i32;
-            if self.current_index >= len {
-                self.current_index = len - 1;
-            }
-            self.report();
-            self.current_index_changed();
+            self.notify_runs(std::iter::once(pos..=pos));
         }
+        self.remove(pos);
+        // The closed tab may have been another's namesake.
+        self.settle_titles();
+        // A tab closed beside the front leaves it be.
+        if front {
+            self.current_tab = front_after_close(&self.items, pos);
+        }
+        self.report();
     }
 
     /// Takes the tab at `from` out of the strip and puts it down at `to`
@@ -199,15 +204,8 @@ impl TabsModel {
             return;
         }
         self.move_notified(from, to);
-        // The rows the tab was carried across moved too, and the front
-        // follows its own row.
-        let landed = index_after_move(self.current_index, from, to);
-        let moved = landed != self.current_index;
-        self.current_index = landed;
+        // The tab in front stays in front; the row it sits in may not.
         self.report();
-        if moved {
-            self.current_index_changed();
-        }
     }
 
     /// Stands the tab holding `tab_id` again, in `worktree`: the worktree it
@@ -233,11 +231,11 @@ impl TabsModel {
         // Every reader's road starts on the page in front; a path handed
         // in from outside can name another tab's repository, and that tab
         // has no page or session — it is only pointed elsewhere.
-        let front = usize::try_from(self.current_index).ok() == Some(at);
+        let front = self.current_tab == Some(standing);
         if front {
             // Before the hub moves: drafts are filed under the worktree they
             // were written in (`Hub::hold_draft`).
-            self.leaving_worktree(at as i32);
+            self.leaving_worktree();
         } else {
             self.leave_front();
         }
@@ -253,14 +251,13 @@ impl TabsModel {
             item.stand_in(worktree);
         }
         self.notify_runs(std::iter::once(at..=at));
-        self.current_index = at as i32;
+        self.current_tab = Some(standing);
         self.report();
-        self.current_index_changed();
         if front {
             // After the hub, so the page restores the new worktree's words.
-            self.stood_worktree(at as i32);
+            self.stood_worktree();
         }
-        self.front_tab_asked();
+        self.ask_front();
     }
 
     /// Stands the tab holding `tab_id` back in the repository's own
@@ -295,7 +292,15 @@ impl TabsModel {
     /// seen (デザイン規約 §タブの所作「必ず何かが起きる」).
     pub(super) fn show(&mut self, position: usize) {
         self.set_current_index(position as i32);
-        self.front_tab_asked();
+        self.ask_front();
+    }
+
+    /// Asks the band to bring the tab now in front into view
+    /// (`front_tab_asked`); every road that asks has just put one there.
+    pub(super) fn ask_front(&mut self) {
+        if let Some(tab_id) = self.current_tab {
+            self.front_tab_asked(tab_id);
+        }
     }
 
     /// Names every tab against the strip it now stands in
@@ -321,40 +326,57 @@ impl TabsModel {
         self.notify_runs(runs);
     }
 
-    /// Names the front row's tab (`current_tab_id`) and its repository and
-    /// worktree (`current_repo_name` / `current_worktree_name`). Called from
-    /// [`TabsModel::report`], so every act on the strip ends here.
+    /// Reads everything else about the front off `current_tab`: the row it
+    /// sits in (`current_index`), each row's flag (`TabItem::current`), and
+    /// its repository and worktree names (`current_repo_name` /
+    /// `current_worktree_name`). Called from [`TabsModel::report`], so every
+    /// act on the strip ends here.
     ///
-    /// Each signal goes out only when what it names changes, so a
-    /// renumbering (a close to the left, a carry past) is silent.
+    /// Each is told only when it changes, so a renumbering (a close to the
+    /// left, a carry past) tells `currentIndex` and no row's flag.
     pub(super) fn settle_current(&mut self) {
-        let front = usize::try_from(self.current_index)
-            .ok()
-            .and_then(|at| self.items.get(at));
-        let id = front.map_or(-1, |tab| tab.tab_id);
+        let at = self
+            .current_tab
+            .and_then(|id| self.items.iter().position(|tab| tab.tab_id == id));
+        let front = at.and_then(|at| self.items.get(at));
         let (repo_name, worktree_name) = front.map_or_else(Default::default, |tab| {
             (title_of(&tab.repo_path), tab.worktree_name.clone())
         });
-        // The names before the row's own signal: whatever reads the tab
-        // in front off it finds the names already said.
+        let index = at.map_or(-1, |at| at as i32);
+        let moved = index != self.current_index;
+        // Before any signal: whatever a signal wakes reads the place the
+        // tab now sits in.
+        self.current_index = index;
+        // The names first: whatever reads the tab in front finds them
+        // already said.
         if repo_name != self.current_repo_name || worktree_name != self.current_worktree_name {
             self.current_repo_name = repo_name;
             self.current_worktree_name = worktree_name;
             self.front_names_changed();
         }
-        if id != self.current_tab_id {
-            self.current_tab_id = id;
+        // The place before the flags: the window shows the page stack once
+        // a tab is in front (`WindowBody`) and the stack shows the seat in
+        // front by it (`RepoPageStack`), so a page is built visible.
+        if moved {
             self.current_index_changed();
         }
+        let mut runs = Vec::new();
+        for (row, item) in self.items.iter_mut().enumerate() {
+            let current = Some(row) == at;
+            if item.current != current {
+                item.current = current;
+                push_run(&mut runs, row);
+            }
+        }
+        self.notify_runs(runs);
     }
 
     /// Hands the hub the strip as it stands (the file is written only by
     /// the flush).
     ///
-    /// Call before the act's own `current_index_changed()`: this names the
-    /// front tab ([`settle_current`]), and a notification with the row
-    /// moved but the tab not yet named leaves "the page in front" reading
-    /// nothing.
+    /// Every act on the strip ends here, and this tells whatever moved
+    /// about the front ([`settle_current`]); no act tells `currentIndex`
+    /// itself.
     ///
     /// [`settle_current`]: TabsModel::settle_current
     pub(super) fn report(&mut self) {
@@ -445,6 +467,13 @@ pub(super) fn landing_for(items: &[TabItem], worktree: &str, repo: &str) -> Land
     Landing::New
 }
 
+/// The tab that comes to the front once the tab in front, at row
+/// `closed`, has been taken out of `items`: its right neighbour, now in that
+/// row, or the last tab when it was the last; none when it was the only one.
+fn front_after_close(items: &[TabItem], closed: usize) -> Option<i32> {
+    items.get(closed).or(items.last()).map(|tab| tab.tab_id)
+}
+
 /// The tab's label on its own: the repository's folder name, by the rule
 /// the whole strip is settled by ([`tab_name::names_for`]);
 /// [`TabsModel::settle_titles`] grows it beside a namesake.
@@ -453,24 +482,6 @@ pub(super) fn title_of(path: &str) -> String {
         .into_iter()
         .next()
         .unwrap_or_default()
-}
-
-/// Where the row at `current` ends up once the row at `from` has been
-/// taken out and put down at `to`; -1 (nothing in front) stays -1.
-pub(crate) fn index_after_move(current: i32, from: usize, to: usize) -> i32 {
-    let Ok(at) = usize::try_from(current) else {
-        return current;
-    };
-    let landed = if at == from {
-        to
-    } else if from < at && at <= to {
-        at - 1
-    } else if to <= at && at < from {
-        at + 1
-    } else {
-        at
-    };
-    i32::try_from(landed).unwrap_or(current)
 }
 
 #[cfg(test)]

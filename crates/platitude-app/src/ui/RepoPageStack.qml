@@ -32,44 +32,51 @@ StackLayout {
     signal gitSettingsRequested()
     signal avatarSettingsRequested(string name, string email)
 
-    /// The page in front, or null while no tab is. `pageAt` reads the loader's `item` live: a switch moves the strip
-    /// and builds the new page in two steps, and only a dependency on `item` sees the second.
-    readonly property var curPage: stack.pageAt(stack.tabsModel.currentIndex)
+    /// The seat of the tab in front — put here by the seat itself as its row's flag rises (`settleFrontSeat`), as the
+    /// strip's tabs name themselves (`TabStrip.frontTab`), never looked up by row: closing a tab to the left renumbers
+    /// rows before `currentIndex` catches up, and a page looked up by row reads null in that gap. Null while no tab is
+    /// (a front row being closed lets go of the front before it goes — `TabsModel::close`).
+    property Item frontSeat: null
+    /// The page in front, or null while no tab is. Read off the seat's `item` live: a switch builds the new page after
+    /// its seat comes forward, and only a dependency on `item` sees it arrive.
+    readonly property var curPage: stack.frontSeat === null ? null : stack.frontSeat.item
     /// One row per tab whether or not it has a page; the harness counts tabs with it (`WindowAutoActDriver`).
     readonly property alias seats: pageRepeater
 
-    /// The page built for the strip's row at `index`, or null — the row is not there, or its tab is not in front.
-    function pageAt(index) {
-        if (index < 0 || index >= pageRepeater.count)
-            return null
-        const holder = pageRepeater.itemAt(index)
-        return holder === null ? null : holder.item
+    /// A seat's row flag moved (`TabItem::current`). Order-free: the seat losing the front clears it only if nobody has
+    /// claimed it since.
+    function settleFrontSeat(seat) {
+        if (seat.current)
+            stack.frontSeat = seat
+        else if (stack.frontSeat === seat)
+            stack.frontSeat = null
     }
 
+    // The seat shown, by the model's row, not the front seat's `index`: a carry hands the seat its new `index` before
+    // the `StackLayout`'s children are put in the new order, and the layout, shown the new number then, shows the seat
+    // that stood there — an empty one (`tab-drag 3:1`, `tab-edge 0`). `currentIndex` is told once the rows have moved.
+    // In the turn a close renumbers them it can name an empty seat, which no frame draws.
     currentIndex: Math.max(0, stack.tabsModel.currentIndex)
 
     // Handing over before the strip moves — the layout to the next tab, the commit editor's draft to the hub — since
     // the page is taken down behind this (`TabsModel::leaving_tab`). The signal makes the order (leaving page's
     // `reportLayout`, then the coming page's `applySavedLayout`); left to binding evaluation, which runs first is
-    // undefined.
+    // undefined. Every one of them is about the tab in front, so it goes to the page in front.
     Connections {
         target: stack.tabsModel
-        function onLeavingTab(index) {
-            const leaving = stack.pageAt(index)
-            if (leaving !== null)
-                leaving.leaveFront()
+        function onLeavingTab() {
+            if (stack.curPage !== null)
+                stack.curPage.leaveFront()
         }
-        // A switch to another worktree of the same repository keeps the page (the tab id does not move); it drops
-        // what the old worktree owned between these two (`RepoPage.leaveWorktree` / `standInWorktree`).
-        function onLeavingWorktree(index) {
-            const leaving = stack.pageAt(index)
-            if (leaving !== null)
-                leaving.leaveWorktree()
+        // A switch to another worktree of the same repository keeps the page (its row stays the tab in front); it
+        // drops what the old worktree owned between these two (`RepoPage.leaveWorktree` / `standInWorktree`).
+        function onLeavingWorktree() {
+            if (stack.curPage !== null)
+                stack.curPage.leaveWorktree()
         }
-        function onStoodWorktree(index) {
-            const stood = stack.pageAt(index)
-            if (stood !== null)
-                stood.standInWorktree()
+        function onStoodWorktree() {
+            if (stack.curPage !== null)
+                stack.curPage.standInWorktree()
         }
     }
 
@@ -82,9 +89,16 @@ StackLayout {
             // off this loader by id.
             required property int index
             required property int tab_id
-            // By tab id, not `index`: closing or moving a tab renumbers `index` before `currentIndex` catches up, and a
-            // page rebuilt in that gap finds its session already open and never reads (`TabsModel::current_tab_id`).
-            active: seat.tab_id === stack.tabsModel.currentTabId
+            // By its row's own flag, not `index` against `currentIndex`: closing or moving a tab renumbers `index`
+            // before `currentIndex` catches up, and a page rebuilt in that gap finds its session already open and never
+            // reads (`TabItem::current`).
+            required property bool current
+            active: seat.current
+            // Before `active` builds the page (a handler runs ahead of the bindings on the same property), so
+            // `curPage` is this seat's page the moment it is built.
+            onCurrentChanged: stack.settleFrontSeat(seat)
+            // A seat born in front never announces `current` changing.
+            Component.onCompleted: if (seat.current) stack.settleFrontSeat(seat)
             sourceComponent: RepoPage {
                 index: seat.index
                 tab_id: seat.tab_id

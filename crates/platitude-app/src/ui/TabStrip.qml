@@ -22,18 +22,19 @@ Item {
     /// The tab in front, as this list built it — pushed by the tab (`TabItemDelegate.frontChanged`), since a new row's
     /// item arrives only with the next layout. Null while no tab is open.
     property Item frontTab: null
-    /// An ask from outside the strip to show the repository just put in front (`TabsModel`), and whether to travel
-    /// there or start there (`askFrontTab`). Held, because at the moment of the ask the tab in front is still the one
-    /// being left.
-    property bool frontAsked: false
+    /// An ask from outside the strip to show the repository just put in front (`TabsModel.frontTabAsked`): the id of
+    /// the tab it is for, undefined while none is open. Held, because at the moment of the ask the tab in front may
+    /// have no item yet.
+    ///
+    /// The ask stays open while that tab is in front and is answered again whenever what it was measured against
+    /// moves: the view settles extent and widths after the item reports itself, and a one-shot answer is left off the
+    /// run. It closes on the reader's hand on the strip (`takeRun`), automation's (`sendRunAway`), a tab closed
+    /// (counted, since neither the `✕` nor a middle click goes through `takeRun`), another tab coming to the front (a
+    /// latch left open would move the strip for it), or — once answered — the next press anywhere (`pressLanded`).
+    property var frontAskFor: undefined
+    readonly property bool frontAsked: tabStrip.frontAskFor !== undefined
+    /// Whether the open ask travels to its tab or starts there (`askFrontTab`).
     property bool frontAskTravels: false
-    /// The tab the open ask is for (`TabsModel::current_tab_id` at the ask). The ask stays open while that tab is in
-    /// front and is answered again whenever what it was measured against moves: the view settles extent and widths
-    /// after the item reports itself, and a one-shot answer is left off the run. It closes on the reader's hand on the
-    /// strip (`takeRun`), automation's (`sendRunAway`), a tab closed (counted, since neither the `✕` nor a middle click
-    /// goes through `takeRun`), the front moving (a latch left open would take the next tab to come forward and move
-    /// the strip for it), or — once answered — the next press anywhere (`pressLanded`).
-    property int frontAskId: -1
     /// The open ask has answered once, so the next press ends it (`pressLanded`).
     property bool frontAskAnswered: false
     /// Whether the strip has held a tab in front since it was last empty. A strip that has not starts at the asked
@@ -197,14 +198,13 @@ Item {
         return tabRun.showTab(tabStrip.frontTab)
     }
 
-    /// An outside ask to show the tab in front (`TabsModel.frontTabAsked` — which roads ask, and why): travelled to as
-    /// a press on the stand-in is, if the strip has stood before, else started at (`stood`). The model has moved its
-    /// front before asking, so its front is the tab asked for.
-    function askFrontTab() {
+    /// An outside ask to show the tab `tabId`, which the model has just put in front (`TabsModel.frontTabAsked` — which
+    /// roads ask, and why): travelled to as a press on the stand-in is, if the strip has stood before, else started at
+    /// (`stood`).
+    function askFrontTab(tabId) {
         tabStrip.frontAskTravels = tabStrip.stood
-        tabStrip.frontAskId = tabStrip.tabsModel.currentTabId
+        tabStrip.frontAskFor = tabId
         tabStrip.frontAskAnswered = false
-        tabStrip.frontAsked = true
         frontAskLater.restart()
     }
 
@@ -215,14 +215,15 @@ Item {
     function answerFrontAsk() {
         if (!tabStrip.frontAsked)
             return
-        if (tabStrip.tabsModel.currentTabId !== tabStrip.frontAskId) {
+        // Its item has not reported itself in front yet; a later layout brings it.
+        const tab = tabStrip.frontTab
+        if (!tab)
+            return
+        // Another tab has come to the front since the ask.
+        if (tab.tab_id !== tabStrip.frontAskFor) {
             tabStrip.closeFrontAsk()
             return
         }
-        // Its item has not reported itself in front yet; a later layout brings it.
-        const tab = tabStrip.frontTab
-        if (!tab || tab.tab_id !== tabStrip.frontAskId)
-            return
         tabStrip.frontAskAnswered = true
         if (tabStrip.frontAskTravels)
             tabRun.showTab(tab)
@@ -235,8 +236,7 @@ Item {
     }
 
     function closeFrontAsk() {
-        tabStrip.frontAsked = false
-        tabStrip.frontAskId = -1
+        tabStrip.frontAskFor = undefined
         tabStrip.frontAskAnswered = false
     }
 
@@ -276,7 +276,7 @@ Item {
     /// the strip would be sent now; a strip at rest whose `to=` is not its `cx=` has a tab it was not sent to.
     function frontAskAccount() {
         const tab = tabStrip.frontTab
-        return "ask=" + tabStrip.frontAsked + " answered=" + tabStrip.frontAskAnswered + " for=" + tabStrip.frontAskId
+        return "ask=" + tabStrip.frontAsked + " answered=" + tabStrip.frontAskAnswered + " for=" + tabStrip.frontAskFor
             + " travels=" + tabStrip.frontAskTravels + " stood=" + tabStrip.stood
             + " front=" + (tab ? tab.tab_id + ":" + tab.index + "@" + Math.round(tab.x) + "+" + Math.round(tab.width)
                                 : "none")
@@ -379,9 +379,9 @@ Item {
         onCountChanged: tabStrip.settleTitleCap()
         delegate: Item {
             id: measured
-            required property int index
             required property string title
             required property string worktree_name
+            required property bool current
 
             /// Both runs together: the one number the run is handed out by.
             readonly property real natW: Math.ceil(nameLabel.implicitWidth) + treeMeasure.naturalWidth
@@ -395,7 +395,7 @@ Item {
                 text: measured.title
                 // The tab's tracking, or the strip and the tab read one name at two widths.
                 font.letterSpacing: tabMetrics.titleTracking(measured.title.length)
-                font.weight: tabStrip.tabsModel.currentIndex === measured.index ? Theme.fontWeightStrong : Font.Normal
+                font.weight: measured.current ? Theme.fontWeightStrong : Font.Normal
             }
             TabTreeMark {
                 id: treeMeasure
@@ -527,8 +527,8 @@ Item {
     // `currentIndex`: the strip's own press and carry move that too, and those leave the band where the reader put it.
     Connections {
         target: tabStrip.tabsModel
-        function onFrontTabAsked() {
-            tabStrip.askFrontTab()
+        function onFrontTabAsked(tabId) {
+            tabStrip.askFrontTab(tabId)
         }
     }
     // Opening one more, drawn: its ink is read off `markSeat` so it cannot come out a step apart from the tabs' `✕`.

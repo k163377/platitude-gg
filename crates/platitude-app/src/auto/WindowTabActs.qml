@@ -893,9 +893,9 @@ Item {
     }
 
     // What a tab switch carries and what it drops, in three landings: mark the front tab, read the other, come back.
-    // Each landing waits for a whole page — a page still opening answers like an emptied one. Waited on
-    // `currentTabId`, not the row (rows renumber). The page is a different object at each landing (built and taken
-    // down with its tab), so nothing but the words may be held across one. The picture reads best over a dirty tree
+    // Each landing waits for a whole page — a page still opening answers like an emptied one. Waited on the page's own
+    // `tab_id`, not the row (rows renumber). The page is a different object at each landing (built and taken down with
+    // its tab), so nothing but the words and the id may be held across one. The picture reads best over a dirty tree
     // (`--preset basic --preset rebase-conflict`): the tab comes back onto the worktree's row, and the reread brings
     // the `REBASING` band back with it.
     WindowStage {
@@ -926,13 +926,13 @@ Item {
                     page.foldByHand(true)
                     page.commandsOpen = true
                     page.pageWip.setMessage(op.typed, "")
-                    op.witness("firstTab", tabsModel.currentTabId)
+                    op.witness("firstTab", page.tab_id)
                     tabsModel.setCurrentIndex(tabsModel.currentIndex === 0 ? 1 : 0)
                 })
                 return
             }
             if (op.at("away")) {
-                if (!Awaited.all("tab_carry_moved", { "moved": tabsModel.currentTabId !== op.witnessed("firstTab") }))
+                if (!Awaited.all("tab_carry_moved", { "moved": page.tab_id !== op.witnessed("firstTab") }))
                     return
                 // Read at the second landing and reported at the third: the layout followed the reader, the words did
                 // not.
@@ -947,7 +947,7 @@ Item {
             // `sessions=` is the release: two tabs in the strip, one repository in memory.
             op.complete({
                 "name": "tab_carry_back",
-                "when": () => ({ "back": tabsModel.currentTabId === op.witnessed("firstTab"),
+                "when": () => ({ "back": window.curPage !== null && window.curPage.tab_id === op.witnessed("firstTab"),
                                  "ready": op.whole(window.curPage) }),
                 "report": () => {
                     const page = window.curPage

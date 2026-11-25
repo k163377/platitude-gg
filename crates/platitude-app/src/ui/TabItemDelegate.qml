@@ -16,7 +16,10 @@ Rectangle {
     /// no run and wears the band's ordinary blue.
     required property string worktree_path
     required property string worktree_name
-    /// The strip's own model: the one question a tab asks of it, and the one thing the mark does to it.
+    /// Whether this is the tab in front — its row's own flag (`TabItem::current`), which a close or a carry does not
+    /// renumber.
+    required property bool current
+    /// The strip's own model: the one thing the mark does to it.
     required property var tabsModel
     /// What every name in the strip is capped at right now, the shortest one is cut to, the length a name stops being
     /// eased at, the room every tab keeps for its mark, and the run a name goes quiet over where the mark stands on
@@ -50,7 +53,6 @@ Rectangle {
     readonly property real easeRight: tabItem.metrics.easeRight(tabItem.titleEase, tabItem.markRoom)
     readonly property bool nameUnderMark: tabItem.markRoom + tabItem.easeRight < tabItem.metrics.markRoomFull
     property real stripHeight: 0
-    readonly property bool current: tabItem.tabsModel.currentIndex === tabItem.index
     /// Whether the pointer is on this tab — the one property both the real hover and the smoke hook write, so the
     /// headless run proves what the wash and the mark answer.
     property bool pointed: false

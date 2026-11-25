@@ -64,6 +64,12 @@ pub struct TabItem {
     /// says whether the strip draws anything after the name
     /// ([`worktree_name_of`]; デザイン規約 §タブの所作).
     worktree_name: String,
+    /// Whether this is the tab in front (`TabsModel::current_tab`), settled
+    /// with it (`settle_current`). Every reader asking "is this one in
+    /// front?" reads its own row's flag: the flag rides with its row through
+    /// a close or a carry, where a row number compared against
+    /// `currentIndex` is renumbered before `currentIndex` catches up.
+    current: bool,
 }
 
 impl TabItem {
@@ -77,6 +83,7 @@ impl TabItem {
             worktree_name: worktree_name_of(&repo, &worktree),
             repo_path: repo,
             worktree_path: worktree,
+            current: false,
         }
     }
 
@@ -116,14 +123,18 @@ struct Ask {
 
 pub struct TabsModel {
     items: Vec<TabItem>,
+    /// Which tab is in front, by its id: the one fact the strip keeps
+    /// about the front. A close or a carry moves rows, not tabs, so nothing
+    /// here is renumbered by one; the row it sits in (`current_index`) and
+    /// each row's flag (`TabItem::current`) are read off it
+    /// (`settle_current`).
+    current_tab: Option<i32>,
+    /// The row `current_tab` sits in, for the readers that go by row: the
+    /// page stack's `StackLayout` (which seat it shows), the settings
+    /// chooser, the file's `active`, and whether any tab is in front at all
+    /// (`WindowBody`); -1 while none is. Whatever asks "is this one in
+    /// front?" reads its own row's flag instead.
     current_index: i32,
-    /// Which *tab* is in front, as opposed to which row it sits in.
-    ///
-    /// The page in front is keyed off this (`RepoPageStack`): closing a
-    /// row to its left or carrying a tab renumbers rows before
-    /// `currentIndex` moves, and a page keyed off the row is rebuilt in
-    /// that gap with its session already open, never to read again.
-    current_tab_id: i32,
     /// The front tab's repository and worktree names (`TabItem::worktree_name`),
     /// for the operation panel. Settled with the row, so the panel does
     /// not wait on the page's own git answer.
@@ -153,10 +164,10 @@ impl Default for TabsModel {
     fn default() -> Self {
         Self {
             items: Vec::new(),
+            current_tab: None,
             // No tab: a derived 0 would point at a tab that does not exist;
             // the UI reads < 0 as none open.
             current_index: -1,
-            current_tab_id: -1,
             current_repo_name: String::new(),
             current_worktree_name: String::new(),
             open_repos: OpenRepos::default(),

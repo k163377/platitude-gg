@@ -34,16 +34,16 @@ Item {
     /// than its tab stands centred on the hand, in whatever font the runner has (`TipSeat.seatX`).
     ListModel {
         id: tabRows
-        property int currentIndex: 0
         function setCurrentIndex(index) {
-            tabRows.currentIndex = index
+            for (let i = 0; i < tabRows.count; i++)
+                tabRows.setProperty(i, "current", i === index)
         }
         function moveTab(from, to) {
             tabRows.move(from, to, 1)
         }
         function closeTab(id) {}
-        ListElement { tab_id: 1; title: "platitude-gg"; worktree_path: "/src/pg"; worktree_name: "" }
-        ListElement { tab_id: 2; title: "sealed-class"; worktree_path: "/src/sc"; worktree_name: "" }
+        ListElement { tab_id: 1; title: "platitude-gg"; worktree_path: "/src/pg"; worktree_name: ""; current: true }
+        ListElement { tab_id: 2; title: "sealed-class"; worktree_path: "/src/sc"; worktree_name: ""; current: false }
     }
 
     readonly property TabMetrics tabMetrics: TabMetrics { id: tabMetrics }
@@ -114,7 +114,7 @@ Item {
             // A carry reorders the strip: each case starts from the same one.
             if (tabRows.get(0).tab_id !== 1)
                 tabRows.move(1, 0, 1)
-            tabRows.currentIndex = 0
+            tabRows.setCurrentIndex(0)
             tabs.forceLayout()
             root.seen = []
         }

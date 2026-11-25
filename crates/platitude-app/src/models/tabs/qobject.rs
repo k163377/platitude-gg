@@ -10,13 +10,6 @@ impl TabsModel {
         Member = current_index,
         Notify = current_index_changed
     );
-    // Shares the row's signal: both are settled together
-    // (`settle_current`).
-    qproperty!(
-        "currentTabId",
-        Member = current_tab_id,
-        Notify = current_index_changed
-    );
     // Their own signal: standing the front tab in another worktree changes
     // them without moving the front.
     qproperty!(
@@ -55,29 +48,30 @@ impl TabsModel {
     #[qsignal]
     pub(super) fn opening_changed(&mut self);
 
-    /// The row at `index` is about to stop being the one in front.
+    /// The tab in front is about to stop being it.
     ///
-    /// Emitted *before* `currentIndex` moves: the page being left hands
-    /// over its layout and its commit editor's words, and once
-    /// `currentIndex` has moved the bindings have already taken that page
-    /// down. Not emitted when the front tab stays.
+    /// Emitted *before* the front moves: the page being left hands over
+    /// its layout and its commit editor's words, and once its row's flag
+    /// has fallen the bindings have already taken that page down. Not
+    /// emitted when the front tab stays. No row is named: it is always the
+    /// tab in front, whose page the stack already holds.
     #[qsignal]
-    pub(super) fn leaving_tab(&mut self, index: i32);
+    pub(super) fn leaving_tab(&mut self);
 
-    /// The row at `index` is about to stand in another worktree, its
-    /// page staying (`TabsModel::switch_worktree`).
+    /// The tab in front is about to stand in another worktree, its page
+    /// staying (`TabsModel::switch_worktree`).
     ///
     /// Emitted *before* the hub moves: the commit editor's words are filed
     /// under the worktree they were written in. Whatever else the page holds
     /// for the worktree being left goes here too; the graph and panes are the
     /// repository's and stay.
     #[qsignal]
-    pub(super) fn leaving_worktree(&mut self, index: i32);
+    pub(super) fn leaving_worktree(&mut self);
 
-    /// The other side of `leaving_worktree`: the tab at `index` now stands in
+    /// The other side of `leaving_worktree`: the tab in front now stands in
     /// the asked-for worktree, and its session is opening.
     #[qsignal]
-    pub(super) fn stood_worktree(&mut self, index: i32);
+    pub(super) fn stood_worktree(&mut self);
 
     /// Somebody asked to be shown the repository now in front, so the band
     /// travels to that tab's seat (`TabStrip.askFrontTab`), as far and as
@@ -90,9 +84,10 @@ impl TabsModel {
     ///
     /// Not `current_index_changed`: a press or a carry moves that too, and
     /// there the reader has put the band where it is. Emitted after the
-    /// index has moved, so the strip reads a model that has answered.
+    /// front has moved, so the strip reads a model that has answered;
+    /// `tab_id` is the tab asked for, now in front (`TabsModel::ask_front`).
     #[qsignal]
-    pub(super) fn front_tab_asked(&mut self);
+    pub(super) fn front_tab_asked(&mut self, tab_id: i32);
 
     /// The folder picked in the dialog did not open. `kind` is `plain` /
     /// `bare` / `other`, `message` git's own words (`other` alone), and
@@ -197,10 +192,10 @@ impl TabsModel {
         if self.items.is_empty() {
             return;
         }
-        self.current_index = wanted_held.unwrap_or(wanted).min(self.items.len() - 1) as i32;
+        let at = wanted_held.unwrap_or(wanted).min(self.items.len() - 1);
+        self.current_tab = self.items.get(at).map(|tab| tab.tab_id);
         self.report();
-        self.current_index_changed();
-        self.front_tab_asked();
+        self.ask_front();
     }
 
     /// A tab's worktree would not open, so it is stood back in the
@@ -240,9 +235,11 @@ impl TabsModel {
     pub(super) fn set_current_index(&mut self, index: i32) {
         if index != self.current_index && index >= -1 && index < self.items.len() as i32 {
             self.leave_front();
-            self.current_index = index;
+            self.current_tab = usize::try_from(index)
+                .ok()
+                .and_then(|at| self.items.get(at))
+                .map(|tab| tab.tab_id);
             self.report();
-            self.current_index_changed();
         }
     }
 }
