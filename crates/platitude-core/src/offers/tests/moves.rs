@@ -44,6 +44,35 @@ fn switch_lands_where_the_kind_and_the_local_branch_say() {
     assert_eq!(lands("remote", "", false, false), None);
 }
 
+/// The checkout each move sends: a `switch` onto the row's own branch, or
+/// the remote branch's local one made off the remote row — the row's name
+/// as the ref, the landing as the branch made.
+#[test]
+fn a_move_sends_the_checkout_its_kind_says() {
+    use crate::branch::CheckoutTarget;
+    use SwitchAction::*;
+    assert_eq!(
+        Switch.checkout("feat", "feat"),
+        Some(CheckoutTarget::Branch {
+            name: "feat".into()
+        })
+    );
+    assert_eq!(
+        Materialize.checkout("origin/feat", "feat"),
+        Some(CheckoutTarget::Track {
+            remote_ref: "origin/feat".into(),
+            local: "feat".into(),
+        })
+    );
+    for sends_none in [None, OpenHolder, MoveBranch] {
+        assert_eq!(
+            sends_none.checkout("origin/feat", "feat"),
+            Option::None,
+            "{sends_none:?}"
+        );
+    }
+}
+
 #[test]
 fn a_move_has_landed_only_once_head_and_the_listing_both_say_so() {
     let feat = TreeStanding::on("feat");

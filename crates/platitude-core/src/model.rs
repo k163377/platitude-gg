@@ -120,6 +120,15 @@ mod tests {
     }
 
     #[test]
+    fn only_nothing_on_either_side_is_level() {
+        let level = |ahead, behind| AheadBehind { ahead, behind }.is_level();
+        assert!(level(0, 0));
+        assert!(!level(1, 0), "a commit to send");
+        assert!(!level(0, 1), "a commit to take");
+        assert!(!level(2, 3));
+    }
+
+    #[test]
     fn intern_deduplicates() {
         let mut pool = StrPool::new();
         let a = pool.intern("Alice");
