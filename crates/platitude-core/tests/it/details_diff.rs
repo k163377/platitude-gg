@@ -90,6 +90,30 @@ async fn details_read_co_authors_whatever_case_the_trailer_used() {
     assert!(d.message.contains("Co-Authored-By: Claude Opus 5"));
 }
 
+/// A message kept as written (`--cleanup=verbatim`) reads back with its
+/// own blank lines at the end: only the last line's ending goes, as `%B`
+/// writes the message and then the `-z` NUL with nothing between.
+#[tokio::test]
+async fn details_keep_the_blank_lines_a_message_ends_with() {
+    let mut repo = TestRepo::init();
+    repo.git(&[
+        "commit",
+        "--allow-empty",
+        "--cleanup=verbatim",
+        "-m",
+        "subject\n\n  body\n\n\n",
+    ]);
+    let sha = repo.git(&["rev-parse", "HEAD"]);
+
+    let (executor, cancel) = env();
+    let oid = Oid::from_hex_str(sha.trim()).unwrap();
+    let d = details::commit_details(&executor, &repo.path, &oid, &cancel)
+        .await
+        .unwrap();
+
+    assert_eq!(d.message, "subject\n\n  body\n\n");
+}
+
 /// The editor's count (`trailers::co_authors_in`, a copy of git's rule so
 /// it costs no process per keystroke) credits whoever git records for the
 /// same body: each body is committed under a subject and git's own
