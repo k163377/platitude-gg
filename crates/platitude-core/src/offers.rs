@@ -381,8 +381,9 @@ pub fn ref_menu(row: &RowStanding<'_>, far: FarSide) -> RefMenuOffers {
         standing: tree.op_standing(),
         // A worktree's own delete is the WORKTREE card's
         // ([`worktree_card`]).
+        // Out wherever the table says why it greys.
         delete: kind != RefKind::Worktree
-            && !(kind == RefKind::Branch && (current || row.leads == Leads::Holder))
+            && delete_out.is_none()
             // A remote-only tag leaves `tag --delete` nothing to name.
             && tag_here,
         delete_remote: upstream.is_some_and(|upstream| upstream.reading == Reading::Together),
