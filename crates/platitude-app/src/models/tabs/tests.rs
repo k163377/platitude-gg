@@ -1,6 +1,6 @@
 //! Tests of the tab strip's move arithmetic (`tabs::index_after_move`).
 
-use super::index_after_move;
+use super::strip::index_after_move;
 
 #[test]
 fn the_tab_being_carried_lands_where_it_was_put_down() {

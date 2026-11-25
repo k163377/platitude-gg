@@ -163,6 +163,53 @@ impl TabsModel {
         self.stand_at(at, worktree, false);
     }
 
+    /// Takes the tab holding `tab_id` out of the strip, and its session
+    /// with it (`Hub::close_tab`).
+    pub(super) fn close(&mut self, tab_id: i32) {
+        let closing = self.items.iter().position(|t| t.tab_id == tab_id);
+        // The front tab says its goodbyes (`leaving_tab`) before the hub
+        // closes its session, while the page is still whole.
+        if closing.is_some() && closing == usize::try_from(self.current_index).ok() {
+            self.leave_front();
+        }
+        Hub::with(|hub| hub.close_tab(tab_id));
+        if let Some(pos) = closing {
+            self.remove(pos);
+            // The closed tab may have been another's namesake.
+            self.settle_titles();
+            // A close to the left shifts the active row down; the index
+            // follows, or the front silently becomes its right neighbour.
+            if (pos as i32) < self.current_index {
+                self.current_index -= 1;
+            }
+            let len = self.items.len() as i32;
+            if self.current_index >= len {
+                self.current_index = len - 1;
+            }
+            self.report();
+            self.current_index_changed();
+        }
+    }
+
+    /// Takes the tab at `from` out of the strip and puts it down at `to`
+    /// (デザイン規約 §タブの所作). A drag asks one neighbour at a time;
+    /// the headless run carries the whole distance in one call.
+    pub(super) fn carry(&mut self, from: usize, to: usize) {
+        if from == to || from >= self.items.len() || to >= self.items.len() {
+            return;
+        }
+        self.move_notified(from, to);
+        // The rows the tab was carried across moved too, and the front
+        // follows its own row.
+        let landed = index_after_move(self.current_index, from, to);
+        let moved = landed != self.current_index;
+        self.current_index = landed;
+        self.report();
+        if moved {
+            self.current_index_changed();
+        }
+    }
+
     /// Stands the tab holding `tab_id` again, in `worktree`: the worktree it
     /// stood in, its folder renamed (the tab follows the new folder — user
     /// decision, ask before changing), or the same folder after a rename git

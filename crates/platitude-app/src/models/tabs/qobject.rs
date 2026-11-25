@@ -220,54 +220,20 @@ impl TabsModel {
         self.follow_tab_worktree(tab_id, path);
     }
 
+    /// Closes the tab holding `tab_id` (`TabsModel::close`).
     #[qslot]
     fn close_tab(&mut self, tab_id: i32) {
-        let closing = self.items.iter().position(|t| t.tab_id == tab_id);
-        // The front tab says its goodbyes (`leaving_tab`) before the hub
-        // closes its session, while the page is still whole.
-        if closing.is_some() && closing == usize::try_from(self.current_index).ok() {
-            self.leave_front();
-        }
-        Hub::with(|hub| hub.close_tab(tab_id));
-        if let Some(pos) = closing {
-            self.remove(pos);
-            // The closed tab may have been another's namesake.
-            self.settle_titles();
-            // A close to the left shifts the active row down; the index
-            // follows, or the front silently becomes its right neighbour.
-            if (pos as i32) < self.current_index {
-                self.current_index -= 1;
-            }
-            let len = self.items.len() as i32;
-            if self.current_index >= len {
-                self.current_index = len - 1;
-            }
-            self.report();
-            self.current_index_changed();
-        }
+        self.close(tab_id);
     }
 
     /// Takes the tab at `from` out of the strip and puts it down at `to`
-    /// (デザイン規約 §タブの所作). A drag asks one neighbour at a time;
-    /// the headless run carries the whole distance in one call.
+    /// (`TabsModel::carry`).
     #[qslot]
     fn move_tab(&mut self, from: i32, to: i32) {
         let (Ok(from), Ok(to)) = (usize::try_from(from), usize::try_from(to)) else {
             return;
         };
-        if from == to || from >= self.items.len() || to >= self.items.len() {
-            return;
-        }
-        self.move_notified(from, to);
-        // The rows the tab was carried across moved too, and the front
-        // follows its own row.
-        let landed = index_after_move(self.current_index, from, to);
-        let moved = landed != self.current_index;
-        self.current_index = landed;
-        self.report();
-        if moved {
-            self.current_index_changed();
-        }
+        self.carry(from, to);
     }
 
     #[qslot]

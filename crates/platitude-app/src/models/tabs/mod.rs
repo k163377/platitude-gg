@@ -42,7 +42,7 @@ mod strip;
 mod tests;
 
 // The siblings reach these through `use super::*`.
-use strip::{Landing, index_after_move, landing_for, title_of};
+use strip::{Landing, landing_for, title_of};
 
 // ---------------------------------------------------------------------------
 // TabsModel: open repositories (the tab strip)
