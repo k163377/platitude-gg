@@ -743,8 +743,8 @@ impl NavSectionModel {
     }
 
     /// Where the worktree at `path` is standing — the HEAD git listed
-    /// with the entry, as hex; empty for a path this listing does not hold
-    /// and for a bare entry.
+    /// with the entry, as hex; empty for a path this listing does not hold,
+    /// for a bare entry, and for a worktree with no commits yet.
     ///
     /// By path, not name: two worktrees can share a leaf name under different
     /// parents (`RepoPage.carriedPath`). What the page lands on when the

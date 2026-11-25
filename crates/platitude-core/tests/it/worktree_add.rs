@@ -343,6 +343,64 @@ async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
     assert!(repo.git_ok(&["branch", "-m", "plain", "plain-renamed"]));
 }
 
+/// A worktree on a branch with no commits yet: git lists it on that branch
+/// with an all-zero `HEAD`, which names no object, so the listing gives it no
+/// commit — as it gives a bare entry none — and nothing downstream reads the
+/// zeros as one (a WORKTREES row's click, a worktree's row in the graph).
+#[tokio::test]
+async fn a_worktree_with_no_commits_yet_stands_on_no_commit() {
+    let (mut repo, _) = two_commits();
+    let lonely = beside(&repo, "lonely");
+    repo.git(&["worktree", "add", "-b", "lonely", &lonely.to_string_lossy()]);
+    repo.git_in(&lonely, &["switch", "--orphan", "empty"]);
+    let raw = repo.git(&["worktree", "list", "--porcelain"]);
+    let entry = raw
+        .split("\n\n")
+        .find(|entry| {
+            entry
+                .lines()
+                .any(|l| l.ends_with("lonely") && l.starts_with("worktree "))
+        })
+        .expect("git lists the worktree");
+    let head = entry
+        .lines()
+        .find_map(|l| l.strip_prefix("HEAD "))
+        .expect("git prints a HEAD line for it");
+    assert!(
+        !head.is_empty() && head.bytes().all(|b| b == b'0'),
+        "git's HEAD for it is all zeros: {entry}"
+    );
+    assert!(
+        entry.lines().any(|l| l == "branch refs/heads/empty"),
+        "and names the branch: {entry}"
+    );
+    // The branch has no ref yet — nothing to merge, rebase or start on —,
+    // and its delete is refused as the worktree's, as one with commits is
+    // (git's words for that moved between versions).
+    assert!(!repo.git_ok(&["rev-parse", "--verify", "-q", "refs/heads/empty"]));
+    let path = repo.path.clone();
+    let refused = repo.git_attempt(&path, &["branch", "--delete", "empty"]);
+    let said = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        !refused.status.success()
+            && (said.contains("used by worktree") || said.contains("checked out at")),
+        "git refuses it as held: {said}"
+    );
+    let (exec, cancel) = env();
+
+    let listed = worktrees::load(&exec, &repo.path, &cancel)
+        .await
+        .expect("a listing");
+    let entry = listed
+        .iter()
+        .find(|entry| entry.path.ends_with("lonely"))
+        .expect("the listing has it");
+
+    assert_eq!(entry.head_hex, None, "the zeros name no commit");
+    assert_eq!(entry.branch.as_deref(), Some("empty"));
+    assert!(!entry.detached && !entry.bare);
+}
+
 /// So a folder that holds something is turned down before git: what is
 /// in it stays, and no branch is left behind.
 #[tokio::test]

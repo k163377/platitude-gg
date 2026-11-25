@@ -434,8 +434,8 @@ fn the_short_sections_read_out_of_what_arrived() {
             path: path.to_string(),
             branch: branch.map(str::to_string),
             head_hex: head.map(|digit| oid(digit).to_hex()),
-            // The one entry git lists with no commit out is the bare
-            // one, and it carries no branch either.
+            // A head-less entry here is the bare one, which carries no
+            // branch either.
             bare: head.is_none(),
             detached: false,
             locked: false,

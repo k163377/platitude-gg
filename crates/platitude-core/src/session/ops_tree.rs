@@ -428,7 +428,6 @@ impl RepoSession {
                 let head = before
                     .as_ref()
                     .and_then(|entry| entry.head_hex.as_deref())
-                    .filter(|hex| !Oid::hex_is_zero(hex))
                     .and_then(|hex| Oid::from_hex_str(hex).ok());
                 if let (true, Some(head)) = (gone, head) {
                     let branch = before.as_ref().and_then(|entry| entry.branch.as_deref());

@@ -15,7 +15,10 @@ pub struct WorktreeEntry {
     pub path: String,
     /// Checked-out branch (short name); `None` when detached or bare.
     pub branch: Option<String>,
-    /// HEAD commit id (hex); `None` for a bare entry.
+    /// HEAD commit id (hex); `None` where it stands on no commit: a bare
+    /// entry, and a worktree on a branch with no commits yet — git prints an
+    /// all-zero `HEAD` there, which names no object
+    /// (`a_worktree_with_no_commits_yet_stands_on_no_commit`).
     pub head_hex: Option<String>,
     pub bare: bool,
     pub detached: bool,
@@ -119,7 +122,8 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
             return Err(WorktreeParseError);
         };
         if let Some(head) = line.strip_prefix("HEAD ") {
-            entry.head_hex = Some(head.trim().to_string());
+            let head = head.trim();
+            entry.head_hex = (!head.bytes().all(|b| b == b'0')).then(|| head.to_string());
         } else if let Some(branch) = line.strip_prefix("branch ") {
             let branch = branch.trim();
             entry.branch = Some(branch.trim_prefix("refs/heads/").to_string());
