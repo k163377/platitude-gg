@@ -2,6 +2,7 @@
 //! the background refreshes. What one pass reads is [`super::walk`].
 
 use super::graph_refresh::{PassAnswer, PassStart};
+use super::relay::Standing;
 use super::rows::LogTotals;
 use super::*;
 
@@ -567,6 +568,42 @@ impl RepoSession {
             }
         };
 
+        self.install_off_screen(
+            OffScreen {
+                rows,
+                builder,
+                marks,
+                walked,
+                laid_from,
+                started,
+            },
+            options,
+            cancel,
+            answer,
+            watch,
+        )
+    }
+
+    /// Puts what an off-screen walk found on screen in one step
+    /// ([`Self::run_swap_pass`]): laid again for what stands now, the deletes
+    /// out kept off it, and swapped in only where the picture on screen is
+    /// not already this one.
+    fn install_off_screen(
+        self: &Arc<Self>,
+        walk: OffScreen,
+        options: LogOptions,
+        cancel: &CancellationToken,
+        answer: &PassAnswer,
+        mut watch: PassWatch<'_>,
+    ) -> RefreshOutcome {
+        let OffScreen {
+            mut rows,
+            mut builder,
+            marks,
+            walked,
+            laid_from,
+            started,
+        } = walk;
         // As walked, before anything is laid out of it (`Shared::walked`).
         let mut record = Walked::of(&rows);
         let standing = self.lay_again_if_moved(&mut rows, &mut builder, &laid_from);
@@ -723,6 +760,19 @@ impl Drop for Asking {
     fn drop(&mut self) {
         self.0.status_read.leave();
     }
+}
+
+/// What an off-screen walk found, on its way to the screen
+/// ([`RepoSession::install_off_screen`]).
+struct OffScreen {
+    rows: Vec<LogRow>,
+    builder: GraphBuilder,
+    marks: PublishMarks,
+    /// How many commits the walk read.
+    walked: u32,
+    /// What the synthetic rows were laid from as the walk began.
+    laid_from: Standing,
+    started: Instant,
 }
 
 /// Puts each row's chips on it, answering them by row — what the next
