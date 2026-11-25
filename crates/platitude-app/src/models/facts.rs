@@ -15,9 +15,7 @@ use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{
-    Chips, CommitMenu, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field,
-};
+use crate::encode::{Chips, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field};
 use crate::models::nav::{CardRecord, RowLead};
 
 /// The singleton every QML file can ask a rule of without wiring a model
@@ -225,14 +223,14 @@ impl GitFacts {
         oid_hex: String,
         stash: bool,
         provisional: bool,
-    ) -> One<CommitMenu> {
+    ) -> One<platitude_core::offers::CommitMenuOffers> {
         let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, stash);
         let offers = if provisional {
             offers.on_provisional()
         } else {
             offers
         };
-        One::new(offers.into())
+        One::new(offers)
     }
 
     /// What the details pane's message boxes do with the commit on screen,

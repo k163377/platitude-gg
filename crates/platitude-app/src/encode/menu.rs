@@ -196,35 +196,9 @@ impl Record for WorktreeMaking {
 
 /// What the right-click menu on a commit row offers (`offers::commit_menu`),
 /// read whole as it opens and as it stands again — one field per row, as
-/// [`RefMenu`] answers a ref's.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct CommitMenu {
-    pub cherry_pick: bool,
-    pub revert: bool,
-    pub integrate: bool,
-    pub edit_history: bool,
-    pub move_branch: bool,
-    pub branch_here: bool,
-    pub standing: bool,
-    pub stash_write: bool,
-}
-
-impl From<CommitMenuOffers> for CommitMenu {
-    fn from(offers: CommitMenuOffers) -> Self {
-        Self {
-            cherry_pick: offers.cherry_pick,
-            revert: offers.revert,
-            integrate: offers.integrate,
-            edit_history: offers.edit_history,
-            move_branch: offers.move_branch,
-            branch_here: offers.branch_here,
-            standing: offers.standing,
-            stash_write: offers.stash_write,
-        }
-    }
-}
-
-impl Record for CommitMenu {
+/// [`RefMenu`] answers a ref's. Core's record itself: a field it gains
+/// fails `from_map` until it crosses too.
+impl Record for CommitMenuOffers {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
             .put("cherryPick", &self.cherry_pick)

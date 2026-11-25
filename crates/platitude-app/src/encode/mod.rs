@@ -43,7 +43,7 @@ pub use markup::{
     spelled_ranges,
 };
 pub use mates::{Mates, mates_of};
-pub use menu::{CommitMenu, RefMenu, WorktreeMaking};
+pub use menu::{RefMenu, WorktreeMaking};
 pub use push::PushRecord;
 pub use routing::{KeyedFile, Routing, file_key, file_of_key};
 pub use rows::{
