@@ -126,7 +126,7 @@ pub use graph_refresh::{
 };
 pub use joins::same_path_key;
 use latest::Latest;
-use leaving::{Leaving, LeavingRef, Walked};
+use leaving::{Leaving, LeavingRef};
 pub use model::{CommitNode, LabelKind, LogOptions, LogRow, RefLabel, RelaidRow, RowNode, Whose};
 pub(crate) use model::{HeadMarks, LabelIndex};
 pub use open::{DrawnGraph, FirstPass};
@@ -140,6 +140,7 @@ use print::RowPrint;
 use published::{PublishMarks, RemoteTips};
 pub use query::DiffReadOutcome;
 use read_flight::{ReadFlight, Stamp};
+use relay::Walked;
 pub use remote_tags::RemoteTagIndex;
 pub use repo_session::{CloseError, RepoSession};
 pub use shown_discard::ShownDiscard;

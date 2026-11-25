@@ -4,9 +4,10 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use super::super::leaving::{Going, Holders, Walked, doomed, footer_without, lay_walked};
+use super::super::leaving::{Going, Holders, doomed, footer_without};
 use super::super::model::LabelIndex;
 use super::super::relay::Standing;
+use super::super::relay::{Walked, lay_walked};
 use super::super::{
     BranchItem, CommitNode, Footer, LabelKind, LogRow, RefLabel, RefsSnapshot, RelaidRow, RowNode,
     RowPrint, Whose,
