@@ -69,19 +69,22 @@ pub enum SessionEvent {
         walked: u32,
         truncated: bool,
     },
-    /// The graph on screen laid out again without walking — a delete that
-    /// is out taking the commits only it held off the screen, or a refused
-    /// one putting them back (`session::leaving`). Commit rows come by id
-    /// and new lanes ([`RelaidRow::Moved`]): the consumer already has the
-    /// rest of them, from `from`, the graph it is being moved off; a
-    /// consumer on another graph drops the whole message. A row it took
-    /// away earlier can come back the same way, so it keeps those
-    /// ([`RelaidRow`]).
+    /// The graph on screen laid out again without walking
+    /// (`session::relay`): a delete that is out taking the commits only it
+    /// held off the screen, or a refused one putting them back
+    /// (`session::leaving`), and the uncommitted rows as the readings have
+    /// them — another worktree's row going with the listing, landing on a
+    /// commit the graph holds, or every one taken down with the worktrees
+    /// turned off. Commit rows come by id and new lanes
+    /// ([`RelaidRow::Moved`]): the consumer already has the rest of them,
+    /// from `from`, the graph it is being moved off; a consumer on another
+    /// graph drops the whole message. A row it took away earlier can come
+    /// back the same way, so it keeps those ([`RelaidRow`]).
     ///
-    /// The footer is the one a walk without those commits would report:
-    /// fewer walked where the window held every commit, the same where it
-    /// was full — the walk that answers for the delete fills that from
-    /// below.
+    /// The footer is the one a walk without the deleted commits would
+    /// report: fewer walked where the window held every commit, the same
+    /// where it was full — the walk that answers for the delete fills that
+    /// from below. With no delete out it is the walk's own.
     LogRelaid {
         generation: u64,
         from: u64,

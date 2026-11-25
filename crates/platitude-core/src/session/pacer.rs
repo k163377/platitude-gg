@@ -178,10 +178,11 @@ impl RepoSession {
     async fn read_own_tree(self: &Arc<Self>, with_stashes: bool, ticket: PollTicket) {
         // The listing rides this read: the WORKTREES rows, the mark saying
         // a branch is another worktree's, and which worktrees there are to
-        // read. The walk waits for it, so it draws the worktrees against
-        // where the listing says they stand now — a worktree that has
-        // committed since its reading is asked for again by that walk
-        // (`relay::carried_current`). The stashes too where this read answers
+        // read. The walk, or the laying again where none is owed, waits for
+        // it, so it draws the worktrees against where the listing says they
+        // stand now — a worktree that has committed since its reading is
+        // asked for again by that drawing (`relay::carried_current`). The
+        // stashes too where this read answers
         // for a write another session landed here (`RepoSession::read_again`).
         let with_stashes = with_stashes || ticket.owed;
         let listings = async {

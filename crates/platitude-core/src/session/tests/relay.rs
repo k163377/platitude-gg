@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use super::super::relay::{Standing, lay, still_where_the_listing_says};
+use super::super::relay::{Standing, Walked, accounted, lay, still_where_the_listing_says};
 use super::super::{Carried, CommitNode, LogRow, RowNode, Whose};
 use crate::graph::GraphBuilder;
 use crate::oid::Oid;
@@ -194,6 +194,40 @@ fn a_reading_the_listing_has_moved_past_draws_nothing() {
         still_where_the_listing_says(&readings, &unlisted).len(),
         2,
         "a worktree the listing has not named yet lost its row"
+    );
+}
+
+/// What a graph laid from the readings answers for: every reading the walk
+/// placed, and one that was there before the walk began even where the walk
+/// did not reach it (below the window). One that came after, on a commit
+/// the walk did not reach, is left out — still moved, so walked for.
+#[test]
+fn a_graph_answers_for_what_it_placed_and_what_its_walk_had_its_chance_at() {
+    let reading = |path: &str, head: u8| Carried {
+        name: "seat".into(),
+        path: path.to_string(),
+        head: oid(head),
+        kinds: Kinds::default(),
+        main: false,
+    };
+    let record = Walked::of(&history());
+    let placed = reading("/tmp/a", 2);
+    let below = reading("/tmp/b", 9);
+    let late = reading("/tmp/c", 8);
+
+    let all_placed = Arc::new(vec![placed.clone()]);
+    assert!(
+        Arc::ptr_eq(&accounted(&all_placed, &[], &record), &all_placed),
+        "a laying that placed every reading answers for them as laid"
+    );
+
+    let standing = Arc::new(vec![placed.clone(), below.clone(), late]);
+    let answered = accounted(&standing, std::slice::from_ref(&below), &record);
+    assert_eq!(
+        answered.as_slice(),
+        [placed, below],
+        "a reading that came after the walk began, on a commit it did not reach, \
+         was taken as drawn"
     );
 }
 

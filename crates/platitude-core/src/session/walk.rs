@@ -14,6 +14,14 @@ pub(super) struct Building<'a> {
     pub(super) out: &'a mut Vec<LogRow>,
 }
 
+/// The graph a stream lays as it goes: the number it was announced under,
+/// and the other worktrees' readings its rows come from — the ones the
+/// screen's record says it was laid from (`Shared::laid_readings`).
+pub(super) struct StreamLaying<'a> {
+    pub(super) generation: u64,
+    pub(super) readings: &'a [Carried],
+}
+
 /// What a walk's command cannot be built without: HEAD's commit and the
 /// stashes' commits.
 ///
@@ -83,12 +91,16 @@ impl RepoSession {
     pub(super) async fn stream_log(
         self: &Arc<Self>,
         workdir: &std::path::Path,
-        generation: u64,
+        laying: StreamLaying<'_>,
         options: LogOptions,
         cancel: &CancellationToken,
         inputs: WalkInputs,
         answer: &PassAnswer,
     ) -> Result<LogTotals, GitError> {
+        let StreamLaying {
+            generation,
+            readings,
+        } = laying;
         let WalkInputs {
             head_tip,
             stash_refs,
@@ -132,7 +144,7 @@ impl RepoSession {
         let mut parser = LogParser::new();
         let mut pending: Vec<CommitMeta> = Vec::new();
         let mut sifter = Sifter::new(&stash_refs, &stash_stands, shown.as_deref());
-        let mut carried = super::rows::CarriedRows::new(&self.carried_current());
+        let mut carried = super::rows::CarriedRows::new(readings);
         let mut first_sent = false;
         let mut parse_error: Option<String> = None;
         let mut totals = LogTotals {

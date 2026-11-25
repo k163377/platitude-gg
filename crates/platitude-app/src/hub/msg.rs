@@ -356,8 +356,9 @@ pub enum GraphMsg {
         truncated: bool,
     },
     /// The graph laid out again without walking (see
-    /// [`SessionEvent::LogRelaid`]): the rows it keeps come by id, from the
-    /// graph `from` or from what an earlier one set aside.
+    /// [`SessionEvent::LogRelaid`]): the commit rows it keeps come by id,
+    /// from the graph `from` or from what an earlier one set aside; the
+    /// uncommitted rows come whole.
     Relaid {
         generation: u64,
         from: u64,

@@ -191,6 +191,9 @@ pub(super) struct WorktreeRead {
     pub(super) published: bool,
     /// What the listing found moved, and so which reads it asks for.
     pub(super) news: super::joins::WorktreeNews,
+    /// What the listing moved under the other worktrees' rows asks of the
+    /// graph (`RepoSession::readings_moved`).
+    pub(super) redraw: super::relay::Redraw,
 }
 
 /// A queued write: what it is, where it stands in its worktree's
@@ -257,10 +260,15 @@ pub(super) struct Shared {
     /// Prints rather than rows: this grows with the window ([`RowPrint`]).
     pub(super) sent_rows: Vec<RowPrint>,
     /// The commit rows as the walk behind `sent_rows` gave them, before a
-    /// delete that is out took any away — what the delete's stand-in lays
-    /// out again (`session::leaving`). Written where `sent_rows` is, by
-    /// the walk; laying out again leaves it be.
+    /// delete that is out took any away — what a laying again lays out
+    /// (`session::relay`). Written where `sent_rows` is, by the walk; laying
+    /// out again leaves it be.
     pub(super) walked: Walked,
+    /// The other worktrees' readings the graph on screen was laid from —
+    /// what a change to them is judged against
+    /// (`RepoSession::readings_moved`). Written under this lock by every
+    /// pass and laying that puts a graph on screen, as it lays it.
+    pub(super) laid_readings: std::sync::Arc<Vec<super::Carried>>,
     /// The footer delivered with them, compared alongside: a window change
     /// can keep every row and still change the footer (two commits are cut
     /// by a window of two, not by three), and a rebuild that overtook the

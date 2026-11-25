@@ -202,6 +202,69 @@ async fn a_worktree_behind_the_listing_is_read_at_the_page_s_pace() {
     session.close_and_wait().await;
 }
 
+/// The head of the newest worktree row a picture after generation `after`
+/// draws.
+fn row_head_after(sink: &CaptureSink, after: u64) -> Option<String> {
+    sink.events
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .filter_map(crate::support::session::other_worktree_rows)
+        .filter(|(generation, _)| *generation > after)
+        .find_map(|(_, rows)| rows.first().map(|c| c.head.to_hex()))
+}
+
+/// A worktree's commit seen by a refs read before any listing has seen it:
+/// the walk that read asks for draws the row on the commit the worktree has
+/// left, against the listing before. The listing that then sees the commit
+/// moves no ref and asks for no walk; the reading it leaves behind is laid
+/// off the graph and read again at once, and the row comes back on the
+/// commit the worktree stands on.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_listing_that_alone_sees_a_worktree_s_commit_reads_its_row_again() {
+    let (mut repo, _head) = scenario();
+    let worktree = a_worktree_beside(&mut repo);
+    let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
+    worktrees_settled(&sink, &session, 1).await;
+    paced_off_the_clock(&session);
+    let left = repo
+        .git_in(&worktree, &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+
+    repo.git_in(&worktree, &["add", "carried.txt"]);
+    repo.git_in(
+        &worktree,
+        &["commit", "-m", "feat: the worktree records its own"],
+    );
+    std::fs::write(worktree.join("still.txt"), "u\n").expect("a second file in the worktree");
+    let moved_to = repo
+        .git_in(&worktree, &["rev-parse", "HEAD"])
+        .trim()
+        .to_string();
+    let before = sink.newest_picture().expect("the opening's picture");
+    session.refresh_refs();
+    bounded("the refs read", session.wait_for_snapshot_reads()).await;
+    bounded("the walk it asked for", session.wait_for_graph_passes()).await;
+    assert_eq!(
+        row_head_after(&sink, before).as_deref(),
+        Some(left.as_str()),
+        "the walk drew the row against the listing before the commit"
+    );
+
+    session.poll_now();
+    sink.wait_for("the worktree's row on the commit it moved to", |events| {
+        events
+            .iter()
+            .rev()
+            .find_map(worktree_row_head)
+            .filter(|head| *head == moved_to)
+    })
+    .await;
+    session.close_and_wait().await;
+}
+
 /// A worktree's path as `git worktree list` prints it — the spelling the app
 /// stands the pane on (`Carried::path`), which a temp path spelled by
 /// hand need not match (a short 8.3 name on Windows).
@@ -273,14 +336,20 @@ async fn worktrees_turned_back_on_come_back_in_one_laying() {
     worktrees_settled(&sink, &session, 2).await;
     paced_off_the_clock(&session);
     session.set_worktrees_pace(WorktreesPace::Off);
-    sink.wait_for("the rows taken down", |events| {
-        events
-            .iter()
-            .rev()
-            .find_map(worktree_rows)
-            .filter(|drawn| *drawn == 0)
-    })
-    .await;
+    // The laying that takes the rows down is one of the graph's passes.
+    bounded("the rows taken down", session.wait_for_graph_passes()).await;
+    let down = sink
+        .events
+        .lock()
+        .unwrap()
+        .iter()
+        .rev()
+        .find_map(worktree_rows);
+    assert_eq!(
+        down,
+        Some(0),
+        "the rows are down once the graph has settled"
+    );
 
     session.set_recording(Recording::WithBackground);
     let from = sink.events.lock().unwrap().len();

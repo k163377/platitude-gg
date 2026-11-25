@@ -214,9 +214,7 @@ impl RepoSession {
             return None;
         }
         if stands_in {
-            // Off the caller's thread: laying out is a pass over the window.
-            let s = Arc::clone(self);
-            self.runtime.spawn(async move { s.relay_screen() });
+            self.relay_screen_soon();
         }
         Some(operation.id)
     }
@@ -618,8 +616,12 @@ impl RepoSession {
                 (walk, self.graph_passes.next_ask())
             }
         };
-        if walk && !self.walk_behind(stashes).await {
-            note_failed(&mut failed, FollowUp::Graph);
+        if walk {
+            if !self.walk_behind(stashes).await {
+                note_failed(&mut failed, FollowUp::Graph);
+            }
+        } else if listed.lay {
+            self.relay_screen();
         }
         // Head reach is asked here because a stash push, pop or drop moves
         // no ref (so the refs read will not ask), yet changes whether

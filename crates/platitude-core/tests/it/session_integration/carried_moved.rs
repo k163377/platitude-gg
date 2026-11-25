@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use crate::support::TestRepo;
-use crate::support::session::{opened_with, other_worktree_rows, scenario};
+use crate::support::session::{opened_with, other_worktree_rows, scenario, write_settled};
 use crate::support::wait::bounded;
 use platitude_core::session::{PaceBounds, Recording, SessionEvent};
 
@@ -243,33 +243,96 @@ async fn a_worktree_removed_outside_takes_its_row_off_with_the_listing() {
     // listing is the only word.
     read_this_tree(&sink, &session, from).await;
 
-    {
-        let events = sink.events.lock().unwrap();
-        let after: Vec<_> = events
-            .iter()
-            .filter_map(worktree_row_anchor)
-            .filter(|(at, _)| *at > with_row)
-            .collect();
-        assert!(
-            !after.is_empty() && after.iter().all(|(_, anchor)| anchor.is_none()),
-            "the graph still draws the removed worktree's row: {after:?}"
-        );
-        assert_eq!(walks_since(&events, from), 0, "the history was walked");
-    }
+    the_row_is_off(&sink, with_row);
+    assert_eq!(
+        walks_since(&sink.events.lock().unwrap(), from),
+        0,
+        "the history was walked"
+    );
+    session.close_and_wait().await;
+}
+
+/// Every picture after `with_row` leaves the worktree's row out, and there is
+/// one.
+fn the_row_is_off(sink: &crate::support::session::CaptureSink, with_row: u64) {
+    let events = sink.events.lock().unwrap();
+    let after: Vec<_> = events
+        .iter()
+        .filter_map(worktree_row_anchor)
+        .filter(|(at, _)| *at > with_row)
+        .collect();
+    assert!(
+        !after.is_empty() && after.iter().all(|(_, anchor)| anchor.is_none()),
+        "the graph still draws the gone worktree's row: {after:?}"
+    );
+}
+
+/// A worktree's folder deleted outside without git: the listing still names
+/// it, prunable, and a prunable worktree is not read (`carried::listed`), so
+/// that listing takes its row off as a removal's does. The prune after it
+/// has nothing left to take.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_worktree_whose_folder_went_takes_its_row_off_with_the_listing() {
+    let (mut repo, _head) = scenario();
+    let worktree = a_worktree_beside(&mut repo);
+    let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
+    let (with_row, _) = settled_with_row(&sink, &session).await;
+    session.set_recording(Recording::WithBackground);
+    let from = sink.events.lock().unwrap().len();
+
+    std::fs::remove_dir_all(&worktree).expect("the worktree's folder deleted");
+    read_this_tree(&sink, &session, from).await;
+    the_row_is_off(&sink, with_row);
+
+    repo.git(&["worktree", "prune"]);
+    let pruned = sink.events.lock().unwrap().len();
+    read_this_tree(&sink, &session, pruned).await;
+    the_row_is_off(&sink, with_row);
+    assert_eq!(
+        walks_since(&sink.events.lock().unwrap(), from),
+        0,
+        "the history was walked"
+    );
+    session.close_and_wait().await;
+}
+
+/// git removes only a clean worktree, so the row of one removed from the app
+/// is a reading taken before it was cleaned: the listing behind the removal
+/// takes that row off.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_worktree_removed_from_the_app_takes_a_row_read_before_it_was_cleaned() {
+    let (mut repo, _head) = scenario();
+    let worktree = a_worktree_beside(&mut repo);
+    let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
+    let (with_row, _) = settled_with_row(&sink, &session).await;
+
+    std::fs::remove_file(worktree.join("carried.txt")).expect("the worktree cleaned");
+    let listed = repo
+        .git_in(&worktree, &["rev-parse", "--show-toplevel"])
+        .trim()
+        .to_string();
+    let id = session
+        .remove_worktree(listed, "worktree".into())
+        .expect("accepted");
+    assert_eq!(write_settled(&sink, id).await, []);
+    bounded("the walks behind it", session.wait_for_graph_passes()).await;
+    assert!(!worktree.exists(), "git removed the folder");
+    the_row_is_off(&sink, with_row);
     session.close_and_wait().await;
 }
 
 /// A worktree moved outside is a folder gone and a folder new to the listing
 /// (its row is keyed by where it is): the row leaves with the old folder and
 /// comes back with the new one's first reading, due at once — as a worktree
-/// that has committed comes back with its reading. No graph draws it under
-/// the folder it left.
+/// that has committed comes back with its reading, and with no walk: it
+/// stands where it stood. No graph draws it under the folder it left.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_worktree_moved_outside_comes_back_under_the_new_folder() {
     let (mut repo, _head) = scenario();
     let worktree = a_worktree_beside(&mut repo);
     let (sink, session) = opened_with(&repo, crate::support::exec::isolated()).await;
     let (with_row, _) = settled_with_row(&sink, &session).await;
+    session.set_recording(Recording::WithBackground);
     let from = sink.events.lock().unwrap().len();
 
     let moved = worktree.with_file_name("moved");
@@ -311,6 +374,7 @@ async fn a_worktree_moved_outside_comes_back_under_the_new_folder() {
                 .all(|(_, folders)| !folders.contains(&"worktree".to_string())),
             "a graph drew the row under the folder it left: {after:?}"
         );
+        assert_eq!(walks_since(&events, from), 0, "the history was walked");
     }
     session.close_and_wait().await;
 }

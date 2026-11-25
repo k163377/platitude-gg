@@ -4,6 +4,7 @@
 //! and walk [`super::head_reach`].
 
 use super::joins::{RefJoins, build_label_map, build_snapshot, join_key, refs_keys};
+use super::relay::Redraw;
 use super::renames;
 use super::*;
 
@@ -458,7 +459,7 @@ impl RepoSession {
                 match crate::worktrees::load(&self.executor, &workdir, &cancel).await {
                     Ok(listed) => {
                         let worktrees = super::removals::left_out(listed.clone(), self);
-                        self.note_worktree_heads(&worktrees, &workdir);
+                        let redraw = self.note_worktree_heads(&worktrees, &workdir);
                         // The holds only from a listing no write has ended
                         // behind (`Standing::current`): one that looked before
                         // a worktree's removal answered would note it back,
@@ -476,6 +477,7 @@ impl RepoSession {
                         WorktreeRead {
                             published: true,
                             news,
+                            redraw,
                         }
                     }
                     Err(e) => {
@@ -486,7 +488,8 @@ impl RepoSession {
             })
             .await;
         let mut listed = Listed {
-            walk: read.news.walk,
+            walk: read.news.walk || read.redraw == Redraw::Walk,
+            lay: read.redraw == Redraw::Lay,
             ..Listed::default()
         };
         if !read.published {
@@ -520,5 +523,10 @@ impl RepoSession {
 #[derive(Debug, Default)]
 pub(super) struct Listed {
     pub(super) walk: bool,
+    /// The other worktrees' rows moved with no history to walk — a worktree
+    /// gone from the listing, or one it says stands elsewhere: the graph on
+    /// screen is laid again ([`RepoSession::relay_screen`]) where nothing
+    /// else asks for a walk, which lays them too.
+    pub(super) lay: bool,
     pub(super) failed: Vec<FollowUp>,
 }

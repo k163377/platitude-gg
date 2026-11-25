@@ -2,8 +2,9 @@
 //! the background refreshes. What one pass reads is [`super::walk`].
 
 use super::graph_refresh::{PassAnswer, PassStart};
-use super::relay::Standing;
+use super::relay::{self, Standing};
 use super::rows::LogTotals;
+use super::walk::StreamLaying;
 use super::*;
 
 /// The reads a pass takes before the walk: the remote-tracking tips the
@@ -347,8 +348,9 @@ impl RepoSession {
         answer: &PassAnswer,
     ) -> RefreshOutcome {
         let mut watch = PassWatch::operation(self);
-        // No older than what the stream lays its worktrees' rows from.
-        let readings = self.carried();
+        // What the stream lays the other worktrees' rows from, written down
+        // as the screen's with the reset: its end draws what moved since.
+        let readings = self.carried_current();
         // Before the lock, because reading them can go to git.
         let (tips, inputs) = self.reads_for(reads, workdir, cancel).await;
         let generation = {
@@ -369,7 +371,7 @@ impl RepoSession {
                 return RefreshOutcome::Cancelled;
             }
             // Numbered under the lock it installs under: a graph laid out
-            // again meanwhile (`session::leaving`) took a number too, and a
+            // again meanwhile (`session::relay`) took a number too, and a
             // stream numbered below the graph on screen is one the
             // consumer refuses.
             let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
@@ -381,6 +383,7 @@ impl RepoSession {
             shared.applied.clear();
             shared.sent_rows.clear();
             shared.walked.clear();
+            shared.laid_readings = Arc::clone(&readings);
             // No footer until the walk ends, so a rebuild landing in
             // between finds none to compare against.
             shared.sent_footer = None;
@@ -400,7 +403,11 @@ impl RepoSession {
             (Some(error), _) => Err(error),
             (None, Err(error)) => Err(error),
             (None, Ok(inputs)) => {
-                self.stream_log(workdir, generation, options, cancel, inputs, answer)
+                let laying = StreamLaying {
+                    generation,
+                    readings: &readings,
+                };
+                self.stream_log(workdir, laying, options, cancel, inputs, answer)
                     .await
             }
         };
@@ -442,21 +449,18 @@ impl RepoSession {
                     });
                 }
                 self.tell_graph_landed(answer);
-                // A stream can neither leave rows out nor lay a row again as
-                // it goes, and a laying asked for meanwhile has no finished
-                // graph to lay: a delete that is out takes its commits off it,
-                // and another worktree's reading that moved under it is laid
-                // on it (a swap pass does both before it publishes). This
-                // window's own row is drawn by the walk its status asks for.
-                if self.deletes_out() || !Arc::ptr_eq(&readings, &self.carried()) {
-                    self.relay_screen();
-                }
+                self.draw_after_the_stream();
                 watch.answered();
                 RefreshOutcome::Changed
             }
             Err(error) => {
                 let cancelled = matches!(error, GitError::Cancelled { .. });
                 if !cancelled {
+                    if let Some(mut shared) = self.store_shared()
+                        && shared.generation == generation
+                    {
+                        shared.walked.failed = true;
+                    }
                     self.sink.event(SessionEvent::LogFailed {
                         generation,
                         error: error.to_string(),
@@ -609,7 +613,7 @@ impl RepoSession {
         let standing = self.lay_again_if_moved(&mut rows, &mut builder, &laid_from);
         let holders = self.holders();
         let tags = self.tags_shown();
-        {
+        let outcome = {
             let Some(mut shared) = self.store_shared() else {
                 return RefreshOutcome::Cancelled;
             };
@@ -649,6 +653,8 @@ impl RepoSession {
             shared.publish_marks = marks;
             shared.applied = applied;
             shared.walked = record;
+            shared.laid_readings =
+                relay::accounted(&standing.carried, &laid_from.carried, &shared.walked);
             self.leaving_walked(answer.ask);
             if unchanged {
                 // The UI already shows exactly this; swapping would only
@@ -659,26 +665,28 @@ impl RepoSession {
                 // A walk that found the screen current clears an earlier
                 // failure's mark, and a silent walk's.
                 self.tell_graph_landed(answer);
-                watch.answered();
-                return RefreshOutcome::Unchanged;
+                RefreshOutcome::Unchanged
+            } else {
+                shared.sent_rows = rows.iter().map(RowPrint::of).collect();
+                shared.sent_footer = Some(footer);
+                // Numbered as it installs, as a stream is (`run_direct_pass`).
+                let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
+                shared.generation = generation;
+                // Under the lock, as in run_direct_pass.
+                self.sink.event(SessionEvent::LogReplaced {
+                    generation,
+                    rows,
+                    elapsed_ms,
+                    walked: footer.walked,
+                    truncated: footer.truncated,
+                });
+                self.tell_graph_landed(answer);
+                RefreshOutcome::Changed
             }
-            shared.sent_rows = rows.iter().map(RowPrint::of).collect();
-            shared.sent_footer = Some(footer);
-            // Numbered as it installs, as a stream is (`run_direct_pass`).
-            let generation = self.log_gen.fetch_add(1, Ordering::SeqCst) + 1;
-            shared.generation = generation;
-            // Under the lock, as in run_direct_pass.
-            self.sink.event(SessionEvent::LogReplaced {
-                generation,
-                rows,
-                elapsed_ms,
-                walked: footer.walked,
-                truncated: footer.truncated,
-            });
-            self.tell_graph_landed(answer);
-        }
+        };
         watch.answered();
-        RefreshOutcome::Changed
+        self.settle_readings();
+        outcome
     }
 
     /// Refreshes refs, status(+op state), stashes and worktrees
@@ -690,8 +698,8 @@ impl RepoSession {
     /// One rebuild for all of them: asked apiece, a commit made outside
     /// (a ref moved, the tree came clean) asked twice, the second taking
     /// the first's walk over part-way. The other worktrees' pass stays
-    /// apart: a status per worktree, too slow to wait on (its rows ask for
-    /// their own walk as they land).
+    /// apart: a status per worktree, too slow to wait on (its rows are drawn
+    /// as they land, `RepoSession::readings_moved`).
     pub fn refresh_quick(self: &Arc<Self>) {
         self.settle_snapshots(true);
         // A refresh asked by hand reads every worktree as well.
@@ -746,6 +754,8 @@ impl RepoSession {
             if moved || listed.walk {
                 let reads = s.pass_reads_listed(&workdir, &s.root_cancel, stashes).await;
                 s.refresh_log_with(reads);
+            } else if listed.lay {
+                s.relay_screen();
             }
         });
     }

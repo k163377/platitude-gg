@@ -1,10 +1,15 @@
 //! A graph laid out again without walking (`GraphMsg::Relaid`): a delete
 //! taking the commits only its names held off the screen, or a refused one
-//! putting them back (デザイン規約 §消す操作は先に画面から消す).
+//! putting them back (デザイン規約 §消す操作は先に画面から消す), and the
+//! uncommitted rows moved with no history walked — another worktree's row
+//! gone with the listing or landed on a commit on screen, or all of them
+//! taken down with the worktrees turned off. Either way it ends like a
+//! pass (`finish_count`), and a reading's row gone under the pane lands it
+//! on that row's commit (`RepoPage.settleCarriedAfterPass`).
 //!
 //! The session sends its commit rows by id and new lanes; everything else
 //! about them is already here — on screen, or set aside by the relaying
-//! that took them ([`SetAside`]).
+//! that took them ([`SetAside`]). The uncommitted rows come whole.
 //!
 //! Core's stand-in (`session::leaving`), not the sidebar's `ops::StandIn`:
 //! another owner and another signal — the rows come back on the write's

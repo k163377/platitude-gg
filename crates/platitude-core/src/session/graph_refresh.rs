@@ -655,6 +655,9 @@ impl RepoSession {
         let outcome = if moved || listed.walk {
             self.walk_here(stashes).await
         } else {
+            if listed.lay {
+                self.relay_screen();
+            }
             RefreshOutcome::Unchanged
         };
         // Given back without taking what is owed: the caller takes it
