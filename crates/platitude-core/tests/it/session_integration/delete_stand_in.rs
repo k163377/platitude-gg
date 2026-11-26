@@ -28,10 +28,14 @@ fn release_of(repo: &TestRepo) -> std::path::PathBuf {
     repo.path.join(".git").join("hook-release")
 }
 
-/// The rows of the `nth` graph laid out again (`LogRelaid`), by id.
-async fn relaid(sink: &CaptureSink, nth: usize) -> Vec<String> {
+/// The rows of the `nth` graph laid out again (`LogRelaid`) among the events
+/// from `from` on, by id — counted from a mark ([`mark`]) taken as the write
+/// goes out: the opening lays the graph out again too, wherever this tree's
+/// status or another worktree's reading lands after the walk.
+async fn relaid(sink: &CaptureSink, from: usize, nth: usize) -> Vec<String> {
     sink.wait_for("the graph laid out again", |evs| {
-        evs.iter()
+        evs[from..]
+            .iter()
             .filter_map(|e| match e {
                 SessionEvent::LogRelaid { rows, .. } => Some(rows),
                 _ => None,
@@ -49,6 +53,11 @@ async fn relaid(sink: &CaptureSink, nth: usize) -> Vec<String> {
             })
     })
     .await
+}
+
+/// Where the record stands now, for [`relaid`] to count from.
+fn mark(sink: &CaptureSink) -> usize {
+    sink.count(|_| true)
 }
 
 fn answered(sink: &CaptureSink, id: platitude_core::OperationId) -> bool {
@@ -69,10 +78,11 @@ async fn a_forced_delete_takes_what_only_it_held_off_the_graph_before_git_answer
     sink.opened_graph(&session, 6).await;
     let swaps = replaced(&sink);
 
+    let from = mark(&sink);
     let id = session
         .delete_branch("unmerged".into(), true)
         .expect("accepted");
-    let rows = relaid(&sink, 0).await;
+    let rows = relaid(&sink, from, 0).await;
     assert!(!answered(&sink, id), "git was still held inside the delete");
     assert_eq!(rows.len(), 5, "{rows:#?}");
     assert!(
@@ -125,17 +135,18 @@ async fn a_refused_delete_puts_its_commits_back_at_the_answer() {
     let (sink, session) = opened(&repo).await;
     sink.opened_graph(&session, 6).await;
 
+    let from = mark(&sink);
     let id = session
         .delete_branch("unmerged".into(), true)
         .expect("accepted");
-    assert!(!relaid(&sink, 0).await.contains(&tip));
+    assert!(!relaid(&sink, from, 0).await.contains(&tip));
 
     std::fs::write(&release, b"go").expect("release the hook");
     assert!(
         write_answer(&sink, id).await.is_some(),
         "the hook refused the delete"
     );
-    let back = relaid(&sink, 1).await;
+    let back = relaid(&sink, from, 1).await;
     assert_eq!(back.len(), 6, "{back:#?}");
     assert!(
         back.contains(&tip),
@@ -149,6 +160,7 @@ async fn a_refused_delete_puts_its_commits_back_at_the_answer() {
             events
                 .iter()
                 .enumerate()
+                .skip(from)
                 .filter(|(_, e)| pred(e))
                 .map(|(at, _)| at)
                 .collect::<Vec<_>>()
@@ -179,10 +191,11 @@ async fn a_walk_landing_while_the_delete_is_out_keeps_the_commits_off() {
     sink.opened_graph(&session, 6).await;
     let swaps = replaced(&sink);
 
+    let from = mark(&sink);
     let id = session
         .delete_branch("unmerged".into(), true)
         .expect("accepted");
-    assert!(!relaid(&sink, 0).await.contains(&tip));
+    assert!(!relaid(&sink, from, 0).await.contains(&tip));
     let outcome = crate::support::wait::bounded(
         "a rebuild while git is held",
         session.refresh_log_tracked().outcome(),
@@ -212,10 +225,11 @@ async fn a_remote_branch_delete_takes_what_only_the_remote_held() {
     sink.opening_settled(&session).await;
     crate::support::wait::bounded("the opening's graph", session.wait_for_graph_passes()).await;
 
+    let from = mark(&sink);
     let id = session
         .delete_remote_branch(row("origin", "theirs"), oid(&theirs))
         .expect("accepted");
-    let rows = relaid(&sink, 0).await;
+    let rows = relaid(&sink, from, 0).await;
     assert!(!answered(&sink, id), "the push was still held over there");
     assert!(!rows.contains(&theirs), "{rows:#?}");
 
@@ -237,8 +251,9 @@ async fn a_tag_delete_takes_what_only_the_tag_held() {
     let (sink, session) = opened(&repo).await;
     sink.opened_graph(&session, 6).await;
 
+    let from = mark(&sink);
     let id = session.delete_tag("lone-tag".into()).expect("accepted");
-    let rows = relaid(&sink, 0).await;
+    let rows = relaid(&sink, from, 0).await;
     assert!(!answered(&sink, id), "git was still held inside the delete");
     assert!(!rows.contains(&lone), "{rows:#?}");
 
@@ -268,10 +283,11 @@ async fn a_landed_delete_whose_walk_failed_stays_off_the_graph() {
         "the walk behind the delete fell over"
     );
 
+    let from = mark(&sink);
     let id = session
         .delete_branch("second".into(), true)
         .expect("accepted");
-    let rows = relaid(&sink, 1).await;
+    let rows = relaid(&sink, from, 0).await;
     assert!(
         !rows.contains(&first),
         "the first delete's commit came back: {rows:#?}"
@@ -361,8 +377,9 @@ async fn a_dropped_stash_leaves_the_graph_at_the_press() {
     let drawn = sink.opened_graph(&session, 6).await;
 
     let commit = commit_held(&sink, &session).await;
+    let from = mark(&sink);
     let id = session.stash_drop("stash@{0}".into()).expect("accepted");
-    let rows = relaid(&sink, 0).await;
+    let rows = relaid(&sink, from, 0).await;
     let early = answered(&sink, id);
 
     let_the_commit_go(&sink, &release, commit).await;
@@ -397,10 +414,11 @@ async fn a_removed_worktree_takes_what_only_it_held_off_the_graph_at_the_press()
     let drawn = sink.opened_graph(&session, 7).await;
 
     let commit = commit_held(&sink, &session).await;
+    let from = mark(&sink);
     let id = session
         .remove_worktree(listed, "loose".into())
         .expect("accepted");
-    let rows = relaid(&sink, 0).await;
+    let rows = relaid(&sink, from, 0).await;
     let early = answered(&sink, id);
 
     let_the_commit_go(&sink, &release, commit).await;
@@ -446,10 +464,11 @@ async fn a_landed_removal_s_commits_stay_off_the_next_delete_s_graph() {
         .remove_worktree(listed, "loose".into())
         .expect("accepted");
     assert_eq!(write_settled(&sink, id).await, []);
+    let from = mark(&sink);
     let id = session
         .delete_branch("unmerged".into(), true)
         .expect("accepted");
-    let rows = relaid(&sink, 1).await;
+    let rows = relaid(&sink, from, 0).await;
     assert!(!rows.contains(&unmerged), "{rows:#?}");
     assert!(
         !rows.contains(&tip),
@@ -479,10 +498,11 @@ async fn a_refused_removal_puts_its_commits_back_at_the_answer() {
     sink.opened_graph(&session, 8).await;
 
     let commit = commit_held(&sink, &session).await;
+    let from = mark(&sink);
     let id = session
         .remove_worktree(listed, "loose".into())
         .expect("accepted");
-    let gone = relaid(&sink, 0).await;
+    let gone = relaid(&sink, from, 0).await;
 
     let_the_commit_go(&sink, &release, commit).await;
     assert!(!gone.contains(&tip), "{gone:#?}");

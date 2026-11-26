@@ -454,10 +454,14 @@ fn off_main(repo: &mut TestRepo, name: &str) -> String {
     tip
 }
 
-/// The rows of the `nth` graph laid out again (`LogRelaid`), by id.
-async fn relaid(sink: &CaptureSink, nth: usize) -> Vec<String> {
+/// The rows of the `nth` graph laid out again (`LogRelaid`) among the events
+/// from `from` on, by id — counted from a mark taken as the write goes out:
+/// the opening lays the graph out again too, where this tree's status lands
+/// after the walk.
+async fn relaid(sink: &CaptureSink, from: usize, nth: usize) -> Vec<String> {
     sink.wait_for("the graph laid out again", |evs| {
-        evs.iter()
+        evs[from..]
+            .iter()
             .filter_map(|e| match e {
                 SessionEvent::LogRelaid { rows, .. } => Some(rows),
                 _ => None,
@@ -504,19 +508,21 @@ async fn a_delete_in_front_of_a_burst_keeps_its_rows_off_until_the_walk_behind_i
     sink.opened_graph(&session, 8).await;
     let from = quiet(&sink, &session).await;
 
+    let at_first = sink.count(|_| true);
     let first = session
         .delete_branch("unmerged".into(), true)
         .expect("the delete was accepted");
     let behind = stage(&session, "held.txt");
-    assert!(!relaid(&sink, 0).await.contains(&first_tip));
+    assert!(!relaid(&sink, at_first, 0).await.contains(&first_tip));
     std::fs::write(&hook, b"go").expect("release the hook");
     last_reached_git(&sink, behind).await;
 
     // The first delete has landed and nothing has walked behind it.
+    let at_second = sink.count(|_| true);
     let second = session
         .delete_branch("unmerged-too".into(), true)
         .expect("the second delete was accepted");
-    let rows = relaid(&sink, 1).await;
+    let rows = relaid(&sink, at_second, 0).await;
     assert!(!rows.contains(&second_tip), "{rows:#?}");
     assert!(
         !rows.contains(&first_tip),

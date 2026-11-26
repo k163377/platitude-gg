@@ -61,14 +61,32 @@ pub fn pass_of(event: &SessionEvent) -> Option<Pass> {
     }
 }
 
-/// The generation of a picture of the graph the event puts on screen: a pass
-/// landing ([`pass_of`]), or the graph laid again off the walk's record
-/// (`LogRelaid` — what another worktree's reading landing or going lays).
-pub fn picture_of(event: &SessionEvent) -> Option<u64> {
+/// A picture of the graph the event puts on screen, as [`Pass`] reports one:
+/// a pass landing ([`pass_of`]), or the graph laid again off the walk's
+/// record (`LogRelaid` — what another worktree's reading, or this tree's
+/// status, landing or going lays), its rows all it puts on screen.
+pub fn picture_pass_of(event: &SessionEvent) -> Option<Pass> {
     match event {
-        SessionEvent::LogRelaid { generation, .. } => Some(*generation),
-        _ => pass_of(event).map(|pass| pass.generation),
+        SessionEvent::LogRelaid {
+            generation,
+            rows,
+            walked,
+            truncated,
+            ..
+        } => Some(Pass {
+            generation: *generation,
+            total: rows.len() as u32,
+            walked: *walked,
+            truncated: *truncated,
+        }),
+        _ => pass_of(event),
     }
+}
+
+/// The generation of a picture of the graph the event puts on screen
+/// ([`picture_pass_of`]).
+pub fn picture_of(event: &SessionEvent) -> Option<u64> {
+    picture_pass_of(event).map(|pass| pass.generation)
 }
 
 /// The other worktrees' rows a picture of the graph sends, with its
@@ -205,8 +223,8 @@ impl CaptureSink {
     /// snapshot events go out from inside the readers, which may ask for a
     /// graph refresh after), a tracked graph refresh, the passes it
     /// displaced stopped (`wait_for_graph_passes` — an ask only cancels the
-    /// previous pass, and a cancel is no proof it stopped), then the pass
-    /// that landed.
+    /// previous pass, and a cancel is no proof it stopped), then the
+    /// picture with every row on screen ([`Self::settled_picture`]).
     ///
     /// The tracked refresh alone does not close the baseline: the opening's
     /// tag-bearing pass comes after the chips have landed, so the refresh
@@ -235,7 +253,22 @@ impl CaptureSink {
             session.wait_for_graph_passes(),
         )
         .await;
-        self.settled_pass(total).await
+        self.settled_picture(total).await
+    }
+
+    /// Waits for a picture of the graph with `total` rows on screen and
+    /// returns the newest such ([`picture_pass_of`]). A row of this tree's
+    /// changes or another worktree's comes with its own read: one that
+    /// lands after the walk is laid onto its picture (`LogRelaid`), so the
+    /// walk's own pass may never hold every row.
+    pub async fn settled_picture(&self, total: u32) -> Pass {
+        self.wait_for(&format!("a {total}-row picture of the graph"), |evs| {
+            evs.iter()
+                .filter_map(picture_pass_of)
+                .filter(|pass| pass.total == total)
+                .max_by_key(|pass| pass.generation)
+        })
+        .await
     }
 
     /// Waits until both opening snapshots have landed *and* their readers
