@@ -464,13 +464,14 @@ FocusScope {
     /// null while the screen is not up (`failedSeat`).
     readonly property var openFailedHand: failedSeat.item !== null ? failedSeat.item.pad : null
 
-    property int seenHeadCommitSeq: 0
+    property int seenHeadMessageSeq: 0
     property bool wantHeadMessage: false
     function amendToggled(on) {
         page.amending = on
+        // An answer still out once the box is unticked would fill the plain commit's box with HEAD's words.
+        page.wantHeadMessage = on
         if (on) {
-            page.wantHeadMessage = true
-            repoTab.requestHeadCommit()
+            repoTab.requestHeadMessage()
         } else {
             page.clearCommitEditor()
             // A stopped merge takes the tick away itself (`WipCommitBlock.amendBarred`), on the same status that brings
@@ -493,9 +494,9 @@ FocusScope {
         && (page.amending || page.messageEdit === "amend")
     onAmendInViewChanged: repoTab.watchAmend(page.amendInView)
     function absorbHeadMessage() {
-        if (repoTab.headCommitSeq === page.seenHeadCommitSeq)
+        if (repoTab.headMessageSeq === page.seenHeadMessageSeq)
             return
-        page.seenHeadCommitSeq = repoTab.headCommitSeq
+        page.seenHeadMessageSeq = repoTab.headMessageSeq
         if (!page.wantHeadMessage)
             return
         page.wantHeadMessage = false
@@ -3093,6 +3094,7 @@ FocusScope {
         // counted from the start again, for its own. The landings go too: they are about the tree left.
         page.pendingPopLabel = ""
         page.pendingPopId = 0
+        page.wantHeadMessage = false
         page.forgetRenameCarry()
         page.diffAwaits = false
         page.recoverAwaits = false

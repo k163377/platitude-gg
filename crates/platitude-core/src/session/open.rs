@@ -177,7 +177,7 @@ impl RepoSession {
             standing: Standing::default(),
             merge_tool_wanted: std::sync::atomic::AtomicBool::new(false),
             shown_discard: Mutex::new(None),
-            amend_watch: Mutex::default(),
+            authorship: Mutex::default(),
             carried_pane: super::carried::Pane::default(),
             eol_baselines: Mutex::new(HashMap::new()),
             eol_normalises: Derived::default(),

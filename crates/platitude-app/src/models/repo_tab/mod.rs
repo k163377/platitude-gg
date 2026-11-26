@@ -229,6 +229,13 @@ pub struct RepoTab {
     /// and the UI should ask for a name and address.
     author_name: String,
     author_email: String,
+    /// The same identity as `.mailmap` spells it — how the graph will show
+    /// what it commits, and the spelling its face is drawn from and told
+    /// apart from another's by (`encode::two_people`). Read behind the
+    /// identity and again wherever HEAD moves (`TabMsg::AuthorShown`); as
+    /// configured until the first lands.
+    author_shown_name: String,
+    author_shown_email: String,
     identity_ready: bool,
     /// Whether that read has landed at all. `identity_ready` starts true so
     /// the band stays quiet while it is out; a commit waits for this one.
@@ -236,9 +243,9 @@ pub struct RepoTab {
     /// Whether the last of those reads failed — an answer as well: the
     /// commit button says so instead of waiting (`TabMsg::AuthorUnread`).
     identity_unread: bool,
-    /// The identity's face: its identicon, and the picture assigned to its
-    /// address if any (デザイン規約 §アバターを与える). Properties because
-    /// the commit editor's badge is a binding.
+    /// The identity's face, from its shown spelling: its identicon, and the
+    /// picture assigned to its address if any (デザイン規約 §アバターを与え
+    /// る). Properties because the commit editor's badge is a binding.
     author_avatar: i32,
     author_avatar_url: String,
     /// Whether new commits here get signed, and with what kind of key.
@@ -283,15 +290,26 @@ pub struct RepoTab {
     /// request so an amend starts from it.
     head_subject: String,
     head_body: String,
-    /// Who HEAD is attributed to, and whether that is someone other than
-    /// the identity git would record now — the one case where taking over
-    /// authorship on an amend is worth offering.
+    /// Bumped each time that message arrives, so an editor waiting for one
+    /// can tell "not loaded yet" from "loaded, and it is empty".
+    head_message_seq: i32,
+    /// Who HEAD is attributed to, read while an amend is in view
+    /// (`watchAmend`), and whether that is someone other than the identity
+    /// git would record now — the one case where taking over authorship on an
+    /// amend is worth offering.
     head_author_name: String,
     head_author_email: String,
     head_author_differs: bool,
-    /// Bumped each time an answer arrives, so an editor waiting for one
-    /// can tell "not loaded yet" from "loaded, and it is empty".
-    head_commit_seq: i32,
+    /// The same author as `.mailmap` spells them, and their face from that
+    /// spelling, as `author_avatar` is the identity's — the face the graph
+    /// draws on HEAD, which an amend keeping the author keeps. Whether that
+    /// is another person than the identity as faces go
+    /// (`encode::two_people`): where it is, the commit button stacks the two.
+    head_shown_author_name: String,
+    head_shown_author_email: String,
+    head_author_avatar: i32,
+    head_author_avatar_url: String,
+    head_author_another: bool,
     /// Whether an amend pressed now would leave HEAD changing nothing —
     /// asked while an amend is in view (`watchAmend`), refused by the commit
     /// button and the details pane's save.

@@ -94,10 +94,9 @@ impl DetailsModel {
         self.committer_avatar = crate::encode::avatar_code(&details.committer_name);
         self.committer_avatar_url =
             Hub::with(|hub| hub.avatar_url(&details.committer_email)).unwrap_or_default();
-        // The address tells two people apart, folded as it keys a face
-        // (`avatar::key`); it arrives already mailmapped.
-        self.committer_differs = platitude_core::avatar::key(&details.committer_email)
-            != platitude_core::avatar::key(&details.author_email);
+        // Both arrive already mailmapped.
+        self.committer_differs =
+            crate::encode::two_people(&details.author_email, &details.committer_email);
         self.commit_time_differs = details.committer_time != details.author_time;
         self.committer_time = details.committer_time;
         // Shown as recorded; an editable card's fields take the cut a save

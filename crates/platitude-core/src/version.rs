@@ -72,6 +72,9 @@ use crate::process::{GitCommand, GitExecutor};
 /// - `branch`: `-d`, `-D`, `-m`, `-M`, `--set-upstream-to=`,
 ///   `--end-of-options`.
 /// - `cat-file`: `-s`, `blob`, `commit`; `check-attr`: `-z`, names, `--`.
+/// - `check-mailmap`: `--end-of-options`, one `Name <address>` or
+///   `<address>` contact; prints `Name <address>` or `<address>`
+///   (v2.43.0 `builtin/check-mailmap.c`, parse-options' terminator).
 /// - `checkout-index`: `--all`, over a temporary index (`GIT_INDEX_FILE`) —
 ///   another worktree's untracked files put in as `stash apply` puts a
 ///   stash's back; `carried_apply` runs it on the minimum binary.
@@ -185,7 +188,7 @@ use crate::process::{GitCommand, GitExecutor};
 ///   `<new-path>` (v2.43.0 `builtin/worktree.c`), which the app turns down
 ///   before writing.
 ///
-/// Pretty formats: `%H %h %P %T %an %ae %at %aI %cn %ce %ct %cI %B %s`
+/// Pretty formats: `%H %h %P %T %an %ae %aN %aE %at %aI %cn %ce %cN %cE %ct %cI %B %s`
 /// `%gd %gD %gs %G? %GS %GK %xNN`; `%(trailers:...)` with `key=`,
 /// `valueonly`, `only`, `unfold`, `separator=`. These are documented in
 /// pretty-formats; `creatordate:unix` delegates to log's unix date format.

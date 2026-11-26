@@ -21,6 +21,23 @@ impl Identity {
     }
 }
 
+/// Whether `email` and `other` are two people as faces go: the address
+/// tells them apart, folded as it keys a face (`avatar::key`), each as
+/// `.mailmap` spells it — the rule the author card shows a committer by.
+/// An empty address is one as recorded (`Name <>`); a caller with one not
+/// read yet does not ask.
+pub fn two_people(email: &str, other: &str) -> bool {
+    platitude_core::avatar::key(email) != platitude_core::avatar::key(other)
+}
+
+/// Whether `--reset-author` would change who HEAD is by: its author as git
+/// recorded it, `(name, address)`, is not the identity git would record now
+/// — any difference in either, as git writes what it is given, with no
+/// fold. An empty name is no HEAD read: git refuses an empty `user.name`.
+pub fn author_replaced(head: (&str, &str), identity: (&str, &str)) -> bool {
+    !head.0.is_empty() && head != identity
+}
+
 impl Record for Identity {
     fn to_map(&self) -> QVariantMap {
         Fields::new()
@@ -50,5 +67,36 @@ mod tests {
         assert_eq!(who.email, "ada@example.com");
         let back = <One<Identity> as QVariantConvertible>::try_from_qvariant(&who.to_qvariant());
         assert_eq!(back.map(|b| (*b).clone()), Some((*who).clone()));
+    }
+
+    #[test]
+    fn two_addresses_are_two_people_as_their_keys_differ() {
+        assert!(two_people("yuki.tanaka@example.com", "demo@example.com"));
+        assert!(!two_people("demo@example.com", "demo@example.com"));
+        assert!(
+            !two_people(" Demo@Example.com", "demo@example.com"),
+            "folded as a face's key"
+        );
+        assert!(
+            two_people("", "demo@example.com"),
+            "an address recorded empty"
+        );
+        assert!(!two_people("", ""));
+    }
+
+    #[test]
+    fn reset_author_replaces_any_difference_as_recorded() {
+        let me = ("Demo User", "demo@example.com");
+        assert!(!author_replaced(me, me));
+        assert!(author_replaced(("Yuki Tanaka", "yuki@example.com"), me));
+        assert!(
+            author_replaced(("Demo", "demo@example.com"), me),
+            "the name alone"
+        );
+        assert!(
+            author_replaced(("Demo User", "Demo@Example.com"), me),
+            "no fold: git records the spelling it is given"
+        );
+        assert!(!author_replaced(("", ""), me), "no HEAD read");
     }
 }

@@ -117,9 +117,9 @@ pub struct RepoSession {
     /// The discard log's picked entry, which the walk takes one tip more
     /// for (`session::shown_discard`); `None` while nothing is picked.
     pub(super) shown_discard: Mutex<Option<Arc<ShownDiscard>>>,
-    /// Whether an amend is in view, and what the last ask was about
-    /// ([`RepoSession::watch_amend`]).
-    pub(super) amend_watch: Mutex<super::author::AmendWatch>,
+    /// What the reads of who a commit is by keep between them
+    /// (`session::author`).
+    pub(super) authorship: Mutex<super::author::Authorship>,
     /// Which other worktree the read-only pane stands on, and which reading of
     /// it the pane holds (`carried::Pane`).
     pub(super) carried_pane: super::carried::Pane,

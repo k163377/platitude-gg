@@ -36,6 +36,14 @@ pub(super) struct LatestReads {
     /// ([`RepoSession::check_amend`]): the tree moves under a ticked amend
     /// box, and only the newest ask answers.
     pub(super) amend: Latest,
+    /// HEAD's author while an amend is in view
+    /// ([`RepoSession::watch_amend`]): HEAD moves under it, and only the
+    /// newest ask answers.
+    pub(super) head_author: Latest,
+    /// The identity's `.mailmap` spelling
+    /// ([`RepoSession::read_identity_shown`]): an identity read and a moved
+    /// HEAD each ask, and only the newest answers.
+    pub(super) identity_shown: Latest,
     /// Another worktree's files ([`RepoSession::read_carried_status`]),
     /// which also orders the answers: reads of different trees finish in
     /// any order, and the pane would show whichever finished last — the

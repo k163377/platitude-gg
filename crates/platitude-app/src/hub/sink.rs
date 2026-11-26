@@ -449,6 +449,10 @@ impl SessionSink for BridgeSink {
                 });
             }
             SessionEvent::AuthorUnread => self.feeds.tab.push(TabMsg::AuthorUnread),
+            SessionEvent::AuthorShown { shown } => self.feeds.tab.push(TabMsg::AuthorShown {
+                name: shown.name.unwrap_or_default(),
+                email: shown.email.unwrap_or_default(),
+            }),
             SessionEvent::RemoteBranchChecked {
                 target,
                 local,
@@ -533,12 +537,11 @@ impl SessionSink for BridgeSink {
             SessionEvent::MergeToolsLoaded { names, settled } => {
                 self.feeds.tab.push(TabMsg::MergeTools { names, settled });
             }
-            SessionEvent::HeadCommitLoaded { head } => {
-                self.feeds.tab.push(TabMsg::HeadCommit {
-                    message: head.message,
-                    author_name: head.author_name,
-                    author_email: head.author_email,
-                });
+            SessionEvent::HeadMessageLoaded { message } => {
+                self.feeds.tab.push(TabMsg::HeadMessage { message });
+            }
+            SessionEvent::HeadAuthorLoaded { author } => {
+                self.feeds.tab.push(TabMsg::HeadAuthor { author });
             }
             SessionEvent::AmendChecked { empties } => {
                 self.feeds.tab.push(TabMsg::AmendChecked { empties });

@@ -27,6 +27,7 @@ mod discard_shown;
 mod head;
 mod head_reach;
 mod helper_binary;
+mod identity_shown;
 mod merge_tools;
 mod operations;
 mod paced;

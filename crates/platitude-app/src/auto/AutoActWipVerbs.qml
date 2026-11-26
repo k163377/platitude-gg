@@ -905,15 +905,15 @@ Item {
                 return
             if (op.at("start")) {
                 op.input("asked", () => {
-                    // HEAD's commit answer count as its message is asked for again.
-                    op.witness("seenHead", repoTab.headCommitSeq)
-                    repoTab.requestHeadCommit()
+                    // HEAD's message answers so far, as it is asked for again.
+                    op.witness("seenHead", repoTab.headMessageSeq)
+                    repoTab.requestHeadMessage()
                 })
                 return
             }
             op.complete({
                 "name": "merge_commit_answered",
-                "when": () => ({ "answered": repoTab.headCommitSeq !== op.witnessed("seenHead") }),
+                "when": () => ({ "answered": repoTab.headMessageSeq !== op.witnessed("seenHead") }),
                 "report": () => driver.verbReport().concat([
                     "merge_committed merging=" + (worktree.opText !== "")
                     + " kept=" + (op.wanted !== "" && repoTab.headSubject === op.wanted)

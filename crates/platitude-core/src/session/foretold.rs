@@ -286,7 +286,7 @@ impl RepoSession {
     /// follows what is told (`Standing::set_wip_dirty`), so the walk behind
     /// the commit lays the graph from it and the status read that finds the
     /// same asks for no second one; the amend in view is asked about the
-    /// index as told ([`Self::amend_status`]).
+    /// index and HEAD as told ([`Self::authorship_status`]).
     ///
     /// Nothing is told by a closed session: its page is gone and its sink
     /// retired, as for the reads behind its writes (`write::settle`).
@@ -311,7 +311,7 @@ impl RepoSession {
             self.sink.event(left.event());
             status
         };
-        self.amend_status(&left);
+        self.authorship_status(&left);
         true
     }
 }

@@ -223,7 +223,26 @@ impl RepoTab {
         Member = head_author_differs,
         Notify = changed
     );
-    qproperty!("headCommitSeq", Member = head_commit_seq, Notify = changed);
+    qproperty!(
+        "headAuthorAvatar",
+        Member = head_author_avatar,
+        Notify = changed
+    );
+    qproperty!(
+        "headAuthorAvatarUrl",
+        Member = head_author_avatar_url,
+        Notify = changed
+    );
+    qproperty!(
+        "headAuthorAnother",
+        Member = head_author_another,
+        Notify = changed
+    );
+    qproperty!(
+        "headMessageSeq",
+        Member = head_message_seq,
+        Notify = changed
+    );
     qproperty!("amendEmpties", Member = amend_empties, Notify = changed);
     qproperty!(
         "lastWriteError",
@@ -358,11 +377,13 @@ impl RepoTab {
         self.restart_auto_fetch()
     }
 
-    /// Re-reads the identity's assigned picture after an assignment
-    /// changes; the identity did not, so nothing is asked of git.
+    /// Re-reads the identity's and HEAD's author's assigned pictures after
+    /// an assignment changes; neither person did, so nothing is asked of
+    /// git.
     #[qslot]
     fn refresh_avatar(&mut self) {
-        if self.read_author_avatar() {
+        // Both read: `|` and not `||`, which would skip HEAD's on the first's yes.
+        if self.read_author_avatar() | self.read_head_author_avatar() {
             self.changed();
         }
     }
@@ -906,20 +927,22 @@ impl RepoTab {
         self.commit_from_fields(subject, body, amend, reset_author);
     }
 
-    /// Reads HEAD's message and author (an amend starts from them).
+    /// Reads HEAD's message (an amend starts from it); the answer bumps
+    /// `headMessageSeq`.
     #[qslot]
-    fn request_head_commit(&mut self) {
-        self.with_session(|s| s.load_head_commit());
+    fn request_head_message(&mut self) {
+        self.with_session(|s| s.load_head_message());
     }
 
     /// Whether an amend is in view — the amend box ticked, or HEAD's own
     /// commit open in the details pane, whose save is an amend too. While
     /// one is, core asks whether it would leave HEAD changing nothing
-    /// (`amendEmpties`) and asks again as the index or HEAD moves
-    /// (`RepoSession::watch_amend`). The last answer goes as the watch
-    /// starts: it was about an index or a HEAD that may be gone, and a
-    /// button refusing on it would stay refused for nothing until the new
-    /// one lands.
+    /// (`amendEmpties`) and reads HEAD's author (`headAuthorName` and the
+    /// rest), and asks again as the index or HEAD moves
+    /// (`RepoSession::watch_amend`). The last emptiness answer goes as the
+    /// watch starts: it was about an index or a HEAD that may be gone, and a
+    /// button refusing on it would stay refused for nothing until the new one
+    /// lands. HEAD's author stays — core lets it go where HEAD moved since.
     #[qslot]
     fn watch_amend(&mut self, on: bool) {
         self.amend_in_view(on);

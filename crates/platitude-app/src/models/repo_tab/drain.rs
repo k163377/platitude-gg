@@ -94,6 +94,12 @@ impl RepoTab {
                     sign_commits,
                     signing_format,
                 } => {
+                    // Another identity is shown as configured until its `.mailmap` spelling lands
+                    // (`AuthorShown`); the same one read again keeps the spelling it has.
+                    if name != self.author_name || email != self.author_email {
+                        self.author_shown_name.clone_from(&name);
+                        self.author_shown_email.clone_from(&email);
+                    }
                     self.author_name = name;
                     self.author_email = email;
                     self.read_author_avatar();
@@ -108,6 +114,12 @@ impl RepoTab {
                 TabMsg::AuthorUnread => {
                     self.identity_read = true;
                     self.identity_unread = true;
+                }
+                TabMsg::AuthorShown { name, email } => {
+                    self.author_shown_name = name;
+                    self.author_shown_email = email;
+                    self.read_author_avatar();
+                    self.compare_head_author();
                 }
                 TabMsg::Signature {
                     oid,
@@ -167,18 +179,19 @@ impl RepoTab {
                     self.branch_delete_asked = branch;
                     self.branch_delete_merged = merged.into();
                 }
-                TabMsg::HeadCommit {
-                    message,
-                    author_name,
-                    author_email,
-                } => {
+                TabMsg::HeadMessage { message } => {
                     let (subject, body) = platitude_core::commit::split_message(&message);
                     self.head_subject = subject;
                     self.head_body = body;
-                    self.head_author_name = author_name;
-                    self.head_author_email = author_email;
+                    self.head_message_seq += 1;
+                }
+                TabMsg::HeadAuthor { author } => {
+                    self.head_author_name = author.name;
+                    self.head_author_email = author.email;
+                    self.head_shown_author_name = author.shown_name;
+                    self.head_shown_author_email = author.shown_email;
+                    self.read_head_author_avatar();
                     self.compare_head_author();
-                    self.head_commit_seq += 1;
                 }
                 TabMsg::AmendChecked { empties } => self.amend_empties = empties,
                 TabMsg::AutoFetch {

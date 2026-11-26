@@ -170,6 +170,11 @@ pub enum TabMsg {
     },
     /// The read behind [`Self::Author`] failed (`SessionEvent::AuthorUnread`).
     AuthorUnread,
+    /// That identity as `.mailmap` spells it (`SessionEvent::AuthorShown`).
+    AuthorShown {
+        name: String,
+        email: String,
+    },
     /// One commit's signature: the outcome the UI shows (empty for an
     /// unsigned commit), git's own `%G?` letter behind it, and who signed.
     Signature {
@@ -192,11 +197,13 @@ pub enum TabMsg {
         /// origin; empty where unset.
         checkout_default: String,
     },
-    /// HEAD's message and author, for prefilling an amend.
-    HeadCommit {
+    /// HEAD's message, for prefilling an amend.
+    HeadMessage {
         message: String,
-        author_name: String,
-        author_email: String,
+    },
+    /// HEAD's author while an amend is in view (`commit::HeadAuthor`).
+    HeadAuthor {
+        author: platitude_core::commit::HeadAuthor,
     },
     /// Whether an amend pressed now would leave HEAD changing nothing.
     AmendChecked {

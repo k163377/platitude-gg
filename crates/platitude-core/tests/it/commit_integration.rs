@@ -229,15 +229,11 @@ async fn head_message_and_merge_detection() {
     repo.git(&["commit", "--amend", "-m", "subject\n\nbody line\n"]);
     let (exec, cancel) = env();
 
-    let head = commit::head_commit(&exec, &repo.path, &cancel)
+    let message = commit::head_message(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit")
+        .expect("head message")
         .expect("HEAD exists");
-    assert_eq!(head.message, "subject\n\nbody line");
-    // Author and message come out of one command, NUL-separated: nothing
-    // printable delimits a multi-line message.
-    assert_eq!(head.author_name, "Test User");
-    assert_eq!(head.author_email, "test@example.com");
+    assert_eq!(message, "subject\n\nbody line");
     assert!(
         !commit::head_is_merge(&exec, &repo.path, &cancel)
             .await
@@ -266,11 +262,11 @@ async fn a_readers_log_output_encoding_does_not_reach_what_is_read() {
     repo.commit_file("a.txt", "one\n", "日本語の件名");
     let (exec, cancel) = env();
 
-    let head = commit::head_commit(&exec, &repo.path, &cancel)
+    let message = commit::head_message(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit")
+        .expect("head message")
         .expect("HEAD exists");
-    assert_eq!(head.message, "日本語の件名");
+    assert_eq!(message, "日本語の件名");
 }
 
 /// A reader's `i18n.commitEncoding` would stamp the commits made here
@@ -311,13 +307,92 @@ async fn a_commit_made_here_is_utf_8_whatever_commit_encoding_says() {
 /// A failed read must stay distinguishable from the blank prefill, or a
 /// failure would blank a real message.
 #[tokio::test]
-async fn head_commit_on_an_unborn_branch_is_no_commit_not_an_error() {
+async fn heads_message_and_author_on_an_unborn_branch_are_no_commit_not_an_error() {
     let repo = TestRepo::init();
     let (exec, cancel) = env();
-    let head = commit::head_commit(&exec, &repo.path, &cancel)
+    let message = commit::head_message(&exec, &repo.path, &cancel)
         .await
         .expect("asking is not an error");
-    assert_eq!(head, None);
+    assert_eq!(message, None);
+    let author = commit::head_author(&exec, &repo.path, &cancel)
+        .await
+        .expect("asking is not an error");
+    assert_eq!(author, None);
+}
+
+/// HEAD's author twice: as recorded, which an amend keeps, and as
+/// `.mailmap` spells it, which faces are drawn from.
+#[tokio::test]
+async fn heads_author_is_read_as_recorded_and_as_mailmap_spells_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file(
+        ".mailmap",
+        "Tanaka Yuki <yuki.tanaka@example.com> <yuki@old.example.com>\n",
+        "map the old address",
+    );
+    repo.write_file("a.txt", "theirs\n");
+    repo.git(&["add", "--", "a.txt"]);
+    // `--author`: the harness pins the author through the environment.
+    repo.git(&[
+        "commit",
+        "--author=Yuki Tanaka <yuki@old.example.com>",
+        "-m",
+        "written under the old address",
+    ]);
+    let (exec, cancel) = env();
+    let author = commit::head_author(&exec, &repo.path, &cancel)
+        .await
+        .expect("head author")
+        .expect("HEAD exists");
+    assert_eq!(
+        (author.name.as_str(), author.email.as_str()),
+        ("Yuki Tanaka", "yuki@old.example.com")
+    );
+    assert_eq!(
+        (author.shown_name.as_str(), author.shown_email.as_str()),
+        ("Tanaka Yuki", "yuki.tanaka@example.com")
+    );
+}
+
+/// The identity as `.mailmap` spells it: an old address it maps reads as
+/// the one the graph shows, and an identity it does not map reads as it is.
+#[tokio::test]
+async fn the_identity_is_read_as_mailmap_spells_it() {
+    let mut repo = TestRepo::init();
+    repo.commit_file(
+        ".mailmap",
+        "Tanaka Yuki <yuki.tanaka@example.com> <yuki@old.example.com>\n",
+        "map the old address",
+    );
+    let (exec, cancel) = env();
+    let shown = |name: Option<&str>, email: Option<&str>| {
+        let identity = platitude_core::identity::Identity {
+            name: name.map(str::to_string),
+            email: email.map(str::to_string),
+        };
+        let (exec, cancel, path) = (&exec, &cancel, repo.path.clone());
+        async move {
+            platitude_core::identity::shown(exec, &path, &identity, cancel)
+                .await
+                .expect("check-mailmap")
+        }
+    };
+    let mapped = shown(Some("Yuki Tanaka"), Some("yuki@old.example.com")).await;
+    assert_eq!(mapped.name.as_deref(), Some("Tanaka Yuki"));
+    assert_eq!(mapped.email.as_deref(), Some("yuki.tanaka@example.com"));
+    let unmapped = shown(Some("-Dash Person"), Some("dash@example.com")).await;
+    assert_eq!(
+        unmapped.name.as_deref(),
+        Some("-Dash Person"),
+        "a dash is no option"
+    );
+    assert_eq!(unmapped.email.as_deref(), Some("dash@example.com"));
+    let nameless = shown(None, Some("yuki@old.example.com")).await;
+    assert_eq!(nameless.name.as_deref(), Some("Tanaka Yuki"));
+    assert_eq!(nameless.email.as_deref(), Some("yuki.tanaka@example.com"));
+    let addressless = shown(Some("Nobody"), None).await;
+    assert_eq!(addressless.name.as_deref(), Some("Nobody"));
+    assert_eq!(addressless.email, None);
 }
 
 #[tokio::test]
@@ -349,12 +424,12 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     )
     .await
     .expect("amend");
-    let head = commit::head_commit(&exec, &repo.path, &cancel)
+    let author = commit::head_author(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit")
+        .expect("head author")
         .expect("HEAD exists");
-    assert_eq!(head.author_name, "Other Person");
-    assert_eq!(head.author_email, "other@example.com");
+    assert_eq!(author.name, "Other Person");
+    assert_eq!(author.email, "other@example.com");
 
     commit::commit(
         &exec,
@@ -369,12 +444,12 @@ async fn amending_keeps_the_author_until_reset_author_is_asked_for() {
     )
     .await
     .expect("amend --reset-author");
-    let head = commit::head_commit(&exec, &repo.path, &cancel)
+    let author = commit::head_author(&exec, &repo.path, &cancel)
         .await
-        .expect("head commit")
+        .expect("head author")
         .expect("HEAD exists");
-    assert_eq!(head.author_name, "Test User");
-    assert_eq!(head.author_email, "test@example.com");
+    assert_eq!(author.name, "Test User");
+    assert_eq!(author.email, "test@example.com");
 }
 
 /// A commit of `a.txt` the outside is set up to turn down, and what came

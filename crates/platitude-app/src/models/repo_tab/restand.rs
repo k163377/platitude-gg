@@ -50,10 +50,8 @@ impl RepoTab {
         self.discard_only = String::new();
         self.head_subject = String::new();
         self.head_body = String::new();
-        self.head_author_name = String::new();
-        self.head_author_email = String::new();
-        self.head_author_differs = false;
-        self.head_commit_seq = 0;
+        self.forget_head_author();
+        self.head_message_seq = 0;
         self.amend_empties = false;
         self.last_write_error = String::new();
         self.last_write_stopped = false;

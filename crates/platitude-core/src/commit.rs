@@ -198,24 +198,65 @@ fn refused_by(out: &crate::process::GitOutput) -> crate::report::ReportKind {
     }
 }
 
-/// What an amend starts from: HEAD's message and the identity recorded
-/// as its author.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HeadCommit {
-    pub message: String,
-    pub author_name: String,
-    pub author_email: String,
-}
-
-/// Reads HEAD's message and author, for prefilling an amend editor.
-/// `None` on an unborn branch.
-///
-/// NUL-separated with the message last, since it spans lines.
-pub async fn head_commit(
+/// Reads HEAD's message, for prefilling an amend editor. `None` on an
+/// unborn branch.
+pub async fn head_message(
     executor: &GitExecutor,
     workdir: &Path,
     cancel: &CancellationToken,
-) -> Result<Option<HeadCommit>, GitError> {
+) -> Result<Option<String>, GitError> {
+    let message = head_log(executor, workdir, "%B", cancel).await?;
+    Ok(message.map(|m| m.trim_end_matches('\n').to_string()))
+}
+
+/// HEAD's author, twice: as git recorded it, which an amend keeps and
+/// `--reset-author` replaces — the spelling that replacing names — and as
+/// `.mailmap` spells it (`%aN` / `%aE`), the graph's and the details pane's,
+/// which faces are drawn from. `oid` is the commit it is the author of;
+/// `None` in the empty answer an unborn HEAD gets.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HeadAuthor {
+    pub oid: Option<Oid>,
+    pub name: String,
+    pub email: String,
+    pub shown_name: String,
+    pub shown_email: String,
+}
+
+/// Reads HEAD's author ([`HeadAuthor`]). `None` on an unborn branch.
+pub async fn head_author(
+    executor: &GitExecutor,
+    workdir: &Path,
+    cancel: &CancellationToken,
+) -> Result<Option<HeadAuthor>, GitError> {
+    let format = "%H%x00%an%x00%ae%x00%aN%x00%aE";
+    let Some(text) = head_log(executor, workdir, format, cancel).await? else {
+        return Ok(None);
+    };
+    let unexpected = || GitError::UnexpectedOutput {
+        command: "git log -1".to_string(),
+        message: "the commit and its author's spellings are not NUL-separated".to_string(),
+    };
+    let mut fields = text.trim_end_matches('\n').splitn(5, '\0');
+    let mut field = || fields.next().map(str::to_string).ok_or_else(unexpected);
+    let oid = Oid::from_hex_str(&field()?).map_err(|_| unexpected())?;
+    Ok(Some(HeadAuthor {
+        oid: Some(oid),
+        name: field()?,
+        email: field()?,
+        shown_name: field()?,
+        shown_email: field()?,
+    }))
+}
+
+/// HEAD's commit through `git log -1 --format=<format>`; `None` on an
+/// unborn branch.
+async fn head_log(
+    executor: &GitExecutor,
+    workdir: &Path,
+    format: &str,
+    cancel: &CancellationToken,
+) -> Result<Option<String>, GitError> {
     // Asked first, so a failure of the log read below stays a failure.
     let probe = GitCommand::new().cwd(workdir).answers_by_code(1).args([
         "rev-parse",
@@ -226,22 +267,13 @@ pub async fn head_commit(
     if executor.run_unchecked(probe, cancel).await?.code != 0 {
         return Ok(None);
     }
+    let format = format!("--format={format}");
     let cmd = GitCommand::new()
         .cwd(workdir)
-        .args(["log", "-1", "--format=%an%x00%ae%x00%B"]);
-    let out = executor.run(cmd, cancel).await?;
-    let text = out.stdout_utf8();
-    let unexpected = || GitError::UnexpectedOutput {
-        command: "git log -1".to_string(),
-        message: "author and message are not NUL-separated".to_string(),
-    };
-    let (author_name, rest) = text.split_once('\0').ok_or_else(unexpected)?;
-    let (author_email, message) = rest.split_once('\0').ok_or_else(unexpected)?;
-    Ok(Some(HeadCommit {
-        message: message.trim_end_matches('\n').to_string(),
-        author_name: author_name.to_string(),
-        author_email: author_email.to_string(),
-    }))
+        .args(["log", "-1", format.as_str()]);
+    Ok(Some(
+        executor.run(cmd, cancel).await?.stdout_utf8().into_owned(),
+    ))
 }
 
 /// Whether HEAD changes nothing against its first parent (the empty tree

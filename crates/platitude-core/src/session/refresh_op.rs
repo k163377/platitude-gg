@@ -72,7 +72,7 @@ impl RepoSession {
         // when status moved or were marked stale.
         let stale = self.eol_marks_stale.swap(false, Ordering::SeqCst);
         let moved = relock(&self.status_key).replace(key) != Some(key);
-        self.amend_status(status);
+        self.authorship_status(status);
         Some(Recorded {
             flipped: dirt_flipped || merge_moved,
             marks: stale || moved,

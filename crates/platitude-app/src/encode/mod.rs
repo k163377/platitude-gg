@@ -34,7 +34,7 @@ pub use counts::shown_count;
 pub use discards::{DiscardRows, discard_key, discard_rows, look_word, shown_matches};
 pub(crate) use far::{put_far, read_far};
 pub use graph::{Lanes, avatar_code, conflict_side_colors, lanes_of, spell_lanes, tail_lanes};
-pub use identity::Identity;
+pub use identity::{Identity, author_replaced, two_people};
 pub(crate) use labels::pr_set;
 pub use labels::{Chips, chips_of, chips_shown, gone_keys, named_kind_word, ref_kind_word};
 pub use landing::{Landed, Landing};

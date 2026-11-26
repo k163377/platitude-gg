@@ -79,6 +79,108 @@ async fn an_index_with_nothing_staged_is_answered_as_no_empty_amend() {
     session.close_and_wait().await;
 }
 
+/// HEAD's authors read so far, in the order they came.
+fn head_authors(events: &[SessionEvent]) -> Vec<String> {
+    events
+        .iter()
+        .filter_map(|e| match e {
+            SessionEvent::HeadAuthorLoaded { author } => Some(author.name.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The commit an amend would replace is who the commit button names: its
+/// author is read as an amend comes into view — an amend restored with a
+/// worktree's draft asks for no message — and again on the status that shows
+/// HEAD moved under it, whoever moved it.
+#[tokio::test]
+async fn heads_author_is_read_as_an_amend_comes_into_view_and_as_head_moves() {
+    let mut repo = undone();
+    let (sink, session) = opened(&repo).await;
+
+    session.watch_amend(true);
+    sink.wait_for("HEAD's author as the amend came into view", |evs| {
+        (head_authors(evs).first().map(String::as_str) == Some("Test User")).then_some(())
+    })
+    .await;
+    // A status before the move, so the one after it shows HEAD moved rather
+    // than being the first.
+    bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+
+    // `--author`: the harness pins the author through the environment.
+    repo.git(&[
+        "commit",
+        "--author=Other Person <other@example.com>",
+        "-m",
+        "written by someone else",
+    ]);
+    bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    sink.wait_for("the author of the HEAD another git made", |evs| {
+        (head_authors(evs).last().map(String::as_str) == Some("Other Person")).then_some(())
+    })
+    .await;
+    session.close_and_wait().await;
+}
+
+/// How many of HEAD's authors have come so far.
+async fn authors_so_far(sink: &Arc<CaptureSink>) -> usize {
+    sink.wait_for("the authors so far", |evs| Some(head_authors(evs).len()))
+        .await
+}
+
+/// An author read off a HEAD that moved while no amend was in view is let go
+/// of as one comes into view, ahead of the read — the commit button names
+/// nobody rather than a commit gone — and one still HEAD's stands until the
+/// read answers.
+#[tokio::test]
+async fn an_author_off_a_head_gone_is_let_go_of_as_an_amend_comes_into_view() {
+    let mut repo = undone();
+    let (sink, session) = opened(&repo).await;
+    session.watch_amend(true);
+    sink.wait_for("HEAD's author as the amend came into view", |evs| {
+        (head_authors(evs).first().map(String::as_str) == Some("Test User")).then_some(())
+    })
+    .await;
+    bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+
+    session.watch_amend(false);
+    let from = authors_so_far(&sink).await;
+    session.watch_amend(true);
+    let again = sink
+        .wait_for("HEAD's author read again", |evs| {
+            let authors = head_authors(evs);
+            (authors.len() > from).then(|| authors[from..].to_vec())
+        })
+        .await;
+    assert_eq!(again[0], "Test User", "still HEAD's: nothing let go of");
+
+    session.watch_amend(false);
+    // `--author`: the harness pins the author through the environment.
+    repo.git(&[
+        "commit",
+        "--author=Other Person <other@example.com>",
+        "-m",
+        "written by someone else",
+    ]);
+    bounded("the tracked poll", session.refresh_poll_tracked().outcome()).await;
+    let from = authors_so_far(&sink).await;
+    session.watch_amend(true);
+    let after = sink
+        .wait_for("the author of the HEAD there is now", |evs| {
+            let authors = head_authors(evs);
+            (authors.last().map(String::as_str) == Some("Other Person"))
+                .then(|| authors[from..].to_vec())
+        })
+        .await;
+    assert_eq!(
+        after,
+        ["", "Other Person"],
+        "the old author let go of first"
+    );
+    session.close_and_wait().await;
+}
+
 fn is_status_spawn(event: &SessionEvent) -> bool {
     matches!(event, SessionEvent::CommandStarted { display, .. } if display.starts_with("git status"))
 }

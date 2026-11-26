@@ -333,11 +333,17 @@ pub enum SessionEvent {
         oid: String,
         signature: identity::Signature,
     },
-    /// Answer to [`RepoSession::load_head_commit`] — what an amend starts
-    /// from: HEAD's message, and whose commit it is about to replace. All
-    /// empty on an unborn branch.
-    HeadCommitLoaded {
-        head: commit::HeadCommit,
+    /// Answer to [`RepoSession::load_head_message`] — what an amend's editor
+    /// starts from. Empty on an unborn branch.
+    HeadMessageLoaded {
+        message: String,
+    },
+    /// HEAD's author, read while an amend is in view
+    /// ([`RepoSession::watch_amend`]) — whom an amend keeps. All empty on an
+    /// unborn branch, and as an amend comes into view over a HEAD the last
+    /// answer was not about.
+    HeadAuthorLoaded {
+        author: commit::HeadAuthor,
     },
     /// Answer to [`RepoSession::check_amend`]: whether an amend pressed
     /// now would leave HEAD changing nothing.
@@ -348,6 +354,11 @@ pub enum SessionEvent {
     /// UI can ask for an identity before the first commit fails.
     AuthorLoaded {
         config: identity::AuthorConfig,
+    },
+    /// The identity as `.mailmap` spells it ([`identity::shown`]), read
+    /// behind each [`Self::AuthorLoaded`] and wherever HEAD moves.
+    AuthorShown {
+        shown: identity::Identity,
     },
     /// That read failed: who a commit would be attributed to is not known,
     /// so the commit button says so rather than waiting on an answer that

@@ -55,6 +55,8 @@ impl Default for RepoTab {
             signature_wanted: String::new(),
             author_name: String::new(),
             author_email: String::new(),
+            author_shown_name: String::new(),
+            author_shown_email: String::new(),
             author_avatar: 0,
             author_avatar_url: String::new(),
             // Assumed fine until the check says otherwise, so startup
@@ -82,7 +84,12 @@ impl Default for RepoTab {
             head_author_name: String::new(),
             head_author_email: String::new(),
             head_author_differs: false,
-            head_commit_seq: 0,
+            head_shown_author_name: String::new(),
+            head_shown_author_email: String::new(),
+            head_author_avatar: 0,
+            head_author_avatar_url: String::new(),
+            head_author_another: false,
+            head_message_seq: 0,
             amend_empties: false,
             amend_watched: false,
             last_write_error: String::new(),
@@ -407,12 +414,12 @@ impl RepoTab {
             crate::hub::from_session(self.tab_id, |s| s.suspend_auto_fetch()).unwrap_or(false);
     }
 
-    /// Re-reads the configured identity's identicon and assigned picture.
-    /// Answers whether either moved; the caller does the telling (the
-    /// feed once at the end of its drain).
+    /// Re-reads the configured identity's identicon and assigned picture,
+    /// from the spelling `.mailmap` gives it. Answers whether either moved;
+    /// the caller does the telling (the feed once at the end of its drain).
     pub(super) fn read_author_avatar(&mut self) -> bool {
-        let code = crate::encode::avatar_code(&self.author_name);
-        let url = Hub::with(|hub| hub.avatar_url(&self.author_email)).unwrap_or_default();
+        let code = crate::encode::avatar_code(&self.author_shown_name);
+        let url = Hub::with(|hub| hub.avatar_url(&self.author_shown_email)).unwrap_or_default();
         if code == self.author_avatar && url == self.author_avatar_url {
             return false;
         }
@@ -421,13 +428,50 @@ impl RepoTab {
         true
     }
 
-    /// Whether HEAD carries someone else's name — the only case where an
-    /// amend has authorship to take over (`--reset-author`). An empty
-    /// name is "no HEAD read yet": git refuses an empty `user.name`.
+    /// Re-reads HEAD's author's face from the spelling `.mailmap` gives, as
+    /// [`Self::read_author_avatar`] the identity's. Answers whether it moved.
+    pub(super) fn read_head_author_avatar(&mut self) -> bool {
+        let code = crate::encode::avatar_code(&self.head_shown_author_name);
+        let url =
+            Hub::with(|hub| hub.avatar_url(&self.head_shown_author_email)).unwrap_or_default();
+        if code == self.head_author_avatar && url == self.head_author_avatar_url {
+            return false;
+        }
+        self.head_author_avatar = code;
+        self.head_author_avatar_url = url;
+        true
+    }
+
+    /// Whether `--reset-author` would change who HEAD is by
+    /// (`encode::author_replaced`), and whether, as faces go, HEAD's author is
+    /// another person than the identity (`encode::two_people`) — asked only
+    /// of a HEAD read and an identity read whole, the committer an amend would
+    /// record. Two people are two authors as recorded too (one `.mailmap`
+    /// spells both), so `differs` stands for the HEAD read.
     pub(super) fn compare_head_author(&mut self) {
-        self.head_author_differs = !self.head_author_name.is_empty()
-            && (self.head_author_name != self.author_name
-                || self.head_author_email != self.author_email);
+        let head = (
+            self.head_author_name.as_str(),
+            self.head_author_email.as_str(),
+        );
+        let identity = (self.author_name.as_str(), self.author_email.as_str());
+        self.head_author_differs = crate::encode::author_replaced(head, identity);
+        self.head_author_another = self.head_author_differs
+            && self.identity_read
+            && self.identity_ready
+            && crate::encode::two_people(&self.head_shown_author_email, &self.author_shown_email);
+    }
+
+    /// Lets HEAD's author go — about a HEAD that may be gone — until the
+    /// next read answers.
+    pub(super) fn forget_head_author(&mut self) {
+        self.head_author_name = String::new();
+        self.head_author_email = String::new();
+        self.head_author_differs = false;
+        self.head_shown_author_name = String::new();
+        self.head_shown_author_email = String::new();
+        self.head_author_avatar = 0;
+        self.head_author_avatar_url = String::new();
+        self.head_author_another = false;
     }
 
     /// Decodes the push-force pair QML sends. `expect` is read for
