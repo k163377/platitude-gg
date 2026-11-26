@@ -456,11 +456,30 @@ pub(super) const TABLE: &[Verb] = &[
     // that never read HEAD's author also leaves it off); the name, because
     // `differs=true` against an author that never arrived is the wrong
     // reason. What git records is `commit_integration.rs`'s
-    // (`amending_keeps_the_author_until_reset_author_is_asked_for`).
+    // (`amending_keeps_the_author_until_reset_author_is_asked_for`). What the
+    // commit button makes of it: `kept=` the author's face stacked over the
+    // committer's while the box is unticked — and not for an old address
+    // `.mailmap` folds into the identity's (`mailmapped-self`), nor for an
+    // identity configured under one (`mailmapped-identity`), where the box
+    // still stands — `reset=` the chip naming `--reset-author` once ticked
+    // (`ticked=`, the tick that went in).
     Verb {
         name: "amend-author",
-        when: &[],
-        plain: "amend_author differs=true name=Yuki Tanaka",
+        when: &[
+            (
+                Arg::Starts("ticked"),
+                "amend_author differs=true name=Yuki Tanaka ticked=true kept=false reset=true",
+            ),
+            (
+                Arg::WithPreset("mailmapped-self"),
+                "amend_author differs=true name=Demo User ticked=false kept=false reset=false",
+            ),
+            (
+                Arg::WithPreset("mailmapped-identity"),
+                "amend_author differs=true name=Demo User ticked=false kept=false reset=false",
+            ),
+        ],
+        plain: "amend_author differs=true name=Yuki Tanaka ticked=false kept=true reset=false",
     },
     // The box ticked and sent, judged after the page is back: the amend
     // answers before the rebuild starts, so a run stopped at the write

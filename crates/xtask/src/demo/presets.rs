@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::authorship::{authorship, co_authors};
+use super::authorship::{authorship, co_authors, mailmapped, mailmapped_identity, mailmapped_self};
 use super::basic::{
     basic, detached, dirty, embedded, eol, gitlink, marker, mergetools, modes, nested, noremote,
     octopus, octopus_mates, one_commit, plan, reflock, rewrite_merge, shallow, stashes, undone,
@@ -180,6 +180,9 @@ pub(super) fn build(preset: &str, root: &Path, name: &str) -> Result<PathBuf, St
         "errsig" => errsig(&mut repo)?,
         "co-authors" => co_authors(&mut repo)?,
         "authorship" => authorship(&mut repo)?,
+        "mailmapped" => mailmapped(&mut repo)?,
+        "mailmapped-self" => mailmapped_self(&mut repo)?,
+        "mailmapped-identity" => mailmapped_identity(&mut repo)?,
         "tags" => tags(&mut repo)?,
         "tagremotes" => tagremotes(&mut repo)?,
         "manytags" => manytags(&mut repo)?,

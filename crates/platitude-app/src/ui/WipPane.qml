@@ -770,6 +770,11 @@ ColumnLayout {
         ? commitBlock.subjectText : ""
     // Amend with the current identity as author (git keeps the original author otherwise).
     readonly property bool resetAuthor: commitBlock.resetAuthor
+    /// Automation: whether `Make me the author` is offered, and what the commit button's phrase says of it — its
+    /// command chip, and the kept author's face stacked over the committer's (-1 for none).
+    readonly property bool authorOffered: commitBlock.authorOffered
+    readonly property string commitHead: commitBlock.commitSeat.phraseHead
+    readonly property int commitKeptFace: commitBlock.commitSeat.phraseKeptFace
     // Both open at the editor's rest height and first line (`MessageEditor.setMessage`).
     function setMessage(subject, body) {
         commitBlock.setMessage(subject, body)

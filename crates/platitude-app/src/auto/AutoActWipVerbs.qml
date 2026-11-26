@@ -136,6 +136,11 @@ Item {
         } else if (act === "amend-author") {
             // The boxes are in the commit editor, on screen only while the uncommitted row is selected.
             page.showWip()
+            const widthAt = arg.indexOf(":")
+            if (widthAt >= 0) {
+                const width = arg.substring(widthAt + 1)
+                page.setDetailsWidth(width === "min" ? 0 : Number(width))
+            }
             acts.tickAmend()
             amendAuthorTimer.start()
         } else if (act === "stash-menu" || act === "delete-stash-row") {
@@ -681,16 +686,31 @@ Item {
             "when": () => ({ "ready": !(driver.graphTopKind() !== "wip") }),
             "report": () => "wip_lanes geometry=" + graphModel.geometryAt(0) + " lanes=" + graphModel.maxLanes })
     }
-    // Waits for HEAD's author; until it arrives the offer to take it over is not in the picture. Waited so, this is the
-    // one picture with a ticked box (amend) and an unticked one (the author's) side by side. `differs=true` wants a
-    // HEAD authored by someone other than the identity (`--preset authorship`).
+    // Waits for HEAD's author and the identity; until both arrive the offer to take the authorship over, and the face
+    // stacked for it, are not in the picture. `differs=true` wants a HEAD authored by someone other than the identity
+    // (`--preset authorship`). The argument is `[kept|ticked][:<width>|:min]`: `ticked` ticks the author's box too,
+    // once it stands, and a width sets the right pane's, as `readRowAt` does (`min` = its floor). The report says what
+    // the commit button makes of it: `kept=` the kept author's face stacked over the committer's
+    // (`WipCommitBlock.phraseKeptFace`), `reset=` the chip naming `--reset-author`.
     PageStage {
         id: amendAuthorTimer
         name: "amend_author"
-        onTriggered: amendAuthorTimer.complete({
-            "name": "amend_author_ready",
-            "when": () => ({ "ready": !(repoTab.headAuthorName === "") }),
-            "report": () => "amend_author differs=" + repoTab.headAuthorDiffers + " name=" + repoTab.headAuthorName })
+        onTriggered: {
+            if (Harness.autoActArg.split(":")[0] === "ticked" && !amendAuthorTimer.at("ticked")) {
+                if (Awaited.all("amend_author_offered", { "offered": wipPane.authorOffered }))
+                    amendAuthorTimer.input("ticked", () => {
+                        wipPane.setResetAuthorChecked(true)
+                        return wipPane.resetAuthor
+                    })
+                return
+            }
+            amendAuthorTimer.complete({
+                "name": "amend_author_ready",
+                "when": () => ({ "ready": !(repoTab.headAuthorName === ""), "identity": repoTab.identityRead }),
+                "report": () => "amend_author differs=" + repoTab.headAuthorDiffers + " name=" + repoTab.headAuthorName
+                                + " ticked=" + wipPane.resetAuthor + " kept=" + (wipPane.commitKeptFace >= 0)
+                                + " reset=" + wipPane.commitHead.endsWith("--reset-author") })
+        }
     }
     readonly property QtObject halfWatch: QtObject {
         id: halfWatch

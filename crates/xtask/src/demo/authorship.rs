@@ -152,6 +152,65 @@ pub(super) fn authorship(repo: &mut DemoRepo) -> Result<(), String> {
     Ok(())
 }
 
+/// HEAD written by somebody else under an address `.mailmap` spells
+/// otherwise — name and address both — so git records one spelling and
+/// every face is drawn from the other (`%aN` / `%aE`).
+pub(super) fn mailmapped(repo: &mut DemoRepo) -> Result<(), String> {
+    mapped_head(
+        repo,
+        "Tanaka Yuki <yuki.tanaka@example.com> <yuki@old.example.com>",
+        "Yuki Tanaka <yuki@old.example.com>",
+    )
+}
+
+/// HEAD written by the identity itself under an old address `.mailmap`
+/// folds into the one it uses now: git records another author, and every
+/// face says it is the same person.
+pub(super) fn mailmapped_self(repo: &mut DemoRepo) -> Result<(), String> {
+    mapped_head(
+        repo,
+        "Demo User <demo@example.com> <demo@old.example.com>",
+        "Demo User <demo@old.example.com>",
+    )
+}
+
+/// The identity configured under an old address `.mailmap` folds into the
+/// one HEAD was written under: git records another author, and every face —
+/// the identity's as well — says it is the same person.
+pub(super) fn mailmapped_identity(repo: &mut DemoRepo) -> Result<(), String> {
+    mapped_head(
+        repo,
+        "Demo User <demo@example.com> <demo@old.example.com>",
+        "Demo User <demo@example.com>",
+    )?;
+    repo.git(&["config", "user.email", "demo@old.example.com"])?;
+    Ok(())
+}
+
+/// Two commits under the identity, the `.mailmap` line among them, and HEAD
+/// by `author` as git records it.
+fn mapped_head(repo: &mut DemoRepo, map: &str, author: &str) -> Result<(), String> {
+    repo.commit(
+        "README.md",
+        "# demo\n\nA repository whose authors go by two spellings.\n",
+        "docs: start the readme",
+    )?;
+    repo.commit(
+        ".mailmap",
+        &format!("{map}\n"),
+        "chore: map the old address",
+    )?;
+    repo.write("src/app.txt", "app v1\n")?;
+    repo.git(&["add", "--", "src/app.txt"])?;
+    repo.git(&[
+        "commit",
+        &format!("--author={author}"),
+        "-m",
+        "feat: add the app",
+    ])?;
+    Ok(())
+}
+
 /// Rewrites HEAD's commit object with a different tree, keeping every
 /// other header — including the signature, so `%G?` reads `B`.
 fn retree_head(repo: &mut DemoRepo, tree: &str) -> Result<String, String> {

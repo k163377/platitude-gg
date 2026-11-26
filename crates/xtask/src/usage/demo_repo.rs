@@ -216,6 +216,14 @@ pub(super) const PRESETS: &str = "  demo-repo <preset> [--at <dir>]
                   verdict (signature-tip passes only on this preset)
         co-authors  one, three and no co-authors, signed and not
         authorship  every way an author and a committer can be two
+        mailmapped  HEAD by somebody else under an address .mailmap spells
+                  otherwise, name and all (amend-author)
+        mailmapped-self
+                  HEAD by the identity under an old address .mailmap folds
+                  into its own (amend-author)
+        mailmapped-identity
+                  the identity configured under an old address .mailmap
+                  folds into the one HEAD was written under (amend-author)
         tags      a tag in every state a remote can put it in (fetch first)
         tagremotes
                   the same states across three remotes: one name carried by

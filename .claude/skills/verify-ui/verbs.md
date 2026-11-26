@@ -377,7 +377,7 @@
 - `settings-tools-enter`(その欄の Enter を一覧の両側で 1 run に撃つ(規約 §選ぶ欄と打つ欄)— 詳細は `WindowSettingsActs.qml` の `toolEnterTimer`、判定は `verify/verbs/identity.rs`)
 - `settings-repo [<タブ番号>]` / `settings-repo-pick [<タブ番号>]`(**`--preset basic --preset stashes` でタブ 2 本**。設定画面の `Git` の分類 = この画面で一番背の高い姿。引数は帯の何番目のタブを選ぶか(省略で前に居るタブ)、`-pick` は更に一覧を下ろす — 詳細は `WindowSettingsActs.qml` の `repoSettingsTimer`、判定は `verify/verbs/identity.rs`)
 - `file-menu` / `file-menu-untracked` / `file-menu-staged` / `file-menu-conflict`(ファイル行の右クリック、バケツ別。引数はパス(`--preset dirty`、conflict は `both.txt --preset conflict-kinds` — 4 種が揃っていて、種別の文言を `conflict_kind` として報告する)— 詳細は `AutoActFileRowVerbs.qml` の `file-menu` の枝と `menuLine`、判定は `verify/verbs/panes.rs`)
-- `amend-author`(**`--preset authorship`**。amend の著者引き継ぎ表示 — 詳細は `AutoActWipVerbs.qml` の `amendAuthorTimer`、判定は `verify/verbs/panes.rs`)
+- `amend-author [kept|ticked][:<幅>|:min]`(**`--preset authorship`**、mailmap の 3 場面は `--preset mailmapped` / `mailmapped-self` / `mailmapped-identity`。amend の著者引き継ぎ表示と commit ボタンの重ねた顔、`ticked` は Make me the author も付ける(`ticked:min` は一番長いチップを床の幅で)。幅は右ペインの幅 — 詳細は `AutoActWipVerbs.qml` の `amendAuthorTimer`、判定は `verify/verbs/panes.rs`)
 - `stash-menu`(stash 行の右クリック)
 - `name-box <行番号>[:<チップ列の幅>]`(グラフ行の名前入力欄を開いたまま止める。幅 `0` は列の床 — 詳細は `AutoActPaneVerbs.qml` の `name-box` の枝)
 - `menu-hover [<行番号>]`(コミット行メニューを開いてから、その行の hover カードを頼む。**`row-card` と対で読む** — 詳細は `AutoActRowMenuVerbs.qml` の `menuHoverTimer`、判定は `verify/verbs/graph.rs`)
