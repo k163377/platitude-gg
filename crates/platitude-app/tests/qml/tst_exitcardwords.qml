@@ -47,6 +47,15 @@ Control {
         repoTab: tab
         worktree: tree
     }
+    /// A row on its own, walked across the width where its sentence goes under its chip (`breaksBeside`).
+    OpExitRow {
+        id: edgeRow
+        y: root.height
+        width: 480
+        code: "--continue"
+        text: "Carry on with what is staged"
+        note: "conflicts stay"
+    }
     /// One line of the card's words, off the font rather than the part: a part that cuts has a line height of its own
     /// to agree with.
     FontMetrics {
@@ -171,6 +180,39 @@ Control {
             const note = find(quit, child => child.text === quit.note && quit.note !== "" && child.visible)
             verify(note !== null, "--quit has its note")
             verify(topOf(note) < topOf(sentenceOf(quit)), "the note stands on the first line, over the sentence")
+        }
+
+        // Kept beside its chip, a sentence is handed room for its widest word on every width: the row tells where it
+        // would break from the chip and the note as its layout spends them — each rounded up to a whole pixel —, so
+        // just past where it stops going under, a word does not break inside.
+        function test_a_sentence_kept_beside_its_chip_has_room_for_its_widest_word() {
+            let under = 50
+            let beside = 480
+            edgeRow.width = under
+            verify(edgeRow.breaksBeside, "a row this narrow sends its sentence under the chip")
+            edgeRow.width = beside
+            verify(!edgeRow.breaksBeside, "a row this wide keeps its sentence beside the chip")
+            while (beside - under > 0.125) {
+                const middle = (under + beside) / 2
+                edgeRow.width = middle
+                if (edgeRow.breaksBeside)
+                    under = middle
+                else
+                    beside = middle
+            }
+            const grid = find(edgeRow, child => child.columns === 3)
+            const words = sentenceOf(edgeRow)
+            const ruler = find(edgeRow, child => child.text === edgeRow.text && child.wrapMode !== undefined
+                                                 && !child.visible)
+            verify(grid !== null && ruler !== null, "the row's layout and its widest word's ruler stand")
+            for (let width = beside; width < beside + 3; width += 0.25) {
+                edgeRow.width = width
+                verify(!edgeRow.breaksBeside, "past " + beside + " the sentence stays beside, at " + width)
+                verify(waitForItemPolished(grid), "the row is laid out at " + width)
+                verify(words.width >= ruler.contentWidth,
+                       "at " + width + " the sentence has " + words.width + " for its widest word, "
+                       + ruler.contentWidth)
+            }
         }
 
         // Wide, the sentences stand beside their chips, on the chip's line.

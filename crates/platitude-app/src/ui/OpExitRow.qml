@@ -40,10 +40,12 @@ Item {
     /// The sentence stands under the chip rather than beside it (`OpExitCard.stacked`).
     property bool stacked: false
     /// Beside the chip, the sentence would break inside a word: its widest word is wider than the room the chip, the
-    /// note and the gaps leave it. Read off the row's own width, so it does not move with `stacked`.
+    /// note and the gaps leave it. Read off the row's own width, so it does not move with `stacked`. The chip and the
+    /// note in whole pixels, as the layout hands them out (`AppMenuItem.besideWords`).
     readonly property bool breaksBeside: opRow.width - 2 * Theme.spaceXs - opRow.holdIndent
-        - Math.max(opRow.codeColW, codeLabel.implicitWidth) - Theme.spaceSm
-        - (opRow.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0) < Math.ceil(widestWord.contentWidth)
+        - Math.ceil(Math.max(opRow.codeColW, codeLabel.implicitWidth)) - Theme.spaceSm
+        - (opRow.note !== "" ? Math.ceil(noteLabel.implicitWidth) + Theme.spaceSm : 0)
+        < Math.ceil(widestWord.contentWidth)
     /// How far the words are pushed in to leave room for the mark — the same on every row, confirmed or not.
     property real holdIndent: 0
     /// How far the fill reaches past the row into the card's side padding (`HoldFill.bleed`).
