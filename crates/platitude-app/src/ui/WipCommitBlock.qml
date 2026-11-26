@@ -300,7 +300,9 @@ Flickable {
                 // Command and branch are git's spelling, so both wear the chip (デザイン規約 §git 用語のコード表記);
                 // the words between are translatable. The branch takes the accent: which branch one is on is the
                 // thing to get wrong here.
-                phraseHead: block.amending ? "commit --amend" : "commit"
+                // The command as sent, `--reset-author` included (`Make me the author`, デザイン規約 §その他の操作).
+                phraseHead: !block.amending ? "commit"
+                            : authorBox.checked ? "commit --amend --reset-author" : "commit --amend"
                 phraseTail: block.commitTarget
                 phraseTailTint: commitButton.enabled ? Theme.accent : Theme.textMuted
                 // The branch behind its mark (デザイン規約 §ref の種別「名前の印」); a detached `HEAD` names no branch.
