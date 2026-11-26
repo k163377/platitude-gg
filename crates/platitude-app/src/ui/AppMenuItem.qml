@@ -372,11 +372,13 @@ MenuItem {
                    + menuItem.besideWords
     /// Everything the row bids beside its words. The words' room is the row less this (`refRoom`) — read off the
     /// bids, never off the words' own label: that one's width answers its text, which the room cuts, and the loop
-    /// closes wherever the layout answers in the same pass (a conflict row's menu). The chip and the code name are bid
-    /// in whole pixels, as the layout hands them out: the row's `RowLayout` rounds each of those up, and a sum rounded
-    /// once comes up the fractions short — the code name, laid out last, elides (a Linux font's `worktree remove` +
-    /// folder).
-    readonly property real besideWords: (codeChip.visible ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
+    /// closes wherever the layout answers in the same pass (a conflict row's menu). **Every item is bid in whole
+    /// pixels, the words too (`wordsWant`)**, as the layout spends them: the row's `RowLayout` takes each item of a
+    /// fixed width out of the row rounded up — an implicit width widens the item, an explicit `Layout.preferredWidth`
+    /// (the far column, the worktree after the words) keeps the item's width in a cell rounded up —, and a sum rounded
+    /// once comes up the fractions short, taken from what fills the rest: the words or the code name elide (a Linux
+    /// font's `rebase --interactive` + `from here up` + its note, `worktree remove` + folder; `tst_menufit`).
+    readonly property real besideWords: (menuItem.code !== "" ? Math.ceil(codeChip.implicitWidth) + Theme.spaceSm : 0)
                    // The code name is data: it bids at most `labelColW` and elides past it (デザイン規約 §メニュー) —
                    // the name ceiling where it is the row's one name.
                    + (codeNameSeat.item !== null
@@ -385,14 +387,14 @@ MenuItem {
                                     + Math.min(codeNameSeat.item.wantWidth - codeNameSeat.item.markRoom,
                                                menuItem.textNames ? Math.ceil(codeCapRuler.advanceWidth)
                                                                   : Metrics.labelColW)) : 0)
-                   + (menuItem.note !== "" ? noteLabel.implicitWidth + Theme.spaceSm : 0)
+                   + (menuItem.note !== "" ? Math.ceil(noteLabel.implicitWidth) + Theme.spaceSm : 0)
                    // Everything drawn after the words bids too, or the row that sets the menu's width cuts its own
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
                    // card is measured before it opens.
-                   + (menuItem.sideName !== "" ? menuItem.sideWidth + Theme.spaceLg : 0)
-                   + (menuItem.tracked ? trackSeat.implicitWidth + Theme.spaceSm : 0)
+                   + (menuItem.sideName !== "" ? Math.ceil(menuItem.sideWidth) + Theme.spaceLg : 0)
+                   + (menuItem.tracked ? Math.ceil(trackSeat.implicitWidth) + Theme.spaceSm : 0)
                    + (menuItem.badged ? Math.ceil(badgeSeat.implicitWidth) + Theme.spaceXs : 0)
-                   + (trailSeat.item !== null ? trailSeat.item.cappedWidth : 0)
+                   + (trailSeat.item !== null ? Math.ceil(trailSeat.item.cappedWidth) : 0)
                    + menuItem.leftPadding + menuItem.rightPadding
     font.pixelSize: Theme.fontMd
     // A row that is one code name says it, as the words would.
@@ -424,9 +426,10 @@ MenuItem {
                                     ? menuItem.width - menuItem.besideWords - itemLabel.rightPadding - 1 : -1
     /// What the sentence asks for whole, names uncut but for the name ceiling — what the row bids, so a cut never
     /// shrinks the menu that caused it. Whether there are seats is the sentence's to say, not `refSeats`', which
-    /// carry the names as cut.
-    readonly property real wordsWant: menuItem.sentence.indexOf("%1") >= 0 || menuItem.sentence.indexOf("%2") >= 0
-                                      ? menuItem.refWant + itemLabel.rightPadding : itemLabel.implicitWidth
+    /// carry the names as cut. In whole pixels, as the layout hands the label its width (`besideWords`).
+    readonly property real wordsWant:
+        Math.ceil(menuItem.sentence.indexOf("%1") >= 0 || menuItem.sentence.indexOf("%2") >= 0
+                  ? menuItem.refWant + itemLabel.rightPadding : itemLabel.implicitWidth)
     readonly property real refWant: Math.ceil(menuItem.refFixedWidth
                                               + (menuItem.sentence.indexOf("%1") >= 0 ? menuItem.refHeld(1) : 0)
                                               + (menuItem.sentence.indexOf("%2") >= 0 ? menuItem.refHeld(2) : 0))

@@ -247,11 +247,9 @@ Menu {
 
     // Fusion sizes a menu by its background (a flat 200), never its rows; here the widest row decides. Rounded up, or
     // that row is handed a fraction short and elides
-    // (rules-refs/app-ui.md「子の入札から自分の幅を決める入れ物は `Math.ceil` で受ける」).
-    // Left as is: on Linux a menu can come out a few px narrow and elide its longest row (Windows fits under the same
-    // conditions) — the rounding up may have closed it, unconfirmed on Linux (P3-確認事項). Suspected otherwise: font
-    // metrics arriving late, the rows measured in the default font first. The elision and the truncated tooltip keep
-    // it readable; a fix would settle the width one tick after `onAboutToShow`.
+    // (rules-refs/app-ui.md「子の入札から自分の幅を決める入れ物は `Math.ceil` で受ける」). A row bids each of its items
+    // rounded up already, as its layout spends them (`AppMenuItem.besideWords`): the sum alone rounded here would
+    // leave that row short by its items' fractions (`tst_menufit`).
     readonly property int widestRow: {
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
