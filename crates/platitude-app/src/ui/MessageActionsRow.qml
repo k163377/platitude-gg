@@ -37,6 +37,10 @@ ColumnLayout {
     /// nothing else on the pane shows.
     property int committerFace: -1
     property string committerFaceUrl: ""
+    /// The author the rewrite keeps, where that is someone else: stacked over the committer's face
+    /// (`ActionButtonLabel.phraseKeptFace`); -1 for none.
+    property int keptFace: -1
+    property string keptFaceUrl: ""
     /// Whether that commit will be signed, and with what (`SignatureMark` / `AvatarButton`).
     property string signature: ""
     property string signatureTip: ""
@@ -72,6 +76,8 @@ ColumnLayout {
         text: actions.intoPlan ? qsTr("in the plan") : qsTr("the message")
         phraseFace: actions.committerFace
         phraseFaceUrl: actions.committerFaceUrl
+        phraseKeptFace: actions.keptFace
+        phraseKeptFaceUrl: actions.keptFaceUrl
         phraseSignature: actions.signature
         phraseSignatureTip: actions.signatureTip
         // Not on `dirty`: it would grey out whenever the text matches again. Pressed with nothing changed, it does

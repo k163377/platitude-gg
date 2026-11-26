@@ -308,13 +308,22 @@ Flickable {
                 // The branch behind its mark (デザイン規約 §ref の種別「名前の印」); a detached `HEAD` names no branch.
                 phraseTailMark: block.worktree.detached ? "" : "branch"
                 // Whom it is committed as: the phrase's last word is the face `user.name` / `user.email` answer to now
-                // (`… by <face>`). Not pressable (user decision — ask before changing): a target inside the button's
-                // target; avatars are assigned in the settings list. Not a row of face and name either: at 40 it would
-                // be the loudest thing in the editor, at 20 too little for a line. Co-authors are only the `+N` after
-                // the face — the names are written right above, in the message's `Co-authored-by:` lines, and the
-                // count grows as they are typed (`platitude_core::trailers`).
+                // (`… by <face>`), with HEAD's author's stacked over it on an amend that keeps that author (git
+                // rewrites the committer only, so the commit records both) — each the face the graph will draw on the
+                // commit, `.mailmap`'s spelling — until `Make me the author` takes it over
+                // (`ActionButtonLabel.phraseKeptFace`). Two faces only for two people as faces go, the author card's
+                // rule (`RepoTab.headAuthorAnother`): an old address `.mailmap` folds into the identity's keeps the
+                // box, as git records the old one, under one face. Not pressable (user decision — ask before
+                // changing): a target inside the button's target; avatars are assigned in the settings list. Not a
+                // row of face and name either: at 40 it would be the loudest thing in the editor, at 20 too little
+                // for a line. Co-authors are only the `+N` after the face — the names are written right above, in the
+                // message's `Co-authored-by:` lines, and the count grows as they are typed
+                // (`platitude_core::trailers`).
                 phraseFace: block.repoTab.authorAvatar
                 phraseFaceUrl: block.repoTab.authorAvatarUrl
+                phraseKeptFace: block.authorOffered && block.repoTab.headAuthorAnother && !authorBox.checked
+                                ? block.repoTab.headAuthorAvatar : -1
+                phraseKeptFaceUrl: block.repoTab.headAuthorAvatarUrl
                 phraseMates: block.mateCount
                 // Signing is on (`commit.gpgsign` alone — this is about a commit, so `tag.gpgsign` is no part of it): a
                 // tick on the face's top right in quiet ink, a fact — not green, since nothing is signed yet (規約

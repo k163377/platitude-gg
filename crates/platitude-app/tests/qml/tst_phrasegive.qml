@@ -54,7 +54,8 @@ Control {
         }
 
         /// The phrase's drawn parts, found by what they draw rather than by `giving`'s order: the command's chip, the
-        /// words, the ref's chip, the face, and the cut marks standing in the row itself.
+        /// words, the ref's chip, the face's seat (one face, or two stacked: `faceSeat`), and the cut marks standing in
+        /// the row itself.
         function drawn(row) {
             const parts = { "head": null, "words": null, "tail": null, "face": null, "mates": false, "marks": [] }
             for (let i = 0; i < row.children.length; i++) {
@@ -63,7 +64,7 @@ Control {
                     parts.head = child
                 else if (child.word !== undefined && child.word === label.phraseTail)
                     parts.tail = child
-                else if (child.face !== undefined)
+                else if (child.paired !== undefined)
                     parts.face = child
                 else if (child.cutting !== undefined && child.text === label.text)
                     parts.words = child
@@ -150,7 +151,6 @@ Control {
             label.phraseMates = 0
             sweep("no face")
         }
-
         // `by <face>` and `+N` gone together leave one mark, so the room they leave is the ref's: the parts at their
         // least price that one mark once, not twice — and the mark is drawn.
         function test_d_the_face_and_the_count_share_one_mark() {
@@ -221,6 +221,25 @@ Control {
             verify(gone, "the face gave way somewhere on the way down")
             label.phraseSignaturePointedAt = false
             label.phraseSignature = ""
+        }
+
+        // The kept author's face stacked over the committer's is priced at what the pair draws, and gives way with it,
+        // as one part, in the same order. The price is read whole: under a cap a chip draws up to a glyph short of it,
+        // which would hide a face's worth of mispricing in the sweep.
+        function test_f_a_kept_author_stacked_gives_way_as_one_face() {
+            label.phraseFace = 3
+            label.phraseKeptFace = 5
+            label.phraseMates = 2
+            label.width = root.width
+            tryVerify(() => phrase() !== null)
+            const row = phrase()
+            for (let i = 0; i < row.giving.length; i++)
+                compare(at(row, i), whole(row, i), "part " + i + " is whole at " + root.width)
+            const priced = row.phraseFixed + row.giving.reduce((sum, part) => sum + part.whole, 0)
+            tryVerify(() => Math.abs(row.width - priced) < 1, undefined,
+                      "the phrase draws " + row.width + "px, priced at " + priced)
+            sweep("kept author and +2")
+            label.phraseKeptFace = -1
         }
 
     }

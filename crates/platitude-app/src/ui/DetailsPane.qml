@@ -69,6 +69,9 @@ ColumnLayout {
     /// The reader's own face: a rewrite keeps the author and replaces the committer.
     property int committerFace: -1
     property string committerFaceUrl: ""
+    /// The author's face where that author is someone else (`MessageActionsRow.keptFace`); -1 for none.
+    property int keptFace: -1
+    property string keptFaceUrl: ""
     /// The boxes are a rebase plan's `reword` input right now — the save row wears that verb,
     /// since nothing runs on the press (`RepoPage.planReword`).
     property bool intoPlan: false
@@ -488,6 +491,8 @@ ColumnLayout {
         signatureSigner: detailsPane.signatureSigner
         committerFace: detailsPane.committerFace
         committerFaceUrl: detailsPane.committerFaceUrl
+        keptFace: detailsPane.keptFace
+        keptFaceUrl: detailsPane.keptFaceUrl
         stashed: detailsPane.stashShown
         signsCommits: detailsPane.signsCommits
         signingTip: detailsPane.signingTip

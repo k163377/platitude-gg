@@ -2019,7 +2019,7 @@ FocusScope {
         function onAvatarsChanged() {
             graphModel.refreshAvatars()
             detailsModel.refreshAvatar()
-            // The commit editor wears the identity's face.
+            // The commit button wears the identity's face, and HEAD's author's over it on an amend that keeps them.
             repoTab.refreshAvatar()
             // The chosen list's faces are packed off the rows.
             page.refreshChosenRecords()
@@ -4293,9 +4293,14 @@ FocusScope {
                         signatureCode: page.selectedSignatureCode
                         signatureSigner: page.selectedSignatureSigner
                         // Whom a rewrite would be attributed to: git keeps the author and puts the reader in as
-                        // committer, so the save button wears the reader's face.
+                        // committer, so the save button wears the reader's face — and, where the author is someone
+                        // else, that author's stacked over it: the commit then records both. The save is HEAD's amend
+                        // (`messageEdit`), so the author is HEAD's, read while the amend is in view and told apart by
+                        // the commit button's rule (`RepoTab.headAuthorAnother`).
                         committerFace: repoTab.authorAvatar
                         committerFaceUrl: repoTab.authorAvatarUrl
+                        keptFace: repoTab.headAuthorAnother ? repoTab.headAuthorAvatar : -1
+                        keptFaceUrl: repoTab.headAuthorAvatarUrl
                         signsCommits: repoTab.signsCommits
                         signingTip: repoTab.signingFormat === "ssh"
                                     ? qsTr("Signed with your ssh key")

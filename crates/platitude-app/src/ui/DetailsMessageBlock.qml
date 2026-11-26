@@ -32,6 +32,8 @@ Flickable {
     required property string signatureSigner
     required property int committerFace
     required property string committerFaceUrl
+    required property int keptFace
+    required property string keptFaceUrl
     /// The commit is a stash entry, whose parents past the first are git's bookkeeping (`CommitAuthorRow.stashed`).
     required property bool stashed
     required property bool signsCommits
@@ -221,6 +223,8 @@ Flickable {
                 pointedAt: block.savePointedAt
                 committerFace: block.committerFace
                 committerFaceUrl: block.committerFaceUrl
+                keptFace: block.keptFace
+                keptFaceUrl: block.keptFaceUrl
                 signature: block.signsCommits ? "signed" : ""
                 signatureTip: block.signingTip
                 onSaveRequested: block.saveRequested()

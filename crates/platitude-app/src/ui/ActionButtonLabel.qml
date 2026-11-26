@@ -95,6 +95,16 @@ Item {
     /// (デザイン規約 §アバターを与える).
     property int phraseFace: -1
     property string phraseFaceUrl: ""
+    /// The author the action keeps where that is someone else, stacked over the face of whoever runs it — the commit
+    /// records both (`faceSeat`); -1 draws none. The signature mark stays on the committer's face: the key is theirs.
+    property int phraseKeptFace: -1
+    property string phraseKeptFaceUrl: ""
+    /// The opaque ground the words stand on, which the stacked faces' ring is cut from (`faceSeat`). Off the right
+    /// pane, hand in the ground beneath.
+    property color ground: Theme.bgSurface
+    /// Whatever is laid over `ground` where the words stand (the pointer's wash). The ring wears both layers, or it
+    /// reads as a disc behind the front face.
+    property color groundOverlay: "transparent"
     /// How many more people the action credits, as the co-author line's `+N`; zero draws none.
     property int phraseMates: 0
     /// The face's signature mark (`SignatureMark.kind`) and its tooltip line; empty draws none.
@@ -222,7 +232,7 @@ Item {
                   "least": Math.min(headChip.wantWidth, Math.ceil(headLeast.advanceWidth) + 1) + phraseRow.spacing },
                 // Given way, it leaves the one mark `+N`'s least already holds where there are names to count.
                 !phraseRow.faced ? { "whole": 0, "least": 0 }
-                : { "whole": byWord.implicitWidth + phraseAvatar.width + 2 * phraseRow.spacing,
+                : { "whole": byWord.implicitWidth + faceSeat.width + 2 * phraseRow.spacing,
                     "least": (btnLabel.phraseMates > 0 ? 0 : phraseRow.cutMark + phraseRow.spacing)
                              + phraseRow.shoulderRoom },
                 { "whole": Math.min(tailWord.wantWidth, phraseRow.tailShare),
@@ -385,29 +395,69 @@ Item {
                 font.pixelSize: btnLabel.fontSize
                 anchors.verticalCenter: parent.verticalCenter
             }
-            // No address, so nothing here is pressable — no pen, no tooltip, only the signature mark: a button holds
-            // one target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
-            AvatarButton {
-                id: phraseAvatar
+            // `by <face>`'s face, or two stacked where the action keeps someone else as author (`phraseKeptFace`): the
+            // author's in front on the left — the face the graph draws on the commit — and the committer's behind it,
+            // a quarter of it showing on the right, where the signature mark keeps its corner. Stacked deep, not side
+            // by side (user decision — ask before changing): the pair costs little more than one face, so `by <face>`
+            // gives way in a narrow pane barely sooner than a single face does. The front face stands in a ring of
+            // the ground (`cut`, `ground`) that cuts into the one behind (user decision): the faces' own rings alone
+            // let the two run together.
+            Item {
+                id: faceSeat
+                readonly property bool paired: btnLabel.phraseKeptFace >= 0
+                /// The ring round the front face, half a gap; the face behind steps out past it as well, so its
+                /// quarter still shows.
+                readonly property real cut: Theme.spaceXs / 2
                 visible: phraseRow.faced && phraseRow.faceFits
-                face: btnLabel.phraseFace
-                faceUrl: btnLabel.phraseFaceUrl
-                signatureKind: btnLabel.phraseSignature
-                signatureTip: btnLabel.phraseSignatureTip
-                // The stand-in reaches the drawn mark alone (`shoulderMark`): a hidden one asking too takes the
-                // window's one tip.
-                signaturePointedAt: btnLabel.phraseSignaturePointedAt && phraseAvatar.visible
-                // A small face drops its badge a step too, so the badge keeps its share of the face (`AvatarButton`).
-                badgeInk: Theme.iconXs
-                // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how far
-                // out it may stand is the neighbour's to say (`AvatarButton.badgeTopOut`).
-                badgeTopOut: Theme.spaceXs - Theme.borderWidth
-                badgeRightOut: Theme.spaceXs - Theme.borderWidth
-                width: Theme.iconLg
+                width: Theme.iconLg + (faceSeat.paired ? Theme.iconLg / 4 + faceSeat.cut : 0)
                 height: Theme.iconLg
                 // A picture beside words, on their capitals' middle (デザイン規約 §アイコンの席).
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.verticalCenterOffset: WordFace.capitalDrop(lineRef)
+                // No address, so nothing here is pressable — no pen, no tooltip, only the signature mark: a button
+                // holds one target, the phrase. `iconLg`, the graph's node step beside a `fontMd` subject.
+                AvatarButton {
+                    id: phraseAvatar
+                    x: faceSeat.width - phraseAvatar.width
+                    face: btnLabel.phraseFace
+                    faceUrl: btnLabel.phraseFaceUrl
+                    signatureKind: btnLabel.phraseSignature
+                    signatureTip: btnLabel.phraseSignatureTip
+                    // The stand-in reaches the drawn mark alone (`shoulderMark`): a hidden one asking too takes the
+                    // window's one tip.
+                    signaturePointedAt: btnLabel.phraseSignaturePointedAt && phraseAvatar.visible
+                    // A small face drops its badge a step too, so the badge keeps its share of the face
+                    // (`AvatarButton`).
+                    badgeInk: Theme.iconXs
+                    // Clear of the round face's corner, its ink's top right a pixel short of the frame beside it: how
+                    // far out it may stand is the neighbour's to say (`AvatarButton.badgeTopOut`).
+                    badgeTopOut: Theme.spaceXs - Theme.borderWidth
+                    badgeRightOut: Theme.spaceXs - Theme.borderWidth
+                    width: Theme.iconLg
+                    height: Theme.iconLg
+                }
+                // The ring, then the kept author's face: after the committer's, so both are drawn over it.
+                Rectangle {
+                    visible: faceSeat.paired
+                    x: -faceSeat.cut
+                    y: -faceSeat.cut
+                    width: Theme.iconLg + 2 * faceSeat.cut
+                    height: width
+                    radius: width / 2
+                    color: btnLabel.ground
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: btnLabel.groundOverlay
+                    }
+                }
+                AvatarButton {
+                    visible: faceSeat.paired
+                    face: btnLabel.phraseKeptFace
+                    faceUrl: btnLabel.phraseKeptFaceUrl
+                    width: Theme.iconLg
+                    height: Theme.iconLg
+                }
             }
             // `+N`, or its mark; and the one mark `by <face>` leaves when it gives, its `+N` with it.
             PlainTextLabel {

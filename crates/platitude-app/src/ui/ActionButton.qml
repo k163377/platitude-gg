@@ -96,6 +96,13 @@ HoverToolButton {
     /// (`ActionButtonLabel.phraseFace`).
     property int phraseFace: -1
     property string phraseFaceUrl: ""
+    /// The author the action keeps where that is someone else, stacked over that face
+    /// (`ActionButtonLabel.phraseKeptFace`).
+    property int phraseKeptFace: -1
+    property string phraseKeptFaceUrl: ""
+    /// The opaque ground the button stands on — the right pane's unless handed in; a face the button wears
+    /// (`faceColor`) stands over it. What those faces' ring is cut from (`ActionButtonLabel.ground`).
+    property color ground: Theme.bgSurface
     property int phraseMates: 0
     property string phraseSignature: ""
     property string phraseSignatureTip: ""
@@ -510,6 +517,12 @@ HoverToolButton {
                     phraseNoteTint: actionBtn.phraseNoteInk
                     phraseFace: actionBtn.phraseFace
                     phraseFaceUrl: actionBtn.phraseFaceUrl
+                    phraseKeptFace: actionBtn.phraseKeptFace
+                    phraseKeptFaceUrl: actionBtn.phraseKeptFaceUrl
+                    // The layers under the words, as `btnGround` lays them: the face where the button wears one, then
+                    // the wash.
+                    ground: Qt.colorEqual(actionBtn.faceColor, "transparent") ? actionBtn.ground : actionBtn.faceColor
+                    groundOverlay: actionBtn.live ? actionBtn.washColor : "transparent"
                     phraseMates: actionBtn.phraseMates
                     phraseSignature: actionBtn.phraseSignature
                     phraseSignatureTip: actionBtn.phraseSignatureTip
