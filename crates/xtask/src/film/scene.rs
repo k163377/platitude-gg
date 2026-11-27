@@ -56,6 +56,11 @@ pub(super) struct Scene {
     /// that overflows, for what the strip does.
     pub(super) tabs: u32,
     pub(super) captions: Vec<String>,
+    /// Captions whose first change on screen `bake` lays at one moment on
+    /// every side: what the window brings on itself (an outside change read
+    /// back, a fetch's answer) lands a different beat on each run, and on
+    /// one clock the sides would show it apart.
+    pub(super) syncs: Vec<usize>,
     pub(super) steps: Vec<Step>,
 }
 
@@ -129,6 +134,7 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
         slow: 1,
         tabs: 1,
         captions: Vec::new(),
+        syncs: Vec::new(),
         steps: Vec::new(),
     };
     let mut repo = None;
@@ -179,6 +185,22 @@ pub(super) fn parse(text: &str) -> Result<Scene, String> {
                 scene.steps.push(Step::Caption(scene.captions.len()));
                 scene.captions.push(rest.to_string());
             }
+            "sync" if rest.is_empty() => {
+                let caption = match scene.captions.last() {
+                    None => Err(
+                        "`sync` comes under the caption whose first change it lays the sides on",
+                    ),
+                    Some(caption) if is_setup(caption) => {
+                        Err("`sync` under the setup: its frames are cut")
+                    }
+                    Some(_) if scene.syncs.last() == Some(&(scene.captions.len() - 1)) => {
+                        Err("one `sync` to a caption")
+                    }
+                    Some(_) => Ok(scene.captions.len() - 1),
+                };
+                scene.syncs.push(caption.map_err(|e| at(e.to_string()))?);
+            }
+            "sync" => return Err(at("`sync` takes nothing".to_string())),
             "prep" | "cap" => return Err(at(format!("`{word}` takes the rest of its line"))),
             _ => return Err(at(format!("`{word}` is neither a setting nor a step"))),
         }
@@ -443,6 +465,28 @@ git:commit --allow-empty -q -m more1
         assert!(with("slowgit add").is_err());
         assert!(with("slowgit").is_err());
         assert_eq!(parse(SCENE).expect("parses").slow_git, "");
+    }
+
+    /// `sync` marks the caption it comes under, past the setup, once.
+    #[test]
+    fn a_sync_marks_the_caption_it_comes_under() {
+        let with = |lines: &str| parse(&format!("repo deep\nview 0 0 10 10\n{lines}\n"));
+        let scene = with("cap -\ncap a\ncap b\nsync\nw:10\ncap c").expect("parses");
+        assert_eq!(scene.syncs, [2]);
+        assert_eq!(
+            scene.steps.len(),
+            5,
+            "a setting, not a step the component plays"
+        );
+        assert_eq!(parse(SCENE).expect("parses").syncs, Vec::<usize>::new());
+        for wrong in [
+            "sync\ncap -\ncap a",
+            "cap -\nsync\ncap a",
+            "cap -\ncap a\nsync\nsync",
+            "cap -\ncap a\nsync now",
+        ] {
+            assert!(with(wrong).is_err(), "{wrong}");
+        }
     }
 
     /// One tab unless the scene asks for a strip.

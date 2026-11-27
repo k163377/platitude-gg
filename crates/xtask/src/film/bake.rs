@@ -1,5 +1,6 @@
 //! `film bake`: a scene's sides into one APNG each, on one clock — the
-//! setup cut, each side's time counted from its first frame after it, and
+//! setup cut, each side's time counted from its first frame after it, a
+//! `sync` caption's first change laid at one moment on every side, and
 //! every side as long as the longest — so a before and an after set side
 //! by side on the board play in step.
 
@@ -54,12 +55,41 @@ pub(super) fn run(tree: &Path, args: &[String]) -> Result<(), String> {
     if sides.is_empty() {
         return Err(format!("no side of {} is shot yet", dir.display()));
     }
-    // Slowed as the sides were shot: the scene each side keeps, which `same_scene` holds to one.
-    let slow = u64::from(scene::parse(&same_scene(&dir, &sides)?)?.slow);
-    let runs: Vec<(&Side, Vec<Row>)> = sides
+    // Slowed and synced as the sides were shot: the scene each side keeps, which `same_scene` holds to one.
+    let shot_from = scene::parse(&same_scene(&dir, &sides)?)?;
+    let slow = u64::from(shot_from.slow);
+    let mut all: Vec<Vec<Row>> = sides
         .iter()
-        .map(|side| Ok((*side, rows(&dir.join(side.name), &captions)?)))
+        .map(|side| rows(&dir.join(side.name), &captions))
         .collect::<Result<_, String>>()?;
+    for &caption in &shot_from.syncs {
+        let moments = sides
+            .iter()
+            .zip(&all)
+            .map(|(side, rows)| {
+                let picture_height = picture_height(&dir.join(side.name))?;
+                first_change(rows, caption, picture_height, image)?.ok_or_else(|| {
+                    format!(
+                        "side {}: nothing on screen changed under `{}`, the caption its `sync` lays \
+                         the sides on",
+                        side.name, captions[caption]
+                    )
+                })
+            })
+            .collect::<Result<Vec<usize>, String>>()?;
+        let delays = line_up(&mut all, &moments);
+        let said: Vec<String> = sides
+            .iter()
+            .zip(delays)
+            .map(|(side, by)| format!("{} {by} ms later", side.name))
+            .collect();
+        println!(
+            "film: `{}` laid on its first change — {}",
+            captions[caption],
+            said.join(", ")
+        );
+    }
+    let runs: Vec<(&Side, Vec<Row>)> = sides.into_iter().zip(all).collect();
     let end = runs
         .iter()
         .filter_map(|(_, rows)| rows.last().map(|row| row.ms))
@@ -169,6 +199,63 @@ pub(super) fn all_rows(side: &Path) -> Result<Vec<Row>, String> {
     Ok(rows)
 }
 
+/// A row's frame, decoded.
+fn image(row: &Row) -> Result<Image, String> {
+    let bytes = std::fs::read(&row.file).map_err(|e| format!("{}: {e}", row.file.display()))?;
+    crate::png::decode(&bytes).map_err(|e| format!("{}: {e}", row.file.display()))
+}
+
+/// The row `caption`'s first change on screen is grabbed in: the first
+/// under it whose picture above the band is not the row's before it. None
+/// when nothing changed under it.
+fn first_change(
+    rows: &[Row],
+    caption: usize,
+    picture_height: u32,
+    image: impl Fn(&Row) -> Result<Image, String>,
+) -> Result<Option<usize>, String> {
+    let Some(start) = rows.iter().position(|row| row.caption == caption) else {
+        return Ok(None);
+    };
+    let from = start.max(1);
+    let mut before = image(&rows[from - 1])?;
+    for (index, row) in rows.iter().enumerate().skip(from) {
+        if row.caption != caption {
+            break;
+        }
+        let next = image(row)?;
+        if !same_size(&before, &next) || changed(&before, &next, picture_height).is_some() {
+            return Ok(Some(index));
+        }
+        before = next;
+    }
+    Ok(None)
+}
+
+/// Each side's rows from its `moment` on, laid later by what puts the
+/// moment where the latest side's is; says by how much, side by side. The
+/// row before it stands the longer, and it shows what was on screen all
+/// that while: nothing changed until the moment.
+fn line_up(sides: &mut [Vec<Row>], moments: &[usize]) -> Vec<u64> {
+    let at = sides
+        .iter()
+        .zip(moments)
+        .map(|(rows, moment)| rows[*moment].ms)
+        .max()
+        .unwrap_or_default();
+    sides
+        .iter_mut()
+        .zip(moments)
+        .map(|(rows, moment)| {
+            let by = at - rows[*moment].ms;
+            for row in &mut rows[*moment..] {
+                row.ms += by;
+            }
+            by
+        })
+        .collect()
+}
+
 /// The height of the picture of the window atop a side's frames: the band
 /// under it is the component's own — the side's tag, the caption by its
 /// number in frames.tsv, and the frame's number, which every frame changes.
@@ -266,8 +353,77 @@ fn timeline(times: &[u64], end: u64, step: u64, hold: u64) -> Vec<(usize, u64)> 
 
 #[cfg(test)]
 mod tests {
-    use super::{same_frame, timeline};
+    use std::path::PathBuf;
+
+    use super::{Row, first_change, line_up, same_frame, timeline};
     use crate::png::{decode, rgba};
+
+    fn row(ms: u64, caption: usize, file: &str) -> Row {
+        Row {
+            ms,
+            file: PathBuf::from(file),
+            caption,
+        }
+    }
+
+    /// The first change under the caption is the moment, whatever changed
+    /// under the caption before it or in the band alone.
+    #[test]
+    fn a_sync_caption_is_found_at_its_first_change_on_screen() {
+        let picture = |file: &str| {
+            let (dot, band) = match file {
+                "moved" => ((1, 1), (5, 4)),
+                "renumbered" => ((0, 0), (4, 4)),
+                _ => ((0, 0), (5, 4)),
+            };
+            decode(&rgba(6, 5, |x, y| {
+                if (x, y) == dot || (x, y) == band {
+                    [200, 0, 0, 255]
+                } else {
+                    [9, 9, 9, 255]
+                }
+            }))
+            .map_err(|e| e.to_string())
+        };
+        let image = |r: &Row| picture(r.file.to_str().unwrap_or_default());
+        let rows = [
+            row(0, 1, "moved"),
+            row(40, 1, "still"),
+            row(80, 2, "still"),
+            row(120, 2, "renumbered"),
+            row(160, 2, "moved"),
+            row(200, 3, "moved"),
+        ];
+        assert_eq!(first_change(&rows, 2, 4, image).expect("reads"), Some(4));
+        assert_eq!(
+            first_change(&rows, 1, 4, image).expect("reads"),
+            Some(1),
+            "the first row past the setup is compared with the next"
+        );
+        assert_eq!(first_change(&rows, 3, 4, image).expect("reads"), None);
+        assert_eq!(first_change(&rows, 9, 4, image).expect("reads"), None);
+    }
+
+    /// The earlier side waits on the row before its moment; what comes
+    /// after keeps its own pace.
+    #[test]
+    fn the_sides_are_laid_on_the_latest_moment() {
+        let mut sides = vec![
+            vec![
+                row(0, 1, ""),
+                row(40, 1, ""),
+                row(500, 2, ""),
+                row(540, 2, ""),
+            ],
+            vec![row(0, 1, ""), row(40, 1, ""), row(900, 2, "")],
+        ];
+        assert_eq!(line_up(&mut sides, &[2, 2]), [400, 0]);
+        let ms: Vec<Vec<u64>> = sides
+            .iter()
+            .map(|rows| rows.iter().map(|r| r.ms).collect())
+            .collect();
+        assert_eq!(ms, [vec![0, 40, 900, 940], vec![0, 40, 900]]);
+    }
 
     /// Four rows of picture over one of band: a frame whose number alone
     /// moved is the frame before; a new caption, a moved picture or another
