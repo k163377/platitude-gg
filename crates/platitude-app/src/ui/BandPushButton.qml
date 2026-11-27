@@ -59,13 +59,15 @@ ActionButton {
     alert: pushButton.failed
     alertTone: Theme.warning
     holdPresses: pushButton.forceShape ? Metrics.holdPressesWarned : 0
-    // Tab, branch and destination (`HoldDriver.premise`): the band outlives the page, so a tab switch between presses
-    // would aim the last press at another repository (`tst_holdlatch`); two local branches can track one remote
-    // branch, so the destination alone does not name what is sent. `:` cannot occur in a ref name.
+    // Tab, branch, destination and the far side's commit the overwrite is leased to (`HoldDriver.premise`): the band
+    // outlives the page, so a tab switch between presses would aim the last press at another repository
+    // (`tst_holdlatch`); two local branches can track one remote branch, so the destination alone does not name what
+    // is sent; and a fetch between presses that moves the far side changes what the overwrite drops — the presses were
+    // made for the commits the tip named (the drop is told: `HoldDriver.spoiled`). `:` cannot occur in a ref name.
     premise: pushButton.curPage === null
              ? ""
              : pushButton.curPage.tab_id + ":" + pushButton.curPage.pageWorktree.branch
-               + ":" + pushButton.facts.target
+               + ":" + pushButton.facts.target + ":" + pushButton.facts.lease
     // Down while a rebase plan is composed: it rewrites the very commits a push would send.
     enabled: pushButton.curPage !== null && !pushButton.curPage.planShown
              && (pushButton.curPage.canPush || pushButton.curPage.canForcePush)

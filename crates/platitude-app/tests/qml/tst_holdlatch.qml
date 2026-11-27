@@ -56,11 +56,13 @@ Item {
         property string target: ""
         /// The branch the worktree is on — what a push actually sends.
         property string branch: ""
+        /// The far side's commit on screen, which the overwrite is leased to (`pushFacts.lease`).
+        property string lease: "aaaa"
         property int sent: 0
         /// Which branch went, read back the way the page would send it.
         property string sentBranch: ""
         property var pushFacts: ({ "state": "behind", "overwrites": true, "target": tab.target, "ahead": 0,
-                                   "behind": 1 })
+                                   "behind": 1, "lease": tab.lease })
         property bool pushFailed: false
         property bool planShown: false
         property bool canPush: false
@@ -123,6 +125,7 @@ Item {
             holds.clear()
             band.curPage = root.here
             root.here.branch = "main"
+            root.here.lease = "aaaa"
             root.here.sent = 0
             root.here.sentBranch = ""
             root.there.sent = 0
@@ -187,6 +190,18 @@ Item {
             compare(band.holdProgress, 0, "dropped at once, not by the idle reset")
             keyClickSpace(root.presses - 1)
             compare(root.here.sent, 0, "the branch under the presses went, so nothing is sent: " + root.here.sentBranch)
+        }
+
+        /// A fetch between presses can move the far side the overwrite is leased to: the presses were counted against
+        /// the commits the tip named, and the last one would drop others.
+        function test_a_band_count_does_not_follow_a_far_side_that_moved() {
+            band.forceActiveFocus()
+            keyClickSpace(1)
+            tryVerify(() => band.holdProgress > 0)
+            root.here.lease = "bbbb"
+            compare(band.holdProgress, 0, "dropped at once, not by the idle reset")
+            keyClickSpace(root.presses - 1)
+            compare(root.here.sent, 0, "the far side under the presses moved, so nothing is sent")
         }
 
         /// Keys counted on one control are its own gesture: move the focus and they go.
