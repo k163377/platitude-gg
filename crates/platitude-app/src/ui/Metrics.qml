@@ -42,6 +42,11 @@ QtObject {
     readonly property int holdResetMs: 4000
     readonly property int holdFillMin: Theme.spaceXs
     readonly property int holdBackMs: animStandardMs
+    // How far sideways presses dropped under the hand because what they would do changed (`HoldDriver.spoiled`) shake
+    // the control: JetBrains' `DialogEarthquakeShaker` (intellij-community `platform/platform-api` @4943b683), a sine
+    // of this reach, chosen over GitHub Desktop's, GNOME Shell's and KDE Plasma's, held side by side (user decision —
+    // ask before changing). Its time is a press's step (`HoldDriver.spoilShift`).
+    readonly property int shakeReach: 10
     // The one opacity anything is dimmed to — the 45% the `*Dim` colours are (デザイン規約 §暗く落とした段).
     readonly property real dimFade: 0.45
     // How much of a round wash's radius is its rim, over which the paint falls to `dimFade` (`CloseToolButton`).
@@ -49,6 +54,10 @@ QtObject {
     readonly property real washRimShare: 0.25
     // One delay everywhere a tooltip opens, so one gesture is answered the same wherever it is made.
     readonly property int tipDelayMs: 600
+    // How long something told in a tooltip that goes by itself stays up to be read: Qt's own tooltip's
+    // (`QTipLabel::restartExpireTimer`, qtbase `src/widgets/kernel/qtooltip.cpp`) for text of up to 100 characters. Its
+    // step for longer text is not taken: what is told so is a short line (user decision — ask before changing).
+    readonly property int tipReadMs: 10000
     // How long something opened by hover waits before closing, for the hand to finish crossing to the next target.
     // `Qt.callLater` is too short: the two hovers change on different frames, and a callLater between them closes it.
     readonly property int hoverKeepMs: 150

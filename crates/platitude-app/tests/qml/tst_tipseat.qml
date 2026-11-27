@@ -164,6 +164,15 @@ Item {
             target: wideRow; words: "src/main.rs"; rowSide: "left"; asked: onWideRow.hovered
         }
     }
+    // A button with no tip of its own: all it says is a lead (`ActionButton`'s dropped presses).
+    HoverToolButton {
+        id: leadButton
+        x: 800
+        y: 150
+        width: 100
+        height: 32
+        text: "go"
+    }
     // A target whose words move while the rest counts, and one that takes its ask back.
     Item {
         id: mover
@@ -201,6 +210,9 @@ Item {
             wideTyped.refused = false
             mover.asks = false
             mover.taken = false
+            mover.y = 20
+            mover.askMover.lead = ""
+            leadButton.tipLead = ""
             Hand.heldBar = null
             tryVerify(() => !root.box.visible && seat.current === null, undefined, "each walk starts with nothing out")
             rowA.x = 0
@@ -415,6 +427,40 @@ Item {
             compare(box.text, "Amending would leave the last commit empty", "with the words the target holds now")
             mover.why = "Copied!"
             compare(box.text, "Copied!", "and the box follows the words while it stands")
+        }
+
+        /// Out, its words change in place (規約 §hover のツールチップ「出ている tip は出たまま字だけ入れ替わり」): a box that
+        /// came out under its target for want of room over it stays under when its words get short enough to fit over.
+        function test_i2_a_box_whose_words_shrink_stays_on_its_side() {
+            const box = root.box
+            mover.y = 200
+            mover.asks = true
+            tryVerify(() => box.visible && box.height === box.implicitHeight && box.height > 0)
+            const oneLine = box.height
+            mover.askMover.lead = "Cancelled"
+            tryVerify(() => box.height === box.implicitHeight && box.height > oneLine)
+            const twoLines = box.height
+            mover.asks = false
+            tryVerify(() => !box.visible && !seat.settling)
+            // Room over it for the one line, not for the two.
+            mover.y = Math.round((oneLine + twoLines) / 2)
+            mover.asks = true
+            tryVerify(() => box.visible && box.height === twoLines, undefined, "out with both lines")
+            compare(box.y, mover.height, "under the target: no room over it")
+            mover.askMover.lead = ""
+            tryVerify(() => box.height === oneLine, undefined, "the line goes")
+            compare(box.y, mover.height, "and the box stays where it stood")
+        }
+
+        /// A lead says what just happened: the box comes out with it at once — no rest — on a button with no tip of its
+        /// own too, whose ask stands on the lead alone (`HoverToolButton.tipLead`).
+        function test_i3_a_lead_opens_the_box_at_once() {
+            mouseMove(leadButton, 10, 10)
+            tryVerify(() => leadButton.hovered)
+            verify(!root.box.visible, "nothing to say at rest")
+            leadButton.tipLead = "Cancelled"
+            verify(root.box.visible, "out with the lead at once, no rest waited")
+            compare(root.box.text, "Cancelled")
         }
 
         // A dismissed box — closed from outside the seat, as Escape with the keyboard in it would — is not put back

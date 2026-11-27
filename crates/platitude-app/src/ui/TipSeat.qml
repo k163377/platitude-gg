@@ -144,7 +144,7 @@ Item {
         seat.park()
         if (ask === null || ask === heldAsk)
             return
-        heldAsk.words = ask.words
+        heldAsk.words = ask.said
         heldAsk.marks = ask.marksNow
         heldAsk.markWord = ask.markWordNow
         heldAsk.markKind = ask.markKindNow
@@ -159,7 +159,7 @@ Item {
     /// …and the row standing again (`HandWatch.rowBack`): its ask saying the same words takes the box back on, as the
     /// target it came off — the box follows its words again, and the hand walking back onto the row is on its target.
     function takeBack(ask, row) {
-        if (machine.target === heldAsk && ask !== heldAsk && ask.words === heldAsk.words
+        if (machine.target === heldAsk && ask !== heldAsk && ask.said === heldAsk.words
                 && Tips.within(ask.target, row))
             machine.retarget(ask)
     }
@@ -220,6 +220,29 @@ Item {
     Component.onDestruction: Tips.leave(seat)
 
     // ---- where the box stands ----------------------------------------------------------------------------------
+    /// The side, over or under its target, the box stood on when its words last changed while it was out: -1 over, 1
+    /// under, 0 for none since it came out. Out, its words are swapped in place (デザイン規約 §hover のツールチップ「出て
+    /// いる tip は出たまま字だけ入れ替わり」) — weighed afresh, a box whose words got shorter would jump over its target
+    /// to the side they now fit (a confirmed control's dropped presses: `TipAsk.lead` going).
+    property int keptSide: 0
+    /// The words the box says: its target's (`TipAsk.said`), taken in as they change rather than bound, so the side the
+    /// box stands on is read before the new words resize it — bound, the box has moved before anything hears them.
+    /// Taken at once all the same: a change while the rest counts or while the box is out reaches the box, so a click
+    /// before the tip comes out and a click on a tip already out both show the answer now (`HashPlate`'s `Copied!`, a
+    /// reason that arrives late).
+    property string shownWords: ""
+    readonly property Connections wordsWatch: Connections {
+        target: machine.target
+        function onSaidChanged() {
+            if (box.visible)
+                seat.keptSide = box.y < 0 ? -1 : 1
+            seat.shownWords = machine.target.said
+        }
+    }
+    onCurrentChanged: {
+        seat.keptSide = 0
+        seat.shownWords = machine.target !== null ? machine.target.said : ""
+    }
     /// Binds the seat, again at every coming out (`freeze`). Bindings: a popup is not its final size in the frame it
     /// gets its words, and assigned, a box above its target would come out one box too low
     /// (rules-refs/app-ui.md「出す前に採寸する」). Again: where the target stands is a call (`targetAt`) they do not
@@ -282,8 +305,9 @@ Item {
         return Math.max(edge, Math.min(goesLeft ? handLeft : handRight, last))
     }
     /// Flush against the target: above while there is room, else below — below first for a target that asks for it
-    /// (`TipAsk.under`). When neither fits (a wrapped name in a short window), the roomier side — "below" alone would
-    /// hang out of the window with `margins` off.
+    /// (`TipAsk.under`), and on the side it stood on while its words change ([`keptSide`]). When neither fits (a
+    /// wrapped name in a short window), the roomier side — "below" alone would hang out of the window with `margins`
+    /// off.
     function seatY() {
         const at = box.parent
         const ask = machine.target
@@ -308,6 +332,10 @@ Item {
         }
         const above = p.y
         const below = seat.host.height - (p.y + at.height)
+        if (seat.keptSide < 0 && box.implicitHeight <= above)
+            return -box.implicitHeight
+        if (seat.keptSide > 0 && box.implicitHeight <= below)
+            return at.height
         if (ask.under)
             return box.implicitHeight <= below || below >= above ? at.height : -box.implicitHeight
         return box.implicitHeight <= above || above >= below ? -box.implicitHeight : at.height
@@ -316,6 +344,7 @@ Item {
     /// target's hover and the window's `HandWatch` are separate items in one delivery, in no set order, so read once
     /// the first box can find no hand yet and land on the target's middle.
     function freeze() {
+        seat.keptSide = 0
         seat.readAnchor()
         seat.seatBox()
         anchorLater.restart()
@@ -367,10 +396,7 @@ Item {
         margins: -1
         // The style's policy reads a press on the box — a selection starting — as a press outside the target.
         closePolicy: Popup.CloseOnEscape
-        // Bound to the target's words, not copied: a change while the rest counts or while the box is out reaches the
-        // box, so a click before the tip comes out and a click on a tip already out both show the answer now
-        // (`HashPlate`'s `Copied!`, a reason that arrives late).
-        text: machine.target !== null ? machine.target.words : ""
+        text: seat.shownWords
         // The same card as `EolHoverCard` / `CommitHoverCard` (`RefListPopup` alone takes `radiusSm` and no padding of
         // its own), and flat as they are: no card in the app casts a shadow.
         background: Rectangle {

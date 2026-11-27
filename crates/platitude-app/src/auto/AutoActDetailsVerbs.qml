@@ -326,9 +326,9 @@ Item {
                 return
             }
             if (op.counting) {
-                // The tip that follows must carry the control's current word. The window's one box binds its text to
-                // the target's `TipAsk.words` (`TipSeat`); a box that took the words once, as it rose, comes up with
-                // the offer — the box this half catches.
+                // The tip that follows must carry the control's current word. The window's one box takes the target's
+                // `TipAsk.said` each time it changes (`TipSeat.shownWords`); a box that took the words once, as it
+                // rose, comes up with the offer — the box this half catches.
                 op.complete({
                     "name": "hash_tip_up",
                     "when": () => op.up(),

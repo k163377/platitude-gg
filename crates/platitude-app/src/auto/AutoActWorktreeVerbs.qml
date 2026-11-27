@@ -178,7 +178,7 @@ Item {
                 return ask.markWordNow
             // A row that is not turned down names its folder in its whole line, among the line's names (`tipMarks`).
             const folder = ask.marksNow.find(mark => mark[1] === "tree" || mark[1] === "home")
-            return folder === undefined ? "" : String(ask.words).substr(folder[0], folder[3])
+            return folder === undefined ? "" : String(ask.said).substr(folder[0], folder[3])
         }
 
         function begin(arg, mode) {

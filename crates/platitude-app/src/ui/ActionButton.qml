@@ -49,6 +49,12 @@ HoverToolButton {
     property bool alert: false
     /// The mark's colour, where it is not the word's.
     property color alertTone: actionBtn.fg
+    /// The mark stands: the last go failed, or the presses were just dropped under the hand (`HoldDriver.spoiled`).
+    readonly property bool alertShown: actionBtn.alert || holdDrive.spoiled
+    /// …drawn a step down while busy, like every mark (デザイン規約 §進行中・回数押しの定数), and lifted over a fill as
+    /// the words are.
+    readonly property color alertInk: actionBtn.busy ? actionBtn.toneDim
+                                      : actionBtn.overFill ? Theme.textOnAccent : actionBtn.alertTone
     /// The fill's colour — the frame's by default. A bare button names its own and fills edge to edge like a confirmed
     /// menu row (the hunk heading's `Discard hunk` — デザイン規約 §回数押し).
     property color holdTone: actionBtn.frameColor
@@ -218,22 +224,25 @@ HoverToolButton {
     signal landed()
     /// The ordinary action: a plain press let go. A confirmed button raises it on no release.
     signal activated()
+    /// A fill is under the words: the presses', or the red of presses dropped under the hand and the fill it pushes
+    /// back (`HoldDriver.spoilPainted`).
+    readonly property bool overFill: actionBtn.holdProgress > 0 || holdDrive.spoilPainted
     /// Over the fill the words lift to `textOnAccent`, the wait included: the full fill stays while the work runs.
-    readonly property color fg: holdProgress > 0 ? Theme.textOnAccent
+    readonly property color fg: actionBtn.overFill ? Theme.textOnAccent
                                 : actionBtn.busy ? Theme.textMuted : enabled ? tone : Theme.textMuted
     /// The marks' colour: while busy, the state a step down like the ring and the frame
     /// (デザイン規約 §進行中・回数押しの定数「リング・枠・印は、そのボタンが待つ前に着ていた色の 1 段下」) — over the fill, the
     /// words' lift. Apart from `fg` because a dimmed word has one colour only (§無効), while a mark keeps its hue so a
     /// wait says which button waits.
-    readonly property color markFg: holdProgress > 0 ? Theme.textOnAccent
+    readonly property color markFg: actionBtn.overFill ? Theme.textOnAccent
                                     : actionBtn.busy ? actionBtn.toneDim : actionBtn.fg
     /// Off (not busy — a wait has its own step down), the hold mark keeps the colour it wears when the button can be
     /// pressed ([`holdHue`]), a step down, while the words and an icon beside them grey: the grey says it cannot be
     /// pressed, the mark what pressing it would cost (`AppMenuItem.holdOff`). An asleep heading's grey mark stays grey
     /// (`HoldIcon.ink`).
-    readonly property bool holdOff: !actionBtn.enabled && !actionBtn.busy && actionBtn.holdProgress <= 0
+    readonly property bool holdOff: !actionBtn.enabled && !actionBtn.busy && !actionBtn.overFill
     /// Neither over the fill nor waiting: the hold mark wears [`holdHue`], which [`holdOff`] dims (`HoldIcon.off`).
-    readonly property bool holdResting: actionBtn.holdProgress <= 0 && !actionBtn.busy
+    readonly property bool holdResting: !actionBtn.overFill && !actionBtn.busy
     /// The hold mark's colour in a seat: at rest [`holdHue`], else the marks'.
     readonly property color holdInk: actionBtn.holdResting ? actionBtn.holdHue : actionBtn.markFg
     /// A press lands only with git off the network for this button.
@@ -321,6 +330,13 @@ HoverToolButton {
         onFinished: actionBtn.held()
         onLanded: actionBtn.landed()
     }
+    // Presses dropped under the hand (`HoldDriver.spoiled`): the tip opens at once with the line saying so over its own
+    // sentence (`TipAsk.lead`), and the button shakes. Disabled, it says no line, as it says no tip (規約 §無効「ボタン
+    // や入力欄の無効はツールチップを持たない」): a button that cannot be pressed has no "try again" to offer.
+    tipLead: holdDrive.spoiled && actionBtn.enabled ? Words.pressesCancelled : ""
+    transform: Translate {
+        x: holdDrive.spoilShift
+    }
     /// The frame's height once folded: the depth the button had with its word, handed down by whoever sets that depth.
     /// Folding gives up the word, not the depth — only the width changes (user decision — ask before changing).
     property real foldedDepth: 0
@@ -361,6 +377,9 @@ HoverToolButton {
                 tone: actionBtn.holdTone
                 dimmed: holdDrive.dimmed
                 inset: actionBtn.framed ? Theme.borderWidth : 0
+                kept: holdDrive.spoilKept
+                sweep: holdDrive.spoilSweep
+                sweepFade: holdDrive.spoilSweepFade
             }
         }
         // `HoverToolButton`'s wash (`washColor`), redrawn because a background handed in replaces the one that carried
@@ -472,8 +491,8 @@ HoverToolButton {
                     holdOff: actionBtn.holdOff
                     // Folded, the `!` comes to the mark's corner: the warning survives the fold
                     // (規約 §回数押し「警告の色は枠と印が持つ」).
-                    cornerAlert: actionBtn.folded && actionBtn.alert
-                    cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                    cornerAlert: actionBtn.folded && actionBtn.alertShown
+                    cornerAlertTone: actionBtn.alertInk
                     // Beside its word, the head of it (デザイン規約 §アイコンの席 の文頭記号); folded, it stands alone.
                     wordSize: actionBtn.folded || btnLabel.phrased || btnLabel.head === "" ? 0 : btnLabel.fontSize
                     wordBase: btnLabel.y + btnLabel.headBase - seat.y
@@ -498,9 +517,8 @@ HoverToolButton {
                     widestCode: actionBtn.widestCode
                     folded: actionBtn.folded
                     tint: actionBtn.fg
-                    alert: actionBtn.alert
-                    // A step down while busy, like every mark (デザイン規約 §進行中・回数押しの定数).
-                    alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                    alert: actionBtn.alertShown
+                    alertTone: actionBtn.alertInk
                     alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - shape.y - btnRow.y - btnLabel.y
                     alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - shape.x - btnRow.x - btnLabel.x
                     fontSize: actionBtn.font.pixelSize
@@ -589,8 +607,8 @@ HoverToolButton {
                         widestCode: actionBtn.widestCode
                         folded: actionBtn.folded
                         tint: actionBtn.fg
-                        alert: actionBtn.alert
-                        alertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                        alert: actionBtn.alertShown
+                        alertTone: actionBtn.alertInk
                         alertCeiling: actionBtn.alertTopEdge - actionBtn.topPadding - shape.y - stackCol.y
                                       - stackLabel.y
                         alertWall: actionBtn.alertRightEdge - actionBtn.leftPadding - shape.x - stackCol.x
@@ -615,8 +633,8 @@ HoverToolButton {
                         tint: actionBtn.markFg
                         holdTint: actionBtn.holdInk
                         holdOff: actionBtn.holdOff
-                        cornerAlert: actionBtn.folded && actionBtn.alert
-                        cornerAlertTone: actionBtn.busy ? actionBtn.toneDim : actionBtn.alertTone
+                        cornerAlert: actionBtn.folded && actionBtn.alertShown
+                        cornerAlertTone: actionBtn.alertInk
                     }
                 }
             }

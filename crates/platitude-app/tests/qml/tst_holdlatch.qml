@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import platitude.ui
+import platitude.ui.words
 
 // Whether presses keep the meaning their gesture began with (rules-refs/app-ui.md「回数押しか否かは最初の押下で確定する」),
 // and what the last press does. The state deciding it flips on its own, and the flip has to land between two presses —
@@ -108,6 +109,13 @@ Item {
             drive.holdPresses = root.presses
             drive.premise = ""
             drive.waiting = false
+            drive.unspoil()
+            drive.spoilTold.interval = Metrics.tipReadMs
+            // A drop told on a button in the test before stands for `tipReadMs`, past a press.
+            band.holdDrive.unspoil()
+            button.holdDrive.unspoil()
+            button.premise = ""
+            button.enabled = true
             button.holdPresses = root.presses
             finishes.clear()
             landings.clear()
@@ -338,6 +346,194 @@ Item {
             keyClickSpace(root.presses)
             compare(holds.count, 1)
             compare(clicks.count, 0)
+        }
+
+        /// Presses dropped because their target moved under them are said, at the moment they go
+        /// (デザイン規約 §回数押し「押している間に的が変わったら」): silent, the fill just goes and nobody knows why.
+        function test_presses_dropped_under_the_hand_are_told() {
+            drive.premise = "here"
+            click()
+            tryVerify(() => drive.progress > 0)
+            const reached = drive.progress
+            drive.premise = "there"
+            verify(drive.spoiled, "the drop is told")
+            compare(drive.spoilKept, reached, "with the fill the presses had made kept for the red to push back")
+            verify(drive.spoilPainted)
+            verify(drive.spoilRun.running, "and the control shaking")
+            tryVerify(() => drive.spoiledMs < 0, undefined, "the shake and the red go by themselves")
+            verify(!drive.spoilPainted)
+            compare(drive.spoilShift, 0)
+            verify(drive.spoiled, "while the line and the mark stay to be read")
+        }
+
+        /// What the person gave up on is not news: the hand left, and the fill was already sliding back.
+        function test_presses_given_up_on_are_not_told() {
+            drive.premise = "here"
+            click()
+            tryVerify(() => drive.progress > 0)
+            drive.leave()
+            verify(drive.gesturing, "the fill is still going back")
+            drive.premise = "there"
+            verify(!drive.spoiled, "so its target moving says nothing")
+        }
+
+        /// Keys counted elsewhere go with the focus — the person moved it.
+        function test_presses_the_focus_took_away_are_not_told() {
+            band.forceActiveFocus()
+            keyClickSpace(1)
+            tryVerify(() => band.holdProgress > 0)
+            elsewhere.forceActiveFocus()
+            verify(!band.holdDrive.spoiled)
+        }
+
+        /// The next press starts a count of its own at once, answered by its own fill where the red was; the line and
+        /// the mark stay, so a hand that bounces does not take them before they are read.
+        function test_a_press_after_a_drop_starts_over_under_its_telling() {
+            drive.premise = "here"
+            click()
+            tryVerify(() => drive.progress > 0)
+            drive.premise = "there"
+            verify(drive.spoilPainted)
+            click()
+            compare(drive.count, 1, "counted as the first of a new count")
+            verify(!drive.spoilPainted, "its own fill on the control, not the red")
+            compare(drive.spoilShift, 0, "standing still under the hand")
+            verify(drive.spoiled, "while the line and the mark stay")
+        }
+
+        /// Pressed through, the try the drop asked for is made: the line and the mark go with it.
+        function test_presses_through_after_a_drop_end_its_telling() {
+            drive.premise = "here"
+            click()
+            drive.premise = "there"
+            for (let i = 0; i < root.presses - 1; i++)
+                click()
+            verify(drive.spoiled, "the presses short of the last keep it")
+            click()
+            compare(finishes.count, 1)
+            verify(!drive.spoiled, "the last one ends it")
+        }
+
+        /// Presses dropped again after a drop are told again, from the fill they had made and for the whole time: the
+        /// first drop's time does not cut the second's short.
+        function test_a_second_drop_is_told_over_from_its_own_moment() {
+            drive.spoilTold.interval = 300
+            drive.premise = "here"
+            click()
+            drive.premise = "there"
+            click()
+            tryVerify(() => drive.progress >= 1 / root.presses, undefined, "the new count's first step lands")
+            const reached = drive.progress
+            drive.premise = "here"
+            const secondDrop = Date.now()
+            verify(drive.spoiled)
+            compare(drive.spoiledMs, 0, "its shake and red start over")
+            compare(drive.spoilKept, reached, "from the fill the new presses made")
+            tryVerify(() => !drive.spoiled, undefined, "and it goes")
+            // A lower bound only, which load cannot break: a timer runs late, never early past Qt's coarse margin.
+            verify(Date.now() - secondDrop >= 0.9 * drive.spoilTold.interval, "a whole time after the second drop")
+        }
+
+        /// A drop that leaves the control plain: the press after it runs at once, and is the try the drop asked for.
+        function test_a_plain_press_after_a_drop_ends_its_telling() {
+            click()
+            drive.holdPresses = 0
+            verify(drive.spoiled)
+            click()
+            verify(!drive.spoiled)
+        }
+
+        /// Pointed elsewhere with nothing pressed — another tab, a pooled row taken for another — the line and the mark
+        /// were about where it pointed. The rest of the change that dropped the presses lands in the same turn and
+        /// says nothing new.
+        function test_a_control_pointed_elsewhere_ends_its_telling() {
+            drive.premise = "here"
+            click()
+            drive.premise = "there"
+            drive.holdPresses = root.presses - 1
+            verify(drive.spoiled, "the rest of the change that dropped the presses keeps it")
+            tryVerify(() => drive.spoilSettled)
+            drive.premise = "elsewhere"
+            verify(!drive.spoiled, "pointed elsewhere, it is no longer said")
+        }
+
+        /// A count that lapsed under a hand still down was given up on: its target moving says nothing.
+        function test_a_count_lapsed_under_a_held_hand_is_not_told() {
+            drive.premise = "here"
+            drive.begin()
+            tryVerify(() => drive.progress > 0)
+            drive.cancel()
+            verify(drive.pressed && drive.gesturing)
+            drive.premise = "there"
+            verify(!drive.spoiled)
+            drive.letUp()
+        }
+
+        /// Disabled, the button says no line over its tip, as it says no tip: it has no "try again" to offer.
+        function test_a_disabled_button_says_no_line() {
+            button.premise = "here"
+            mouseClick(button, 10, 10)
+            button.premise = "there"
+            compare(button.tipLead, Words.pressesCancelled)
+            button.enabled = false
+            compare(button.tipLead, "")
+        }
+
+        /// The band switched to another tab after a drop: its push is another, and the drop is not said on it.
+        function test_a_band_drop_is_not_said_on_another_tab() {
+            band.forceActiveFocus()
+            keyClickSpace(1)
+            tryVerify(() => band.holdProgress > 0)
+            root.here.branch = "main-rework"
+            verify(band.alertShown)
+            tryVerify(() => band.holdDrive.spoilSettled)
+            band.curPage = root.there
+            verify(!band.alertShown)
+        }
+
+        /// A hand still down on presses already dropped has lost nothing more when the target moves again.
+        function test_a_hand_still_down_on_dropped_presses_is_not_told_again() {
+            drive.premise = "here"
+            drive.begin()
+            drive.premise = "there"
+            verify(drive.spoiled)
+            tryVerify(() => drive.spoiledMs < 0, undefined, "the drop's shake and red are over")
+            drive.premise = "elsewhere"
+            compare(drive.spoiledMs, -1, "so it does not shake again")
+            drive.letUp()
+        }
+
+        /// Pressed no more, the drop is said for as long as a tooltip stays up to be read (`tipReadMs`, cut short
+        /// here).
+        function test_a_drop_is_told_for_as_long_as_it_is_read() {
+            drive.spoilTold.interval = 50
+            drive.premise = "here"
+            click()
+            drive.premise = "there"
+            verify(drive.spoiled)
+            tryVerify(() => !drive.spoiled, undefined, "and then it goes")
+        }
+
+        /// The band says it where it is pressed: the `!` stands and its tip opens on the line saying why, over the
+        /// sentence it says at rest — whose names keep their marks past that line.
+        function test_a_band_drop_is_told_on_the_button() {
+            band.forceActiveFocus()
+            keyClickSpace(1)
+            tryVerify(() => band.holdProgress > 0)
+            const atRest = band.buttonTip.said
+            const seats = band.buttonTip.marksNow
+            verify(seats.length > 0, "the sentence at rest seats a name, whose seat the lead moves")
+            root.here.branch = "main-rework"
+            verify(band.alertShown, "the `!` stands")
+            compare(band.buttonTip.said, Words.pressesCancelled + "\n" + atRest)
+            compare(band.buttonTip.marksNow.map(mark => mark[0]),
+                    seats.map(mark => mark[0] + Words.pressesCancelled.length + 1))
+            keyClickSpace(1)
+            verify(band.alertShown, "and stays through the next press")
+            keyClickSpace(root.presses - 1)
+            compare(root.here.sent, 1, "until the presses go through")
+            verify(!band.alertShown)
+            compare(band.buttonTip.said, atRest)
         }
 
         /// The band's doors raise `clicked()` with no press so a run presses what a hand does (`TopBar.stashNow` /

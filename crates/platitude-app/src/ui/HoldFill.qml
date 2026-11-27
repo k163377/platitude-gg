@@ -2,7 +2,10 @@ import QtQuick
 import platitude.ui
 
 /// The fill every confirmed control paints (デザイン規約 §回数押し). Only the paint; the state machine is `HoldDriver`.
-Rectangle {
+/// Lays itself over its parent, out to `bleed` either side: the presses' fill grows from the left, and where presses
+/// were dropped under the hand (`HoldDriver.spoiled`) the red comes over the whole of it from the right, pushing that
+/// fill back.
+Item {
     id: holdFill
 
     /// `HoldDriver.progress`.
@@ -18,6 +21,12 @@ Rectangle {
     /// mark at the row's edge has as much fill on its left as on its right — inside the row only, the air left of the
     /// mark is narrower than on its right.
     property real bleed: 0
+    /// The fill dropped presses had reached (`HoldDriver.spoilKept`), standing until the red has come over it.
+    property real kept: 0
+    /// How far the red has come from the right, 0 to 1, and how strongly it is drawn as it goes
+    /// (`HoldDriver.spoilSweep` / `spoilSweepFade`).
+    property real sweep: 0
+    property real sweepFade: 0
 
     /// A white delete keeps the plain ink for its words only: the fill carries the warning, as its mark does
     /// (デザイン規約 §回数押しの色). Not a fill in the ground's blue-grey (`borderStrong`): pressed, it cannot be told
@@ -28,23 +37,41 @@ Rectangle {
                                 : Qt.colorEqual(holdFill.tone, Theme.danger) ? Theme.dangerDim
                                 : Qt.colorEqual(holdFill.tone, Theme.accent) ? Theme.accentDim
                                 : holdFill.tone
+    /// Where the red's left edge stands, in this item: the red covers the frame too, the fill only inside it.
+    readonly property real redLeft: holdFill.width * (1 - holdFill.sweep)
 
-    anchors.left: parent.left
-    anchors.top: parent.top
-    anchors.bottom: parent.bottom
-    anchors.margins: holdFill.inset
-    anchors.leftMargin: holdFill.inset - holdFill.bleed
-    // Floored at `holdFillMin`: proportional from zero, the first frames of a step are a sub-pixel sliver.
-    width: holdFill.progress > 0
-           ? Math.max(Metrics.holdFillMin,
-                      (parent.width - 2 * holdFill.inset + 2 * holdFill.bleed) * Math.min(holdFill.progress, 1))
-           : 0
-    radius: Theme.radiusSm
-    color: holdFill.dimmed ? holdFill.down : holdFill.full
-    Behavior on color {
-        ColorAnimation {
-            duration: Metrics.holdStepMs / 2
+    anchors.fill: parent
+    anchors.leftMargin: -holdFill.bleed
+    anchors.rightMargin: -holdFill.bleed
+
+    Rectangle {
+        readonly property real span: holdFill.width - 2 * holdFill.inset
+        /// The presses' own fill, else what dropped presses left of it, up to where the red has come.
+        readonly property real reach: holdFill.progress > 0 ? span * Math.min(holdFill.progress, 1)
+                                                            : Math.min(span * holdFill.kept,
+                                                                       holdFill.redLeft - holdFill.inset)
+        x: holdFill.inset
+        y: holdFill.inset
+        height: holdFill.height - 2 * holdFill.inset
+        // Floored at `holdFillMin`: proportional from zero, the first frames of a step are a sub-pixel sliver.
+        width: holdFill.progress > 0 ? Math.max(Metrics.holdFillMin, reach) : Math.max(0, reach)
+        radius: Theme.radiusSm
+        color: holdFill.dimmed ? holdFill.down : holdFill.full
+        Behavior on color {
+            ColorAnimation {
+                duration: Metrics.holdStepMs / 2
+            }
         }
+        visible: width > 0
     }
-    visible: holdFill.progress > 0
+    // Over the frame as well: the press was refused, not the fill drawn back.
+    Rectangle {
+        x: holdFill.redLeft
+        width: holdFill.width - holdFill.redLeft
+        height: holdFill.height
+        radius: Theme.radiusSm
+        color: Theme.danger
+        opacity: holdFill.sweepFade
+        visible: holdFill.sweep > 0 && holdFill.sweepFade > 0
+    }
 }

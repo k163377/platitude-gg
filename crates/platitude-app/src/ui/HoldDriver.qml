@@ -98,12 +98,85 @@ QtObject {
     onHoldPressesChanged: drive.noteSpoiled()
     onPremiseChanged: drive.noteSpoiled()
     function noteSpoiled() {
-        if (drive.done || !drive.gesturing)
+        if (drive.done)
             return
+        if (!drive.gesturing) {
+            // Pointed elsewhere with nothing pressed — another tab's push, a pooled row taken for another: what was
+            // told was about where it pointed. Not within the change that dropped the presses, whose other parts land
+            // in the same turn ([`spoilSettled`]).
+            if (drive.spoiled && drive.spoilSettled)
+                drive.unspoil()
+            return
+        }
         if (drive.holdPresses !== drive.armedPresses || drive.premise !== drive.armedPremise) {
+            // Said only where presses were under way — counted, or a plain press still down — and not dropped yet: a
+            // fill sliding back after the hand left or the count lapsed was given up on, and a hand still down on
+            // presses already dropped has lost nothing more.
+            const pressedFor = drive.count > 0 || (drive.pressed && drive.armedPresses <= 0 && !drive.stale)
+            const reached = drive.progress
             drive.stale = true
             drive.drop()
+            if (pressedFor)
+                drive.spoil(reached)
         }
+    }
+
+    /// The presses under way were dropped because what they would do changed under them ([`noteSpoiled`]), and an
+    /// owner that tells it — `ActionButton` — says so (デザイン規約 §回数押し「押している間に的が変わったら」): the
+    /// control shakes ([`spoilShift`]), red pushes its fill back from the right ([`spoilSweep`]), its tip opens at once
+    /// with `Words.pressesCancelled` over its own sentence (`TipAsk.lead`) and a `!` stands. The next press starts its
+    /// count at once, its fill coming in where the red was ([`stopSpoilRun`]); the line and the mark stay — a hand that
+    /// bounces would take them before they were read — until presses go through ([`complete`], or a plain press:
+    /// [`press`]), the control is pointed elsewhere with nothing pressed ([`noteSpoiled`]), or for as long as a tooltip
+    /// stays up to be read (`tipReadMs`), counted again from each drop. Presses given up on (the hand or the focus
+    /// leaving, the idle reset) slide back unsaid: the person knows why.
+    property bool spoiled: false
+    /// A turn has passed since the presses were dropped: the change that dropped them has landed whole.
+    property bool spoilSettled: false
+    /// How long ago the presses were dropped, while the drop's motion runs; -1 at rest. The shake, the red and the fill
+    /// it pushes back are all read off this one clock: a driver stands in every confirmed row of a card.
+    property real spoiledMs: -1
+    /// The fill the dropped presses had reached, 0 to 1.
+    property real spoilReached: 0
+    /// That fill, standing while the red comes over it in one press's step (`HoldFill.kept`).
+    readonly property real spoilKept:
+        drive.spoiledMs >= 0 && drive.spoiledMs < Metrics.holdStepMs ? drive.spoilReached : 0
+    /// How far the red has come from the right, 0 to 1 — over the whole control in one press's step, as a press's
+    /// fill steps (`OutCubic`) — and how strongly it is drawn: held, then faded (`InQuad`), for the longest ruled
+    /// length each (`animLongMs`), the step counted in the hold (`HoldFill.sweep`).
+    readonly property real spoilSweep:
+        drive.spoiledMs < 0 ? 0 : 1 - Math.pow(1 - Math.min(1, drive.spoiledMs / Metrics.holdStepMs), 3)
+    readonly property real spoilSweepFade:
+        drive.spoiledMs < 0 ? 0
+        : 1 - Math.pow(Math.max(0, drive.spoiledMs - Metrics.animLongMs) / Metrics.animLongMs, 2)
+    /// The red, or the fill it pushes back, is on the control: words and marks over it lift as over the presses' own.
+    readonly property bool spoilPainted: drive.spoilKept > 0 || (drive.spoilSweep > 0 && drive.spoilSweepFade > 0)
+    /// The shake's sideways shift, which the owner moves the control by: JetBrains' `DialogEarthquakeShaker`'s sine,
+    /// `(int)(Math.sin(angle) * 10)` (`Metrics.shakeReach`), timed by a press's step — two whole turns over
+    /// `holdStepMs`, so it is back at rest just as the red has come over the control (user decision — ask before
+    /// changing).
+    readonly property int spoilShift: drive.spoiledMs < 0 || drive.spoiledMs >= Metrics.holdStepMs ? 0
+        : Math.trunc(Math.sin(drive.spoiledMs / Metrics.holdStepMs * 4 * Math.PI) * Metrics.shakeReach)
+    function spoil(reached) {
+        drive.spoiled = true
+        drive.spoilSettled = false
+        spoilSettle.restart()
+        spoilTold.restart()
+        drive.spoilReached = reached
+        // Set here, not left to the animation's first tick: the red is on the control from this press's frame.
+        drive.spoiledMs = 0
+        spoilRun.restart()
+    }
+    /// The shake and the red stop where they are: a press after a drop is answered by its own fill.
+    function stopSpoilRun() {
+        spoilRun.stop()
+        drive.spoiledMs = -1
+    }
+    /// The drop is no longer told: presses went through, the control points elsewhere, or its time is up.
+    function unspoil() {
+        drive.spoiled = false
+        spoilTold.stop()
+        drive.stopSpoilRun()
     }
     /// The presses so far go, and the fill with them; a hand still down keeps the latches until it lets go, so its
     /// release is judged against the gesture it began.
@@ -140,9 +213,13 @@ QtObject {
         if (drive.count === 0) {
             drive.stale = false
             drive.byKey = false
+            drive.stopSpoilRun()
         }
-        if (drive.armedPresses <= 0)
+        if (drive.armedPresses <= 0) {
+            // A plain press is the try itself, answered at its release: the drop before it is over.
+            drive.unspoil()
             return
+        }
         drive.count += 1
         back.stop()
         if (drive.count >= drive.armedPresses) {
@@ -160,6 +237,9 @@ QtObject {
         drive.done = true
         idle.stop()
         const fire = !drive.stale
+        // Pressed through: the try a drop asked for is made. How it goes is the owner's to say (`ActionButton.alert`).
+        if (fire)
+            drive.unspoil()
         if (drive.automated) {
             // Settled first: nothing is left to do after the signals. The run is synchronous, so nothing the latches
             // held can have moved before `finished` reads it.
@@ -276,6 +356,21 @@ QtObject {
     readonly property Timer idle: Timer {
         interval: Metrics.holdResetMs
         onTriggered: drive.cancel()
+    }
+    readonly property TurnLater spoilSettle: TurnLater {
+        onTriggered: drive.spoilSettled = true
+    }
+    readonly property Timer spoilTold: Timer {
+        interval: Metrics.tipReadMs
+        onTriggered: drive.spoiled = false
+    }
+    readonly property NumberAnimation spoilRun: NumberAnimation {
+        target: drive
+        property: "spoiledMs"
+        from: 0
+        to: 2 * Metrics.animLongMs
+        duration: 2 * Metrics.animLongMs
+        onFinished: drive.spoiledMs = -1
     }
     /// The full fill stays this long after the last press, whatever the work does.
     readonly property Timer floor: Timer {

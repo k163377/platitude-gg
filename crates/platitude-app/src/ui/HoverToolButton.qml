@@ -9,9 +9,9 @@ import platitude.ui.input
 // implicit 20, so no button changes size by being flattened. `checked` (the eye's two states) is told by the mark
 // alone, its tint and its shape (規約 §暗く落とした段, `NavHeader`'s `eye-off`).
 //
-// Disabled, it still takes hover (it says `hoverEnabled: true`) and `TipAsk.asked` reads only `tip` and `lit`: a
-// button that cannot be pressed is silenced by an empty `tip` (規約 §無効「ボタンや入力欄の無効はツールチップを持たない」)
-// — `TopBar`'s fetch is that shape (headless: the `fetch-tip` pair).
+// Disabled, it still takes hover (it says `hoverEnabled: true`) and `TipAsk.asked` reads only `tip`, `tipLead` and
+// `lit`: a button that cannot be pressed is silenced by an empty `tip` and `tipLead` (規約 §無効「ボタンや入力欄の無効は
+// ツールチップを持たない」) — `TopBar`'s fetch is that shape (headless: the `fetch-tip` pair), `ActionButton`'s lead too.
 ToolButton {
     id: hoverToolButtonSelf
     /// Zero on controls that fill a band or cell edge to edge, beside square washes.
@@ -46,6 +46,8 @@ ToolButton {
 
     /// The one thing the face had no room to say (デザイン規約 §hover のツールチップ); empty shows none.
     property string tip: ""
+    /// A line said over `tip` for something that just happened to the button (`TipAsk.lead`).
+    property string tipLead: ""
     /// A word inside `tip` that is a place to go, and the name the page answers for it (`RepoPage.tipLinkAsked`).
     /// `tip` stays plain text (git-printed names can hold `<`); the window's tip draws this word as the anchor.
     property string tipPlace: ""
@@ -54,8 +56,9 @@ ToolButton {
     readonly property TipAsk buttonTip: TipAsk {
         id: buttonTip
         target: hoverToolButtonSelf
-        asked: hoverToolButtonSelf.tip !== "" && hoverToolButtonSelf.lit
+        asked: (hoverToolButtonSelf.tip !== "" || hoverToolButtonSelf.tipLead !== "") && hoverToolButtonSelf.lit
         words: hoverToolButtonSelf.tip
+        lead: hoverToolButtonSelf.tipLead
         place: hoverToolButtonSelf.tipPlace
         href: hoverToolButtonSelf.tipHref
     }

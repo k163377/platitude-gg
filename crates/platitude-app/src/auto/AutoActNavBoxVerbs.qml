@@ -155,10 +155,10 @@ Item {
     // drawn and holding the keyboard (`NavList.rowBoxShown` / `rowFocused`). `refused=` alone passes a box refusing in
     // silence, and Qt can drop the tooltip the box's binding raises (`NavNameBox`) as a binding loop without a word,
     // so `tip=` is taken through the box (`NavList.rowTipShown` = the box's own `TipAsk.shown`). `text=` is read off
-    // the window's box (`Tips.box.text`, bound to the target's `TipAsk.words`) — the sentence that reached the reader,
-    // not `editRefusedWhy` inside the model. The picture holds the red frame alone — the reason is the tooltip's — so
-    // the line is the judgement; a box refusing in silence wears the same frame, never raises the tip this waits on,
-    // and the run goes quiet until the watchdog.
+    // the window's box (`Tips.box.text`, the target's `TipAsk.said` as it changes) — the sentence that reached the
+    // reader, not `editRefusedWhy` inside the model. The picture holds the red frame alone — the reason is the
+    // tooltip's — so the line is the judgement; a box refusing in silence wears the same frame, never raises the tip
+    // this waits on, and the run goes quiet until the watchdog.
     PageStage {
         id: tagNameBoxTimer
         name: "tag_name_box"

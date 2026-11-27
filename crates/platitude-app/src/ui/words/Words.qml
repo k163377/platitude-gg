@@ -20,6 +20,9 @@ QtObject {
     function pressToActivate(presses) {
         return qsTr("%1 to activate").arg(Words.pressCount(presses))
     }
+    /// A confirmed control's tip, its first line, while the presses it had counted stand dropped because what they
+    /// would do changed under them (`HoldDriver.spoiled`); the control's own sentence follows on the next line.
+    readonly property string pressesCancelled: qsTr("Cancelled — the target changed; try again")
 
     /// The menu-row tag on anything that replays commits a remote already has — the rebase entries; the amend-family
     /// rows say `already pushed` (デザイン規約 §回数押し).

@@ -32,6 +32,11 @@ QtObject {
     required property Item target
     property bool asked: false
     property string words: ""
+    /// A line the box says over `words`, on a line of its own: a confirmed control's presses dropped under it
+    /// (`HoldDriver.spoiled`). The box says [`said`], and the names' seats (`marksNow`) count past this line.
+    property string lead: ""
+    readonly property string said: ask.lead === "" ? ask.words
+                                   : ask.words === "" ? ask.lead : ask.lead + "\n" + ask.words
     /// The ask answers what is typed, not a hand (a name box's refusal): the box stands until the ask falls, wherever
     /// the hand goes, and no hover takes the box off it (規約 §hover のツールチップ「入力の拒否への補足は一律」).
     property bool typed: false
@@ -63,9 +68,12 @@ QtObject {
     /// where the target seats them itself (a menu row's whole line, a cut sentence). Null reads the target's own
     /// `tipMarks`, the way the one word above falls back to its `tipMarkWord` / `tipMarkKind`.
     property var marks: null
-    readonly property var marksNow:
-        ask.marks !== null ? ask.marks
-        : ask.target.tipMarks !== undefined && ask.target.tipMarks !== null ? ask.target.tipMarks : []
+    readonly property var marksNow: {
+        const own = ask.marks !== null ? ask.marks
+                  : ask.target.tipMarks !== undefined && ask.target.tipMarks !== null ? ask.target.tipMarks : []
+        const past = ask.lead === "" ? 0 : ask.lead.length + 1
+        return past === 0 ? own : own.map(mark => [mark[0] + past].concat(mark.slice(1)))
+    }
     readonly property string markWordNow:
         ask.markWord !== "" ? ask.markWord : ask.target.tipMarkWord !== undefined ? ask.target.tipMarkWord : ""
     readonly property string markKindNow:
@@ -112,6 +120,8 @@ QtObject {
             ask.seat.answer(ask)
     }
 
+    // A lead says what just happened: the box comes out with it now, as with a click's answer.
+    onLeadChanged: if (ask.lead !== "") ask.answer()
     onLiveChanged: {
         if (ask.live) {
             if (ask.seat === null)
