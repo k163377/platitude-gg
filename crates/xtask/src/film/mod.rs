@@ -121,6 +121,21 @@ const SIDES: &[Side] = &[
         tag: "案 C",
         colour: "textLink",
     },
+    Side {
+        name: "d",
+        tag: "案 D",
+        colour: "textLink",
+    },
+    Side {
+        name: "e",
+        tag: "案 E",
+        colour: "textLink",
+    },
+    Side {
+        name: "f",
+        tag: "案 F",
+        colour: "textLink",
+    },
 ];
 
 fn side(name: &str) -> Result<&'static Side, String> {
