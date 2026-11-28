@@ -1,8 +1,9 @@
 //! Hands the linker the Windows resource with the exe's icon and the name
 //! the shell shows for it (without it, `platitude-gg.exe`), and the binary
 //! the commit it is built from (`models::build_id`); builds the C++ of the
-//! preview's image provider (`preview_images`, its decoder `preview_decode`)
-//! and of the slot wires' metatypes (`encode::metatype`).
+//! preview's image provider (`preview_images`, its decoder `preview_decode`),
+//! of the slot wires' metatypes (`encode::metatype`) and of Qt's mnemonic
+//! switch (`mnemonics`).
 //!
 //! `assets/platitude.res` is checked in compiled: the resource compiler
 //! comes only with the Windows SDK. `assets/platitude.rc` says how to
@@ -33,18 +34,23 @@ fn main() {
 /// bridge's `include!` spells it from the include root, which resolves to
 /// no file of the tree.
 const METATYPE_H: &str = "src/encode/metatype.h";
+/// The header of Qt's mnemonic switch, named for the same graph.
+const MNEMONICS_H: &str = "src/mnemonics/mnemonics.h";
 
 /// The preview's image provider (`src/preview_images.rs`) and the device it
 /// streams a picture through (`src/preview_decode.rs`): the C++ classes
 /// their bridges generate, against Qt Quick. The slot wires' metatypes
-/// (`src/encode/metatype.rs`, its header [`METATYPE_H`]).
+/// (`src/encode/metatype.rs`, its header [`METATYPE_H`]). Qt's mnemonic
+/// switch (`src/mnemonics/mod.rs`, its header [`MNEMONICS_H`]).
 fn build_bridges() {
     println!("cargo:rerun-if-changed={METATYPE_H}");
+    println!("cargo:rerun-if-changed={MNEMONICS_H}");
     cxx_qt_build::CxxQtBuilder::new()
         .qt_module("Quick")
         .file("src/preview_images.rs")
         .file("src/preview_decode.rs")
         .file("src/encode/metatype.rs")
+        .file("src/mnemonics/mod.rs")
         .build();
 }
 

@@ -8,6 +8,7 @@ mod harness;
 mod hub;
 mod inherited;
 mod logsink;
+mod mnemonics;
 mod models;
 mod ops;
 mod preview_decode;
@@ -27,7 +28,7 @@ use models::{
 };
 use platitude_core::settings::{Build, Claim, Store};
 use qtbridge::QmlElement;
-use qtbridge::qtbridge_type_lib::{QGuiApplication, QQmlApplicationEngine, QString};
+use qtbridge::qtbridge_type_lib::{QQmlApplicationEngine, QString};
 
 #[expect(clippy::too_many_lines)]
 fn main() {
@@ -86,7 +87,8 @@ fn main() {
 
     // Held here rather than in qtbridge's `QApp`, which does not say when the
     // window's QML fails to load (`qml_engine`).
-    let mut app = QGuiApplication::new();
+    // Mnemonics off before the window's QML: an `&` in a name is no key.
+    let mut app = mnemonics::application();
     let mut engine = QQmlApplicationEngine::new();
     qml_engine::arm(engine.pin_mut());
     preview_images::install(engine.pin_mut());
