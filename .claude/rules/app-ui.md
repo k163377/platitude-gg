@@ -43,9 +43,9 @@ UI の**値**の正本は `Theme.qml` / `Metrics.qml`。**どこで何に使う�
   `elide` を新しく書かない — 台座に積んだ罠避けがまるごと落ちる。**3 箇所以上で言う同じ文・語は `Words`**
 - 配線: データは親→子へ property、操作・状態変更は子→親へ signal(渡されたモデルの slot は呼んでよい)。ウィンドウ横断 (タ
   ブを開く・settings・identity)は Main まで signal で上げる
-- **メニューは `AppMenu` 系で書く**: 行の可否は開く関数と立て直しで決めて `offered` に置き、`offer()` で開き、閉じるのは
-  自分の `dismiss()` 1 発(素の `Menu` を書かない。1 関数で閉じるのは 1 つまで = 機械化済み。各論は rules-refs の
-  `AppMenu` / `offered` の行)
+- **メニューは `AppMenu` 系で書く**: 右クリックの行は種類(`word`)を名乗り、`MenuLines` が型の答えから描く。`offer()` で
+  開き、閉じるのは自分の `dismiss()` 1 発(素の `Menu` を書かない・1 関数で閉じるのは 1 つまで。どれも機械化済み。各論は
+  rules-refs の `AppMenu` / `MenuLines` の行)
 - **`onXChanged` は同じ `x` から導かれるバインディングより先に走り、`FontMetrics.advanceWidth()` 等のメソッドはバイン
   ディングが依存を取らない** — 測って押し出す値は、元のプロパティを自分で読み直す関数にする(各論は rules-refs)
 
