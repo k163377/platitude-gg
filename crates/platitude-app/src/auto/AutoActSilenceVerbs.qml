@@ -79,9 +79,9 @@ Item {
             let greyed = 0
             for (let i = 0; i < commitMenu.count; i++) {
                 const row = commitMenu.itemAt(i)
-                if (!row || !row.present || row.codeColSeat === undefined || row.subMenu)
+                if (!row || !row.present || row.codeColSeat === undefined || row.subMenu || !row.startsCommand)
                     continue
-                if (row.blockedReason !== "" && !row.withdrawn)
+                if (row.ownBlocked && !row.withdrawn)
                     continue
                 rows++
                 if (row.blocked)

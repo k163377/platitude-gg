@@ -125,12 +125,14 @@ Item {
             remotesModel.toggleFolder(GitFacts.remoteBranchOf(arg, repoTab.remoteNames).remote)
             page.openRefMenu("remote", arg, arg, remotesModel.oidOfName(arg))
             // The row as the menu offered it, read here, ahead of the press below, and kept (`offered`): the
-            // completion reads its report past the write.
-            driver.act.witness("offered", "ref_menu kind=remote delete=" + refDeleteItem.code
-                                          + " " + refDeleteItem.text)
+            // completion reads its report past the write. A remote branch's own delete is the table's remote row
+            // (`BranchRemoteDeleteRow`, core's one `DeleteRemoteBranch`).
+            const remoteDelete = driver.refRowMenu.deleteRemoteItem
+            driver.act.witness("offered", "ref_menu kind=remote delete=" + remoteDelete.code
+                                          + " " + remoteDelete.codeName)
             driver.reportAtCompletion(() => driver.act.witnessed("offered"))
             if (act === "delete-remote-go" || act === "remote-refused")
-                driver.holdToEnd(refDeleteItem)
+                driver.holdToEnd(remoteDelete)
             // The far side keeps the branch (`--preset protected`): the refusal comes back as a report, in a bar.
             if (act === "remote-refused")
                 driver.barrierNotice.start()
@@ -161,7 +163,7 @@ Item {
             // Bare: the current branch's row. A local branch's name: that branch's own row, the worktree being on
             // another. Anything else: a remote-tracking row, its fold opened as `delete-remote` does. Two remote rows
             // tell the offer apart — only the upstream this branch is measured against carries it
-            // (`offers::pull_row`).
+            // (`menu::Part::Pulled`).
             const onRemote = arg !== "" && branchesModel.oidOfName(arg) === ""
             const name = arg === "" ? worktree.branch : arg
             if (onRemote)
@@ -197,7 +199,7 @@ Item {
         } else if (act === "chip-menu") {
             // The chip raises the row's menu aimed at its name (デザイン規約 §グラフ行の右クリック). The branch is
             // required: without it the menu aims at an empty name. Whether the rows are drawn from the answer is
-            // `tests/qml/tst_commitrowmenu.qml`'s, the answer `offers::ref_menu`'s; this run holds the aim alone.
+            // `tests/qml/tst_commitrowmenu.qml`'s, the answer core's (`menu::lines`); this run holds the aim alone.
             page.openRowMenu(branchesModel.oidOfName(arg), { "kind": "branch", "name": arg })
             chipMenuTimer.start()
         } else if (act === "chip-menu-current") {
@@ -215,7 +217,7 @@ Item {
             // The arguments exist to show reasons other than "current": `feature/topic-a --preset worktrees` (another
             // worktree has it out) says `reason=Checked out in topic — …`; bare `:remote` is the current branch's
             // remote row, and `--preset basic`'s `main` is one ahead of origin, so it says
-            // `reason=Differs from origin/main` (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+            // `reason=Differs from origin/main` (デザイン規約 §メニュー「右クリックのメニューの行は、対象の分類で決まる」).
             // `aside=true`: the tip box stands outside the menu, beside it, over neither neighbouring row.
             const named = arg.endsWith(":remote") ? arg.slice(0, -7) : arg
             const blockedOn = named === "" ? worktree.branch : named
@@ -291,7 +293,7 @@ Item {
         return "delete_row asked=" + page.deleteRowAsked
                + " busy=" + repoTab.busyCount
                + " offered=" + row.offered
-               + " blocked=" + (row.blockedReason !== "")
+               + " blocked=" + row.ownBlocked
     }
     // The delete asked of the left pane's menu. The menu goes up and the row is pressed here, not in `run`: a menu
     // opened while a write runs greys its delete row (`AppMenu.runningWhy`) and the page drops the request
@@ -458,7 +460,7 @@ Item {
                             + " tip=" + pullBlockedTimer.row.tip.shown
                             + " says=" + pullBlockedTimer.row.blockedReason })
     }
-    /// The `pull` row as the card opens. Whether it was offered is the claim (`offers::pull_row`): a row wired to
+    /// The `pull` row as the card opens. Whether it was offered is the claim (`menu::Part::Pulled`): a row wired to
     /// nothing frames like one that reaches git.
     PageStage {
         id: pullMenuTimer
@@ -639,7 +641,7 @@ Item {
                 // `both-delete` runs on a name held on both sides (`v1.0`): elsewhere the row is not offered
                 // (`both_del=false`), and holding a row that is not there to its end waits out the watchdog. A delete
                 // of a drifted name (`v1.5`) passes by a road no hand has: the two rows reaching the drifted reading
-                // stand greyed (user decision — デザイン規約 §メニュー「「今できない」行は無効で残す」), but
+                // stand greyed (user decision — デザイン規約 §メニュー「右クリックのメニューの行は、対象の分類で決まる」), but
                 // `AppMenuItem.completeHold` does not look at that; the greyed card is `tag-menu v1.5:drift`'s. A
                 // lease refusal is made with a `--repo` whose fetch and push destinations differ.
                 if (!op.input("pressed", () => {
@@ -752,7 +754,7 @@ Item {
                     "report": () => "delete_early asked=false"
                                     + " oid=" + (branchesModel.oidOfName(Harness.autoActArg) !== "")
                                     + " offered=" + refDeleteItem.offered
-                                    + " blocked=" + (refDeleteItem.blockedReason !== "") })
+                                    + " blocked=" + refDeleteItem.ownBlocked })
                 return
             }
             // `code` cannot tell "not answered yet" from "answered merged" — both wear `branch --delete`. The answer is

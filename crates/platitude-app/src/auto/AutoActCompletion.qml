@@ -186,6 +186,8 @@ QtObject {
                 // The card has to be up before the row it came for can be read; the second waits for the line under
                 // the pointer as well.
                 "pull-menu", "pull-blocked",
+                // The file menu up, then its greyed `stash` row's line under the pointer (`AutoActFileRowVerbs`).
+                "stash-blocked-tip",
                 // These end on the editor's own answer and the status it asks for (`RepoPage.commitAnswered`);
                 // `commit`'s press is made once its staging is through (`AutoActWipVerbs.commitAfterStage`).
                 "commit", "amend",
@@ -298,7 +300,8 @@ QtObject {
                 // comes too early to say (`AutoActDriver.awaitOpExitLanding`).
                 "rebase-plan", "rebase-plan-run", "rebase-edit-stop", "rebase-edit-stop-out",
                 // The reorder finishes inside the overview's sampler: one turn once the plan stands, nothing written.
-                "plan-fold-carry",
+                // The verb menu the same way, raised once the plan stands.
+                "plan-fold-carry", "plan-menu",
                 // Escape on that same face: what it does to the plan is read once the rows are there.
                 "plan-escape", "plan-escape-held",
                 // Each finished by the sampler that latched its edge. `replay-running` photographs the middle of the

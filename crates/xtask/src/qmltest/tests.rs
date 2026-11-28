@@ -406,6 +406,45 @@ fn a_loop_in_the_log_or_on_stderr_turns_a_green_runner_red() {
     assert!(why.starts_with("qmltestrunner exited"), "{why}");
 }
 
+/// A menu row with no part (`verify::gaps`) is a red the way a loop is:
+/// said under a case, that case's; said anywhere in a green file's log or
+/// on its stderr, the file's.
+#[test]
+fn a_menu_row_with_no_part_is_a_red_like_a_loop() {
+    let root = crate::tree::workspace_root();
+    let test = format!("{TESTS}/tst_menulines.qml");
+    let gap = "QWARN  : qmltestrunner::MenuDrawnOffTheAnswer::test_x() MenuLines: a row with no \
+               part: pull";
+    let log = format!(
+        "PASS   : qmltestrunner::MenuDrawnOffTheAnswer::initTestCase()\n\
+         {gap}\n\
+         PASS   : qmltestrunner::MenuDrawnOffTheAnswer::cleanupTestCase()\n"
+    );
+    assert_eq!(
+        outcomes(&root, std::slice::from_ref(&test), &log),
+        vec![(test, Came::Red(gap.to_string()))]
+    );
+    let status = exit_status(0);
+    let green =
+        "PASS   : qmltestrunner::MenuDrawnOffTheAnswer::cleanupTestCase()\nTotals: 1 passed\n";
+    let why = judged(
+        "t.qml",
+        status,
+        green.to_string(),
+        &[
+            "qrc:/qt/qml/platitude/ui/MenuLines.qml:128: MenuLines: a row with no part: pull"
+                .to_string(),
+        ],
+        "l.txt",
+        "l.stderr.txt",
+    )
+    .expect_err("a gap said on stderr");
+    assert!(
+        why.contains("no part for: pull") && why.contains("stderr: l.stderr.txt"),
+        "{why}"
+    );
+}
+
 #[cfg(windows)]
 fn exit_status(code: u32) -> std::process::ExitStatus {
     use std::os::windows::process::ExitStatusExt;

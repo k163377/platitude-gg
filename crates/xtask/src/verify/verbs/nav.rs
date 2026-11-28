@@ -279,7 +279,7 @@ pub(super) const TABLE: &[Verb] = &[
     // greys on (`cardOf`'s `remoteCounterpart`), `worktrees` that
     // the worktree holding the branch did. `:remote` does not tell a
     // drifted reading from a far side that never arrived — both grey the
-    // row in the same words —, so the drift is `offers::ref_menu`'s tests'
+    // row in the same words —, so the drift is `menu::tests::lines`'
     // to judge. No run on the current branch: `current` is core's own
     // word, so that row stands on no lookup.
     Verb {

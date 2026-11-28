@@ -345,9 +345,9 @@ Item {
         }
     }
     /// _PGG_AUTO_ACT=remote-menu: the menu a remote's own row (its folder row: the repository's settings) raises, left
-    /// standing (overlay.png). `rows=`: two on a remote that is not origin, one on the remote both keys already name
-    /// (`markedOrigin`), whose `Mark as origin (default remote)` row goes (デザイン規約 §メニュー). Raised each beat
-    /// until it is up.
+    /// standing (overlay.png). `rows=` two on every remote; `greyed=` one on the remote both keys already name
+    /// (`markedOrigin`), whose `Mark as origin (default remote)` row stands greyed (core's `menu::Why::AlreadyOrigin`).
+    /// Raised each beat until it is up.
     PageStage {
         id: remoteMenuTimer
         name: "remote_menu"
@@ -368,6 +368,7 @@ Item {
                 "when": () => ({ "ready": op.ready(), "open": driver.remoteMenu.opened }),
                 "report": () => "remote_menu open=" + driver.remoteMenu.opened
                                 + " rows=" + driver.remoteMenu.offeredRows
+                                + " greyed=" + (driver.remoteMenu.offeredRows - driver.remoteMenu.liveRows)
                                 + " remote=" + acts.remoteTarget
                                 + " marked=" + repoTab.pushDefault })
         }

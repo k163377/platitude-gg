@@ -150,7 +150,7 @@ pub(super) const TABLE: &[Verb] = &[
     // The three deletes a tag's name can want; `sides=` is the reading
     // they come off, so a wrong row and a wrong reading fail apart. Which
     // rows a side offers is core's
-    // (`offers::each_delete_row_needs_the_side_it_names`) and the card's
+    // (`menu::tests::lines::each_tag_row_needs_the_side_it_names`) and the card's
     // use of it `tests/qml/tst_tagcard.qml`'s; these claim the two parts of
     // the record the menu reads (`RefMenuFacts.stand` — `tagMenu`):
     // `:remote` that the sides arrived (unread answers `here`, one row
@@ -373,12 +373,16 @@ pub(super) const TABLE: &[Verb] = &[
         ],
         plain: "push_hover tip=true mode=ready ahead=1 behind=0",
     },
-    // A remote's own menu: `rows=` because the marked remote's menu loses
-    // a row, `open=true` since an unopened menu photographs as the sidebar.
+    // A remote's own menu: `greyed=` because the marked remote's mark row
+    // stands greyed, which its picture alone tells from a live one only by
+    // shade; `open=true` since an unopened menu photographs as the sidebar.
     Verb {
         name: "remote-menu",
-        when: &[(Arg::Ends(":marked"), "remote_menu open=true rows=1")],
-        plain: "remote_menu open=true rows=2",
+        when: &[(
+            Arg::Ends(":marked"),
+            "remote_menu open=true rows=2 greyed=1",
+        )],
+        plain: "remote_menu open=true rows=2 greyed=0",
     },
     // The form, and whether its box came up in the state the
     // repository is actually in.

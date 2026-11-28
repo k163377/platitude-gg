@@ -81,15 +81,17 @@ pub(super) const TABLE: &[Verb] = &[
         when: &[],
         plain: "write_stopped wip=true conflicts=true error=false log=false cont=true home=repo",
     },
-    // The `rebase` row's note about the range. The picture cannot date it:
-    // a note a frame late moves the card's edge from under the hand
-    // (規約 §行が読む答えはどこから来るか). One run per answer — nothing
-    // above `v0.2` is pushed, and `feature/topic-a` forks below
-    // `origin/main` so its range reaches back over it. Under a stopped
-    // merge (`--preset others-merging`) the four rows that would start
-    // something of their own keep their seats greyed, and the rebase row
-    // warns of nothing — though its range reaches main's pushed commit,
-    // which the note would name were the row live.
+    // The `rebase` row's warning about the range. The picture cannot date
+    // it: a warning a frame late moves the card's edge from under the hand
+    // (規約 §行が読む答えはどこから来るか). One run per answer —
+    // `feature/topic-a` forks below `origin/main`, so its range reaches
+    // back over it, and nothing in `origin/feature/remote-only`'s is
+    // pushed. A ref already in HEAD's history (`v0.2`) brings nothing in:
+    // merge and rebase grey and say so. Under a stopped merge (`--preset
+    // others-merging`) the four rows that would start something of their
+    // own keep their seats greyed, and the rebase row warns of nothing —
+    // though its range reaches main's pushed commit, which the warning
+    // would name were the row live.
     Verb {
         name: "integrate-menu",
         when: &[
@@ -100,7 +102,12 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("v0.2:tag"),
-                "integrate_menu ref=v0.2 offered=true pushed=false greyed=0 says=",
+                "integrate_menu ref=v0.2 offered=true pushed=false greyed=2 \
+                 says=Nothing to bring in — already in the branch you are on",
+            ),
+            (
+                Arg::Is("origin/feature/remote-only:remote"),
+                "integrate_menu ref=origin/feature/remote-only offered=true pushed=false greyed=0 says=",
             ),
         ],
         plain: "integrate_menu ref=feature/topic-a offered=true pushed=true greyed=0 says=",
@@ -194,14 +201,16 @@ pub(super) const TABLE: &[Verb] = &[
     // The other door: the plan's preview turns the history down before
     // the plan opens. One run for the three shapes it refuses — they
     // differ only in the heading, which `tst_reportdress.qml` reads.
+    // `row=off-branch`: the row that opens the plan greys on this commit
+    // first (`menu::Why::OffBranch`), the refusal the guard behind it.
     // `plan=false`: a plan opened and put away frames like one never
     // opened. `tone=warning`, not the row menu's `danger` — the plan is a
     // gesture still going; no picture reads a 2px line.
     Verb {
         name: "plan-off-branch",
         when: &[],
-        plain: "write_notice open=true clears=true why=true tone=warning log=false wrong=false \
-                plan=false said=Not on this branch",
+        plain: "plan_off_branch row=off-branch write_notice open=true clears=true why=true \
+                tone=warning log=false wrong=false plan=false said=Not on this branch",
     },
     // The button under the card finishes the merge, and an empty box
     // commits the message git wrote when it stopped — a merge commit and
@@ -237,6 +246,25 @@ pub(super) const TABLE: &[Verb] = &[
         name: "plan-fold-carry",
         when: &[],
         plain: "plan_fold_carry carried=squash landed=squash row=1 rows=3 dirty=true",
+    },
+    // The verb menu on a step, raised through the pane's door: the type's
+    // rows for it (`RebasePlanModel.stepMenu`). Over steps all set to `drop`
+    // (`0:dropped`) the fold rows stand greyed under core's word; the
+    // oldest step (`last`) has no fold rows. `greyed=` and `why=` say what
+    // the picture tells only by shade.
+    Verb {
+        name: "plan-menu",
+        when: &[
+            (
+                Arg::Is("0:dropped"),
+                "plan_menu row=0 rows=6 greyed=2 fold=true why=no-fold",
+            ),
+            (
+                Arg::Is("last"),
+                "plan_menu row=3 rows=4 greyed=0 fold=false",
+            ),
+        ],
+        plain: "plan_menu row=0 rows=6 greyed=0 fold=true",
     },
     // Escape over the plan, on both sides of what prices its exit. With
     // nothing composed `Discard` is a press, so Escape takes it; with a

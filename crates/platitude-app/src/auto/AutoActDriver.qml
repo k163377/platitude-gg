@@ -89,6 +89,8 @@ Item {
     /// commit.
     property RefWorktreeMenu refWorktreeCard
     property RefWorktreeMenu commitWorktreeCard
+    /// The ref menu's GITHUB card, whose links a menu that stopped applying greys (`menu-follow`'s `links=`).
+    property GitHubMenu refGithubCard
     /// The two rows that make a worktree, on each of those two cards (`AutoActWorktreeVerbs`).
     property AppMenuItem refWorktreeHereItem
     property AppMenuItem refWorktreeAddItem
@@ -373,7 +375,7 @@ Item {
     /// The acts that name rows of the WIP lists — run only once those rows are walkable (`fileRowsTimer`).
     readonly property var fileRowActs: [
         "stage-many", "stage-many-go", "discard-many", "discard-many-go",
-        "file-menu", "file-menu-untracked", "file-menu-staged", "file-menu-conflict",
+        "file-menu", "file-menu-untracked", "file-menu-staged", "file-menu-conflict", "stash-blocked-tip",
         "take-side-ours", "take-side-theirs", "open-mergetool",
         "discard-file", "discard-file-go", "delete-file", "delete-file-go",
         "discard-staged", "discard-staged-go"

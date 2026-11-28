@@ -413,8 +413,11 @@ fn outcomes(root: &Path, tests: &[String], text: &str) -> Vec<(String, Came)> {
             continue;
         };
         first[at].get_or_insert(n);
-        // A loop QML said under a case is that case's red ([`runner`]).
-        if line.starts_with("FAIL!") || crate::verify::loops::refused(line).is_some() {
+        // A loop QML said under a case is that case's red ([`runner`]), and so is a menu row with no part.
+        if line.starts_with("FAIL!")
+            || crate::verify::loops::refused(line).is_some()
+            || crate::verify::gaps::in_line(line).is_some()
+        {
             failed[at].get_or_insert(line);
         }
         if function.starts_with("cleanupTestCase(") {
@@ -814,8 +817,9 @@ fn tail_of(err: &[String]) -> String {
 /// What a runner that exited `status` comes to, its log `text` (at `at`)
 /// and its stderr `err` (at `err_at`) read: the log's own red when the
 /// exit or a `FAIL!` line says one, else the loops either holds
-/// (`verify::loops`) — which no case's verdict carries, and which a test
-/// that asked for one with `ignoreWarning` never sees logged.
+/// (`verify::loops`) and the rows a menu had no part for (`verify::gaps`)
+/// — which no case's verdict carries, and which a test that asked for one
+/// with `ignoreWarning` never sees logged.
 fn judged(
     input: &str,
     status: std::process::ExitStatus,
@@ -841,14 +845,30 @@ fn judged(
         .filter(|met| met.allowed.is_none())
         .map(|met| format!("  loop: {met}\n    first said: {}", met.first))
         .collect();
-    if looped.is_empty() {
+    let gaps = crate::verify::gaps::met(text.lines().chain(err.iter().map(String::as_str)));
+    if looped.is_empty() && gaps.is_empty() {
         return Ok(text);
     }
-    Err(format!(
-        "{}\n  {} (log: {at}, stderr: {err_at})",
-        looped.join("\n"),
-        crate::verify::loops::MEANING
-    ))
+    let mut why: Vec<String> = Vec::new();
+    if !looped.is_empty() {
+        why.push(format!(
+            "{}\n  {}",
+            looped.join("\n"),
+            crate::verify::loops::MEANING
+        ));
+    }
+    if !gaps.is_empty() {
+        let named: Vec<String> = gaps
+            .iter()
+            .map(|rows| format!("  no part for: {rows}"))
+            .collect();
+        why.push(format!(
+            "{}\n  {}",
+            named.join("\n"),
+            crate::verify::gaps::MEANING
+        ));
+    }
+    Err(format!("{} (log: {at}, stderr: {err_at})", why.join("\n")))
 }
 
 /// Keeps a red run's staging directory under [`FAILED`] with its

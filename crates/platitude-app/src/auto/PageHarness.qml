@@ -154,6 +154,7 @@ Item {
             remoteRowMenu: harness.remoteRowMenu
             commitFileMenu: harness.commitFileMenu
             refWorktreeCard: harness.refRowMenu.worktreeCard
+            refGithubCard: harness.refRowMenu.githubCard
             commitWorktreeCard: harness.commitRowMenu.worktreeCard
             refWorktreeHereItem: harness.refRowMenu.worktreeCard.worktreeHereItem
             refWorktreeAddItem: harness.refRowMenu.worktreeCard.worktreeAddItem

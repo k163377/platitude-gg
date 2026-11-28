@@ -239,7 +239,7 @@ Item {
         }
         onTriggered: {
             const op = worktreeTimer
-            // Asked as the menu opens (`offers::worktree_rows`): opened while a write runs, the rows grey until it ends
+            // Asked as the menu opens (`GitFacts.menuOn`): opened while a write runs, the rows grey until it ends
             // (`AppMenu.runningWhy`).
             if (!Awaited.all("worktree_menus_live", { "live": acts.driver.menusLive() }))
                 return
@@ -718,9 +718,9 @@ Item {
                     }))
                     return
             }
-            // A row the card has nothing for (no place for a new worktree, nothing to take away): the menu is the
-            // whole answer. The repository's own worktree has a card — the rows that make a worktree — with no
-            // `worktree remove`.
+            // A row whose answer has no row of the card: the menu is the whole answer. With no place for a new
+            // worktree the making rows stand greyed, so the card stands; the repository's own worktree has one — the
+            // rows that make a worktree — with no `worktree remove`.
             if (!card.applies && !op.press) {
                 op.complete({
                     "name": "worktree_menu_open",

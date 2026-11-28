@@ -29,15 +29,16 @@ Item {
             || act === "rebase-edit-stop-out" || act === "plan-reword-verb"
             || act === "plan-reword-out" || act === "plan-reword-ask" || act === "plan-loading"
             || act === "plan-details-held" || act === "plan-fold-carry"
-            || act === "plan-escape" || act === "plan-escape-held") {
+            || act === "plan-escape" || act === "plan-escape-held" || act === "plan-menu") {
             // The menu entry and its handler, then the menu dismissed as the click does. Each verb opens the smallest
             // plan it needs: the box verbs only the newest commit (the plan selects it), the carry three rows — the
-            // fold, the oldest to carry it over, and one above.
+            // fold, the oldest to carry it over, and one above. `plan-menu`'s argument names a step, not the commit
+            // the plan opens from.
             const back = act === "rebase-plan" || act === "plan-escape"
-                         || act === "plan-escape-held" ? 3
+                         || act === "plan-escape-held" || act === "plan-menu" ? 3
                        : act === "rebase-plan-run" || act === "plan-fold-carry" ? 2
                        : 1
-            const fromOid = arg !== "" ? driver.autoActOid(arg)
+            const fromOid = arg !== "" && act !== "plan-menu" ? driver.autoActOid(arg)
                           : graphModel.oidAt(graphModel.rowOf(worktree.headOid) + back)
             page.openRowMenu(fromOid)
             page.startRebasePlan(fromOid)
@@ -51,12 +52,15 @@ Item {
                 planOpenTimer.order = act === "rebase-plan" || act.startsWith("plan-reword") ? ["dressed"]
                                     : act === "plan-fold-carry" ? ["carried"]
                                     : act === "plan-escape" || act === "plan-escape-held" ? ["escaped"]
+                                    : act === "plan-menu" ? ["raised"]
                                     : act === "plan-details-held" ? []
                                     : ["ran"]
                 planOpenTimer.start()
             }
         } else if (act === "plan-off-branch") {
-            // The same press as `rebase-plan`, on a history the preview turns down (`PlanRefusal`): no plan comes
+            // A commit off the history of HEAD's branch: the menu greys the row that opens a plan on it
+            // (`menu::Why::OffBranch`, said as `row=`), and the plan asked for past the row — as `rebase-plan` asks it
+            // — is turned down by the preview all the same (`PlanRefusal`), the guard behind the grey: no plan comes
             // back, so the notice barrier finishes the run.
             //
             // One run covers the three refusal shapes: they share this road and differ only in the heading, which
@@ -70,8 +74,12 @@ Item {
             page.openRowMenu(refusedOid)
             page.startRebasePlan(refusedOid)
             commitMenu.close()
-            // `plan=`: a window that opened a plan and put it away frames like one that never opened it.
+            // `plan=`: a window that opened a plan and put it away frames like one that never opened it. `row=` is
+            // read at the completion: the row keeps what the menu's stand on this commit drew, and a menu down stands
+            // nowhere again (`MenuLines.again`).
             driver.noticeSaysPlan()
+            driver.reportAtCompletion(() => "plan_off_branch row=" + driver.commitRowMenu.rebaseInteractiveItem.why
+                                             + " " + driver.noticeLine(true))
             driver.barrierNotice.start()
         } else if (act === "plan-amend-kept") {
             // A half-written amend, then a plan opened from HEAD's own row (`planAmendTimer`). `--preset plan`.
@@ -175,6 +183,26 @@ Item {
                                               + " took=" + op.witnessed("took")
                                               + " held=" + page.planShown
                                               + " dirty=" + page.rebasePlan.dirty })
+            } else if (op.act === "plan-menu") {
+                // The verb menu on the step the argument names — `<n>` from the newest, `last` the oldest —, raised
+                // through the pane's own door, the one a right-click on the row takes. `:dropped` sets every step
+                // below it to `drop` first, which leaves a fold nowhere to land. `why=` is core's word for the fold
+                // rows' grey (`menu::Why::word`), which the picture tells from a live row by shade alone.
+                op.input("raised", () => {
+                    const parts = Harness.autoActArg.split(":")
+                    const row = parts[0] === "last" ? plan.stepCount - 1 : Number(parts[0])
+                    if (parts[1] === "dropped")
+                        for (let below = row + 1; below < plan.stepCount; below++)
+                            plan.setAction(below, "drop")
+                    planPane.verbMenu.openFor(row)
+                })
+                op.complete({ "when": () => ({ "open": planPane.verbMenu.opened }), "report": () => {
+                    const menu = planPane.verbMenu
+                    return "plan_menu row=" + menu.forRow + " rows=" + menu.offeredRows
+                           + " greyed=" + (menu.offeredRows - menu.liveRows)
+                           + " fold=" + menu.lines.has("step-squash")
+                           + " why=" + menu.lines.why("step-squash")
+                } })
             } else if (op.act === "plan-fold-carry") {
                 // A fold carried down over the oldest place (where no fold can stand) and back, through the functions
                 // the row's `MouseArea` calls (`RebasePlanRow`), so the fold rule's two brackets are under test. Moves

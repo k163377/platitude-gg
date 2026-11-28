@@ -543,10 +543,15 @@ Item {
                    || act === "file-menu-staged" || act === "file-menu-conflict") {
             const menuBucket = act === "file-menu" ? "unstaged" : act === "file-menu-staged" ? "staged"
                              : act === "file-menu-conflict" ? "conflicts" : "untracked"
-            wipPane.chooseOnly(menuBucket, arg)
-            page.openFileMenu(menuBucket, arg)
+            const named = acts.namedRows(act, arg)
+            wipPane.chooseOnly(menuBucket, named[0])
+            // The second row, Ctrl-clicked into the choice: a choice across two sections, the menu raised on the first.
+            const mate = named.length > 1 ? wipPane.rowFor(named[1]) : null
+            if (mate)
+                wipPane.applyClick(mate.bucket, mate.fullName, Qt.ControlModifier)
+            page.openFileMenu(menuBucket, named[0])
             if (menuBucket === "conflicts") {
-                const row = wipPane.rowFor(arg)
+                const row = wipPane.rowFor(named[0])
                 lines.push("conflict_kind " + (row ? row.conflictWords() : "-"))
             } else {
                 lines.push("discard_row " + fileDiscardItem.text)
@@ -597,6 +602,16 @@ Item {
                 fileDiscardItem.completeHold()
                 driver.awaitTreeGone(GitFacts.fileKey(bucket, arg))
             }
+        } else if (act === "stash-blocked-tip") {
+            // The `stash` row out where git would turn the press down, its reason under the pointer — forced, since a
+            // pointer cannot be put on a row from here (verify-ui §hover の絵の撮り方). The row named is chosen
+            // alone, in the section that holds it.
+            const named = acts.rowNamed(arg)
+            const bucket = named !== null ? named.bucket : "unstaged"
+            wipPane.chooseOnly(bucket, arg)
+            page.openFileMenu(bucket, arg)
+            fileRowMenu.stashItem.tipForced = true
+            stashTipTimer.start()
         }
         fileRowsTimer.witness("lines", lines)
         driver.reportAtCompletion(() => fileRowsTimer.witnessed("lines").concat(
@@ -606,6 +621,12 @@ Item {
     function menuLine() {
         return "file_menu bucket=" + fileRowMenu.bucket + " rows=" + fileMenu.offeredRows
                + " stash=" + fileRowMenu.stashItem.offered + " stashWhy=" + fileRowMenu.stashItem.blockedReason
+               + " keep=" + fileRowMenu.keepItem.offered + " discard=" + fileRowMenu.discardItem.offered
+    }
+    /// The rows an act's argument names: `file-menu-conflict`'s `<conflict>+<other>` chooses a second row beside the
+    /// first (a choice across two sections); every other act names one.
+    function namedRows(act, arg) {
+        return act === "file-menu-conflict" ? arg.split("+") : [arg]
     }
     /// The row `path` is on, in whichever bucket holds it, or null: `WipPane.rowFor`'s answer, asked bucket by bucket
     /// (`WipPane.rowIn`) — `cargo xtask waits` follows `rowFor` itself as an input, which a beat does not make.
@@ -629,7 +650,9 @@ Item {
             const act = Harness.autoAct
             const many = (act === "stage-many" || act === "stage-many-go"
                           || act === "discard-many" || act === "discard-many-go")
-            if (!Awaited.all("file_rows_ready", { "row": acts.rowNamed(Harness.autoActArg) !== null,
+            const named = acts.namedRows(act, Harness.autoActArg)
+            if (!Awaited.all("file_rows_ready", { "row": acts.rowNamed(named[0]) !== null,
+                                                  "mate": named.length < 2 || acts.rowNamed(named[1]) !== null,
                                                   "head": !many || wipPane.rowAt(0) !== null }))
                 return
             fileRowsTimer.input("dispatched", () => {
@@ -639,6 +662,22 @@ Item {
             // A verb that completed here stopped this already.
             fileRowsTimer.stop()
         }
+    }
+    /// The file menu's greyed `stash` row and its tip. The line claims what the picture cannot: offered, out rather
+    /// than pale (`AppMenuItem.blocked`, which decides colour and press), and the sentence. The tip comes up after
+    /// `Metrics.tipDelayMs`.
+    PageStage {
+        id: stashTipTimer
+        name: "stash_tip"
+        onTriggered: stashTipTimer.complete({
+            "name": "stash_tip_ready",
+            "when": () => ({ "ready": fileMenu.opened && fileRowMenu.stashItem.tip.shown }),
+            "report": () => driver.verbReport().concat([
+                "stash_blocked bucket=" + fileRowMenu.bucket
+                + " offered=" + fileRowMenu.stashItem.offered
+                + " blocked=" + fileRowMenu.stashItem.blocked
+                + " tip=" + fileRowMenu.stashItem.tip.shown
+                + " says=" + fileRowMenu.stashItem.blockedReason]) })
     }
     /// How many rows the graph holds once the opening's fetch has landed — under `--preset behind` only that fetch
     /// brings the last one in.

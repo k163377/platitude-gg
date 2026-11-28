@@ -120,10 +120,11 @@ Item {
         } else if (act === "commit-menu" || act === "reset-menu"
                    || act === "branch-card" || act === "tag-card") {
             // With no row named, the row under HEAD's: most of this menu is about a commit the branch is not on, and
-            // the rows above HEAD belong to whatever else the graph is showing. The BRANCH card's own case is HEAD's
-            // row aimed at the branch the tree is on: the card holds a local branch's upstream rows, and a
-            // remote-tracking chip — what the row under HEAD often draws — has no card (`RefBranchMenu.applies`).
-            let menuOid = arg
+            // the rows above HEAD belong to whatever else the graph is showing. A row named is a branch's or a remote
+            // branch's commit (`autoActOid`). The BRANCH card's own case is HEAD's row aimed at the branch the tree is
+            // on: the card holds a local branch's upstream rows, and a remote-tracking chip — what the row under HEAD
+            // often draws — has no card (`RefBranchMenu.applies`).
+            let menuOid = arg === "" ? "" : driver.autoActOid(arg)
             if (menuOid === "" && act === "branch-card") {
                 page.openRowMenu(worktree.headOid, { "kind": "branch", "name": worktree.branch })
             } else {
@@ -137,25 +138,45 @@ Item {
                 commitMenu.openSub(commitBranchCard)
             else if (act === "tag-card")
                 commitMenu.openSub(commitTagCard)
-            // `greyed=` the first level's rows out for a reason of their own — a stopped operation's, all of them.
-            // `rebase_note=` whether the `rebase` row wears its note, read off the row as drawn — the page's wiring
-            // from `CommitMenuState.menuRebasePublished` to the menu included.
+            // `greyed=` the first level's rows out for a reason of their own — a stopped operation's, all of them —,
+            // `reset_greyed=` the RESET card's the same way, on its title's card. `rebase_warning=` whether the
+            // `rebase` row wears its warning, read off the row as drawn — the page's wiring from
+            // `CommitMenuState.menuRebasePublished` to the menu included. `merge_why=` / `rebase_why=` / `pick_why=`
+            // why the type greys those rows (`menu::Why::word`), empty where they can be pressed — how the branch
+            // HEAD is on has the commit, read off the graph as drawn (`GraphModel.historyOf`).
             driver.reportAtCompletion(() => {
-                let greyed = 0
-                let rebaseNote = false
+                const whyOf = code => {
+                    for (let i = 0; i < commitMenu.count; i++) {
+                        const row = commitMenu.itemAt(i)
+                        if (row && row.code === code && row.offered)
+                            return row.why
+                    }
+                    return "-"
+                }
+                const greyedIn = card => {
+                    let greyed = 0
+                    for (let i = 0; i < card.count; i++) {
+                        const row = card.itemAt(i)
+                        if (row && row.codeColSeat !== undefined && row.offered && !row.subMenu
+                                && row.ownBlocked)
+                            greyed++
+                    }
+                    return greyed
+                }
+                let rebaseWarning = false
                 for (let i = 0; i < commitMenu.count; i++) {
                     const row = commitMenu.itemAt(i)
-                    if (row && row.codeColSeat !== undefined && row.offered && !row.subMenu
-                            && row.blockedReason !== "")
-                        greyed++
                     if (row && row.code === "rebase" && row.offered)
-                        rebaseNote = row.note !== ""
+                        rebaseWarning = row.tag !== ""
                 }
                 return "commit_menu rows=" + commitMenu.offeredRows
-                       + " can_move=" + commitMenuState.menuCanMoveBranch
-                       + " standing=" + commitMenuState.menuOpStanding
-                       + " greyed=" + greyed
-                       + " rebase_note=" + rebaseNote
+                       + " greyed=" + greyedIn(commitMenu)
+                       + " reset_rows=" + resetMenu.offeredRows
+                       + " reset_greyed=" + greyedIn(resetMenu)
+                       + " merge_why=" + whyOf("merge")
+                       + " rebase_why=" + whyOf("rebase")
+                       + " pick_why=" + whyOf("cherry-pick")
+                       + " rebase_warning=" + rebaseWarning
             })
         } else if (act === "drop-commit" || act === "drop-commit-go" || act === "drop-stops"
                    || act === "drop-last-commit") {
@@ -244,33 +265,35 @@ Item {
         return true
     }
     /// The ref menu left standing on what a merge or a rebase would bring in — a branch by bare name, a tag with
-    /// `:tag` after it. `pushed=` is the `rebase` row's note, which must be on the row as the card is measured; a
-    /// photograph cannot tell it from one a frame late (規約 §メニュー). Both values are runs of their own: either
-    /// alone passes an implementation that always answers the same. `greyed=` counts the rows that would start
-    /// something of their own — `Create branch here…`, merge, rebase, `Create tag here…` — standing greyed: all four
-    /// under a stopped operation, none otherwise; `says=` is the rebase row's reason. Read as the card is measured, in
-    /// the turn it opens, and handed to the completion as read.
+    /// `:tag` after it, a remote-tracking branch with `:remote`. `pushed=` is the `rebase` row's warning as the row
+    /// wears it (`tag`), which must be on the row as the card is measured; a photograph cannot tell it from one a frame
+    /// late (規約 §メニュー). Both values are runs of their own: either alone passes an implementation that always
+    /// answers the same. `greyed=` counts the rows that would start something of their own — `Create branch here…`,
+    /// merge, rebase, `Create tag here…` — standing greyed: all four under a stopped operation, merge and rebase on a
+    /// ref already in HEAD's history, none otherwise; `says=` is the rebase row's reason. Read as the card is
+    /// measured, in the turn it opens, and handed to the completion as read.
     function openIntegrateMenu(arg) {
-        const onTag = arg.endsWith(":tag")
-        const name = onTag ? arg.substring(0, arg.length - 4) : arg
-        const oid = onTag ? tagsModel.oidOfName(name) : branchesModel.oidOfName(name)
-        page.openRefMenu(onTag ? "tag" : "branch", name, name, oid)
+        const kind = arg.endsWith(":tag") ? "tag" : arg.endsWith(":remote") ? "remote" : "branch"
+        const name = kind === "branch" ? arg : arg.substring(0, arg.lastIndexOf(":"))
+        const oid = (kind === "tag" ? tagsModel : kind === "remote" ? remotesModel : branchesModel).oidOfName(name)
+        page.openRefMenu(kind, name, name, oid)
         const starts = [refRowMenu.branchHereItem, refRowMenu.mergeItem, refRebaseItem, refRowMenu.tagHereItem]
         driver.act.witness("integrate", "integrate_menu ref=" + name
                                         + " offered=" + refRebaseItem.offered
-                                        + " pushed=" + (refRebaseItem.note !== "")
+                                        + " pushed=" + (refRebaseItem.tag !== "")
                                         + " greyed=" + starts.filter(item => item.offered && item.blocked).length
                                         + " says=" + refRebaseItem.blockedReason)
         driver.reportAtCompletion(() => driver.act.witnessed("integrate"))
     }
 
-    /// The `--hard` row of the reset card. `tagged=`: the row's tag is there exactly when there is something to lose,
-    /// so it holds on a clean fixture and a dirty one alike. `note=` carries spaces, so it goes last.
+    /// The `--hard` row of the reset card. `tagged=`: on a row that can be pressed, the tag is there exactly when
+    /// there is something to lose, so it holds on a clean fixture and a dirty one alike (a greyed row warns of
+    /// nothing). `warning=` carries spaces, so it goes last.
     function resetRow() {
-        return "reset_row tagged=" + ((hardResetItem.note !== "") === (worktree.hardResetTakes > 0))
+        return "reset_row tagged=" + ((hardResetItem.tag !== "") === (worktree.hardResetTakes > 0))
                + " files=" + worktree.hardResetTakes
                + " untracked=" + worktree.untrackedCount
-               + " note=" + hardResetItem.note
+               + " warning=" + hardResetItem.tag
     }
 
     /// Which commit the reset verbs take the branch back to. With nothing given, the row under HEAD's: a reset to
@@ -391,7 +414,7 @@ Item {
     // gives them back once what the commit left is read — the same menu, still up, stood again on that reading
     // (デザイン規約 §メニュー). `same=` holds the rows to a count taken off the menu raised and put down on that row
     // before the commit; `held=` is how many of them grey, which a picture of grey rows next to a picture of missing
-    // ones cannot say.
+    // ones cannot say — `nothing` where no row is left to count, so `all` never stands for none.
     // `menu-wait stash`, over `--preset stashes`: the second entry's graph row menu, raised in the turn the first is
     // popped — the pop asked for and not started — waits for it all the same, and stands again on the selector the
     // entry answers to once the pop is read (`CommitMenuState.standAgain`): `was=` is the one it went up on,
@@ -400,11 +423,13 @@ Item {
     // `menu-wait replay`, over `--preset replay`: the plain form's line with a rebase out instead of the commit, the
     // menu raised once the rewrite shows mid-way, and photographed once its worktree row stands too (`replayRow`).
     // `named=` is the branch the `reset` card's title names — the one the rebase holds while HEAD is on none, read off
-    // the tree as it is (`WorktreeModel.heldBranch`): drawn words, which no row count says.
+    // the tree as it is (`WorktreeModel.movedBranch`): drawn words, which no row count says.
     // `menu-wait replay-stop`, over `--preset replay-stop`: the same menu raised mid-replay, stood again once the
-    // replay has stopped on its conflict — HEAD detached, so the rows that name the branch are taken away and grey,
-    // naming the branch the stopped rebase still holds (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is
-    // the same over the left menu's `base` row, whose `rebase` row names it (`RefRowMenu.standAgain`).
+    // replay has stopped on its conflict — HEAD detached, and the rows that move the branch the stopped rebase holds
+    // stay, greyed for the operation (`menu::Why::StoppedOperation`), naming that branch
+    // (`CommitMenuState.standAgain`). `menu-wait replay-stop-ref` is the same over the left menu's `base` row, whose
+    // `rebase` row names it (`RefRowMenu.standAgain`). `stopped=` is the chips of the rows greyed for the operation, as
+    // `withdrawn=` says them: a reason of their own, which `held=` leaves out, and one a row left live would drop.
     // `menu-wait conflict`, over `--preset conflict-kinds`: the plain form's line on the worktree's `both.txt` row,
     // whose menu is raised while that file is out to the merge editor — the run seeds a tool held as the presets'
     // hooks hold their commit, and git holds the write queue until it exits (`verify::repos::held_tool`). `ours=` /
@@ -502,10 +527,10 @@ Item {
             item.askMenu()
             return menuWaitTimer.level.visible
         }
-        /// The rows that start git — every row on show but the cards' titles, which stay live while the rows inside
-        /// say why, and a row that reads the screen alone (`AppMenuItem.startsCommand`: `Copy path`) — and how many of
-        /// them grey. A row greyed for a reason of its own (`blockedReason`: the delete table's row on the branch the
-        /// tree is on) greys whether or not anything runs, so it is not one the wait holds.
+        /// The rows that start git — every row on show but the cards' titles, which open their cards whatever the rows
+        /// inside say, and a row that reads the screen alone (`AppMenuItem.startsCommand`: `Copy path`) — and how many
+        /// of them grey. A row greyed for a reason of its own (`blockedReason`: the delete table's row on the branch
+        /// the tree is on) greys whether or not anything runs, so it is not one the wait holds.
         function held() {
             const level = menuWaitTimer.level
             let rows = 0
@@ -514,13 +539,13 @@ Item {
                 const row = level.itemAt(i)
                 if (!row || !row.present || row.codeColSeat === undefined || row.subMenu || !row.startsCommand)
                     continue
-                if (row.blockedReason !== "" && !row.withdrawn)
+                if (row.ownBlocked && !row.withdrawn)
                     continue
                 rows++
                 if (row.blocked)
                     greyed++
             }
-            return greyed === rows ? "all" : greyed === 0 ? "none" : greyed + "/" + rows
+            return rows === 0 ? "nothing" : greyed === rows ? "all" : greyed === 0 ? "none" : greyed + "/" + rows
         }
         /// The chips of the rows on show that greyed where they stand, as `menu-follow` says them.
         function withdrawn() {
@@ -529,9 +554,25 @@ Item {
             for (let i = 0; i < level.count; i++) {
                 const row = level.itemAt(i)
                 if (row && row.present && row.withdrawn === true)
-                    chips.push((row.code !== "" ? row.code : row.text).replace(/ /g, ""))
+                    chips.push(menuWaitTimer.chipOf(row))
             }
             return chips.length === 0 ? "none" : chips.join(",")
+        }
+        /// The chips of the rows on show greyed for an operation stopped in the tree.
+        function stopped() {
+            const level = menuWaitTimer.level
+            const chips = []
+            for (let i = 0; i < level.count; i++) {
+                const row = level.itemAt(i)
+                if (row && row.present && !row.subMenu && row.blocked
+                        && row.blockedReason === Words.finishStoppedFirst)
+                    chips.push(menuWaitTimer.chipOf(row))
+            }
+            return chips.length === 0 ? "none" : chips.join(",")
+        }
+        /// A row's chip as these lines say it: its code, else its words, spaces dropped.
+        function chipOf(row) {
+            return (row.code !== "" ? row.code : row.text).replace(/ /g, "")
         }
         function line(stage) {
             const level = menuWaitTimer.level
@@ -542,7 +583,8 @@ Item {
                    + " held=" + menuWaitTimer.held()
                    + " open=" + level.visible
                    + (was !== "" ? " was=" + was + " selector=" + menuWaitTimer.selector : "")
-                   + (menuWaitTimer.replays ? " named=" + menuWaitTimer.named() : "")
+                   + (menuWaitTimer.replays ? " named=" + menuWaitTimer.named() + " stopped=" + menuWaitTimer.stopped()
+                                            : "")
                    + (menuWaitTimer.mode === "conflict" ? menuWaitTimer.sides() : "")
                    + (menuWaitTimer.merges ? " why=" + menuWaitTimer.why() : "")
                    + (menuWaitTimer.fetches

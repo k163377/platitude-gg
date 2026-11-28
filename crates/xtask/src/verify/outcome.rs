@@ -53,6 +53,9 @@ pub(super) struct Outcome {
     /// The binding and polish loops QML said (`super::loops`): one that
     /// nothing allows is a red whatever else the run said.
     pub(super) loops: Vec<super::loops::Met>,
+    /// The rows a menu was handed and has no part for (`super::gaps`),
+    /// each as the drawer named them: a red whatever else the run said.
+    pub(super) gaps: Vec<String>,
 }
 
 impl Outcome {
@@ -69,6 +72,7 @@ impl Outcome {
             && self.held_save_landed.is_none_or(|landed| landed)
             && self.stored_path_kept.is_none_or(|kept| kept)
             && !self.looped()
+            && self.gaps.is_empty()
     }
 
     /// Whether QML said a loop nothing allows.
@@ -144,6 +148,7 @@ pub(super) fn judge(
         held_save_landed: super::shim::held_save_landed(&opts.verb, config),
         stored_path_kept: super::seed::stored_path_kept(&opts.verb, &opts.arg, config_dir),
         loops: super::loops::met(every_line.iter().map(String::as_str)),
+        gaps: super::gaps::met(every_line.iter().map(String::as_str)),
     }
 }
 
@@ -290,6 +295,12 @@ pub(super) fn announce(
     if outcome.looped() {
         println!("  {}", super::loops::MEANING);
     }
+    for rows in &outcome.gaps {
+        println!("  no part for: {rows}");
+    }
+    if !outcome.gaps.is_empty() {
+        println!("  {}", super::gaps::MEANING);
+    }
     if passed {
         Ok(())
     } else {
@@ -365,6 +376,7 @@ mod tests {
         held_save_landed: None,
         stored_path_kept: None,
         loops: Vec::new(),
+        gaps: Vec::new(),
     };
 
     /// A loop QML said is a red however well the run went otherwise, and
@@ -396,6 +408,29 @@ mod tests {
             ..WELL
         };
         assert!(!allowed.looped() && allowed.passed());
+    }
+
+    /// A menu row the app said it has no part for is a red however well
+    /// the run went otherwise (`super::super::gaps`).
+    #[test]
+    fn a_menu_row_with_no_part_fails_the_run() {
+        let opts = super::super::options::parse(&["wip".to_string()]).expect("a line");
+        let dir = crate::yard::Yard::new("verify-gap");
+        let said = super::super::child::Ran {
+            err_lines: vec![
+                "qrc:/qt/qml/platitude/ui/MenuLines.qml:128: MenuLines: a row with no part: pull"
+                    .to_string(),
+            ],
+            ..ran(false, Some(0))
+        };
+        let outcome = super::judge(&opts, &said, &dir, &dir, "r1", None);
+        assert_eq!(outcome.gaps, ["pull"], "{outcome:?}");
+        let gapped = Outcome {
+            gaps: outcome.gaps,
+            ..WELL
+        };
+        assert!(!gapped.passed());
+        assert!(WELL.passed());
     }
 
     /// The picture is of another state than the one the verb completed on

@@ -18,7 +18,7 @@
 //!   the baseline follows it down; it may not grow.
 //! * **neither** — the backstop applies as written.
 //!
-//! Nine other questions of how the tree is divided are counted here too:
+//! Ten other questions of how the tree is divided are counted here too:
 //! the product's QML may not name a harness type ([`modules`]), a
 //! singleton past the tokens stands in a module of its own that only its
 //! readers import ([`singletons`]), the app's
@@ -30,14 +30,17 @@
 //! ([`canvases`]), the repository's words are drawn by `PlainTextLabel`
 //! and never by a label guessing its format ([`labels`]), the core
 //! matches git's words only against the messages of its table
-//! ([`relied_messages`]), and the tooling stands its throwaway trees only
-//! where a sweep reaches them ([`throwaway`]).
+//! ([`relied_messages`]), the tooling stands its throwaway trees only
+//! where a sweep reaches them ([`throwaway`]), and a right-click menu's
+//! rows and reasons travel in core's words alone, each reason said in a
+//! sentence of its own ([`menu_words`]).
 //!
 //! The fn half of the same § is left to clippy's `too_many_lines`.
 
 mod canvases;
 mod env;
 pub(crate) mod labels;
+mod menu_words;
 mod modules;
 mod popups;
 mod relied_messages;
@@ -93,6 +96,10 @@ const FORMATS_GUESSED: &str = "line(s) drawing input with a label that guesses i
     naming a format outside the parts that draw markup";
 const TREES_UNSWEPT: &str = "spelling(s) standing a tree under the throwaway folder where no \
     sweep reads it, or excusing one that is gone (`structure::throwaway`)";
+const WORDS_OUT_OF_STEP: &str = "menu word(s) out of step — the QML's with core's, a row's with \
+    what the row keeps, the drawer's warning with `verify::gaps`: a reason with no sentence greys \
+    its row with nothing said, a row's own `enabled` leaves it a stop for the keys off show \
+    (`structure::menu_words`)";
 
 const BASELINE_HEADER: &str = "\
 # Baseline for `cargo xtask structure` — the files that were already past
@@ -154,6 +161,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     let (guessed_formats, label_files) = labels::check(&root)?;
     let (stray_messages, word_readers) = relied_messages::check(&root)?;
     let (unswept, tooling_files) = throwaway::check(&root)?;
+    let (stray_words, menu_files) = menu_words::check(&root)?;
     let kinds = [
         (crossed.len() + looked_up.len(), SHIPPED_LACKS.to_string()),
         (out_of_step.len(), IMPORTS_OUT_OF_STEP.to_string()),
@@ -169,6 +177,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
             format!("{FORMATS_GUESSED} ({})", labels::RULE),
         ),
         (unswept.len(), TREES_UNSWEPT.to_string()),
+        (stray_words.len(), WORDS_OUT_OF_STEP.to_string()),
     ];
     failures.extend(crossed);
     failures.extend(out_of_step);
@@ -179,6 +188,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
     failures.extend(guessed_formats);
     failures.extend(stray_messages);
     failures.extend(unswept);
+    failures.extend(stray_words);
 
     for failure in &failures {
         println!("structure: {failure}");
@@ -197,7 +207,8 @@ pub fn run(args: &[String]) -> Result<(), String> {
              {canvas_files} product files drawing their marks on InkCanvas alone, \
              {label_files} product files drawing input with PlainTextLabel alone, \
              {word_readers} core functions reading git's words through the table, \
-             {tooling_files} tooling files standing their throwaway trees where a sweep reads \
+             {tooling_files} tooling files standing their throwaway trees where a sweep reads, \
+             {menu_files} product files asking the menus in core's words \
              — PASS",
             counted.len(),
             comment_share(physical, code),

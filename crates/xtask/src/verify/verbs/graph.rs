@@ -86,24 +86,48 @@ pub(super) const TABLE: &[Verb] = &[
     // through the click meant to close it.
     // Under a stopped merge (`--preset others-merging`) the row the menu
     // stands on — `feature/clash`'s — keeps its eight history rows greyed
-    // with the operation's reason, read off core's word (`standing=`):
-    // `Create branch here…`, cherry-pick, revert, squash, drop,
-    // `rebase --interactive`, merge and rebase. The reset card's title
-    // stays live; its three rows grey inside it (`reset-menu` on the same
-    // preset). Which rows grey is held by `tests/qml/tst_commitrowmenu.qml`
-    // and `offers::commit_menu`'s unit tests; these two runs are pictures.
-    // On `--preset tags` the row under HEAD is published and HEAD is not:
-    // `rebase` onto it replays only HEAD, so it wears no note
-    // (`rebase_note=`, read off the row as drawn — the page's wiring
-    // included), while squash and drop on the row itself say it is pushed.
+    // with the operation's reason: `Create branch here…`, cherry-pick,
+    // revert, squash, drop, `rebase --interactive`, merge and rebase
+    // (`greyed=`), and the reset card its three (`reset_greyed=`), its
+    // title greying with them (`reset-menu` on the same preset). Which rows
+    // grey and why is the menu type's (`menu/tests/lines.rs`), what the
+    // rows read of it `tests/qml/tst_commitrowmenu.qml`'s; these two runs
+    // are pictures.
+    // The history rows read how the branch HEAD is on has the row's commit,
+    // off the graph as drawn (`merge_why=` / `rebase_why=` / `pick_why=`,
+    // `GraphModel.historyOf`): on `--preset tags` the row under HEAD is down
+    // a straight line — merge and rebase grey, saying the branch has it, and
+    // the cherry-pick stays live, what git makes of it being in the lines
+    // since —, while squash and drop on the row itself say it is pushed; on
+    // `--preset rewrite-merge` `side` is past the merge, where the rebase
+    // lays the branch again and stays live; `feature/topic-a` and
+    // `origin/feature/remote-only` are off it. `rebase_warning=` the warning a
+    // live rebase wears, read off the row as drawn — the page's wiring
+    // included: topic's range holds pushed commits, remote-only's HEAD's
+    // own alone.
     Verb {
         name: "commit-menu",
         when: &[
             (
                 Arg::WithPreset("others-merging"),
-                "can_move=true standing=true greyed=8",
+                "greyed=8 reset_rows=3 reset_greyed=3",
             ),
-            (Arg::WithPreset("tags"), "rebase_note=false"),
+            (
+                Arg::WithPreset("tags"),
+                "merge_why=in-history rebase_why=in-history pick_why= rebase_warning=false",
+            ),
+            (
+                Arg::IsOn("side", "rewrite-merge"),
+                "merge_why=in-history rebase_why= pick_why= rebase_warning=false",
+            ),
+            (
+                Arg::Is("feature/topic-a"),
+                "merge_why= rebase_why= pick_why= rebase_warning=true",
+            ),
+            (
+                Arg::Is("origin/feature/remote-only"),
+                "merge_why= rebase_why= pick_why= rebase_warning=false",
+            ),
         ],
         plain: "overlay saved=true popups=1 yield=true",
     },
@@ -139,8 +163,12 @@ pub(super) const TABLE: &[Verb] = &[
     // asked, not on the rewrite's detached HEAD — and the branch they name
     // is the one the rebase holds while HEAD is on none, `named=main`.
     // Stood again on the replay stopped part-way (`replay-stop`, and the
-    // left menu's `base` row in `replay-stop-ref`), the rows that name the
-    // branch grey, still naming the one the stopped rebase holds. Raised on
+    // left menu's `base` row in `replay-stop-ref`), the rows that move the
+    // branch the stopped rebase holds stay, greyed for the operation — a
+    // reason of their own, which `held=` leaves out (`nothing` where no row
+    // is left to hold) —, still naming that branch: `stopped=` names them,
+    // so one left live drops out of it, and none stands so while the replay
+    // still runs (`replay`). Raised on
     // a worktree's conflicted file while the merge editor has it
     // (`conflict`), the conflict rows name the merge's two sides in the
     // colours they wear with nothing running — `main` the branch stood on.
@@ -151,19 +179,22 @@ pub(super) const TABLE: &[Verb] = &[
     // (`fetch-ref`) — as this window's fetch is asked, and that fetch moves
     // it, the menu stays up on where it is now (§hover「外乱で閉じない」),
     // its `push --delete` still leased to where it stood and greyed. The
-    // left menu opens on `origin/main` while it still stands on HEAD's
-    // commit, so it offers no merge or rebase (`offers::ref_menu`) and
-    // fewer rows wait than on the chip's menu.
+    // chip's menu is HEAD's row's, whose cherry-pick, merge and rebase grey
+    // for HEAD's own commit (`menu::line`'s `SameCommit`) and are no rows
+    // the wait holds. The left menu opens on `origin/main` while it still
+    // stands on HEAD's commit, so its merge and rebase stand greyed the same
+    // way and go live once the fetch moves it; the cards it carries hold
+    // the rest, so fewer rows wait than on the chip's menu.
     Verb {
         name: "menu-wait",
         when: &[
             (
                 Arg::Is("fetch"),
-                "menu_wait stage=after same=true held=1/9 open=true waited=true moved=true withdrawn=push--delete",
+                "menu_wait stage=after same=true held=1/8 open=true waited=true moved=true withdrawn=push--delete",
             ),
             (
                 Arg::Is("fetch-ref"),
-                "menu_wait stage=after same=true held=1/4 open=true waited=true moved=true withdrawn=push--delete",
+                "menu_wait stage=after same=true held=1/6 open=true waited=true moved=true withdrawn=push--delete",
             ),
             (
                 Arg::Is("merge"),
@@ -179,15 +210,17 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("replay"),
-                "menu_wait stage=during same=true held=all open=true named=main",
+                "menu_wait stage=during same=true held=all open=true named=main stopped=none",
             ),
             (
                 Arg::Is("replay-stop"),
-                "menu_wait stage=after same=true held=all open=true named=main",
+                "menu_wait stage=after same=true held=nothing open=true named=main \
+                 stopped=Createbranchhere…,cherry-pick,revert,squash,drop,rebase--interactive,merge,rebase",
             ),
             (
                 Arg::Is("replay-stop-ref"),
-                "menu_wait stage=after same=true held=2/5 open=true named=main",
+                "menu_wait stage=after same=true held=none open=true named=main \
+                 stopped=Createbranchhere…,merge,rebase",
             ),
             (
                 Arg::Is("after"),
@@ -202,7 +235,7 @@ pub(super) const TABLE: &[Verb] = &[
     // (`same=true`). The branch renamed, its rows say the new name; HEAD
     // taken off its branch, the rows that name it grey where they stand and
     // say to open the menu again; a tracked file written, the `--hard` row's
-    // note says it and the card grows to hold it whole, as one opened on
+    // warning says it and the card grows to hold it whole, as one opened on
     // that tree stands. The rename made by the window's own write instead
     // (`written`), the menu stands on what it left once it has ended. What
     // reaches over there stays on what the menu went up with: a remote
@@ -213,14 +246,19 @@ pub(super) const TABLE: &[Verb] = &[
     // its new name (`aimed=`) rather than close, the left menu's door with
     // it (`door=`). The upstream taken off
     // (`upstream-unset`), the BRANCH card's `Unset upstream` row — no chip
-    // to fall back on — greys and keeps its words without the name.
+    // to fall back on — greys and keeps its words without the name. The
+    // worktree whose WORKTREES row raised the menu taken off its branch
+    // (`worktree-moved`), only the row on that worktree stays live
+    // (`live=`, `card=`): every other row was the branch's, which the row
+    // no longer has out. That worktree removed (`worktree-removed`), no
+    // row does: the branch is still there, but what was clicked is gone.
     Verb {
         name: "menu-follow",
         when: &[
             (
                 Arg::Is("detach"),
                 "menu_follow form=detach open=true same=true \
-                 withdrawn=squash,drop,rebase--interactive,merge,rebase,reset named= tip=again",
+                 withdrawn=squash,drop,rebase--interactive,merge,rebase named= tip=again",
             ),
             (
                 Arg::Is("detach-ref"),
@@ -228,7 +266,7 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("dirty"),
-                "menu_follow form=dirty open=true same=true withdrawn=none named=main note=true width=grew",
+                "menu_follow form=dirty open=true same=true withdrawn=none named=main warning=true width=grew",
             ),
             (
                 Arg::Is("written"),
@@ -259,6 +297,18 @@ pub(super) const TABLE: &[Verb] = &[
             (
                 Arg::Is("upstream-unset"),
                 "menu_follow form=upstream-unset open=true same=true withdrawn=Unsetupstream named=main tip=again",
+            ),
+            (
+                Arg::Is("worktree-moved"),
+                "menu_follow form=worktree-moved open=true same=true \
+                 withdrawn=Createbranchhere…,switch,merge,rebase,push,branch-D named=main tip=again \
+                 live=WORKTREE card=worktreeremove links=false",
+            ),
+            (
+                Arg::Is("worktree-removed"),
+                "menu_follow form=worktree-removed open=true same=true \
+                 withdrawn=Createbranchhere…,switch,merge,rebase,push,branch-D named=main tip=again \
+                 live=none card=none links=false",
             ),
         ],
         plain: "menu_follow form=rename open=true same=true withdrawn=none named=trunk",
@@ -553,7 +603,7 @@ pub(super) const TABLE: &[Verb] = &[
     // `ref=false` is the ref menu staying away. A window checks the aim:
     // the press reaches `CommitMenuState.standRow` with the chip's name
     // and the tree's branch (the drawing is `tst_commitrowmenu.qml`, the
-    // answer `offers::ref_menu`). The two lines are the two aims — a name
+    // answer core's `menu::lines`). The two lines are the two aims — a name
     // the tree is not on, and the one it is; neither stands for the
     // other — one alone passes a press that always hands the same name.
     // A run naming no branch aims at an empty name, which the graph never

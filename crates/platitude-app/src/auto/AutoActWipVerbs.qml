@@ -157,20 +157,23 @@ Item {
                 stashDeleteItem.completeHold()
             }
         } else if (act === "stash-apply-row" || act === "stash-pop-row") {
+            // The first stash's graph row, applied or popped by the selector that row answers to, down the road the
+            // details pane's band and the row's menu both take from the page on (`repoTab.applyStash` /
+            // `page.popStash`); the menu's rows hand the selector up to it (tst_commitrowmenu).
             const stashOid = stashesModel.oidOfName(stashesModel.nameAt(0))
-            page.openRowMenu(stashOid)
+            const selector = graphModel.stashRefOf(stashOid)
             if (act === "stash-apply-row") {
-                repoTab.applyStash(commitMenuState.menuStashRef)
+                repoTab.applyStash(selector)
             } else {
                 // A pop's row leaves the graph, the rebuild's edge; an apply keeps the plain write barrier.
                 driver.awaitGraphGone(GitFacts.commitKey(stashOid))
-                // Through the page, the menu's road, which reads the entry's name before it goes (`popStash`);
+                // Through the page, the details pane's road, which reads the entry's name before it goes (`popStash`);
                 // `back=` checks the box at the barrier — no picture answers it. Fired with the box empty: a
                 // sentence already in it is kept over the name. Every stash of `--preset stashes` / `basic` is named,
                 // so `back=true` is right there. `--preset stashes` is the subject: the row leaving is the top one,
                 // so whether it hands the top mark on shows in the picture.
                 driver.expectPopBack(GitFacts.stashLabel(stashesModel.nameAt(0)))
-                page.popStash(commitMenuState.menuStashRef)
+                page.popStash(selector)
             }
         } else if (act === "wip-embedded") {
             // An embedded repository's row, whose pane answers with a sentence (core `details::embedded`). The

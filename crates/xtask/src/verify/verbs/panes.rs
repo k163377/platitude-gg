@@ -181,7 +181,8 @@ pub(super) const TABLE: &[Verb] = &[
             ),
             (
                 Arg::Is("readonly"),
-                "field_menu box=readonly opened=true rows=Copy,Select all live=Copy,Select all",
+                "field_menu box=readonly opened=true \
+                 rows=Undo,Redo,Cut,Copy,Paste,Delete,Select all live=Copy,Select all",
             ),
         ],
         // `empty`, and no argument.
@@ -625,13 +626,34 @@ pub(super) const TABLE: &[Verb] = &[
         plain: "carried_menu open=true apply=true held=false name=",
     },
     // A conflicted file's menu: git stashes nothing over an unmerged path,
-    // so the `stash` row stands greyed in the toolbar's words — not taken
-    // away (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+    // so the `stash` row is listed greyed with the reason's sentence, and no
+    // `Discard` row is listed — git refuses to restore an unmerged path. With
+    // a file of another section chosen beside it (`<conflict>+<other>`, over
+    // `--preset lfs-conflict`'s untracked `.gitattributes`), both sections'
+    // rows stand: the choice decides them, not the row right-clicked.
     Verb {
         name: "file-menu-conflict",
-        when: &[],
+        when: &[(
+            Arg::Has("+"),
+            "file_menu bucket=conflicts rows=6 stash=true \
+             stashWhy=Settle this worktree's conflicts first keep=true discard=true",
+        )],
         plain: "file_menu bucket=conflicts rows=5 stash=true \
-                stashWhy=Settle the conflicts first — git will not stash an unmerged file",
+                stashWhy=Settle this worktree's conflicts first keep=true discard=false",
+    },
+    // The same greyed `stash` row with its reason up — forced, as a pointer
+    // cannot be put on a row from here. Over a conflict the sentence is the
+    // type's (`menu::Why::ConflictsHere`), what every menu says of it; a tree
+    // named by `--repo` (one with no commit yet) holds the row greyed with
+    // its tip up, whatever its sentence.
+    Verb {
+        name: "stash-blocked-tip",
+        when: &[(
+            Arg::WithPreset("conflict-kinds"),
+            "stash_blocked bucket=conflicts offered=true blocked=true tip=true \
+             says=Settle this worktree's conflicts first",
+        )],
+        plain: " offered=true blocked=true tip=true says=",
     },
     // That worktree's work applied here, landing as `stash apply` lands:
     // `here=` is this tree's row after it and `there=` the row it came from,
