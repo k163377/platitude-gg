@@ -1,7 +1,7 @@
 //! What a ref's menu reads of the far side: a local branch's upstream, or
 //! the sides a tag's name stands on. One value per kind of row, built by
-//! the model that lists the row and handed to [`super::ref_menu`] and
-//! [`super::pull_row`] whole.
+//! the model that lists the row and handed to the menu's row whole
+//! ([`crate::menu::Subject::far`]).
 
 use super::RefKind;
 
@@ -9,12 +9,14 @@ use super::RefKind;
 ///
 /// Only a local branch and a tag have a far side its rows read: a remote
 /// branch is a reading itself, and a stash or a worktree has none. A far
-/// side is read on a row of its own kind alone ([`Self::on`]): the cards'
-/// rows read it (`RefBranchMenu` / `RefTagMenu`), and of the row's own
-/// menu the `pull` row.
+/// side is read on a row of its own kind alone ([`Self::on`]); what of it
+/// decides rows and what greys them is the menu type's
+/// ([`crate::menu::Facts::of_subject`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum FarSide {
-    /// Nothing read over there: the rows that reach it stay out.
+    /// Nothing read over there: a remote branch's row, which reads none of
+    /// its own, and any row before the tab's refs are read — when every row
+    /// waits for the opening (`menu::Why::Opening`).
     #[default]
     Unread,
     Branch(BranchFar),
@@ -26,9 +28,9 @@ impl FarSide {
     /// branch's row, a tag's on a tag's, and nothing on any other pairing.
     ///
     /// The kind is the row's word and the far side the card's record,
-    /// handed to `GitFacts.refMenu` apart, so no type keeps the two
+    /// handed to `GitFacts.menuOn` apart, so no type keeps the two
     /// together; this is the one place they are matched.
-    pub(super) fn on(self, kind: RefKind) -> Self {
+    pub(crate) fn on(self, kind: RefKind) -> Self {
         match (kind, &self) {
             (RefKind::Branch, Self::Branch(_)) | (RefKind::Tag, Self::Tag(_)) => self,
             _ => Self::Unread,
@@ -40,11 +42,8 @@ impl FarSide {
 /// (`RefsSnapshot::branch_far`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BranchFar {
-    /// The remote reading the branch speaks for.
-    pub reading: Reading,
-    /// An upstream at all — the reading, or one gone or here, which leaves
-    /// [`Self::reading`] at [`Reading::None`].
-    pub tracked: bool,
+    /// Where the upstream it is configured with stands.
+    pub tracks: Tracks,
     /// The repository has a remote to name an upstream on.
     pub has_remote: bool,
     /// How many commits the branch has that its upstream lacks, as of the
@@ -52,37 +51,59 @@ pub struct BranchFar {
     pub ahead: u32,
 }
 
-/// Where the remote reading a local branch speaks for stands.
+/// Where the upstream a local branch is configured with stands, as the refs
+/// listing reads it (`session::BranchItem::tracks`).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Reading {
-    /// No listed reading: the branch tracks nothing, a branch here, or one
-    /// gone.
+pub enum Tracks {
+    /// None is configured.
     #[default]
-    None,
-    /// On the branch's commit: one row on the graph.
+    Nothing,
+    /// A remote branch the listing has, on the branch's commit: one row on
+    /// the graph.
     Together,
-    /// On another commit, so the pair is two rows
-    /// (`session::BranchItem::upstream_drifted`). The reading is deleted
-    /// from its own row.
+    /// A remote branch the listing has, on another commit, so the pair is
+    /// two rows (`session::BranchItem::upstream_drifted`). The reading is
+    /// deleted from its own row.
     Drifted,
+    /// A branch of this repository the listing has
+    /// (`branch.<n>.remote = .`).
+    Here,
+    /// A name no row of the listing answers to: git's `[gone]` — no ref by
+    /// that name, over there or here —, or an upstream fetched outside the
+    /// remote branches, whose ref the listing does not hold
+    /// (`session::BranchItem::upstream_gone`).
+    Gone,
 }
 
-impl Reading {
+impl Tracks {
+    /// A remote branch the listing has, which the branch speaks for.
+    pub fn reads(self) -> bool {
+        matches!(self, Self::Together | Self::Drifted)
+    }
+
     /// The word a branch's record carries it in (`encode::far`); empty for
-    /// [`Self::None`].
+    /// [`Self::Nothing`].
     pub fn word(self) -> &'static str {
         match self {
-            Self::None => "",
+            Self::Nothing => "",
             Self::Together => "together",
             Self::Drifted => "drifted",
+            Self::Here => "here",
+            Self::Gone => "gone",
         }
     }
 
-    /// The reading [`Self::word`] wrote; `None` for any other word.
+    /// The upstream [`Self::word`] wrote; `None` for any other word.
     pub fn from_word(word: &str) -> Option<Self> {
-        [Self::None, Self::Together, Self::Drifted]
-            .into_iter()
-            .find(|reading| reading.word() == word)
+        [
+            Self::Nothing,
+            Self::Together,
+            Self::Drifted,
+            Self::Here,
+            Self::Gone,
+        ]
+        .into_iter()
+        .find(|tracks| tracks.word() == word)
     }
 }
 
@@ -143,16 +164,6 @@ impl TagSides {
             .into_iter()
             .find(|sides| sides.word() == word)
     }
-
-    /// Whether this repository holds the tag.
-    pub(super) fn here(self) -> bool {
-        matches!(self, Self::Here | Self::Both)
-    }
-
-    /// Whether a remote was last heard to carry the name.
-    pub(super) fn on_remote(self) -> bool {
-        matches!(self, Self::Remote | Self::Both)
-    }
 }
 
 /// Why a tag menu's rows that delete over there stand greyed.
@@ -195,8 +206,14 @@ mod tests {
     /// a word none of them writes reads as nothing.
     #[test]
     fn every_far_word_reads_back_as_what_wrote_it() {
-        for reading in [Reading::None, Reading::Together, Reading::Drifted] {
-            assert_eq!(Reading::from_word(reading.word()), Some(reading));
+        for tracks in [
+            Tracks::Nothing,
+            Tracks::Together,
+            Tracks::Drifted,
+            Tracks::Here,
+            Tracks::Gone,
+        ] {
+            assert_eq!(Tracks::from_word(tracks.word()), Some(tracks));
         }
         for sides in [TagSides::Here, TagSides::Remote, TagSides::Both] {
             assert_eq!(TagSides::from_word(sides.word()), Some(sides));
@@ -208,7 +225,7 @@ mod tests {
         ] {
             assert_eq!(TagDeleteHeld::from_word(held.word()), Some(held));
         }
-        assert_eq!(Reading::from_word("elsewhere"), None);
+        assert_eq!(Tracks::from_word("elsewhere"), None);
         assert_eq!(TagSides::from_word(""), None, "unread is no side");
         assert_eq!(TagSides::from_word("neither"), None);
         assert_eq!(TagDeleteHeld::from_word("drifted"), None);

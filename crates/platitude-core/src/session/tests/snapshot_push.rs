@@ -171,8 +171,9 @@ fn the_branch_head_is_on_answers_nothing_here() {
     assert_eq!(row(&at, "topic").standing, PushStanding::Ready);
 }
 
-/// A tab that is not open sends nothing from a row either: the row has no
-/// seat ([`PushStanding::offered`]).
+/// A tab that is not open sends nothing from a row either: the row stands
+/// closed, and greys while the menu waits for the opening
+/// (`menu::Why::Opening`).
 #[test]
 fn a_row_on_a_tab_that_is_not_open_stands_closed() {
     let at = snapshot(
@@ -181,7 +182,6 @@ fn a_row_on_a_tab_that_is_not_open_stands_closed() {
     );
     let closed = at.branch_push("topic", "origin", false, &TreeStanding::on("main"));
     assert_eq!(closed.standing, PushStanding::Closed);
-    assert!(!closed.standing.offered());
 }
 
 /// `short` measured against the branch here called `upstream`, `ahead` of

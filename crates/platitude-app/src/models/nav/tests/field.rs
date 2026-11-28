@@ -444,7 +444,7 @@ fn the_short_sections_read_out_of_what_arrived() {
             prune_reason: String::new(),
             // A real listing always opens with the repository's own worktree.
             main: path.ends_with("repo"),
-            held: None,
+            kept: None,
         }
     };
     let mut model = section(
@@ -494,7 +494,7 @@ fn a_worktree_row_wears_the_state_of_its_checkout() {
                 String::new()
             },
             main: path.ends_with("home"),
-            held: None,
+            kept: None,
         }
     };
     let mut model = section(
@@ -722,7 +722,7 @@ fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
         prunable: false,
         prune_reason: String::new(),
         main: path.ends_with("repo"),
-        held: None,
+        kept: None,
     };
     let mut model = section(
         "worktrees",
@@ -747,13 +747,13 @@ fn the_worktree_holding_a_branch_answers_for_every_other_worktree() {
 }
 
 /// A worktree stopped part-way through a rebase is listed detached, yet
-/// holds its branch as git counts it (`WorktreeEntry::held`) — and what
+/// holds its branch as git counts it (`WorktreeEntry::kept`) — and what
 /// holds it, for the name box, which git turns a rename of it down for from
 /// any worktree, the one this window stands on too (`held_by_operation`).
 #[test]
 fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
-    use platitude_core::worktrees::HeldBy;
-    let entry = |path: &str, branch: Option<&str>, held: Option<(&str, HeldBy)>| {
+    use platitude_core::worktrees::Keeper;
+    let entry = |path: &str, branch: Option<&str>, kept: Option<(&str, Keeper)>| {
         platitude_core::worktrees::WorktreeEntry {
             path: path.to_string(),
             branch: branch.map(str::to_string),
@@ -765,7 +765,7 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
             prunable: false,
             prune_reason: String::new(),
             main: path.ends_with("repo"),
-            held: held.map(|(branch, by)| platitude_core::worktrees::Held {
+            kept: kept.map(|(branch, by)| platitude_core::worktrees::KeptBranch {
                 branch: branch.to_string(),
                 by,
             }),
@@ -775,8 +775,8 @@ fn a_branch_a_stopped_rebase_holds_is_held_by_that_worktree() {
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:/work/repo", None, Some(("main", HeldBy::Bisect))),
-                entry("C:/work/rebasing", None, Some(("topic", HeldBy::Rebase))),
+                entry("C:/work/repo", None, Some(("main", Keeper::Bisect))),
+                entry("C:/work/rebasing", None, Some(("topic", Keeper::Rebase))),
                 entry("C:/work/plain", Some("plain"), None),
             ],
             current: "c:/work/repo".to_string(),
@@ -883,7 +883,7 @@ fn an_upstream_is_named_wherever_it_stands() {
 /// branch carries its name.
 #[test]
 fn a_branch_card_reads_its_upstream_off_one_record() {
-    use platitude_core::offers::{BranchFar, Reading};
+    use platitude_core::offers::{BranchFar, Tracks};
     let mut reads = local("reads", false);
     reads.upstream = "origin/reads".into();
     reads.upstream_oid = Some(oid("b"));
@@ -905,8 +905,7 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
         card("branch", "reads"),
         Some(CardRecord::Branch(BranchUpstream {
             far: Some(BranchFar {
-                reading: Reading::Drifted,
-                tracked: true,
+                tracks: Tracks::Drifted,
                 has_remote: true,
                 ahead: 0,
             }),
@@ -921,8 +920,7 @@ fn a_branch_card_reads_its_upstream_off_one_record() {
         card("branch", "lost"),
         Some(CardRecord::Branch(BranchUpstream {
             far: Some(BranchFar {
-                reading: Reading::None,
-                tracked: true,
+                tracks: Tracks::Gone,
                 has_remote: true,
                 ahead: 0,
             }),
@@ -976,13 +974,8 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
 
     let row = branches.branch_push_facts("topic".into(), "origin".into(), true, on_main());
     assert_eq!(
-        (
-            row.state.as_str(),
-            row.offered,
-            row.overwrites,
-            row.lease.as_str()
-        ),
-        ("diverged", true, true, tip.as_str())
+        (row.state.as_str(), row.overwrites, row.lease.as_str()),
+        ("diverged", true, tip.as_str())
     );
     let head = HeadPush::Read(HeadBranch {
         name: "main".into(),
@@ -1003,19 +996,21 @@ fn both_doors_lease_to_the_listed_tip_off_one_snapshot() {
         ("behind", "origin/main", tip.as_str())
     );
     let own = branches.branch_push_facts("main".into(), "origin".into(), true, on_main());
-    assert!(!own.offered, "the branch the tree is on: the toolbar's");
+    assert_eq!(
+        own.state, "closed",
+        "the branch the tree is on: the toolbar's"
+    );
     let closed = branches.branch_push_facts("topic".into(), "origin".into(), false, on_main());
-    assert!(!closed.offered, "a tab that is not open");
+    assert_eq!(closed.state, "closed", "a tab that is not open");
 }
 
-/// What `GitFacts.refMenu` reads off the record a card hands it as it was
+/// What `GitFacts.menuOn` reads off the record a card hands it as it was
 /// read: its far side, whichever model's record it is (`CardRecord`).
 #[test]
 fn a_cards_record_is_read_as_its_far_side() {
-    use platitude_core::offers::{BranchFar, FarSide, Reading, TagFar, TagSides};
+    use platitude_core::offers::{BranchFar, FarSide, TagFar, TagSides, Tracks};
     let far = BranchFar {
-        reading: Reading::Together,
-        tracked: true,
+        tracks: Tracks::Together,
         has_remote: true,
         ahead: 1,
     };

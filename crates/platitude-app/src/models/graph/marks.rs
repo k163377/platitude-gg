@@ -10,6 +10,7 @@
 //! they move: cleared in `reset_unnotified`, extended in `take_chunk`,
 //! rebuilt whole in `replace_walk` and `relay_walk`.
 
+use platitude_core::menu::History;
 use platitude_core::publish::WalkedRow;
 
 use super::*;
@@ -258,6 +259,25 @@ impl GraphModel {
         }
         platitude_core::publish::reaches(self.walked_rows(), from, to)
     }
+
+    /// How the branch HEAD is on has `oid` — whether HEAD's commit `head`
+    /// reaches it, and down a straight line of first parents or past a
+    /// merge —, off the drawn rows; `None` where they cannot say
+    /// (`GraphModel.historyOf`). Reached, the line is always told
+    /// (`publish::straight_down`); a line the window cut would read as past
+    /// a merge, which greys no rebase.
+    pub(super) fn drawn_history(&self, oid: Oid, head: Oid) -> Option<History> {
+        if !self.reaches_between(head, oid)? {
+            return Some(History::Off);
+        }
+        let straight =
+            platitude_core::publish::straight_down(self.walked_rows(), head, oid).unwrap_or(false);
+        Some(if straight {
+            History::Straight
+        } else {
+            History::PastMerge
+        })
+    }
 }
 
 #[cfg(test)]
@@ -293,6 +313,49 @@ mod tests {
             !model.is_parent_of(9, 0),
             "a row past the window is nobody's parent"
         );
+    }
+
+    /// The same four rows, HEAD at 3: 2 and 1 are in its history down a
+    /// straight line, 4 — forked off 1 — is not, and a commit the rows do
+    /// not hold is git's to answer at the press. What greys a graph row's
+    /// rewrites, and a merge or a rebase of a commit the branch has.
+    #[test]
+    fn a_commit_is_in_heads_history_where_heads_commit_reaches_it() {
+        let mut model = GraphModel::default();
+        model.push_mark(commit(oid(3), &[oid(2)]));
+        model.push_mark(commit(oid(4), &[oid(1)]));
+        model.push_mark(commit(oid(2), &[oid(1)]));
+        model.push_mark(commit(oid(1), &[]));
+        model.index.sort();
+
+        let straight = Some(History::Straight);
+        assert_eq!(model.drawn_history(oid(2), oid(3)), straight);
+        assert_eq!(model.drawn_history(oid(1), oid(3)), straight);
+        assert_eq!(model.drawn_history(oid(3), oid(3)), straight, "HEAD's own");
+        let off = Some(History::Off);
+        assert_eq!(model.drawn_history(oid(4), oid(3)), off, "4 forked off 1");
+        assert_eq!(model.drawn_history(oid(3), oid(4)), off, "nor is 3 in 4's");
+        assert_eq!(model.drawn_history(oid(9), oid(3)), None, "not drawn");
+    }
+
+    /// HEAD at 6 on a merge 5 of 3 and 4: the merge is down a straight
+    /// line, and everything under it past one — the rebase there lays the
+    /// branch again.
+    #[test]
+    fn a_commit_under_a_merge_is_in_heads_history_past_it() {
+        let mut model = GraphModel::default();
+        model.push_mark(commit(oid(6), &[oid(5)]));
+        model.push_mark(commit(oid(5), &[oid(3), oid(4)]));
+        model.push_mark(commit(oid(4), &[oid(1)]));
+        model.push_mark(commit(oid(3), &[oid(1)]));
+        model.push_mark(commit(oid(1), &[]));
+        model.index.sort();
+
+        assert_eq!(model.drawn_history(oid(5), oid(6)), Some(History::Straight));
+        let past = Some(History::PastMerge);
+        assert_eq!(model.drawn_history(oid(3), oid(6)), past, "its first side");
+        assert_eq!(model.drawn_history(oid(4), oid(6)), past, "its other side");
+        assert_eq!(model.drawn_history(oid(1), oid(6)), past);
     }
 
     /// The same four rows, listed as a choice would list them.

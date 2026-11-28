@@ -784,7 +784,7 @@ mod tests {
         );
     }
 
-    fn entry(path: &str, main: bool, branch: Option<&str>, held: Option<&str>) -> WorktreeEntry {
+    fn entry(path: &str, main: bool, branch: Option<&str>, kept: Option<&str>) -> WorktreeEntry {
         WorktreeEntry {
             path: path.to_string(),
             branch: branch.map(str::to_string),
@@ -796,9 +796,9 @@ mod tests {
             prunable: false,
             prune_reason: String::new(),
             main,
-            held: held.map(|branch| crate::worktrees::Held {
+            kept: kept.map(|branch| crate::worktrees::KeptBranch {
                 branch: branch.to_string(),
-                by: crate::worktrees::HeldBy::Rebase,
+                by: crate::worktrees::Keeper::Rebase,
             }),
         }
     }

@@ -26,8 +26,6 @@ pub struct PushRecord {
     pub asks: bool,
     /// Only the held overwrite reaches (`PushStanding::overwrites`).
     pub overwrites: bool,
-    /// A branch's menu keeps its `push` row (`PushStanding::offered`).
-    pub offered: bool,
     pub target: String,
     /// Hex; empty where the overwrite leases to git's own tracking ref.
     pub lease: String,
@@ -44,7 +42,6 @@ impl From<PushFacts> for PushRecord {
             sends_plain: standing.sends_plain(),
             asks: standing.asks(),
             overwrites: standing.overwrites(),
-            offered: standing.offered(),
             target: facts.target.unwrap_or_default(),
             lease: super::oid_text(facts.lease),
             ahead: shown_count(facts.counts.ahead),
@@ -61,7 +58,6 @@ impl Record for PushRecord {
             .put("sendsPlain", &self.sends_plain)
             .put("asks", &self.asks)
             .put("overwrites", &self.overwrites)
-            .put("offered", &self.offered)
             .put("target", &self.target)
             .put("lease", &self.lease)
             .put("ahead", &self.ahead)
@@ -76,7 +72,6 @@ impl Record for PushRecord {
             sends_plain: field(map, "sendsPlain")?,
             asks: field(map, "asks")?,
             overwrites: field(map, "overwrites")?,
-            offered: field(map, "offered")?,
             target: field(map, "target")?,
             lease: field(map, "lease")?,
             ahead: field(map, "ahead")?,
@@ -281,17 +276,11 @@ mod tests {
                 ..PushFacts::default()
             });
             assert_eq!(
-                (
-                    record.sends_plain,
-                    record.asks,
-                    record.overwrites,
-                    record.offered
-                ),
+                (record.sends_plain, record.asks, record.overwrites),
                 (
                     standing.sends_plain(),
                     standing.asks(),
-                    standing.overwrites(),
-                    standing.offered()
+                    standing.overwrites()
                 ),
                 "{standing:?}"
             );

@@ -3,10 +3,11 @@
 
 use super::super::testkit::*;
 use super::super::*;
+use platitude_core::menu::Placing;
 use platitude_core::offers::Leads;
-use platitude_core::worktrees::{Held, HeldBy, WorktreeEntry};
+use platitude_core::worktrees::{Keeper, KeptBranch, WorktreeEntry};
 
-fn entry(path: &str, branch: Option<&str>, held: Option<(&str, HeldBy)>) -> WorktreeEntry {
+fn entry(path: &str, branch: Option<&str>, kept: Option<(&str, Keeper)>) -> WorktreeEntry {
     WorktreeEntry {
         path: path.to_string(),
         branch: branch.map(str::to_string),
@@ -18,7 +19,7 @@ fn entry(path: &str, branch: Option<&str>, held: Option<(&str, HeldBy)>) -> Work
         prunable: false,
         prune_reason: String::new(),
         main: path.ends_with("repo"),
-        held: held.map(|(branch, by)| Held {
+        kept: kept.map(|(branch, by)| KeptBranch {
             branch: branch.to_string(),
             by,
         }),
@@ -33,7 +34,7 @@ fn worktrees() -> NavSectionModel {
         "worktrees",
         Source::Worktrees {
             list: vec![
-                entry("C:/work/repo", None, Some(("main", HeldBy::Rebase))),
+                entry("C:/work/repo", None, Some(("main", Keeper::Rebase))),
                 entry("C:/work/other", Some("topic"), None),
                 entry("C:/work/loose", None, None),
             ],
@@ -65,8 +66,7 @@ fn a_branch_row_leads_to_the_worktree_holding_its_local_branch() {
             home: false,
             card: model.worktree_of("C:/work/other"),
             card_here: false,
-            stopped_by: String::new(),
-            placed: true,
+            placing: Placing::Beside { taken: false },
             place: model.new_worktree("topic"),
         }
     );
@@ -85,23 +85,37 @@ fn a_branch_row_leads_to_the_worktree_holding_its_local_branch() {
 }
 
 /// A rebase stopped in this window's own tree holds its branch with no
-/// other holder listed: the row leads nowhere and says the stop. Only a
-/// local branch's row says it — a remote row's local branch is the
-/// remote's to make.
+/// other holder listed: the row leads nowhere — the stop is HEAD's
+/// reading's to say (`TreeStanding::kept`), and the remote row's too.
 #[test]
-fn a_branch_a_rebase_here_holds_says_the_stop_and_leads_nowhere() {
+fn a_branch_a_rebase_here_holds_leads_nowhere() {
+    let model = worktrees();
+    let main = model.row_lead("branch", "main", "main", "");
+    assert_eq!((main.leads, main.path.as_str()), (Leads::Nowhere, ""));
+    assert_eq!(
+        model.row_lead("remote", "origin/main", "main", "").leads,
+        Leads::Nowhere
+    );
+}
+
+/// A branch out in this window's own worktree — kept here by a stopped
+/// rebase, as with HEAD on it — stands its WORKTREE card on this worktree,
+/// as that worktree's own row does: the same branch has the same rows from
+/// either entrance. It still leads nowhere.
+#[test]
+fn a_branch_out_here_stands_its_card_on_this_worktree() {
     let model = worktrees();
     let main = model.row_lead("branch", "main", "main", "");
     assert_eq!(
-        (main.leads, main.path.as_str(), main.stopped_by.as_str()),
-        (Leads::Nowhere, "", "rebase")
+        (
+            main.leads,
+            main.path.as_str(),
+            main.card.map(|card| card.full),
+            main.card_here
+        ),
+        (Leads::Nowhere, "", Some("C:/work/repo".to_string()), true)
     );
-    assert_eq!(
-        model
-            .row_lead("remote", "origin/main", "main", "")
-            .stopped_by,
-        ""
-    );
+    assert_eq!(model.row_lead("branch", "free", "free", "").card, None);
 }
 
 /// A worktree on no branch leads to itself, unless the window stands in it
@@ -161,8 +175,13 @@ fn only_a_branchy_row_lands_on_a_local_branch() {
     let branches = section("branches", Source::Locals(locals(Vec::new())));
     let lead = branches.row_lead("branch", "topic", "topic", "");
     assert_eq!(
-        (lead.leads, lead.local.as_str(), lead.placed),
-        (Leads::Nowhere, "topic", false)
+        (lead.leads, lead.local.as_str(), lead.placing),
+        (Leads::Nowhere, "topic", Placing::Unread),
+        "no worktree listing read: nothing known of where it goes"
+    );
+    assert_ne!(
+        model.row_lead("branch", "topic", "topic", "").placing,
+        Placing::Unread
     );
 }
 
@@ -175,4 +194,44 @@ fn nothing_handed_is_no_card() {
     let back =
         <Optional<CardRecord> as QVariantConvertible>::try_from_qvariant(&none.to_qvariant());
     assert!(back.is_some_and(|back| back.is_none()));
+}
+
+/// Where the worktrees' listing leaves a new worktree nowhere to go, the
+/// row's lead says why: a bare repository's listing names no worktree of
+/// its own, and one whose own stands at its drive's root has nothing
+/// beside it (`worktrees_nowhere`); elsewhere it goes beside that one.
+#[test]
+fn a_rows_lead_says_why_a_new_worktree_has_nowhere_to_go() {
+    use platitude_core::menu::Nowhere;
+    let placing = |list: Vec<WorktreeEntry>, current: &str| {
+        let mut model = section(
+            "worktrees",
+            Source::Worktrees {
+                list,
+                current: current.to_string(),
+            },
+        );
+        model.arrange();
+        model.row_lead("branch", "topic", "topic", "").placing
+    };
+    let linked = entry("C:/work/wt", Some("main"), None);
+    assert_eq!(
+        placing(vec![linked], "c:/work/wt"),
+        Placing::Nowhere(Nowhere::Bare)
+    );
+    let at_root = WorktreeEntry {
+        main: true,
+        ..entry("C:/", Some("main"), None)
+    };
+    assert_eq!(
+        placing(vec![at_root], "c:/"),
+        Placing::Nowhere(Nowhere::DriveRoot)
+    );
+    assert_eq!(
+        placing(
+            vec![entry("C:/work/repo", Some("main"), None)],
+            "c:/work/repo"
+        ),
+        Placing::Beside { taken: false }
+    );
 }

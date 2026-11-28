@@ -250,9 +250,9 @@ pub struct HeadMsg {
     /// The branch, empty when detached or unborn-without-a-name.
     pub branch: String,
     pub detached: bool,
-    /// While detached, the branch a rebase or bisect keeps to the worktree
-    /// (`HeadState::held`); empty otherwise.
-    pub held: String,
+    /// While detached, the branch a rebase or bisect keeps to the worktree,
+    /// and which of them keeps it (`HeadState::kept`); `None` otherwise.
+    pub kept: Option<platitude_core::worktrees::KeptBranch>,
     /// The report's number (`SessionEvent::HeadObserved::seq`), rising
     /// across sessions. A report at or above the `head_seq` a write's
     /// answer named looked after the write.
@@ -265,7 +265,7 @@ impl HeadMsg {
             oid: head.oid,
             branch: head.branch.clone().unwrap_or_default(),
             detached: head.detached,
-            held: head.held.clone().unwrap_or_default(),
+            kept: head.kept.clone(),
             seq,
         }
     }

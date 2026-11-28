@@ -358,7 +358,7 @@ impl NavSectionModel {
                 let Entry::Worktree { entry, .. } = of else {
                     return None;
                 };
-                let by = entry.held.as_ref().filter(|held| held.branch == branch)?.by;
+                let by = entry.kept.as_ref().filter(|kept| kept.branch == branch)?.by;
                 let row = Row::Shown {
                     of,
                     depth: 0,
@@ -376,8 +376,22 @@ impl NavSectionModel {
     /// the `worktree_holding` slot). Not `told`: two fields decide it — the
     /// row's branch, and not being this window's own worktree. A rebase or
     /// bisect standing in a worktree holds its branch too, listed
-    /// detached (`WorktreeEntry::held`).
+    /// detached (`WorktreeEntry::kept`).
     pub(super) fn worktree_with(&self, branch: &str) -> String {
+        self.worktree_having(branch, false)
+    }
+
+    /// The path of this window's own worktree where it has `branch` out —
+    /// HEAD on it, or a rebase or bisect standing here keeping it —; empty
+    /// otherwise. The worktree a branch's WORKTREE card stands on when no
+    /// other has it out, as its WORKTREES row's does.
+    pub(super) fn worktree_here_with(&self, branch: &str) -> String {
+        self.worktree_having(branch, true)
+    }
+
+    /// The path of the worktree that has `branch` out, this window's own
+    /// (`here`) or another.
+    fn worktree_having(&self, branch: &str, here: bool) -> String {
         if branch.is_empty() || self.section != "worktrees" {
             return String::new();
         }
@@ -385,15 +399,15 @@ impl NavSectionModel {
             .filter_map(|at| self.all.entry(at))
             .find_map(|of| {
                 let held = matches!(of, Entry::Worktree { entry, .. }
-                    if entry.held.as_ref().is_some_and(|held| held.branch == branch));
+                    if entry.kept.as_ref().is_some_and(|kept| kept.branch == branch));
                 let row = Row::Shown {
                     of,
                     depth: 0,
                     from: 0,
                 };
                 ((held || self.field(row, Role::Bucket).as_str() == branch)
-                    && !self.field(row, Role::IsHead).flag())
-                .then(|| self.field(row, Role::Full).as_str().to_string())
+                    && self.field(row, Role::IsHead).flag() == here)
+                    .then(|| self.field(row, Role::Full).as_str().to_string())
             })
             .unwrap_or_default()
     }

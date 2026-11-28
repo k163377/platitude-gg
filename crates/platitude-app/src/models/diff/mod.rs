@@ -364,9 +364,10 @@ pub struct DiffModel {
     /// The selection, none while nothing is selected
     /// (`selection::DiffSelection`).
     selection: Option<selection::DiffSelection>,
-    /// What the selection holds, so the menu can leave out a row that
-    /// would copy nothing (デザイン規約 §メニュー「対象が存在しない」行は消す);
-    /// settled with the selection, read once as the menu opens.
+    /// What the selection holds — the menu's class: a row stands for each
+    /// side it takes something from (デザイン規約 §メニュー「右クリックの
+    /// メニューの行は、対象の分類で決まる」); settled with the selection,
+    /// read once as the menu opens.
     sel_has_new: bool,
     sel_removed: i32,
     /// When the file on screen was asked for, for the read / apply marks

@@ -31,14 +31,19 @@ pub struct WorktreeModel {
     detached: bool,
     /// The branch this worktree holds: the one HEAD is on, or while HEAD
     /// is on none the one its rebase or bisect keeps to it — the branch
-    /// git itself still counts as this worktree's (`HeadState::held`).
+    /// git itself still counts as this worktree's (`HeadState::kept`).
     /// What the menus' rows name as the current branch (`merge` into it,
     /// `rebase` it, `reset` it, `pull` into it), read off the tree as it
     /// is: a branch renamed outside is named anew under a menu still up
     /// (デザイン規約 §hover「中身が残っていれば字だけ替え」), and a replay's
     /// detached HEAD still names the branch it rewrites. Empty only where
-    /// HEAD is on none and nothing holds one. Off HEAD alone (`take_head`).
-    held_branch: String,
+    /// HEAD is on none and nothing holds one. Off HEAD alone, by core's
+    /// rule (`TreeStanding::moved`).
+    moved_branch: String,
+    /// While HEAD is on none, the branch its rebase or bisect keeps, and
+    /// which of them keeps it: what the menus' rules read
+    /// (`TreeStanding::kept`). Off HEAD alone, with `moved_branch`.
+    kept: Option<platitude_core::worktrees::KeptBranch>,
     /// A branch with no commits yet: HEAD is known and names none.
     unborn: bool,
     /// The tip of the branch HEAD is on — `head_oid` on a branch, empty
@@ -190,6 +195,10 @@ pub struct WorktreeModel {
     /// `clean` / `ready` (`platitude_core::stash::standing`). Empty until
     /// `loaded`, like every count here.
     stash_standing: String,
+    /// Why git takes no stash of this tree, in the menus' reasons
+    /// (`menu::stash_why`'s word, `Words.menuWhy`): what the toolbar's
+    /// button and a file row's `stash` both say. Empty where git takes one.
+    stash_why: String,
     /// Whether a move has to clear the way first — an operation standing
     /// or unmerged paths (`platitude_core::offers::moves_blocked`). What
     /// `RepoPage.standsInTheWay` reads, less the consent already given, and
@@ -274,7 +283,7 @@ impl WorktreeModel {
     qproperty!("branch", Member = branch, Notify = changed);
     qproperty!("headOid", Member = head_oid, Notify = changed);
     qproperty!("detached", Member = detached, Notify = changed);
-    qproperty!("heldBranch", Member = held_branch, Notify = changed);
+    qproperty!("movedBranch", Member = moved_branch, Notify = changed);
     qproperty!("unborn", Member = unborn, Notify = changed);
     qproperty!("branchOid", Member = branch_oid, Notify = changed);
     qproperty!("headSeq", Member = head_seq, Notify = changed);
@@ -342,6 +351,7 @@ impl WorktreeModel {
     qproperty!("wipRenamed", Member = wip_renamed, Notify = changed);
     qproperty!("wipCopied", Member = wip_copied, Notify = changed);
     qproperty!("stashStanding", Member = stash_standing, Notify = changed);
+    qproperty!("stashWhy", Member = stash_why, Notify = changed);
     qproperty!("movesBlocked", Member = moves_blocked, Notify = changed);
     qproperty!("leaveUndoes", Member = leave_undoes, Notify = changed);
     qproperty!("leaveCode", Member = leave_code, Notify = changed);
@@ -458,7 +468,9 @@ impl WorktreeModel {
             op_editing: self.op_editing,
             moves_blocked: self.moves_blocked,
             upstream: self.upstream.clone(),
+            upstream_counted: self.counts_settled && self.status.upstream_counts.is_some(),
             diverged: self.pull_blocked,
+            kept: self.kept.clone(),
         }
     }
 
@@ -501,7 +513,8 @@ impl WorktreeModel {
         self.branch = String::new();
         self.head_oid = String::new();
         self.detached = false;
-        self.held_branch = String::new();
+        self.moved_branch = String::new();
+        self.kept = None;
         self.unborn = false;
         self.branch_oid = String::new();
         self.head_seq = 0;
@@ -545,6 +558,7 @@ impl WorktreeModel {
         self.wip_renamed = 0;
         self.wip_copied = 0;
         self.stash_standing = String::new();
+        self.stash_why = String::new();
         self.moves_blocked = false;
         self.leave_undoes = false;
         self.leave_code = String::new();
@@ -598,13 +612,14 @@ impl WorktreeModel {
 
     fn take_head(&mut self, head: HeadMsg) {
         self.head_oid = crate::encode::oid_text(head.oid);
-        self.held_branch = if head.branch.is_empty() {
-            head.held
-        } else {
-            head.branch.clone()
-        };
+        self.kept = head.kept;
         self.branch = head.branch;
         self.detached = head.detached;
+        self.moved_branch = self
+            .tree_standing()
+            .moved()
+            .map(|moved| moved.name().to_owned())
+            .unwrap_or_default();
         self.head_seq = i32::try_from(head.seq).unwrap_or(i32::MAX);
     }
 
@@ -754,10 +769,11 @@ impl WorktreeModel {
         } else {
             self.head_oid.clone()
         };
-        self.stash_standing =
-            platitude_core::stash::standing(self.head_oid.is_empty(), &self.counts)
-                .as_str()
-                .to_string();
+        let stash = platitude_core::stash::standing(self.head_oid.is_empty(), &self.counts);
+        self.stash_standing = stash.as_str().to_string();
+        self.stash_why = platitude_core::menu::stash_why(stash)
+            .map_or("", platitude_core::menu::Why::word)
+            .to_string();
         self.moves_blocked = platitude_core::offers::moves_blocked(&self.op_state, &self.counts);
         let in_progress = platitude_core::integrate::InProgress::from_state(&self.op_state);
         self.leave_undoes = platitude_core::offers::leaving_undoes(in_progress);

@@ -101,8 +101,10 @@ impl<'a> RefJoins<'a> {
     }
 
     /// The upstream this branch is configured for while nothing in the
-    /// listing answers to that name — git's `[gone]`, shortened the way
-    /// the row says it; empty otherwise.
+    /// listing answers to that name, shortened the way the row says it;
+    /// empty otherwise. git's `[gone]` is one such — no ref by the name —,
+    /// an upstream fetched outside the remote branches another: git has
+    /// its ref, the listing does not hold it.
     fn upstream_gone(&self, r: &RefEntry) -> crate::Name {
         let Some(up) = r.upstream.as_deref() else {
             return crate::Name::default();
@@ -541,8 +543,8 @@ impl RepoSession {
                 // filtered out above. A rebase or bisect standing there keeps
                 // its branch to that worktree, as git counts it.
                 None => {
-                    if let Some(held) = &worktree.held {
-                        fresh.branches.insert(held.branch.clone(), worktree.locked);
+                    if let Some(kept) = &worktree.kept {
+                        fresh.branches.insert(kept.branch.clone(), worktree.locked);
                     }
                     if let Some(oid) = worktree
                         .head_hex

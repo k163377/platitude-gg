@@ -117,9 +117,9 @@ impl Record for HeldMark {
 /// What a tag's menu stands on (`NavSectionModel::tag_card`,
 /// `platitude_core::session::TagMenuFacts`), in the words the card reads,
 /// with what its rows read over there flat beside them (`encode::put_far`:
-/// `sides`, the `pushRemote` its pushes go to and the `heldBack` the card
-/// words its greyed rows by) — the record QML hands `GitFacts.refMenu` as
-/// it is (`CardRecord`).
+/// `sides`, the `pushRemote` its pushes go to and the `heldBack` core
+/// greys its rows by) — the record QML hands `GitFacts.menuOn` as it is
+/// (`CardRecord`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenu {
     /// Hex; empty for the plain push.
@@ -175,7 +175,7 @@ impl From<platitude_core::session::TagMenuFacts> for TagMenu {
 /// with, where that stands and the commit it is on, and core's part flat
 /// beside them (`encode::put_far`), off the same row
 /// (`RefsSnapshot::branch_upstream`). QML hands the record to
-/// `GitFacts.refMenu` as it is (`CardRecord`).
+/// `GitFacts.menuOn` as it is (`CardRecord`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BranchUpstream {
     /// `None` on a row that is no local branch's: it reads nothing over
@@ -422,7 +422,7 @@ pub struct NavSectionModel {
     carried_name: String,
     /// The branch the repository's own worktree keeps, where that worktree is
     /// not this window's — checked out, or kept by a rebase or bisect
-    /// standing there (`WorktreeEntry::held`). A branch it keeps wears the
+    /// standing there (`WorktreeEntry::kept`). A branch it keeps wears the
     /// house where the others wear the tree (デザイン規約 §ref の種別).
     /// Empty otherwise, and on every section but WORKTREES.
     home_branch: String,

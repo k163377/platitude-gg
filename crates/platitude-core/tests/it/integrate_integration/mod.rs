@@ -9,6 +9,7 @@
 
 mod drop;
 mod edits;
+mod in_history;
 mod merge;
 mod mergetool;
 mod pick_revert;

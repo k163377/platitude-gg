@@ -91,13 +91,21 @@ impl PushStanding {
         self == Self::Publish
     }
 
-    /// A branch's menu keeps its `push` row: a press reaches, or the row
-    /// stands out saying why — nothing to send (`Clean`; user decision —
-    /// ask before changing) or nowhere to send it (`StaysHere`)
-    /// (デザイン規約 §メニュー「「今できない」行は無効で残す」). None where
-    /// there is no branch to send, nothing it is a row for.
-    pub fn offered(self) -> bool {
-        !matches!(self, Self::Closed | Self::Unborn)
+    /// The standing [`Self::as_str`] wrote; `None` for any other word.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [
+            Self::Closed,
+            Self::Unborn,
+            Self::Publish,
+            Self::StaysHere,
+            Self::Elsewhere,
+            Self::Ready,
+            Self::Clean,
+            Self::Behind,
+            Self::Diverged,
+        ]
+        .into_iter()
+        .find(|standing| standing.as_str() == word)
     }
 
     /// The word the UI says it by (`BandPushButton.mode`, `BranchPushRow`).
@@ -509,6 +517,24 @@ mod tests {
 
     use crate::remote::Marked;
 
+    #[test]
+    fn every_standing_reads_back_as_its_word() {
+        for standing in [
+            PushStanding::Closed,
+            PushStanding::Unborn,
+            PushStanding::Publish,
+            PushStanding::StaysHere,
+            PushStanding::Elsewhere,
+            PushStanding::Ready,
+            PushStanding::Clean,
+            PushStanding::Behind,
+            PushStanding::Diverged,
+        ] {
+            assert_eq!(PushStanding::from_word(standing.as_str()), Some(standing));
+        }
+        assert_eq!(PushStanding::from_word(""), None);
+    }
+
     const REMOTES: [&str; 3] = ["origin", "my", "my/fork"];
 
     /// HEAD's push is read off a status about HEAD's branch alone: the last
@@ -608,8 +634,7 @@ mod tests {
     }
 
     /// What a press does in each standing — a plain send, after asking
-    /// where it goes or not, the held overwrite, or nothing at all — and
-    /// whether a branch's menu keeps its row there.
+    /// where it goes or not, the held overwrite, or nothing at all.
     #[test]
     fn each_standing_takes_a_plain_press_the_overwrite_or_none() {
         use PushStanding::*;
@@ -618,22 +643,20 @@ mod tests {
                 standing.sends_plain(),
                 standing.asks(),
                 standing.overwrites(),
-                standing.offered(),
             )
         };
-        let plain = (true, false, false, true);
-        let asked = (true, true, false, true);
-        let overwrite = (false, false, true, true);
-        let out = (false, false, false, true);
-        let none = (false, false, false, false);
+        let plain = (true, false, false);
+        let asked = (true, true, false);
+        let overwrite = (false, false, true);
+        let none = (false, false, false);
         for (standing, takes) in [
             (Closed, none),
             (Unborn, none),
             (Publish, asked),
-            (StaysHere, out),
+            (StaysHere, none),
             (Elsewhere, plain),
             (Ready, plain),
-            (Clean, out),
+            (Clean, none),
             (Behind, overwrite),
             (Diverged, overwrite),
         ] {

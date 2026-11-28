@@ -2,6 +2,8 @@
 //! them: every one this section holds, **whatever the section is
 //! filtering to** — as on the branches' card (`card`).
 
+use platitude_core::menu::Nowhere;
+
 use super::*;
 
 /// One row of the card: a worktree, said the way the section's own
@@ -220,13 +222,20 @@ impl NavSectionModel {
         })
     }
 
-    /// Whether new worktrees have a place at all: the listing names the
-    /// repository's own worktree, and that worktree has a parent to go beside
-    /// it in (`worktrees_folder`). Nothing on disk is looked at.
-    pub(super) fn has_place_for_worktrees(&self) -> bool {
-        self.worktree_rows().iter().any(|row| {
-            row.change == MAIN && platitude_core::worktrees::worktrees_folder(&row.full).is_some()
-        })
+    /// Why new worktrees have nowhere to go, off the listing; `None` where
+    /// they go beside the repository's own worktree (`worktrees_folder`).
+    /// A listing that names no worktree of the repository's own is a bare
+    /// repository's — git lists the repository's own first, and only a bare
+    /// one's entry is left out (`drain`) —; one whose own has no parent
+    /// stands at the root of its drive. Nothing on disk is looked at.
+    pub(super) fn worktrees_nowhere(&self) -> Option<Nowhere> {
+        let rows = self.worktree_rows();
+        let Some(main) = rows.iter().find(|row| row.change == MAIN) else {
+            return Some(Nowhere::Bare);
+        };
+        platitude_core::worktrees::worktrees_folder(&main.full)
+            .is_none()
+            .then_some(Nowhere::DriveRoot)
     }
 
     /// The card's rows. Empty for every section but the worktrees.
@@ -342,7 +351,7 @@ mod tests {
             prunable: false,
             prune_reason: String::new(),
             main: path.ends_with("home"),
-            held: None,
+            kept: None,
         }
     }
 
@@ -433,9 +442,9 @@ mod tests {
         );
 
         let mut rebasing = worktree_entry("C:/work/home", None, false);
-        rebasing.held = Some(platitude_core::worktrees::Held {
+        rebasing.kept = Some(platitude_core::worktrees::KeptBranch {
             branch: "main".to_string(),
-            by: platitude_core::worktrees::HeldBy::Rebase,
+            by: platitude_core::worktrees::Keeper::Rebase,
         });
         model.settle_home_branch(&[rebasing], "c:/work/plain");
         assert_eq!(
@@ -561,19 +570,34 @@ mod tests {
         assert_eq!(holding, "folder");
     }
 
+    /// A listing naming no worktree of the repository's own is a bare
+    /// repository's, its entry left out: nothing to go beside. Nor is there
+    /// for one whose own stands at the root of its drive.
     #[test]
-    fn no_place_before_the_listing_names_the_repositorys_own_worktree() {
-        let model = section(
+    fn new_worktrees_have_nowhere_to_go_with_nothing_to_go_beside() {
+        let bare = section(
             "worktrees",
             Source::Worktrees {
                 list: vec![worktree_entry("C:/work/plain", Some("topic"), false)],
                 current: "c:/work/plain".to_string(),
             },
         );
-        assert!(model.new_worktree("x").is_none());
-        assert!(!model.has_place_for_worktrees());
+        assert!(bare.new_worktree("x").is_none());
+        assert_eq!(bare.worktrees_nowhere(), Some(Nowhere::Bare));
+        let root = section(
+            "worktrees",
+            Source::Worktrees {
+                list: vec![platitude_core::worktrees::WorktreeEntry {
+                    main: true,
+                    ..worktree_entry("C:/", Some("main"), false)
+                }],
+                current: "c:/".to_string(),
+            },
+        );
+        assert!(root.new_worktree("x").is_none());
+        assert_eq!(root.worktrees_nowhere(), Some(Nowhere::DriveRoot));
         assert!(worktrees().new_worktree("").is_none());
-        assert!(worktrees().has_place_for_worktrees());
+        assert_eq!(worktrees().worktrees_nowhere(), None);
     }
 
     /// A renamed worktree stays in its parent, and a name that is not one

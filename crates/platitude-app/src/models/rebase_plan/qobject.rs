@@ -3,6 +3,7 @@
 //! `drain`'s.
 
 use super::*;
+use crate::encode::{MenuAnswer, One};
 
 #[qobject(Base = QListModel, ConvertToCamelCase, NoQmlElement)]
 impl RebasePlanModel {
@@ -133,15 +134,15 @@ impl RebasePlanModel {
         crate::hub::with_session(self.tab_id, |s| s.check_plan_published(range.clone()));
     }
 
-    /// Whether a fold may stand on `row` right now — what the verb menu
-    /// freezes as it opens.
+    /// The verb menu on row `row` (`RebasePlanPane`), asked as it opens and
+    /// frozen while it stands (デザイン規約 §メニュー): [`Self::step_answer`].
     #[qslot]
-    fn can_fold(&mut self, row: i32) -> bool {
-        usize::try_from(row).is_ok_and(|index| self.fold_lands(index))
+    fn step_menu(&mut self, row: i32) -> One<MenuAnswer> {
+        One::new(self.step_answer(row))
     }
 
     /// Sets row `row`'s verb; a fold with nowhere to land is refused (for
-    /// callers that skip `canFold`). Leaving `reword` drops the typed
+    /// callers that skip the menu's greying). Leaving `reword` drops the typed
     /// draft: kept invisibly, it would resurface on the next reword.
     #[qslot]
     fn set_action(&mut self, row: i32, action: String) {

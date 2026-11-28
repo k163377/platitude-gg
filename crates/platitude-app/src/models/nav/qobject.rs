@@ -479,7 +479,7 @@ impl NavSectionModel {
 
     /// The record the card of the row `name` of `kind` stands on
     /// (`CardRecord`, `card_record`), read as the menu opens and as it
-    /// stands again and handed on whole to `GitFacts.refMenu`; none on a
+    /// stands again and handed on whole to `GitFacts.menuOn`; none on a
     /// row with no card. `against` is the remote this window's tag rows
     /// act on, `aim` one the reader named on its own (`tag_aim_at`) or
     /// empty. Every refs section holds the one snapshot, so any of them
@@ -588,7 +588,7 @@ impl NavSectionModel {
     /// What a menu's `push` row on this branch stands on, read as the menu
     /// opens and as it stands again (`RefsSnapshot::branch_push`): the
     /// toolbar's reading for a branch the worktree is not on — `tree` is
-    /// where it stands, handed on as `GitFacts.refMenu` takes it —
+    /// where it stands, handed on as `GitFacts.menuOn` takes it —
     /// on a tab that is `open`. `fallback` is where a branch marked nowhere
     /// and tracking nothing goes (`RepoTab.defaultRemote`). Asked of the
     /// branches section.
@@ -681,14 +681,14 @@ impl NavSectionModel {
     /// two words and the local branch it lands on, the worktree a press on
     /// it opens — the one holding a branch or a remote branch's local one,
     /// or a worktree on no branch itself, unless the tab stands in it —,
-    /// the worktree its WORKTREE card stands on, the operation stopped here
-    /// that holds a local branch, and whether new worktrees have a place.
+    /// the worktree its WORKTREE card stands on, and whether new worktrees
+    /// have a place.
     /// `local` is the local branch the row lands on (the remotes section's
     /// `landsOn`); `opened` the worktree the menu was opened on (a WORKTREES
     /// row's path), which its WORKTREE card stands on, empty for none. Read
     /// as a menu opens and as it stands again, or as a press on a ref is
     /// weighed, and handed on whole
-    /// to `GitFacts.refMenu` / `switchMove`. Asked of the worktrees
+    /// to `GitFacts.menuOn` / `switchMove`. Asked of the worktrees
     /// section.
     #[qslot]
     pub(super) fn lead_of(

@@ -468,7 +468,7 @@ mod periodic {
 
     /// A branch another worktree has checked out still takes an
     /// upstream, though its delete is refused; which rows that leaves is
-    /// `offers::ref_menu`'s answer.
+    /// the menu type's answer (`menu::Row::SetUpstream`).
     #[tokio::test]
     #[ignore = "git letting a held branch take an upstream: not worth the pre-merge run"]
     async fn a_branch_another_worktree_holds_still_takes_an_upstream() {

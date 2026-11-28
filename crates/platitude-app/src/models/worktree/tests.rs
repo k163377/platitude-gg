@@ -1,6 +1,7 @@
 use super::*;
 use platitude_core::opstate::OpState;
 use platitude_core::status::{StatusItem, WorktreeStatus};
+use platitude_core::worktrees::{Keeper, KeptBranch};
 
 const ROOT: &str = "1111111111111111111111111111111111111111";
 const NEXT: &str = "2222222222222222222222222222222222222222";
@@ -10,19 +11,22 @@ fn head_on(branch: &str, oid_hex: &str, seq: u64) -> StateMsg {
         oid: crate::encode::oid_arg(oid_hex),
         branch: branch.to_string(),
         detached: false,
-        held: String::new(),
+        kept: None,
         seq,
     })
 }
 
-/// HEAD on no branch at `oid_hex`, with `held` the branch an operation
-/// keeps to the worktree ("" for none).
-fn head_detached(oid_hex: &str, held: &str, seq: u64) -> StateMsg {
+/// HEAD on no branch at `oid_hex`, with `kept` the branch a rebase keeps
+/// to the worktree ("" for none).
+fn head_detached(oid_hex: &str, kept: &str, seq: u64) -> StateMsg {
     StateMsg::Head(HeadMsg {
         oid: crate::encode::oid_arg(oid_hex),
         branch: String::new(),
         detached: true,
-        held: held.to_string(),
+        kept: (!kept.is_empty()).then(|| KeptBranch {
+            branch: kept.to_string(),
+            by: Keeper::Rebase,
+        }),
         seq,
     })
 }
@@ -152,22 +156,35 @@ fn detached_names_no_branch_tip() {
 /// is on none the one a rebase or bisect keeps to the worktree — and none
 /// where nothing does, or once the tab stands elsewhere.
 #[test]
-fn the_held_branch_is_heads_own_or_the_one_an_operation_keeps() {
+fn the_moved_branch_is_heads_own_or_the_one_an_operation_keeps() {
     let mut model = WorktreeModel::default();
     model.absorb(vec![head(ROOT, 1)]);
-    assert_eq!(model.held_branch, "main");
+    assert_eq!(model.moved_branch, "main");
+    assert_eq!(model.kept, None, "HEAD's own is kept by nothing");
     model.absorb(vec![head_detached(NEXT, "main", 2)]);
     assert_eq!(
-        (model.branch.as_str(), model.held_branch.as_str()),
+        (model.branch.as_str(), model.moved_branch.as_str()),
         ("", "main"),
         "a replay's detached HEAD still holds the branch it rewrites"
     );
+    assert_eq!(
+        model.kept,
+        Some(KeptBranch {
+            branch: "main".into(),
+            by: Keeper::Rebase
+        }),
+        "and says the rebase keeps it"
+    );
     model.absorb(vec![head_detached(NEXT, "", 3)]);
-    assert_eq!(model.held_branch, "", "`rebase --quit` takes it away");
+    assert_eq!(model.moved_branch, "", "`rebase --quit` takes it away");
+    assert_eq!(model.kept, None);
     model.absorb(vec![head_on("trunk", ROOT, 4)]);
-    assert_eq!(model.held_branch, "trunk", "a rename outside is named anew");
+    assert_eq!(
+        model.moved_branch, "trunk",
+        "a rename outside is named anew"
+    );
     model.forget_the_worktree();
-    assert_eq!(model.held_branch, "");
+    assert_eq!(model.moved_branch, "");
 }
 
 /// What a standing menu follows (`RepoPage.menuReadRevision`): it moves when
@@ -291,7 +308,10 @@ fn the_counts_are_the_branch_they_were_read_with() {
 }
 
 /// An upstream git names with nothing counted against it — its ref gone —
-/// is none the counts speak for; with counts it is, and they go out.
+/// is none the counts speak for; with counts it is, and they go out. The
+/// tree says which to the menus, whose pull of the branch HEAD is on
+/// stands on it where the listing has no row for the upstream
+/// (`TreeStanding::upstream_counted`).
 #[test]
 fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
     let read = |counts: Option<platitude_core::AheadBehind>| {
@@ -308,17 +328,18 @@ fn an_upstream_with_nothing_counted_against_it_is_not_tracked() {
                 .is_some_and(|read| read.upstream_counts.is_some()),
             model.upstream_counts,
             model.pull_blocked,
+            model.tree_standing().upstream_counted,
         )
     };
     assert_eq!(
         read(None),
-        (false, platitude_core::AheadBehind::default(), false)
+        (false, platitude_core::AheadBehind::default(), false, false)
     );
     let both = platitude_core::AheadBehind {
         ahead: 1,
         behind: 2,
     };
-    assert_eq!(read(Some(both)), (true, both, true));
+    assert_eq!(read(Some(both)), (true, both, true, true));
 }
 
 /// Commits on both sides of the upstream grey the pull; on one side
@@ -390,11 +411,13 @@ fn the_stash_standing_is_settled_off_head_and_the_counts_together() {
         path: "f.txt".to_string(),
     }])]);
     assert_eq!(model.stash_standing, "unborn", "no commit to stash on");
+    assert_eq!(model.stash_why, "no-commits", "in the menus' reason");
     model.absorb(vec![head(ROOT, 2)]);
     assert_eq!(
         model.stash_standing, "ready",
         "the same tree, once it has a commit"
     );
+    assert_eq!(model.stash_why, "", "git takes it");
 }
 
 /// The badge's word is the only thing on screen naming the stopped
@@ -622,7 +645,17 @@ fn the_records_carry_each_field_in_its_own_seat() {
         moves_blocked: true,
         conflict_count: 2,
         upstream: "origin/feature/日本語".into(),
+        counts_settled: true,
+        status: Arc::new(WorktreeStatus {
+            upstream_counts: Some(platitude_core::AheadBehind::default()),
+            ..WorktreeStatus::default()
+        }),
         pull_blocked: true,
+        moved_branch: "release/日本語".into(),
+        kept: Some(KeptBranch {
+            branch: "release/日本語".into(),
+            by: Keeper::Bisect,
+        }),
         unborn: true,
         hard_reset_takes: 3,
         hard_reset_not_copied: true,
@@ -639,7 +672,12 @@ fn the_records_carry_each_field_in_its_own_seat() {
         op_editing: true,
         moves_blocked: true,
         upstream: "origin/feature/日本語".into(),
+        upstream_counted: true,
         diverged: true,
+        kept: Some(KeptBranch {
+            branch: "release/日本語".into(),
+            by: Keeper::Bisect,
+        }),
     };
     assert_eq!(*model.standing(), standing);
     assert_eq!(

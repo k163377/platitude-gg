@@ -10,6 +10,7 @@ use crate::support::remote::origin_and_clone;
 use crate::support::session::{open_unawaited, opened, poll_landed, write_result};
 use crate::support::wait::bounded;
 use platitude_core::session::{RefreshOutcome, SessionEvent};
+use platitude_core::worktrees::Keeper;
 use platitude_core::{OperationKind, commit};
 
 /// Every `HeadObserved` the session has sent, as `(oid, seq)`.
@@ -190,13 +191,18 @@ async fn a_head_on_no_branch_names_the_branch_its_rebase_holds() {
     sink.opening_settled(&session).await;
     let held = |evs: &[SessionEvent]| {
         evs.iter().rev().find_map(|e| match e {
-            SessionEvent::HeadObserved { head, .. } => Some((head.detached, head.held.clone())),
+            SessionEvent::HeadObserved { head, .. } => Some((
+                head.detached,
+                head.kept
+                    .as_ref()
+                    .map(|held| (held.branch.clone(), held.by)),
+            )),
             _ => None,
         })
     };
     assert_eq!(
         held(&sink.events.lock().unwrap()),
-        Some((true, Some("main".to_string()))),
+        Some((true, Some(("main".to_string(), Keeper::Rebase)))),
         "the stopped rebase holds main"
     );
 

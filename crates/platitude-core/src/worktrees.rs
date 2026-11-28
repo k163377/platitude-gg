@@ -38,7 +38,7 @@ pub struct WorktreeEntry {
     /// main one; the caller drops it for having no working tree.
     pub main: bool,
     /// The branch a rebase or bisect standing in this worktree is about,
-    /// and which of the two ([`held_by_operation`]): listed `detached`, yet
+    /// and which of the two ([`kept_by_operation`]): listed `detached`, yet
     /// git keeps the branch to this worktree as if it were checked out
     /// (`worktree add`, `switch` and `branch -d` elsewhere say `is already
     /// used by worktree at`) — and turns a rename of it down from any
@@ -50,25 +50,25 @@ pub struct WorktreeEntry {
     /// only once it checks out a midpoint: with none between good and bad it
     /// stays on the branch. `None` elsewhere. Net:
     /// `a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing`.
-    pub held: Option<Held>,
+    pub kept: Option<KeptBranch>,
 }
 
 /// A branch an operation standing in a worktree keeps to it
-/// ([`WorktreeEntry::held`]).
+/// ([`WorktreeEntry::kept`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Held {
+pub struct KeptBranch {
     pub branch: String,
-    pub by: HeldBy,
+    pub by: Keeper,
 }
 
-/// What keeps a branch to a worktree listed `detached` ([`Held`]).
+/// What keeps a branch to a worktree listed `detached` ([`KeptBranch`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HeldBy {
+pub enum Keeper {
     Rebase,
     Bisect,
 }
 
-impl HeldBy {
+impl Keeper {
     /// The word the screen branches on.
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -76,6 +76,14 @@ impl HeldBy {
             Self::Rebase => "rebase",
             Self::Bisect => "bisect",
         }
+    }
+
+    /// The kind [`Self::as_str`] names; `None` for any other word.
+    #[must_use]
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::Rebase, Self::Bisect]
+            .into_iter()
+            .find(|by| by.as_str() == word)
     }
 }
 
@@ -114,7 +122,7 @@ pub fn parse_worktrees(bytes: &[u8]) -> Result<Vec<WorktreeEntry>, WorktreeParse
                 lock_reason: String::new(),
                 prunable: false,
                 prune_reason: String::new(),
-                held: None,
+                kept: None,
             });
             continue;
         }
@@ -174,15 +182,15 @@ pub async fn load(
         .iter_mut()
         .filter(|entry| entry.detached && !entry.bare && !entry.prunable)
     {
-        entry.held = held_by_operation(Path::new(&entry.path));
+        entry.kept = kept_by_operation(Path::new(&entry.path));
     }
     Ok(entries)
 }
 
-/// [`held_at`] for the worktree at `path`. `None` also where its git
+/// [`kept_at`] for the worktree at `path`. `None` also where its git
 /// directory cannot be found.
-fn held_by_operation(path: &Path) -> Option<Held> {
-    held_at(&crate::repo::git_dir_of(path)?)
+fn kept_by_operation(path: &Path) -> Option<KeptBranch> {
+    kept_at(&crate::repo::git_dir_of(path)?)
 }
 
 /// The branch a rebase or bisect standing in the worktree whose own git
@@ -196,13 +204,13 @@ fn held_by_operation(path: &Path) -> Option<Held> {
 ///
 /// Plain file reads, a few per detached worktree: no git process. `None`
 /// where nothing stands.
-pub fn held_at(git_dir: &Path) -> Option<Held> {
+pub fn kept_at(git_dir: &Path) -> Option<KeptBranch> {
     let read = |name: &str| {
         std::fs::read_to_string(git_dir.join(name))
             .ok()
             .map(|text| text.trim().to_string())
     };
-    let held = |branch: &str, by| Held {
+    let kept = |branch: &str, by| KeptBranch {
         branch: branch.to_string(),
         by,
     };
@@ -211,7 +219,7 @@ pub fn held_at(git_dir: &Path) -> Option<Held> {
             .as_deref()
             .and_then(|full| full.strip_prefix("refs/heads/"))
         {
-            return Some(held(branch, HeldBy::Rebase));
+            return Some(kept(branch, Keeper::Rebase));
         }
     }
     if !git_dir.join("BISECT_LOG").exists() {
@@ -221,7 +229,7 @@ pub fn held_at(git_dir: &Path) -> Option<Held> {
     let branch = start.trim_prefix("refs/heads/");
     let detached = branch.len() >= 40 && branch.bytes().all(|b| b.is_ascii_hexdigit());
     (!branch.is_empty() && !detached && !branch.starts_with("refs/"))
-        .then(|| held(branch, HeldBy::Bisect))
+        .then(|| kept(branch, Keeper::Bisect))
 }
 
 /// What a new worktree is made to stand on. Always a branch: every
@@ -393,7 +401,7 @@ pub fn folder_free(path: &Path) -> bool {
 /// not know — removed elsewhere since the menu opened — is gone as asked.
 /// Run from inside the worktree it removes, git stops part-way, so the
 /// card greys the row of the worktree the tab stands in
-/// (`offers::worktree_card`).
+/// (`menu::Why::ShownHere`).
 pub async fn remove(
     executor: &GitExecutor,
     workdir: &Path,

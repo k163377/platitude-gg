@@ -335,7 +335,7 @@ mod tests {
             branch: Some(branch.to_string()),
             oid: Some(Oid::from_hex_str(&format!("{oid:02x}").repeat(20)).expect("test oid")),
             detached: false,
-            held: None,
+            kept: None,
         }
     }
 

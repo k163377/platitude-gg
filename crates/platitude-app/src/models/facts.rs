@@ -9,13 +9,17 @@
 
 use std::ops::RangeInclusive;
 
-use platitude_core::offers::{FarSide, RowStanding, TreeStanding, UpstreamPlace};
-use platitude_core::remote::RemoteBranch;
+use platitude_core::menu;
+use platitude_core::offers::{FarSide, TreeStanding, UpstreamPlace};
+use platitude_core::remote::{PushStanding, RemoteBranch};
+use platitude_core::stash::StashStanding;
 use qtbridge::qobject;
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::qml_register;
-use crate::encode::{Chips, Fields, Mates, One, Optional, Record, RefMenu, WorktreeMaking, field};
+use crate::encode::{
+    Chips, Fields, Mates, MenuAnswer, One, Optional, PushRecord, Record, Routing, field,
+};
 use crate::models::graph::RowKey;
 use crate::models::nav::{CardRecord, RowLead};
 
@@ -160,15 +164,19 @@ impl GitFacts {
             .unwrap_or_default()
     }
 
-    /// What the right-click menu on a ref offers for one stand, read whole
-    /// (`encode::RefMenu`): the row's own rows and the BRANCH and TAG cards'
-    /// (`offers::ref_menu`), where the branch's upstream stands
-    /// (`offers::upstream_place`), the `pull` row (`offers::pull_row`) and
-    /// the WORKTREE card's rows (`offers::worktree_rows` /
-    /// `offers::worktree_card`). Asked
-    /// as the menu opens and as it stands again, never by a binding
-    /// (app-ui.md「メニューは `AppMenu` 系で書く」), by both entrances through
-    /// one part (`RefMenuFacts`).
+    /// What the right-click menu on a row of the left pane or the graph
+    /// offers for one stand, read whole (`encode::MenuAnswer`): the rows its
+    /// class has and why each is greyed — the menu's own and its cards'
+    /// (`menu::lines`) —, and what a press on some of them sends: whether
+    /// `switch` asks first and how `worktree add` takes the branch out
+    /// (`menu::Subject`), where the branch's upstream stands
+    /// (`offers::upstream_place`) and what `pull` runs
+    /// (`menu::pull_runs`). Asked as the menu opens and as
+    /// it stands again, never by a binding (app-ui.md「メニューは `AppMenu`
+    /// 系で書く」), by both entrances through one part (`RefMenuFacts`).
+    ///
+    /// `seen` is which row was right-clicked, by its entrance's word
+    /// (`menu::Seen::from_word`): a word it is not answers no rows.
     ///
     /// `tree` is the model's own record handed on as it was read:
     /// `WorktreeModel.reading` as the menu stood on it — the model's, or the
@@ -192,62 +200,147 @@ impl GitFacts {
     /// a remote row whose local one is takes its way through that row.
     /// `oid_hex` is the row's commit, read as every object name is
     /// (`encode::oid_arg`): an empty or malformed one is a row with none.
+    /// `history`: how the branch HEAD is on has that commit, as
+    /// `GraphModel.historyOf` answered it (`menu::History::word`), empty
+    /// where it cannot say.
+    /// `push` is a branch's push as `NavSectionModel.branchPushFacts`
+    /// answered it, `undefined` on any other row.
     #[qslot]
-    fn ref_menu(
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "one per record QML hands on whole"
+    )]
+    fn menu_on(
         &self,
+        seen: String,
         oid_hex: String,
+        history: String,
         open: bool,
         tree: One<TreeStanding>,
         lead: One<RowLead>,
         card: Optional<CardRecord>,
         local_listed: bool,
-    ) -> One<RefMenu> {
+        push: Optional<PushRecord>,
+    ) -> One<MenuAnswer> {
         use platitude_core::offers;
-        let row = row_standing(&lead, crate::encode::oid_arg(&oid_hex), open, &tree);
+        let Some(seen) = menu::Seen::from_word(&seen) else {
+            return One::new(MenuAnswer::default());
+        };
+        let commit = crate::encode::oid_arg(&oid_hex);
         let far = card.as_ref().map_or(FarSide::Unread, CardRecord::far);
+        let row = subject(
+            seen,
+            &lead,
+            commit,
+            menu::History::from_word(&history),
+            open,
+            &tree,
+            far,
+            local_listed,
+            push.as_ref(),
+        );
+        let facts = menu::Facts::of_subject(&row);
+        let lines = menu::lines(row.open, &menu::On::Ref(facts)).unwrap_or_default();
+        let has = |wanted: menu::Row| lines.iter().any(|line| line.row == wanted);
         let upstream = match &*card {
             Some(CardRecord::Branch(upstream)) => {
                 offers::upstream_place(&upstream.upstream, upstream.upstream_here, &tree)
             }
             _ => UpstreamPlace::None,
         };
-        let making = offers::worktree_rows(&row, !lead.stopped_by.is_empty(), local_listed);
-        let worktree = lead.card.as_ref().map_or_else(Default::default, |card| {
-            offers::worktree_card(
-                card.change == crate::models::nav::MAIN,
-                card.change == crate::models::nav::LOCKED,
-                lead.card_here,
-            )
-        });
-        One::new(RefMenu::new(
-            offers::ref_menu(&row, far.clone()),
-            offers::pull_row(&row, far),
+        One::new(MenuAnswer::new(
+            &lines,
+            row.switch_asks(),
             upstream,
-            WorktreeMaking::new(making, lead.placed, lead.place.is_some()),
-            worktree,
+            has(menu::Row::Pull).then(|| menu::pull_runs(&facts.shape)),
+            has(menu::Row::WorktreeAdd)
+                .then(|| row.worktree_checkout())
+                .flatten(),
         ))
     }
 
-    /// What the right-click menu on a commit row may offer, read whole the
-    /// same way (`CommitMenuState.standRow`). `stash`: the row is a
-    /// stash's; `provisional`: the row is one the discard log's picked
-    /// entry draws (`GraphModel.provisionalAt`).
+    /// Whether the worktree a WORKTREES row raised a menu on has left the
+    /// branch `branch` the menu stands on (`menu::worktree_left`, read as
+    /// the menu stands again — `RefRowMenu.standOn`): `present` whether the
+    /// worktree listing still holds it, `out` the branch it has out — empty
+    /// on none.
     #[qslot]
-    fn commit_menu(
+    fn worktree_left(&self, branch: String, present: bool, out: String) -> bool {
+        let now = if !present {
+            menu::WorktreeOut::Gone
+        } else if out.is_empty() {
+            menu::WorktreeOut::Detached
+        } else {
+            menu::WorktreeOut::Branch(&out)
+        };
+        menu::worktree_left(&branch, now)
+    }
+
+    /// What the right-click menu on another worktree's uncommitted row
+    /// offers, read whole as `menuOn` is (`CommitMenuState.standCarried`):
+    /// that worktree's door and its changes brought here, which a conflict
+    /// on either side greys (`menu::On::Carried`). `tree` is the
+    /// reading the menu stands on, whole — its `conflictCount` is this
+    /// tree's; `conflicted_there` is the row's own count of that worktree's
+    /// (`GraphModel.carriedAt`'s `tally`), as old as its last read.
+    #[qslot]
+    fn carried_menu(
         &self,
         open: bool,
-        tree: One<TreeStanding>,
-        oid_hex: String,
-        stash: bool,
-        provisional: bool,
-    ) -> One<platitude_core::offers::CommitMenuOffers> {
-        let offers = platitude_core::offers::commit_menu(open, &tree, &oid_hex, stash);
-        let offers = if provisional {
-            offers.on_provisional()
-        } else {
-            offers
+        tree: crate::encode::Reading,
+        conflicted_there: i32,
+    ) -> One<MenuAnswer> {
+        let on = menu::On::Carried {
+            conflicts_here: tree.conflict_count > 0,
+            conflicts_there: conflicted_there > 0,
         };
-        One::new(offers)
+        let lines = menu::lines(open, &on).unwrap_or_default();
+        One::new(MenuAnswer::of_lines(&lines))
+    }
+
+    /// The right-click menu on the working tree pane's chosen files
+    /// (`FileRowMenu`), read whole as it opens and as it stands again: the
+    /// rows of every section the choice reaches and why each is greyed
+    /// (`menu::lines`). `sections` is the section of each chosen row, in the
+    /// pane's words (`Routing::of_word` — a word it is not chooses nothing);
+    /// `tree` the reading the menu stands on, whole, as `carriedMenu`'s: a
+    /// tree whose stash is not read yet greys every row as an opening tab
+    /// does.
+    #[qslot]
+    fn files_menu(
+        &self,
+        open: bool,
+        sections: Vec<String>,
+        tree: crate::encode::Reading,
+    ) -> One<MenuAnswer> {
+        let routed: Vec<Routing> = sections
+            .iter()
+            .filter_map(|word| Routing::of_word(word))
+            .collect();
+        let Some(chosen) = menu::Chosen::of(
+            routed.contains(&Routing::Conflicts),
+            routed.iter().any(|routing| *routing != Routing::Conflicts),
+        ) else {
+            return One::new(MenuAnswer::default());
+        };
+        let standing = StashStanding::from_word(&tree.stash_standing);
+        let on = menu::On::Files {
+            chosen,
+            stash: standing.unwrap_or(StashStanding::Ready),
+        };
+        let lines = menu::lines(open && standing.is_some(), &on).unwrap_or_default();
+        One::new(MenuAnswer::of_lines(&lines))
+    }
+
+    /// The menu on a remote's own row of REMOTES (`RemoteRowMenu`): where it
+    /// is, and the origin mark, greyed where both keys already name it
+    /// (`menu::lines`). `marked_origin` is `RepoTab.markedOrigin`, empty
+    /// where the keys name no one remote.
+    #[qslot]
+    fn remote_menu(&self, open: bool, remote: String, marked_origin: String) -> One<MenuAnswer> {
+        let marked = !remote.is_empty() && remote == marked_origin;
+        let lines = menu::lines(open, &menu::On::Remote { marked }).unwrap_or_default();
+        One::new(MenuAnswer::of_lines(&lines))
     }
 
     /// What the details pane's message boxes do with the commit on screen,
@@ -599,19 +692,47 @@ impl GitFacts {
     }
 }
 
-/// The row `refMenu` is asked about, standing on `tree`.
-fn row_standing<'a>(
+/// The row as the menu's type reads it (`menu::Subject`): the kind only
+/// where the row names a ref of a kind a menu names itself by — a row that
+/// names none is a commit's —, the WORKTREE card's worktree off the row's,
+/// and where a new one goes off the worktrees' answer.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the slot's records, handed on as `GitFacts.menuOn` took them"
+)]
+fn subject<'a>(
+    seen: menu::Seen,
     lead: &'a RowLead,
     commit: Option<platitude_core::Oid>,
+    history: Option<menu::History>,
     open: bool,
     tree: &'a TreeStanding,
-) -> RowStanding<'a> {
-    RowStanding {
-        target: platitude_core::offers::RefTarget::from_words(&lead.kind, &lead.full),
+    far: FarSide,
+    local_listed: bool,
+    push: Option<&PushRecord>,
+) -> menu::Subject<'a> {
+    menu::Subject {
+        seen,
+        kind: (!lead.full.is_empty())
+            .then(|| platitude_core::offers::RefKind::from_word(&lead.kind))
+            .flatten(),
+        name: &lead.full,
         commit,
+        history,
         open,
         tree,
         leads: lead.leads,
+        far,
+        local_listed,
+        worktree: lead.card.as_ref().map(|card| menu::RowWorktree {
+            main: card.change == crate::models::nav::MAIN,
+            here: lead.card_here,
+            locked: card.change == crate::models::nav::LOCKED,
+        }),
+        placing: lead.placing,
+        push: push
+            .and_then(|push| PushStanding::from_word(&push.state))
+            .unwrap_or_default(),
     }
 }
 

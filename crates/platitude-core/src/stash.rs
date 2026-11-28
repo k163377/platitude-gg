@@ -42,7 +42,8 @@ pub struct StashEntry {
 }
 
 /// What the worktree lets a stash do. Every refusal is git's own, shown
-/// before the press (the words: `BandStashButton`, `FileRowMenu`).
+/// before the press (the toolbar's words: `BandStashButton`; a file row's
+/// reason: [`crate::menu::lines`] on [`crate::menu::On::Files`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StashStanding {
     /// No commit yet ("You do not have the initial commit yet"): git
@@ -71,13 +72,21 @@ impl StashStanding {
             Self::Ready => "ready",
         }
     }
+
+    /// The standing [`Self::as_str`] words; `None` for any other word — the
+    /// empty one a tree not read yet carries.
+    pub fn from_word(word: &str) -> Option<Self> {
+        [Self::Unborn, Self::Conflicts, Self::Clean, Self::Ready]
+            .into_iter()
+            .find(|standing| standing.as_str() == word)
+    }
 }
 
 /// The standing, off a status already in hand (no git runs).
 /// `head_missing`: no commit yet (`WorktreeStatus::branch_oid` is `None`).
 /// The one place a stash's availability is decided: the band's
-/// `BandStashButton.mode` and a file row's `FileRowMenu.stashStanding`
-/// both read it.
+/// `BandStashButton.mode` reads it, and the menu type greys a file row's
+/// `stash` off it (`menu::stash_why`, which the button's tip says too).
 pub fn standing(head_missing: bool, counts: &crate::status::Counts) -> StashStanding {
     if head_missing {
         return StashStanding::Unborn;

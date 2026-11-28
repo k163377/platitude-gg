@@ -1,9 +1,9 @@
 //! What a ref's card reads over there (`offers::FarSide`), as the fields of
 //! the record the model hands QML (`NavSectionModel.cardOf`) — a branch's upstream,
-//! a tag's menu — which QML hands on to `GitFacts.refMenu` as it is
+//! a tag's menu — which QML hands on to `GitFacts.menuOn` as it is
 //! (`models::nav::CardRecord`) and never builds.
 
-use platitude_core::offers::{BranchFar, FarSide, Reading, TagDeleteHeld, TagFar, TagSides};
+use platitude_core::offers::{BranchFar, FarSide, TagDeleteHeld, TagFar, TagSides, Tracks};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, field};
@@ -11,17 +11,17 @@ use super::wire::{Fields, field};
 /// [`FarSide`]'s fields, written into the record that carries it — flat,
 /// beside the record's own, as [`super::TreeReading`] carries the
 /// standing: `far` says which (`branch` / `tag`, empty for none), and the
-/// rest are its parts. The TAG card reads two of a tag's: `pushRemote` for
-/// where its pushes go, and `heldBack` (`drift` / `unnamed`) for the words
-/// its greyed rows say; `sides` — whether the copy here exists — is core's
-/// alone, read back through [`read_far`] (`offers::ref_menu`).
+/// rest are its parts. The TAG card reads one of a tag's: `pushRemote`, for
+/// where its pushes go. `sides` — whether the copy here exists — and
+/// `heldBack` (`drift` / `unnamed`), what greys its rows that reach over
+/// there, are core's alone, read back through [`read_far`]
+/// (`GitFacts.menuOn`).
 pub(crate) fn put_far(fields: Fields, far: &FarSide) -> Fields {
     match far {
         FarSide::Unread => fields.put("far", ""),
         FarSide::Branch(upstream) => fields
             .put("far", "branch")
-            .put("reading", upstream.reading.word())
-            .put("tracked", &upstream.tracked)
+            .put("tracks", upstream.tracks.word())
             .put("hasRemote", &upstream.has_remote)
             .put("ahead", &upstream.ahead),
         FarSide::Tag(tag) => fields
@@ -39,8 +39,7 @@ pub(crate) fn read_far(map: &QVariantMap) -> Option<FarSide> {
     match side.as_str() {
         "" => Some(FarSide::Unread),
         "branch" => Some(FarSide::Branch(BranchFar {
-            reading: Reading::from_word(&field::<String>(map, "reading")?)?,
-            tracked: field(map, "tracked")?,
+            tracks: Tracks::from_word(&field::<String>(map, "tracks")?)?,
             has_remote: field(map, "hasRemote")?,
             ahead: field(map, "ahead")?,
         })),
@@ -68,19 +67,25 @@ fn sides_of(word: &str) -> Option<Option<TagSides>> {
 mod tests {
     use super::*;
 
-    /// Every word each part of a far side goes out in: the three readings,
+    /// Every word each part of a far side goes out in: where a branch's
+    /// upstream stands, each way,
     /// and the sides — unread too — under each of the three holds.
     fn sides() -> Vec<FarSide> {
-        let branches = [Reading::None, Reading::Together, Reading::Drifted]
-            .into_iter()
-            .map(|reading| {
-                FarSide::Branch(BranchFar {
-                    reading,
-                    tracked: reading != Reading::None,
-                    has_remote: true,
-                    ahead: 2,
-                })
-            });
+        let branches = [
+            Tracks::Nothing,
+            Tracks::Together,
+            Tracks::Drifted,
+            Tracks::Here,
+            Tracks::Gone,
+        ]
+        .into_iter()
+        .map(|tracks| {
+            FarSide::Branch(BranchFar {
+                tracks,
+                has_remote: true,
+                ahead: 2,
+            })
+        });
         let tags = [
             None,
             Some(TagSides::Here),
@@ -139,8 +144,7 @@ mod tests {
     fn a_word_nothing_answers_to_does_not_read() {
         let record = Fields::new()
             .put("far", "branch")
-            .put("reading", "elsewhere")
-            .put("tracked", &true)
+            .put("tracks", "elsewhere")
             .put("hasRemote", &true)
             .put("ahead", &0u32)
             .done();

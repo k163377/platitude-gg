@@ -291,25 +291,25 @@ async fn a_branch_a_stopped_rebase_or_bisect_holds_is_named_by_the_listing() {
         listed
             .iter()
             .find(|entry| entry.path.ends_with(leaf))
-            .map(|entry| (entry.detached, entry.held.clone()))
+            .map(|entry| (entry.detached, entry.kept.clone()))
     };
-    let by = |branch: &str, by| worktrees::Held {
+    let by = |branch: &str, by| worktrees::KeptBranch {
         branch: branch.to_string(),
         by,
     };
     assert_eq!(
         held("rebasing"),
-        Some((true, Some(by("rebasing", worktrees::HeldBy::Rebase))))
+        Some((true, Some(by("rebasing", worktrees::Keeper::Rebase))))
     );
     assert_eq!(
         held("bisecting"),
-        Some((true, Some(by("bisecting", worktrees::HeldBy::Bisect))))
+        Some((true, Some(by("bisecting", worktrees::Keeper::Bisect))))
     );
     assert_eq!(
         listed
             .iter()
             .find(|entry| entry.main)
-            .map(|entry| entry.held.clone()),
+            .map(|entry| entry.kept.clone()),
         Some(None),
         "a worktree on its branch holds nothing more"
     );

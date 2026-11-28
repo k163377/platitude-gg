@@ -523,7 +523,7 @@ async fn setting_an_upstream_rebuilds_what_the_rows_read() {
 /// Taking an upstream off rebuilds the rows as setting one does, wherever
 /// the upstream stands — a reading the listing shows, a branch here
 /// (`remote = .`), or gone (git's `[gone]`) — the three the menu offers
-/// it on (`offers::ref_menu`'s `unset_upstream`).
+/// it on (`menu::Row::UnsetUpstream`).
 #[tokio::test(flavor = "multi_thread")]
 async fn unsetting_an_upstream_rebuilds_what_the_rows_read() {
     let mut origin = TestRepo::init();

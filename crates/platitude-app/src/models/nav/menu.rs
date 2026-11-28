@@ -1,8 +1,10 @@
 //! What a ref's menu reads off the sections beside its own row: the row and
 //! where it leads among the worktrees (`RowLead`), and the record its card
-//! stood on handed back whole (`CardRecord`). The rules that read them are
-//! core's (`offers`), asked through `GitFacts.refMenu` / `switchMove`.
+//! stood on handed back whole (`CardRecord`). What reads them is core's —
+//! the menu type and the move's rule —, asked through `GitFacts.menuOn` /
+//! `switchMove`.
 
+use platitude_core::menu::Placing;
 use platitude_core::offers::{FarSide, Leads};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
@@ -12,8 +14,8 @@ use crate::encode::{Fields, Record, field, optional_record};
 /// A ref's row as its menu asks core about it: the row's two words and the
 /// local branch it lands on, where it leads beside the tree the tab stands
 /// in, the worktree its WORKTREE card stands on and whether the tab stands
-/// in that one, what the worktrees say of its branch, and where new
-/// worktrees go — one answer (`NavSectionModel.leadOf`).
+/// in that one, and where new worktrees go — one answer
+/// (`NavSectionModel.leadOf`).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RowLead {
     /// The row's kind word (`offers::RefKind::from_word`), and its name as
@@ -40,11 +42,11 @@ pub struct RowLead {
     pub card: Option<WorktreeRow>,
     /// The tab stands in that worktree.
     pub card_here: bool,
-    /// `rebase` / `bisect` where an operation stopped in the tree the tab
-    /// stands in holds the row's branch; empty otherwise.
-    pub stopped_by: String,
-    /// New worktrees have a place to go (`has_place_for_worktrees`).
-    pub placed: bool,
+    /// Where new worktrees go — `Unread` until the worktree listing has
+    /// arrived, when what the rest says of worktrees is read off it and
+    /// every row leads nowhere —, the row's own branch's folder being
+    /// taken or not (`worktrees_nowhere`, `place`).
+    pub placing: Placing,
     /// Where the row's own branch would go out in a worktree of its own
     /// (`new_worktree`); none with no local branch, or nowhere to go.
     pub place: Option<NewWorktree>,
@@ -63,8 +65,7 @@ impl Record for RowLead {
             .put("called", &self.called)
             .put("home", &self.home)
             .put("cardHere", &self.card_here)
-            .put("stoppedBy", &self.stopped_by)
-            .put("placed", &self.placed)
+            .put("placing", self.placing.word())
             .put_record("card", self.card.as_ref())
             .put_record("place", self.place.as_ref())
             .done()
@@ -81,15 +82,14 @@ impl Record for RowLead {
             home: field(map, "home")?,
             card: optional_record(map, "card")?,
             card_here: field(map, "cardHere")?,
-            stopped_by: field(map, "stoppedBy")?,
-            placed: field(map, "placed")?,
+            placing: Placing::from_word(&field::<String>(map, "placing")?)?,
             place: optional_record(map, "place")?,
         })
     }
 }
 
 /// The record a ref's card stood on, handed back as the section built it
-/// (`GitFacts.refMenu`, picked by the row's kind in `card_record`): a branch's upstream
+/// (`GitFacts.menuOn`, picked by the row's kind in `card_record`): a branch's upstream
 /// — nothing over there on any row but a local branch's — or a tag's menu
 /// (`tag_card`). Told apart by the far side it carries (`encode::put_far`).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,8 +176,9 @@ impl NavSectionModel {
     /// Where the row `full` of `kind` leads (contract on the `leadOf` slot):
     /// a branch's or a remote branch's holder, by `local` — the local
     /// branch the row lands on —, and a worktree on no branch itself while
-    /// the tab does not stand in it. Of a local branch, also the operation
-    /// stopped here that holds it. `opened` is the worktree the menu was
+    /// the tab does not stand in it — a branch an operation stopped here
+    /// keeps is HEAD's reading's to say (`TreeStanding::kept`). `opened` is
+    /// the worktree the menu was
     /// opened on (a WORKTREES row's path), which the WORKTREE card stands on
     /// over the row's own; empty for none. Asked of any other section, the
     /// row leads nowhere.
@@ -211,11 +212,10 @@ impl NavSectionModel {
             }
             _ => (Leads::Nowhere, String::new()),
         };
-        let stopped_by = if kind == "branch" {
-            self.held_by_operation_of(local)
-                .filter(|held| held.here)
-                .map(|held| held.by)
-                .unwrap_or_default()
+        // A branch out in this window's own worktree stands its card there,
+        // as that worktree's row does: the same branch, the same rows.
+        let here = if kind == "branch" && path.is_empty() {
+            self.worktree_here_with(local)
         } else {
             String::new()
         };
@@ -224,6 +224,7 @@ impl NavSectionModel {
         } else {
             match kind {
                 "worktree" => full,
+                "branch" if path.is_empty() => here.as_str(),
                 "branch" => path.as_str(),
                 _ => "",
             }
@@ -242,6 +243,12 @@ impl NavSectionModel {
         } else {
             self.called_worktree(&path)
         };
+        let placing = match self.worktrees_nowhere() {
+            Some(nowhere) => Placing::Nowhere(nowhere),
+            None => Placing::Beside {
+                taken: place.as_ref().is_some_and(|place| !place.taken.is_empty()),
+            },
+        };
         RowLead {
             leads,
             card,
@@ -250,8 +257,7 @@ impl NavSectionModel {
             called: named.called,
             home: named.home,
             path,
-            stopped_by,
-            placed: self.has_place_for_worktrees(),
+            placing,
             ..row
         }
     }

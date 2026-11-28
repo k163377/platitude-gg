@@ -52,8 +52,8 @@ impl MessageEdit {
 /// boxes are a surface a click drops a caret on, so whatever they accept
 /// is what a stray keystroke can start. Amending an older one replays
 /// every commit after it (each gets a new id); rewrites asked for by name
-/// (squash, drop) stay in the commit menu ([`super::commit_menu`]'s
-/// `edit_history`), and the boxes are the amend's alone.
+/// (squash, drop) stay in the graph row's menu
+/// ([`crate::menu::Part::Rewritten`]), and the boxes are the amend's alone.
 ///
 /// **Nothing while an operation stands**, since git refuses the amend
 /// there (`You are in the middle of a merge -- cannot amend`; mid-rebase

@@ -1,5 +1,7 @@
 //! Where the worktree stands, as every rule here reads it.
 
+use crate::worktrees::{Keeper, KeptBranch};
+
 /// HEAD, the operation standing on it, and what its branch is measured
 /// against: what the menus, the message boxes and a press on a ref ask
 /// about the tree. One value off `WorktreeModel` (`standing`, or the
@@ -28,11 +30,43 @@ pub struct TreeStanding {
     /// badge a replay's faster tick puts up can stand ahead of that status.
     pub moves_blocked: bool,
     /// What the branch tracks, empty where it tracks nothing
-    /// (`WorktreeModel.upstream`).
+    /// (`WorktreeModel.upstream`): the far end of the comparison the window
+    /// shows as ↑↓, which only a branch HEAD is on has.
     pub upstream: String,
+    /// git counted the branch against `upstream` in the last status (its
+    /// `branch.ab`): the upstream's ref is there to count against. False
+    /// where the branch tracks nothing, where the ref is gone (git's
+    /// `[gone]`), and while the branch has no commit to count with.
+    pub upstream_counted: bool,
     /// The branch and its upstream have both moved
     /// (`WorktreeModel.pullBlocked`).
     pub diverged: bool,
+    /// While HEAD is detached, the branch a stopped rebase or bisect keeps
+    /// to the tree, and which of them keeps it — read with HEAD
+    /// (`refs::HeadState::kept`), ahead of the badge's status; `None`
+    /// otherwise.
+    pub kept: Option<KeptBranch>,
+}
+
+/// The branch the tab moves ([`TreeStanding::moved`]), and how the tab holds
+/// it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MovedBranch<'a> {
+    /// HEAD is on it.
+    Head(&'a str),
+    /// A stopped rebase or bisect keeps it while HEAD is on none: git moves
+    /// it once the operation is finished, and counts it as out here until
+    /// then.
+    Kept { name: &'a str, by: Keeper },
+}
+
+impl<'a> MovedBranch<'a> {
+    /// The branch, however it is held.
+    pub fn name(self) -> &'a str {
+        match self {
+            Self::Head(name) | Self::Kept { name, .. } => name,
+        }
+    }
 }
 
 impl TreeStanding {
@@ -45,6 +79,30 @@ impl TreeStanding {
     /// rewrite history waits until it is finished or put down.
     pub fn op_standing(&self) -> bool {
         !self.op_text.is_empty()
+    }
+
+    /// HEAD is on a branch with no commits yet: there is nothing on it to
+    /// undo a commit on, to rebase or to rewrite — `git revert` exits 1 and
+    /// `git rebase` 128 (`Could not resolve HEAD to a commit`), while
+    /// `cherry-pick`, `merge` and `reset` take the branch to a commit
+    /// (measured on 2.55) — `merge` as a fast-forward, which
+    /// `merge.ff=false` turns down into an empty head.
+    pub fn head_unborn(&self) -> bool {
+        self.on_branch() && self.head_oid.is_empty()
+    }
+
+    /// The branch `merge`, `rebase`, the rewrites and `reset` move: the one
+    /// HEAD is on, or — while a stopped rebase or bisect keeps HEAD detached
+    /// — the one it keeps, which they move once it is finished. `None` while
+    /// the tab moves no branch.
+    pub fn moved(&self) -> Option<MovedBranch<'_>> {
+        if self.on_branch() {
+            return Some(MovedBranch::Head(&self.branch));
+        }
+        self.kept.as_ref().map(|kept| MovedBranch::Kept {
+            name: &kept.branch,
+            by: kept.by,
+        })
     }
 
     /// Whether `name` is the branch HEAD is on ([`is_current_branch`]).
@@ -95,6 +153,18 @@ impl TreeStanding {
             ..self
         }
     }
+
+    /// The same tree with `branch` kept by a rebase or bisect stopped in it,
+    /// as HEAD's reading names it — the badge read apart.
+    pub(crate) fn keeping(self, branch: &str, by: Keeper) -> Self {
+        Self {
+            kept: Some(KeptBranch {
+                branch: branch.into(),
+                by,
+            }),
+            ..self
+        }
+    }
 }
 
 #[cfg(test)]
@@ -115,6 +185,21 @@ mod tests {
     }
 
     #[test]
+    fn only_a_branch_with_no_commits_yet_is_unborn() {
+        let unborn = TreeStanding {
+            head_oid: String::new(),
+            ..TreeStanding::on("main")
+        };
+        assert!(unborn.head_unborn());
+        assert!(!TreeStanding::on("main").head_unborn());
+        assert!(!TreeStanding::detached().head_unborn());
+        assert!(
+            !TreeStanding::default().head_unborn(),
+            "before HEAD is read"
+        );
+    }
+
+    #[test]
     fn the_badge_is_the_operation() {
         assert!(!TreeStanding::on("main").op_standing());
         assert!(TreeStanding::on("main").standing("MERGING").op_standing());
@@ -122,6 +207,25 @@ mod tests {
             TreeStanding::detached().standing("BISECTING").op_standing(),
             "bisect counts"
         );
+    }
+
+    #[test]
+    fn the_branch_moved_is_heads_or_the_one_a_stopped_operation_keeps() {
+        assert_eq!(
+            TreeStanding::on("main").moved(),
+            Some(MovedBranch::Head("main"))
+        );
+        let kept = TreeStanding::detached().keeping("main", Keeper::Bisect);
+        assert_eq!(
+            kept.moved(),
+            Some(MovedBranch::Kept {
+                name: "main",
+                by: Keeper::Bisect
+            })
+        );
+        assert_eq!(kept.moved().map(MovedBranch::name), Some("main"));
+        assert_eq!(TreeStanding::detached().moved(), None);
+        assert_eq!(TreeStanding::default().moved(), None, "before HEAD is read");
     }
 
     #[test]

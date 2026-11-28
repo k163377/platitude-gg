@@ -262,6 +262,28 @@ impl RebasePlanModel {
             .is_some_and(|below| below.iter().any(|step| step.action != "drop"))
     }
 
+    /// The verb menu's rows on row `row` (`menu::lines`): the fold rows
+    /// where a step stands below, greyed where every step below is a drop —
+    /// the line [`Self::fold_lands`] draws. No rows for a row that is none.
+    /// A plan is composed only in a tab that has finished opening.
+    pub(super) fn step_answer(&self, row: i32) -> crate::encode::MenuAnswer {
+        use platitude_core::menu::{Below, On, lines};
+        let Some(index) = usize::try_from(row)
+            .ok()
+            .filter(|&index| index < self.steps.len())
+        else {
+            return crate::encode::MenuAnswer::default();
+        };
+        let below = if index + 1 == self.steps.len() {
+            Below::Nothing
+        } else if self.fold_lands(index) {
+            Below::Landing
+        } else {
+            Below::Dropped
+        };
+        crate::encode::MenuAnswer::of_lines(&lines(true, &On::Step(below)).unwrap_or_default())
+    }
+
     /// Sends every fold with nothing but drops (or nothing) below it back
     /// to `pick`, and answers their rows — git stops broken on such a todo
     /// (`cannot 'squash' without a previous commit`). Walked bottom-up: a

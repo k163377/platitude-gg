@@ -153,7 +153,7 @@ mod tests {
             branch: Some("main".to_string()),
             oid: Some(Oid::from_hex_str(oid).expect("test oid")),
             detached: false,
-            held: None,
+            kept: None,
         }
     }
 
@@ -231,7 +231,7 @@ mod tests {
             branch: Some("main".to_string()),
             oid: None,
             detached: false,
-            held: None,
+            kept: None,
         };
         assert_eq!(on_tip(&[], &state), OnTip::default());
     }

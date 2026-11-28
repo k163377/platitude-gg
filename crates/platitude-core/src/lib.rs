@@ -20,6 +20,7 @@ pub mod integrate;
 pub mod intraline;
 pub mod lfs;
 pub mod mem;
+pub mod menu;
 pub mod model;
 pub mod offers;
 pub mod oid;

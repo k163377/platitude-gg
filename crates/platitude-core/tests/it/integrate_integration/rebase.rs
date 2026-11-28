@@ -239,6 +239,35 @@ async fn an_interactive_rebase_stops_on_an_emptied_commit_and_names_skip() {
 /// above (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
+    use crate::support::integrate::unborn_beside_a_commit;
+
+    /// A branch with no commits yet gives the rebase no HEAD to start from:
+    /// git stops before anything, exit 128 (`Could not resolve HEAD to a
+    /// commit`) — what greys the left pane's `rebase` while HEAD is unborn
+    /// (`menu::Why::HeadUnborn`).
+    #[tokio::test]
+    #[ignore = "git's own refusal to rebase an unborn branch: not worth the pre-merge run"]
+    async fn a_rebase_of_a_branch_with_no_commits_is_refused() {
+        let (repo, _) = unborn_beside_a_commit();
+        let (exec, cancel) = env();
+        let err = integrate::rebase(
+            &exec,
+            &repo.path,
+            "other",
+            &RebaseOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect_err("nothing to rebase");
+        assert!(
+            matches!(
+                &err,
+                platitude_core::GitError::Failed { code: 128, stderr, .. }
+                    if stderr.contains("Could not resolve HEAD to a")
+            ),
+            "{err}"
+        );
+    }
 
     #[tokio::test]
     #[ignore = "git's own replay behind a fixed command line: not worth the pre-merge run"]

@@ -2,7 +2,7 @@
 //! refs, and the rows it lists them as.
 
 use super::*;
-use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides, TreeStanding};
+use crate::offers::{BranchFar, TagDeleteHeld, TagFar, TagSides, Tracks, TreeStanding};
 use crate::remote::{PushFacts, PushRoute, RemoteTagRef, Upstream};
 
 /// Sidebar-ready refs snapshot (sorted).
@@ -81,7 +81,7 @@ pub struct RefsSnapshot {
 /// ([`RefsSnapshot::branch_upstream`]), all off the branch's one row.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BranchUpstreamFacts {
-    /// What the card's rows read over there (`offers::ref_menu`).
+    /// What the card's rows read over there (`menu::Subject::far`).
     pub far: BranchFar,
     /// The remote reading the branch speaks for, by short name — what the
     /// card's remote deletes name; empty where none is listed.
@@ -282,10 +282,15 @@ impl RefsSnapshot {
     /// marked nowhere, goes to; a tab that is not `open` stands closed.
     ///
     /// For a branch the worktree is not on: the one HEAD is on — as the
-    /// tree has it, or as this listing does — answers nothing here (closed,
-    /// so the menu keeps no row for it): its push's one door is the toolbar
-    /// (デザイン規約 §メニュー「そこにしか入口が無いもの」), off the status
-    /// tick, and this snapshot keeps none of its counts. A branch
+    /// tree has it, or as this listing does — answers nothing here
+    /// (closed): its push's one door is the toolbar (デザイン規約 §メニュー
+    /// 「そこにしか入口が無いもの」), off the status tick, and this snapshot
+    /// keeps none of its counts. A name not listed answers closed too. The
+    /// menu's class reads HEAD off the tree alone, so a row the tree already
+    /// reads as another branch's greys its push until this listing has it
+    /// (`menu::Why::Unread`). A branch with no commit is in no listing (it
+    /// has no ref): its row says that instead (`menu::Why::NoCommitsYet`).
+    /// A branch
     /// measured against another branch here (`branch.<n>.remote = .`) that
     /// is listed stands as the toolbar's would (`PushStanding::StaysHere`,
     /// or a mark's destination and its counts); one whose upstream, of
@@ -340,15 +345,14 @@ impl RefsSnapshot {
     }
 
     /// What the card of local branch `short` reads of its upstream
-    /// (`offers::ref_menu`): where the reading it speaks for stands,
-    /// whether it has an upstream at all, and whether this repository has a
-    /// remote to name one on. A name this snapshot does not list reads with
-    /// no upstream; the remotes are there all the same.
+    /// (`menu::Subject::far`): where the upstream it is configured with
+    /// stands, and whether this repository has a remote to name one on. A
+    /// name this snapshot does not list reads with no upstream; the remotes
+    /// are there all the same.
     pub fn branch_far(&self, short: &str) -> BranchFar {
         let branch = self.local_named(short);
         BranchFar {
-            reading: branch.map_or(Reading::None, BranchItem::reading),
-            tracked: branch.is_some_and(|branch| !branch.upstream_named().is_empty()),
+            tracks: branch.map_or(Tracks::Nothing, BranchItem::tracks),
             has_remote: !self.remote_names.is_empty(),
             ahead: branch.map_or(0, |branch| branch.counts.ahead),
         }
@@ -360,7 +364,7 @@ impl RefsSnapshot {
     /// names none of them.
     pub fn branch_upstream(&self, short: &str) -> BranchUpstreamFacts {
         let branch = self.local_named(short);
-        let reading = branch.filter(|branch| branch.reading() != Reading::None);
+        let reading = branch.filter(|branch| branch.tracks().reads());
         BranchUpstreamFacts {
             far: self.branch_far(short),
             counterpart: reading
@@ -557,7 +561,8 @@ pub struct BranchItem {
     /// wherever the two stand. Empty when it speaks for none.
     pub upstream: crate::Name,
     /// The upstream this branch is configured for while nothing in the
-    /// listing answers to the name (git's `[gone]`), by short name. Never
+    /// listing answers to the name, by short name: git's `[gone]`, or an
+    /// upstream fetched outside the remote branches the listing holds. Never
     /// filled together with [`Self::upstream`].
     pub upstream_gone: crate::Name,
     /// The branch here this one is configured against (`remote = .`)
@@ -619,14 +624,22 @@ impl BranchItem {
             .map_or("", |named| named.as_str())
     }
 
-    /// Where the remote reading this branch speaks for stands.
-    pub fn reading(&self) -> Reading {
-        if self.upstream.is_empty() {
-            Reading::None
-        } else if self.upstream_drifted {
-            Reading::Drifted
+    /// Where the upstream this branch is configured with stands: off the
+    /// one of [`Self::upstream`] / [`Self::upstream_local`] /
+    /// [`Self::upstream_gone`] filled, nothing where none is.
+    pub fn tracks(&self) -> Tracks {
+        if !self.upstream.is_empty() {
+            if self.upstream_drifted {
+                Tracks::Drifted
+            } else {
+                Tracks::Together
+            }
+        } else if !self.upstream_local.is_empty() {
+            Tracks::Here
+        } else if !self.upstream_gone.is_empty() {
+            Tracks::Gone
         } else {
-            Reading::Together
+            Tracks::Nothing
         }
     }
 }
@@ -663,7 +676,7 @@ impl TagItem {
 /// What a menu on one tag stands on ([`RefsSnapshot::tag_menu`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TagMenuFacts {
-    /// What the card's rows read over there (`offers::ref_menu`): which
+    /// What the card's rows read over there (`menu::Subject::far`): which
     /// sides the name stands on — `None` where this snapshot lists no tag
     /// of the name —, where `push` sends it, and why the delete rows stand
     /// greyed, if they do.

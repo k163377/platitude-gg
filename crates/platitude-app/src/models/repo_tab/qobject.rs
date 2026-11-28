@@ -1031,7 +1031,7 @@ impl RepoTab {
     }
 
     /// Leaves `branch` measured against nothing (`branch::unset_upstream`).
-    /// Asked only where the listing shows it an upstream (`offers::ref_menu`).
+    /// Asked only where the listing shows it an upstream (`menu::Row::UnsetUpstream`).
     #[qslot]
     fn unset_upstream(&mut self, branch: String) {
         self.upstream_unset(branch);

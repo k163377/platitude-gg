@@ -8,7 +8,7 @@
 
 use super::super::joins::{RefJoins, WorktreeHolders, build_label_map, build_snapshot};
 use super::super::*;
-use crate::offers::{BranchFar, Reading, TagDeleteHeld, TagFar, TagSides};
+use crate::offers::{BranchFar, TagDeleteHeld, TagFar, TagSides, Tracks};
 use crate::remote::AdvertisedTag;
 
 /// One worktree: no branch is held anywhere else.
@@ -53,7 +53,7 @@ fn head_at(commit: Oid) -> HeadState {
         branch: Some("main".to_string()),
         oid: Some(commit),
         detached: false,
-        held: None,
+        kept: None,
     }
 }
 
@@ -101,8 +101,8 @@ fn a_branch_says_whether_its_reading_stands_on_the_same_commit() {
 }
 
 /// What a branch's card reads of its upstream (`RefsSnapshot::branch_far`):
-/// where the reading stands, an upstream of any kind, and a remote to name
-/// one on.
+/// where the reading stands, an upstream of any kind and whether it is
+/// gone, and a remote to name one on.
 #[test]
 fn a_branchs_card_reads_where_its_upstream_stands() {
     let tracking = |short: &str, commit: Oid| RefEntry {
@@ -132,6 +132,10 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
             ..tracks("mine", "origin/side")
         },
         branch("plain", oid(1)),
+        RefEntry {
+            upstream: Some(crate::Name::from("refs/heads/main")),
+            ..branch("local", oid(1))
+        },
         tracking("origin/main", oid(2)),
         tracking("origin/side", oid(1)),
     ];
@@ -140,29 +144,33 @@ fn a_branchs_card_reads_where_its_upstream_stands() {
     let remote_tags = index_of("origin", Vec::new());
     let mut snapshot = build_snapshot(&refs, &head_at(oid(1)), &remote_tags, &joins);
     snapshot.remote_names = vec!["origin".to_string()];
-    let far = |reading, tracked| BranchFar {
-        reading,
-        tracked,
+    let far = |tracks| BranchFar {
+        tracks,
         has_remote: true,
         ahead: 0,
     };
 
-    assert_eq!(snapshot.branch_far("main"), far(Reading::Drifted, true));
-    assert_eq!(snapshot.branch_far("side"), far(Reading::Together, true));
+    assert_eq!(snapshot.branch_far("main"), far(Tracks::Drifted));
+    assert_eq!(snapshot.branch_far("side"), far(Tracks::Together));
     assert_eq!(
         snapshot.branch_far("gone"),
-        far(Reading::None, true),
+        far(Tracks::Gone),
         "a gone upstream names no reading and is there to take off"
     );
-    assert_eq!(snapshot.branch_far("plain"), far(Reading::None, false));
+    assert_eq!(snapshot.branch_far("plain"), far(Tracks::Nothing));
     assert_eq!(
         snapshot.branch_far("mine").ahead,
         2,
         "what the branch has that its reading lacks"
     );
     assert_eq!(
+        snapshot.branch_far("local"),
+        far(Tracks::Here),
+        "a branch here as the upstream is no reading, and not gone"
+    );
+    assert_eq!(
         snapshot.branch_far("never"),
-        far(Reading::None, false),
+        far(Tracks::Nothing),
         "the remotes are the repository's, whichever name is asked"
     );
     snapshot.remote_names.clear();
@@ -1094,7 +1102,7 @@ fn the_chips_wear_the_head_the_record_names() {
         branch: None,
         oid: Some(oid(2)),
         detached: true,
-        held: None,
+        kept: None,
     };
     let off = moved.marked_by(&detached);
     assert_eq!(drawn(&off, 1), ["main", "zz-two"]);

@@ -158,6 +158,41 @@ pub fn reaches<'a>(
     (from_drawn && to_drawn).then_some(false)
 }
 
+/// Whether `to` lies down `from`'s first parents with no merge on the way —
+/// git's `is_linear_history(to, from)`, which decides whether a rebase onto
+/// `to` has anything to move (builtin/rebase.c `can_fast_forward`) —, off
+/// rows already on screen, so the `rebase` row greys in the frame the menu
+/// opens in. `from` itself counts as on the way: a merge at the tip lays
+/// the branch again too.
+///
+/// `rows` in walk order, children before every parent, so one pass down
+/// from `from` follows the line. `None` where the window cannot say: the
+/// line runs off the drawn rows, or ends at a root, before it meets `to` or
+/// a merge — never where [`reaches`] answers `Some(true)`, since the first
+/// step off the line that reaches `to` is a merge's.
+pub fn straight_down<'a>(
+    rows: impl IntoIterator<Item = WalkedRow<'a>>,
+    from: Oid,
+    to: Oid,
+) -> Option<bool> {
+    if from == to {
+        return Some(true);
+    }
+    let mut next = from;
+    for row in rows {
+        if row.oid != next {
+            continue;
+        }
+        match row.parents {
+            [parent] if *parent == to => return Some(true),
+            [parent] => next = *parent,
+            [] => return None,
+            _ => return Some(false),
+        }
+    }
+    None
+}
+
 /// Which remotes already have `target`, off rows already on screen, so a
 /// menu offering a link on a remote can leave out the remotes without the
 /// commit as it opens (デザイン規約 §行が読む答えはどこから来るか). `tips`
@@ -398,6 +433,71 @@ mod tests {
                 oid(to),
             )
         }
+
+        fn straight(&self, from: u8, to: u8) -> Option<bool> {
+            let rows: Vec<(Oid, Vec<Oid>)> = self
+                .0
+                .iter()
+                .map(|(id, parents, _)| (oid(*id), parents.iter().map(|p| oid(*p)).collect()))
+                .collect();
+            super::straight_down(
+                rows.iter().map(|(oid, parents)| WalkedRow {
+                    oid: *oid,
+                    parents,
+                    published: false,
+                }),
+                oid(from),
+                oid(to),
+            )
+        }
+    }
+
+    /// The shapes a rebase onto a commit the branch has meets (measured on
+    /// 2.55): down a straight line git says `Current branch … is up to
+    /// date`, and past a merge — on the way down, at the tip, or the commit
+    /// on the merge's other side — it lays the branch again in one line.
+    #[test]
+    fn a_straight_line_down_first_parents_holds_no_merge() {
+        let stretch = a_local_stretch();
+        assert_eq!(stretch.straight(1, 3), Some(true));
+        assert_eq!(stretch.straight(1, 2), Some(true), "the first parent");
+        assert_eq!(stretch.straight(1, 1), Some(true), "the commit itself");
+        // 9 ─ 10 ─ (merge 5 of 6 and 7) ─ 8: a merge between, and the tip one.
+        let carried_on = Window(vec![
+            (9, vec![10], false),
+            (10, vec![5], false),
+            (5, vec![6, 7], false),
+            (6, vec![8], false),
+            (7, vec![8], true),
+            (8, vec![], true),
+        ]);
+        assert_eq!(
+            carried_on.straight(9, 5),
+            Some(true),
+            "down to the merge itself"
+        );
+        assert_eq!(carried_on.straight(9, 6), Some(false), "below the merge");
+        assert_eq!(carried_on.straight(9, 8), Some(false));
+        assert_eq!(carried_on.straight(9, 7), Some(false), "its other side");
+        assert_eq!(
+            a_merged_side().straight(5, 6),
+            Some(false),
+            "a merge at the tip"
+        );
+    }
+
+    /// The line run off the drawn rows, or to a root, before `to`: the
+    /// window cannot say.
+    #[test]
+    fn a_line_off_the_window_cannot_say() {
+        let cut = Window(vec![(1, vec![2], false), (2, vec![3], false)]);
+        assert_eq!(cut.straight(1, 4), None);
+        assert_eq!(a_local_stretch().straight(1, 9), None, "a root first");
+        assert_eq!(
+            a_local_stretch().straight(9, 1),
+            None,
+            "a start no row draws"
+        );
     }
 
     #[test]

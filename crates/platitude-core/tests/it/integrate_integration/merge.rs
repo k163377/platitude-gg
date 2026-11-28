@@ -253,6 +253,27 @@ async fn merge_heads_says_nothing_read_rather_than_no_sides() {
 /// are read by the tests above (rules-refs/core.md `periodic`).
 mod periodic {
     use super::*;
+    use crate::support::integrate::unborn_beside_a_commit;
+
+    /// Into a branch with no commits yet a merge takes the branch to the
+    /// commit: what keeps the left pane's `merge` live while HEAD is unborn
+    /// (`menu::Why::HeadUnborn` greys `rebase` there).
+    #[tokio::test]
+    #[ignore = "git merging into an unborn branch: not worth the pre-merge run"]
+    async fn a_merge_into_a_branch_with_no_commits_takes_it_to_the_commit() {
+        let (mut repo, tip) = unborn_beside_a_commit();
+        let (exec, cancel) = env();
+        integrate::merge(
+            &exec,
+            &repo.path,
+            "other",
+            &MergeOptions::default(),
+            &cancel,
+        )
+        .await
+        .expect("the branch is taken to the commit");
+        assert_eq!(repo.git(&["rev-parse", "main"]), tip);
+    }
 
     #[tokio::test]
     #[ignore = "git's own --ff-only refusal: not worth the pre-merge run"]

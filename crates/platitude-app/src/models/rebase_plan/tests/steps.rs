@@ -255,6 +255,27 @@ fn fold_lands_answers_for_the_menu_what_the_demotion_enforces() {
     assert!(!model.fold_lands(1), "only a drop is left below");
 }
 
+/// The verb menu reads the same line: the fold rows greyed over nothing but
+/// drops, and no fold rows on the oldest step.
+#[test]
+fn the_step_menu_greys_a_fold_over_drops_and_has_none_on_the_oldest() {
+    let mut model = fresh();
+    let squash = |menu: &crate::encode::MenuAnswer| {
+        let line = menu.lines.iter().find(|line| line.word == "step-squash")?;
+        Some(line.why.clone())
+    };
+    assert_eq!(squash(&model.step_answer(1)), Some(String::new()));
+    assert_eq!(squash(&model.step_answer(2)), None, "the oldest row");
+    model.steps[2].action = "drop".to_string();
+    assert_eq!(squash(&model.step_answer(1)), Some("no-fold".to_string()));
+    assert_eq!(
+        model.step_answer(1).words().first().copied(),
+        Some("step-pick")
+    );
+    assert!(model.step_answer(-1).lines.is_empty());
+    assert!(model.step_answer(3).lines.is_empty(), "no such row");
+}
+
 #[test]
 fn settle_carries_the_selected_rows_stored_reword_out() {
     let mut model = fresh();

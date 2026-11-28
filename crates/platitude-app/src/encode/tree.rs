@@ -2,6 +2,7 @@
 //! (`WorktreeModel.reading`).
 
 use platitude_core::offers::TreeStanding;
+use platitude_core::worktrees::{Keeper, KeptBranch};
 use qtbridge::qtbridge_type_lib::QVariantMap;
 
 use super::wire::{Fields, One, Record, field};
@@ -13,7 +14,9 @@ use super::wire::{Fields, One, Record, field};
 ///
 /// Its fields are flat, under `WorktreeModel`'s own property names: QML
 /// reads `tree.branch` off a kept one as off the model, and a slot taking
-/// [`TreeStanding`] reads its part of the same map, leaving the rest.
+/// [`TreeStanding`] reads its part of the same map, leaving the rest. The
+/// branch a stopped operation keeps goes as two of its own (`keptBranch`,
+/// `keptBy`), which only core's rules read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TreeReading {
     pub standing: TreeStanding,
@@ -44,7 +47,19 @@ fn put_standing(fields: Fields, standing: &TreeStanding) -> Fields {
         .put("opEditing", &standing.op_editing)
         .put("movesBlocked", &standing.moves_blocked)
         .put("upstream", &standing.upstream)
+        .put("upstreamCounted", &standing.upstream_counted)
         .put("pullBlocked", &standing.diverged)
+        .put(
+            "keptBranch",
+            standing
+                .kept
+                .as_ref()
+                .map_or("", |kept| kept.branch.as_str()),
+        )
+        .put(
+            "keptBy",
+            standing.kept.as_ref().map_or("", |kept| kept.by.as_str()),
+        )
 }
 
 fn read_standing(map: &QVariantMap) -> Option<TreeStanding> {
@@ -56,8 +71,21 @@ fn read_standing(map: &QVariantMap) -> Option<TreeStanding> {
         op_editing: field(map, "opEditing")?,
         moves_blocked: field(map, "movesBlocked")?,
         upstream: field(map, "upstream")?,
+        upstream_counted: field(map, "upstreamCounted")?,
         diverged: field(map, "pullBlocked")?,
+        kept: read_kept(map)?,
     })
+}
+
+/// The kept branch back: none where its name is empty, the whole record
+/// refused where the operation's word is none core knows.
+fn read_kept(map: &QVariantMap) -> Option<Option<KeptBranch>> {
+    let branch: String = field(map, "keptBranch")?;
+    if branch.is_empty() {
+        return Some(None);
+    }
+    let by = Keeper::from_word(&field::<String>(map, "keptBy")?)?;
+    Some(Some(KeptBranch { branch, by }))
 }
 
 /// What a `GitFacts` slot takes: the part of a [`TreeReading`] the rules
@@ -114,7 +142,12 @@ mod tests {
                 op_editing: true,
                 moves_blocked: true,
                 upstream: "origin/feature/日本語".into(),
+                upstream_counted: true,
                 diverged: true,
+                kept: Some(KeptBranch {
+                    branch: "release/日本語".into(),
+                    by: Keeper::Bisect,
+                }),
             },
             conflict_count: 2,
             unborn: true,

@@ -269,7 +269,7 @@ impl NavSectionModel {
             .and_then(|w| {
                 w.branch
                     .clone()
-                    .or_else(|| w.held.as_ref().map(|held| held.branch.clone()))
+                    .or_else(|| w.kept.as_ref().map(|kept| kept.branch.clone()))
             })
             .unwrap_or_default();
         let moved = self.home_branch != home;

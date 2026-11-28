@@ -489,6 +489,25 @@ impl GraphModel {
         }
     }
 
+    /// How the branch HEAD is on has the commit `oid_hex` — whether HEAD's
+    /// commit `head_hex` reaches it, and down a straight line or past a
+    /// merge —, off the drawn rows: `menu::History`'s word, or empty where
+    /// the window cannot say, which git answers at the press. What greys a
+    /// graph row's rewrites, and any row's merge and rebase of a commit the
+    /// branch has already (`GitFacts.menuOn`).
+    #[qslot]
+    fn history_of(&self, oid_hex: String, head_hex: String) -> String {
+        let (Some(oid), Some(head)) = (
+            crate::encode::oid_arg(&oid_hex),
+            crate::encode::oid_arg(&head_hex),
+        ) else {
+            return String::new();
+        };
+        self.drawn_history(oid, head)
+            .map_or("", platitude_core::menu::History::word)
+            .to_string()
+    }
+
     /// The colour each side of a conflict is drawn in, both at once
     /// (`encode::conflict_side_colors` decides).
     #[qslot]

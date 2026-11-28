@@ -265,7 +265,7 @@ impl Footprint for crate::session::TagDrift {
 
 impl Footprint for crate::refs::HeadState {
     fn heap_bytes(&self) -> usize {
-        self.branch.heap_bytes() + self.held.heap_bytes()
+        self.branch.heap_bytes() + self.kept.heap_bytes()
     }
 }
 
@@ -346,11 +346,11 @@ impl Footprint for crate::worktrees::WorktreeEntry {
             + self.head_hex.heap_bytes()
             + self.lock_reason.heap_bytes()
             + self.prune_reason.heap_bytes()
-            + self.held.heap_bytes()
+            + self.kept.heap_bytes()
     }
 }
 
-impl Footprint for crate::worktrees::Held {
+impl Footprint for crate::worktrees::KeptBranch {
     fn heap_bytes(&self) -> usize {
         self.branch.heap_bytes()
     }

@@ -40,6 +40,16 @@ pub fn conflicting_branches() -> TestRepo {
     repo
 }
 
+/// HEAD on `main` with no commits yet, beside a branch `other` fetched from
+/// another repository; `other`'s commit.
+pub fn unborn_beside_a_commit() -> (TestRepo, String) {
+    let mut source = TestRepo::init();
+    let tip = source.commit_file_id("a.txt", "one\n", "root");
+    let mut repo = TestRepo::init();
+    repo.git(&["fetch", &source.file_url(), "main:refs/heads/other"]);
+    (repo, tip)
+}
+
 pub async fn current_op(repo: &TestRepo) -> Option<InProgress> {
     let (exec, cancel) = env();
     let state = opstate::detect(&exec, &repo.path, &cancel)

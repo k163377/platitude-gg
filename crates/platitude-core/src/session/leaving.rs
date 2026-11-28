@@ -207,7 +207,7 @@ impl Holders {
     fn folded_remote(&self, local: &str) -> Option<String> {
         let snapshot = self.snapshot.as_ref()?;
         let item = snapshot.local_named(local)?;
-        (item.reading() == crate::offers::Reading::Together)
+        (item.tracks() == crate::offers::Tracks::Together)
             .then(|| format!("refs/remotes/{}", item.upstream))
     }
 }

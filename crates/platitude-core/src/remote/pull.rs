@@ -70,7 +70,8 @@ pub async fn pull(
 /// §取り込んで合流させる). The remote-tracking ref comes along under the
 /// remote's own refspec, as a pull's fetch brings it. What is weighed
 /// before the press (commits of its own, the worktree holding it) is
-/// `offers::pull_row`'s. Held by `pull_integration`'s `a_branch_aside_*`.
+/// the menu type's (`menu::Row::Pull`). Held by `pull_integration`'s
+/// `a_branch_aside_*`.
 ///
 /// Where the branch tracks is read at the moment of asking, by the one
 /// reader of the branch keys ([`super::push_marks`]); a branch tracking

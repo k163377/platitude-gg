@@ -25,22 +25,22 @@ impl RepoSession {
     /// `looked` is the read's pre-spawn stamp: a read that looked before a
     /// write ended is refused, whichever order the two landed in.
     pub(super) fn observe_head(&self, looked: u64, head: &HeadState) {
-        let head = &self.with_held(head);
+        let head = &self.with_kept(head);
         let offer = self.standing.offer_head(looked, head);
         self.report_head(offer, head);
     }
 
     /// `head` with the branch an operation keeps to this worktree while
-    /// HEAD is on none ([`HeadState::with_held_at`]), read in by both doors
+    /// HEAD is on none ([`HeadState::with_kept_at`]), read in by both doors
     /// into the record so the two reads compare alike.
     ///
     /// Read after the process that read HEAD, not at `looked`: a replay
     /// ending between the two (git puts HEAD back on the branch, then takes
     /// `rebase-merge` away) leaves a detached HEAD holding none, under the
     /// write — the read behind the write reports HEAD back on its branch.
-    fn with_held(&self, head: &HeadState) -> HeadState {
+    fn with_kept(&self, head: &HeadState) -> HeadState {
         match self.git_dir() {
-            Some(git_dir) => head.clone().with_held_at(&git_dir),
+            Some(git_dir) => head.clone().with_kept_at(&git_dir),
             None => head.clone(),
         }
     }
@@ -77,7 +77,7 @@ impl RepoSession {
         // (`HeadOffer::Overtaken` — the status read's HEAD often lands
         // first) still does: left without a hold, the reach answers as for
         // an unborn branch.
-        let head = &self.with_held(head);
+        let head = &self.with_kept(head);
         let offer = self.standing.offer_head(looked, head);
         if offer == HeadOffer::Stale {
             return;

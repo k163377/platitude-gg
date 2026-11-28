@@ -76,7 +76,7 @@ async fn a_branch_aside_is_fast_forwarded_to_what_its_upstream_holds() {
 
 /// No `+` on the refspec: a branch with commits its upstream lacks is never
 /// set back to the upstream's tip. git turns the fetch down instead, which
-/// is why the row is greyed before the press (`offers::pull_row`).
+/// is why the row is greyed before the press (`menu::Why::OwnCommits`).
 ///
 /// The one flag no argv unit pins: `fast_forward` reads the branch keys
 /// (`push_marks`) before it builds the fetch, so `refusing::git()` never
@@ -121,6 +121,46 @@ async fn a_branch_aside_tracking_nothing_is_refused_before_git() {
 /// full gate runs these.
 mod periodic {
     use super::*;
+
+    /// The upstream's reading deleted here, the branch still over there:
+    /// the status counts nothing, and the pull fetches the branch and lands.
+    /// Nothing read here tells it from one gone, which has no `pull` row
+    /// (`menu::UpstreamShape::Gone`): a fetch reads it back, and the row
+    /// with it.
+    #[tokio::test]
+    #[ignore = "git fetching an upstream whose reading was deleted: not worth the pre-merge run"]
+    async fn a_pull_with_its_reading_gone_lands_from_the_branch_over_there() {
+        let (bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        work.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+        let theirs = moved_over_there(&bare, "main", "b.txt", "over there");
+        work.git(&["update-ref", "-d", "refs/remotes/origin/main"]);
+
+        remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect("the branch over there is fetched");
+        assert_eq!(work.git(&["rev-parse", "main"]), theirs);
+    }
+
+    /// Gone over there and pruned here, the same status and the same pull:
+    /// it finds nothing, exit 1 (`no such ref was fetched`) — nothing to
+    /// pull from, so no `pull` row (`menu::UpstreamShape::Gone`).
+    #[tokio::test]
+    #[ignore = "git's refusal to pull a branch gone over there: not worth the pre-merge run"]
+    async fn a_pull_of_a_branch_gone_over_there_is_a_failure() {
+        let (mut bare, mut work) = origin_and_clone();
+        let (exec, cancel) = env();
+        a_branch_over_there(&mut work, "topic");
+        bare.git(&["branch", "-D", "topic"]);
+        work.git(&["fetch", "--prune", "origin"]);
+        work.git(&["switch", "topic"]);
+
+        let err = remote::pull(&exec, &work.path, NET, &cancel)
+            .await
+            .expect_err("nothing over there to pull");
+        assert!(matches!(err, GitError::Failed { code: 1, .. }), "{err}");
+        assert!(err.to_string().contains("no such ref was fetched"), "{err}");
+    }
 
     #[tokio::test]
     #[ignore = "git's own dirty-tree refusal: not worth the pre-merge run"]

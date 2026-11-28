@@ -210,8 +210,7 @@ impl Carried<'_> {
     /// (`MERGE_HEAD`, `REVERT_HEAD` …) down with it, so nothing is carried
     /// under one. A rewrite says so in a report of its own; a merge or a
     /// pull keeps git's refusal — the screen offers neither under a
-    /// standing operation (`RefMenuOffers::standing`,
-    /// `CommitMenuOffers::standing`, `PullOut::Standing`), and git's own
+    /// standing operation (`menu::Why::StoppedOperation`), and git's own
     /// check before a merge reads `MERGE_HEAD` and `CHERRY_PICK_HEAD` but
     /// not `REVERT_HEAD` (builtin/merge.c, the minimum to 2.55), so this is
     /// the backstop. A move cannot get here: git refuses every move under a

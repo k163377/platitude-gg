@@ -137,3 +137,19 @@ fn the_standing_names_the_one_refusal_that_applies() {
     assert_eq!(standing(false, &counts(0, 0, 1, 0)).as_str(), "ready");
     assert_eq!(standing(false, &counts(2, 1, 0, 0)).as_str(), "ready");
 }
+
+/// The word a standing goes out in reads back as it; any other — the empty
+/// one of a tree not read yet — as none.
+#[test]
+fn a_standing_reads_back_from_its_word() {
+    for standing in [
+        StashStanding::Unborn,
+        StashStanding::Conflicts,
+        StashStanding::Clean,
+        StashStanding::Ready,
+    ] {
+        assert_eq!(StashStanding::from_word(standing.as_str()), Some(standing));
+    }
+    assert_eq!(StashStanding::from_word(""), None);
+    assert_eq!(StashStanding::from_word("Ready"), None);
+}
