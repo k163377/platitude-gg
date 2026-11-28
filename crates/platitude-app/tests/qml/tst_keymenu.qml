@@ -16,7 +16,9 @@ import platitude.ui.input
 Item {
     id: root
     width: 480
-    height: 360
+    // Room under the box for its card, every row of the table on show: one that does not fit is pushed inside the
+    // window (`FieldMenu.offerNow`), and stands under the caret no more.
+    height: 600
 
     // Where the window takes what nothing above took: under everything here.
     Item {

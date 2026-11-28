@@ -233,7 +233,7 @@ QtObject {
     readonly property string finishStoppedFirst: qsTr("Finish the stopped operation first")
 
     /// Why the `pull` row is greyed while both sides have moved, from both entrances (`RefRowMenu` / `CommitRowMenu`;
-    /// `offers::PullOut::Diverged`). The second half names where to go: a greyed row alone is a dead end.
+    /// `menu::Why::Diverged`). The second half names where to go: a greyed row alone is a dead end.
     readonly property string pullDiverged: qsTr(
         "The branches have diverged, so pick the remote branch and rebase onto it")
     /// …and while a branch the worktree is not on has commits its upstream lacks: a fast-forward is all a pull does
@@ -245,15 +245,73 @@ QtObject {
         //: %1 is the remote branch this branch tracks, e.g. origin/feature/login.
         return qsTr("Cannot fast-forward — it has commits not on %1").arg(upstream)
     }
-    /// Why the `pull` row is greyed, by the word `GitFacts.refMenu` answers in `pullOut`: an operation stands here,
-    /// the tree diverged, the row's branch has commits its `upstream` lacks, or another worktree has it out — `leaf`
-    /// is that worktree's folder. Empty where the row is live.
-    function pullOut(out, leaf, upstream) {
-        switch (out) {
+    /// Why a row of a menu or its cards is greyed, by core's word for it (`MenuLines.why` — `menu::Why::word`): one
+    /// sentence per reason, whichever row it greys — a word left without one would grey its row saying nothing, so
+    /// the cases and core's words are held equal (`cargo xtask structure`); what greys the row is the word, not the
+    /// sentence (`AppMenuItem.ownBlocked`). Empty for `""`, a live row. `names` holds what the sentence names, where
+    /// the row has it: `holder` the worktree that has the branch out, `local` the branch a remote row lands on, `place`
+    /// where a new worktree would go (`NavSectionModel.newWorktreeFor`'s answer), `upstream` the remote branch the
+    /// branch tracks, `head` the branch the worktree is on, `counterpart` the reading a delete reaches, `reach` /
+    /// `carriers` where a tag's deletes reach and who carries it, `target` where a push goes, `lockReason` what the lock
+    /// was given, `worktree` the other worktree whose changes the row brings.
+    function menuWhy(why, names) {
+        const named = names === undefined ? {} : names
+        switch (why) {
+        case "opening": return qsTr("Wait for the repository to open")
+        case "no-commits": return qsTr("No commits yet")
         case "standing": return Words.finishStoppedFirst
+        // The branch's name opens the reason (user decision — ask before changing); the tip seats its mark there
+        // (`tipNameSeat`).
+        //: Revert, rebase or rewrite while the branch the worktree is on has no commits. %1 is that branch, as the
+        //: empty graph names it ("The first commit will start main").
+        case "head-unborn": return qsTr("%1 has no commits yet").arg(named.head)
+        //: Squash, drop or rebase --interactive on a commit the branch the worktree is on does not have.
+        case "off-branch": return qsTr("Not in the history of the branch you are on")
+        //: Merge, rebase onto or cherry-pick the commit the worktree already stands on.
+        case "same-commit": return qsTr("Nothing to bring in — this is the commit you are on")
+        //: Merge a commit behind it that the branch the worktree is on already has, or rebase onto one the branch runs
+        //: down to with no merge on the way.
+        case "in-history": return qsTr("Nothing to bring in — already in the branch you are on")
+        //: Reset the branch to the commit it already stands on.
+        case "already-there": return qsTr("Nothing to move — this is the commit you are on")
+        case "current": return qsTr("Switch away first — this is the branch you are on")
+        case "held": return Words.checkedOutElsewhere(named.holder)
+        // The rename box's words for the same hold, the operation said by core's word.
+        case "rebasing": return Words.heldByOperation("rebase", true, "")
+        case "bisecting": return Words.heldByOperation("bisect", true, "")
+        //: %1 is the local branch of the remote branch's name, whose own row makes the worktree.
+        case "local": return qsTr("Already a branch here — %1").arg(named.local)
+        case "worktrees-unread": return qsTr("Wait for the worktrees to be read")
+        // The two with nowhere to put a new worktree say what cannot happen, then why (user decision — ask before
+        // changing): the reason alone leaves unsaid that the row makes nothing.
+        //: Create worktree here… / worktree add: new worktrees go in a folder beside the repository's own worktree,
+        //: and a bare repository has none.
+        case "bare": return qsTr("Cannot create a worktree — the repository is bare")
+        //: Create worktree here… / worktree add: new worktrees go in a folder beside the repository, and one at the
+        //: root of a drive has nothing beside it.
+        case "drive-root": return qsTr("Cannot create a worktree — the repository is at the root of the drive")
+        case "taken": return Words.worktreePlaceTaken(named.place.taken, named.place.name)
         case "diverged": return Words.pullDiverged
-        case "own": return Words.pullOwnCommits(upstream)
-        case "held": return Words.checkedOutElsewhere(leaf)
+        case "own": return Words.pullOwnCommits(named.upstream)
+        case "drifted": return Words.differsFrom(named.counterpart)
+        case "no-remote": return qsTr("This repository has no remote")
+        case "tag-drifted": return Words.differsFrom(named.reach)
+        case "tag-unnamed": return Words.severalRemotesHave(named.carriers)
+        case "locked": return named.lockReason === undefined || named.lockReason === ""
+                              ? qsTr("This worktree is locked") : qsTr("Locked — %1").arg(named.lockReason)
+        case "here": return qsTr("This tab is showing this worktree")
+        case "clean": return Words.pushClean(named.target)
+        case "stays-here": return Words.pushStaysHere
+        // git applies nothing over an unmerged index; over there, which of its sides to bring is not decided.
+        case "conflicts-here": return qsTr("Settle this worktree's conflicts first")
+        //: %1 is the other worktree's name — its folder, or the branch the repository's own worktree has out.
+        case "conflicts-there": return qsTr("Settle its conflicts first — %1").arg(named.worktree)
+        //: A squash or fixup in a rebase plan, every commit below it set to drop.
+        case "no-fold": return qsTr("Every commit below is dropped — nothing to fold into")
+        //: Mark as origin on the remote the repository already pushes to and checks out from by default.
+        case "already-origin": return qsTr("Already marked as origin")
+        //: A branch's push row while the branch list is read again — the tree has moved on before the list.
+        case "unread": return qsTr("Wait for the branches to be read again")
         default: return ""
         }
     }
@@ -921,9 +979,10 @@ QtObject {
     }
     /// Where a tip's sentence puts `word`, the name a drawn mark goes in front of (`TipAsk.markWordNow`): a
     /// whole word at its end — a tip names it after its conclusion, `<conclusion> — <name>`, and a cut row's line ends
-    /// in it — or opening what follows the conclusion, `<conclusion> — <name> is locked`. -1 anywhere else — a
-    /// translation that moved it, or the same letters inside another word (`old` in `folder`) — so the sentence is
-    /// drawn as it came, with no mark on the wrong word.
+    /// in it —, opening what follows the conclusion, `<conclusion> — <name> is locked`, or opening the sentence
+    /// that is about it, `<name> has no commits yet` — in that order, so a name that is also the sentence's first
+    /// word takes the seat after the conclusion. -1 anywhere else — a translation that moved it, or the same letters
+    /// inside another word (`old` in `folder`) — so the sentence is drawn as it came, with no mark on the wrong word.
     function tipNameSeat(sentence, word) {
         if (word === "")
             return -1
@@ -934,7 +993,9 @@ QtObject {
                 return seat
         }
         const after = sentence.indexOf(" — " + word + " ")
-        return after < 0 ? -1 : after + 3
+        if (after >= 0)
+            return after + 3
+        return sentence.startsWith(word + " ") ? 0 : -1
     }
     /// Where each name of a `, `-joined list stands in a sentence that ends in it (`severalRemotesHave`,
     /// `differsFrom`, `pullOwnCommits`): `[at, kind, , length]` each, for the marks the names wear and the colour they

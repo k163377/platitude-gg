@@ -3,9 +3,9 @@ import platitude
 import platitude.ui
 
 // ---- what the commit menu is standing on ----------------------------
-// The row the menu was opened on and what it may offer there, decided in `openRowMenu` and stood again on the tree as
-// it is while the menu stands — when a command it waited for has ended (`standAgain`) and when what it reads moves
-// (`follow`), its rows kept (デザイン規約 §メニュー). One place to look for why a row is not on offer.
+// The row the menu was opened on and the answers its rows stand on: read in `openRowMenu`, and read again on the tree
+// as it is while the menu stands (`standAgain`), its rows kept (デザイン規約 §メニュー). Which rows the menu has and why
+// each greys are core's (`menu::lines`), drawn by `MenuLines`.
 //
 // A `QtObject`: it holds no child (rules-refs/structure.md「切り出した非表示のホストは `Item` にする」). The menu
 // itself is declared on the page, which gives it an item to measure the window through (「描かないホスト」).
@@ -15,22 +15,16 @@ QtObject {
     required property RepoTab repoTab
     required property WorktreeModel worktree
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
-    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`follow`) — a menu up as
-    /// it ran, waiting for it or not.
+    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`MenuLines.waiting`) — a
+    /// menu up as it ran, waiting for it or not.
     property var treeAtAsk: null
-    onTreeAtAskChanged: if (menuState.treeAtAsk === null) menuState.follow()
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, not
     /// bound: nothing reads it outside a door, and a binding would build the record on every status drain.
     property var tree: null
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
-    /// standing follows it (`follow`).
+    /// standing follows it (`MenuLines.moved`).
     property int readRevision: 0
-    onReadRevisionChanged: followLater.restart()
-    readonly property TurnLater followLater: TurnLater {
-        id: followLater
-        onTriggered: menuState.follow()
-    }
     required property GraphModel graphModel
     /// What the rows on the name the menu is aimed at and the cards at the foot stand on, read through `menuFacts`;
     /// where the name points now (`aimedAt`) and what it was renamed to (`standAgain`) off the sections themselves.
@@ -62,33 +56,31 @@ QtObject {
     // in hand as the menu opens (デザイン規約 §行が読む答えはどこから来るか).
     property bool menuPublished: false
     /// Whether a rebase onto the menu's commit would rewrite a commit a remote has (`<ref>..HEAD`), off the same rows
-    /// (`GraphModel.rebaseRewritesPublished`) — the `rebase` row's note, as `RefRowMenu.rebasePublished`.
+    /// (`GraphModel.rebaseRewritesPublished`) — the `rebase` row's warning, as `RefRowMenu.rebasePublished`.
     property bool menuRebasePublished: false
-    /// What these menus offer on the reading they stand on (`standRow`). The rules are core's (`offers::commit_menu`).
-    property bool menuCanCherryPick: false
-    property bool menuCanRevert: false
-    property bool menuCanIntegrate: false
-    property bool menuCanEditHistory: false
-    property bool menuCanMoveBranch: false
-    property bool menuCanBranchHere: false
-    /// An operation stands: every row that starts or rewrites history is there but greyed.
-    property bool menuOpStanding: false
-    property bool menuStashCanWrite: false
-    /// Whether the row's name is somewhere to move to, and whether the press asks first (`offers::ref_menu`).
-    property bool menuCanSwitch: false
+    /// The rows the menu and its cards have on the reading they stand on (`standRow`), and why each is greyed, as
+    /// core's type answered the stand (`MenuLines`): a commit row's — its commit's, its name's and the cards' —, or a
+    /// stash's —, drawn into the first level the menu raises (`CommitRowMenu.standFresh`), and when it stands again
+    /// (`standAgain`).
+    readonly property MenuLines lines: MenuLines {
+        id: lines
+        moved: menuState.readRevision
+        waiting: menuState.treeAtAsk !== null
+        onStandAgain: again => menuState.standAgain(again)
+    }
+    /// Whether the move to the row's name asks first.
     property bool menuSwitchAsks: false
     /// …or leads to another worktree instead: the name the one holding that name goes by, empty when none does
     /// (`RefRowMenu.heldLeaf`).
     property string menuHeldLeaf: ""
     /// That worktree is the repository's own (`RefRowMenu.heldHome`).
     property bool menuHeldHome: false
-    /// What the `pull` row runs on that name and why it is greyed — the same `offers::pull_row` ask as
-    /// `RefRowMenu.pullRuns` / `pullOut`.
+    /// What the `pull` row runs on that name, and the remote branch its `own` reason names — the same answer
+    /// `RefRowMenu`'s `pull` row reads.
     property string menuPullRuns: ""
-    property string menuPullOut: ""
     property string menuPullUpstream: ""
     /// How many files the `--hard` row would take besides the commits, off the reading the rows stand on — read with
-    /// them, not bound to the model, so its note comes and goes as the menu stands again (デザイン規約 §メニュー).
+    /// them, not bound to the model, so its warning comes and goes as the menu stands again (デザイン規約 §メニュー).
     property int menuHardResetTakes: 0
     /// Whether those files hold one the discard record cannot copy, off the same reading: it dresses the row.
     property bool menuHardResetNotCopied: false
@@ -101,7 +93,7 @@ QtObject {
     /// it — read off the tree as `openRowMenu` reads it, and greyed while a command is out as every menu is.
     function openCarriedMenu(path, name) {
         const menu = menuState.menu
-        menu.releaseShape()
+        menu.standFresh("carried")
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         menu.carriedPath = path
         menu.carriedName = name
@@ -114,23 +106,17 @@ QtObject {
     function carriedRow() {
         return menuState.graphModel.rowOfKey(GitFacts.worktreeKey(menuState.menu.carriedPath))
     }
-    /// Whether that worktree's work has an apply row — false where the row is gone — and what greys it: a conflict
-    /// standing on either side (デザイン規約 §メニュー「「今できない」行は無効で残す」; user decision — ask before changing).
-    /// There: which of its sides to carry is not decided. Here: git applies nothing over an unmerged index — so with
-    /// both, the reason says here. That worktree's count is the row's, as old as its last read (`session::pace`); the
-    /// write reads the tree afresh when its turn comes (`RepoSession::apply_carried`).
+    /// What that worktree's menu offers, as core's type answers it (`GitFacts.carriedMenu`): its door, and its work
+    /// brought here, greyed while a conflict stands on either side (`menu::Row::ApplyChanges`) — that worktree's count
+    /// the row's own.
     function standCarried() {
-        const menu = menuState.menu
         const carried = menuState.graphModel.carriedAt(menuState.carriedRow())
-        const tally = carried !== undefined ? carried.tally : undefined
-        menu.carriedApplyOffered = menuState.repoTab.state === "open" && tally !== undefined
-        menu.carriedApplyOut = !menu.carriedApplyOffered ? ""
-                             : menuState.tree.conflictCount > 0 ? "here"
-                             : tally.conflicted > 0 ? "there" : ""
+        const there = carried === undefined || carried.tally === undefined ? 0 : carried.tally.conflicted
+        lines.answer = GitFacts.carriedMenu(menuState.repoTab.state === "open", menuState.tree, there)
     }
 
     function openRowMenu(oidHex) {
-        menuState.menu.releaseShape()
+        menuState.menu.standFresh(menuState.graphModel.stashRefOf(oidHex) !== "" ? "stash" : "commit")
         menuState.tree = menuState.treeAtAsk !== null ? menuState.treeAtAsk : menuState.worktree.reading
         const facts = menuState.standRow(oidHex, oidHex)
         if (facts === null) {
@@ -142,28 +128,14 @@ QtObject {
         menuState.menu.offerCommit(facts)
     }
 
-    /// What the rows stand on moved with the menu up — outside while nothing runs, or with a command that has just
-    /// ended: the rows stand again on the tree as it is, as when a wait ends (`standAgain`; デザイン規約 §メニュー
-    /// 「今の内容」). Not while a command is out: the menu stands on the tree as that was asked until it ends
-    /// (`treeAtAsk`), whatever the write.
-    function follow() {
-        if (menuState.treeAtAsk !== null)
-            return
-        menuState.standAgain("follow")
-    }
-
-    /// The command the menu waited for has ended with the menu up: what it left is read again and the rows stand on
-    /// it, the menu keeping its shape (`AppMenu.holdShape`) — the stash's selector the row now answers to, the notes
-    /// and the presses off where HEAD now is, the BRANCH card off where its branch now points, the rows an operation it
-    /// stopped in takes away greyed. A row the command took off the graph (a stash popped, a commit dropped), or the
-    /// name the menu was aimed at taken away, leaves the menu nothing to act on. `again`: `wait` for that, `follow`
-    /// for what moved with the menu up (`follow`) — the cards' rows that reach over there keep their leases either way,
-    /// and git's answers about the branch only while following (`RefBranchMenu.standOn`). The pair's menu reads
-    /// nothing of the tree: its links name the two commits, and it starts no git.
+    /// The menu stands again with the menu up (`MenuLines.standAgain`, whose `again` says why): what the rows stand on
+    /// is read again off the tree as it now is, the menu keeping its shape (`AppMenu.holdShape`) — the stash's selector
+    /// the row now answers to, the warnings and the presses off where HEAD now is, the BRANCH card off where its branch
+    /// now points, the rows an operation stopped meanwhile takes away greyed. A row gone off the graph (a stash popped,
+    /// a commit dropped), or the name the menu was aimed at taken away, leaves the menu nothing to act on. The pair's
+    /// menu reads nothing of the tree: its links name the two commits, and it starts no git.
     function standAgain(again) {
         const menu = menuState.menu
-        if (menu === null || !menu.showing || menu.choiceShowing)
-            return
         // Another worktree's row: gone where that worktree went clean, its apply read again otherwise.
         // No test reaches this branch: `tst_commitrowmenu` covers the menu's side (the wait, the shape,
         // `withdraw`), and choosing between withdrawing and reading again needs a graph model with the row.
@@ -172,7 +144,6 @@ QtObject {
                 menu.withdraw()
                 return
             }
-            menu.holdShape()
             menuState.tree = menuState.worktree.reading
             menuState.standCarried()
             return
@@ -193,7 +164,6 @@ QtObject {
             menu.withdraw()
             return
         }
-        menu.holdShape()
         menuState.tree = menuState.worktree.reading
         const facts = menuState.standRow(menuState.menuOid, aimAt)
         if (facts !== null)
@@ -223,12 +193,10 @@ QtObject {
         menuState.menuOid = oidHex
         menuState.menuStashRef = menuState.graphModel.stashRefOf(oidHex)
         // No running command is asked about: the menu waits for one with its rows greyed (`AppMenu.runningWhy`), so it
-        // has one shape whenever it is opened.
-        const offers = GitFacts.commitMenu(
-            menuState.repoTab.state === "open", menuState.tree, oidHex, menuState.menuStashRef !== "",
-            menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)))
+        // has one shape whenever it is opened. A stash's row is the stash's, as its left row is.
         if (menuState.menuStashRef !== "") {
-            menuState.menuStashCanWrite = offers.stashWrite
+            lines.answer = menuFacts.stand("graph", "stash", menuState.menuStashRef, oidHex, menuState.tree, "",
+                                           oidHex).menu
             return null
         }
         menuState.menuPublished = menuState.graphModel.publishedAt(oidHex)
@@ -236,30 +204,23 @@ QtObject {
         menuState.menuHardResetTakes = menuState.tree.hardResetTakes
         menuState.menuHardResetNotCopied = menuState.tree.hardResetNotCopied
         menuState.menuTipHeldElsewhere = menuState.tree.headReachedElsewhere
-        menuState.menuCanCherryPick = offers.cherryPick
-        menuState.menuCanRevert = offers.revert
-        menuState.menuCanIntegrate = offers.integrate
-        menuState.menuCanEditHistory = offers.editHistory
-        menuState.menuCanMoveBranch = offers.moveBranch
-        menuState.menuCanBranchHere = offers.branchHere
-        menuState.menuOpStanding = offers.standing
-        // The name the menu is aimed at: its `switch` and `pull` rows and every card at the foot, the BRANCH card where
-        // its branch points (`aimAt`). A chip drawing one remote's reading of a tag names that remote on its own, so
-        // the TAG card's `push` and deletes act on it (user decision — ask before changing;
+        // The commit's rows, and the name the menu is aimed at: its `switch` and `pull` rows and every card at the
+        // foot, the BRANCH card where its branch points (`aimAt`). A chip drawing one remote's reading of a tag names
+        // that remote on its own, so the TAG card's `push` and deletes act on it (user decision — ask before changing;
         // `NavSectionModel.tagAimAt`); the copy here and a reading several remotes share on this commit name none, and
         // the card's default stands.
         const kind = menuState.menu.targetKind
         const name = menuState.menu.targetName
-        const facts = menuFacts.stand(kind, name, oidHex, menuState.tree,
+        const seen = menuState.graphModel.provisionalAt(menuState.graphModel.rowOf(oidHex)) ? "provisional" : "graph"
+        const facts = menuFacts.stand(seen, kind, name, oidHex, menuState.tree,
                                       kind === "tag" ? menuState.tagsModel.tagAimAt(name, oidHex) : "", aimAt)
         const menu = facts.menu
-        menuState.menuCanSwitch = menu.switch
+        lines.answer = menu
         menuState.menuSwitchAsks = menu.switchAsks
         menuState.menuHeldLeaf = facts.lead.called
         menuState.menuHeldHome = facts.lead.home
         menuState.menuPullUpstream = kind === "branch" ? facts.card.remoteCounterpart : ""
         menuState.menuPullRuns = menu.pullRuns
-        menuState.menuPullOut = menu.pullOut
         return facts
     }
 }

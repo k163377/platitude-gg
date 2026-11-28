@@ -615,7 +615,7 @@ Item {
         if (button === Qt.RightButton) {
             // Only rows with operations behind them open a menu. A worktree's is the ref menu too: the branch it has
             // out, or its commit, and its own card (`RefRowMenu.offerOn`) — one with no commit yet has its branch and
-            // its card, and what is made on a commit is not offered there (`offers::ref_menu`).
+            // its card, where what is made on a commit stands greyed (`menu::Why::NoCommitsYet`).
             if (!navRow.folder && (navRow.oid_hex !== "" || navRow.kindHint === "worktree")
                     && (navRow.kindHint === "branch"
                         || navRow.kindHint === "remote"

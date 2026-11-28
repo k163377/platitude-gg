@@ -428,8 +428,8 @@ Item {
             text: box.text
             readonly property var ask: machine.target
             readonly property string markWord: tipWords.ask !== null ? tipWords.ask.markWordNow : ""
-            /// Where the one name stands: a tip names it last, after its conclusion (`Words.tipNameSeat`) — unless the
-            /// ask seats its names itself (`TipAsk.marksNow`).
+            /// Where the one name stands: a tip names it last, after its conclusion, or first, as what it is about
+            /// (`Words.tipNameSeat`) — unless the ask seats its names itself (`TipAsk.marksNow`).
             readonly property int markAt: Words.tipNameSeat(box.text, tipWords.markWord)
             // Each a sign on its name (デザイン規約 §アイコンの席 の修飾), in a room the field opens; the sentence's own
             // space before the word stays the gap.

@@ -85,7 +85,7 @@ ToolButton {
             // A local re-read (no network), for where the on-tick refresh cannot reach.
             AppMenuItem {
                 text: qsTr("Reload")
-                enabled: menuButton.curPage !== null
+                doable: menuButton.curPage !== null
                 onTriggered: menuButton.curPage.pageTab.refreshAll()
             }
             AppMenuSeparator {}
@@ -97,7 +97,7 @@ ToolButton {
             }
             AppMenuItem {
                 text: qsTr("About Platitude GG")
-                enabled: false
+                doable: false
             }
             AppMenuSeparator {}
             AppMenuItem {

@@ -9,10 +9,23 @@ import platitude.ui.words
 MenuItem {
     id: menuItem
 
-    /// Whether this row is on offer — false where it cannot be chosen, and then the row goes (デザイン規約 §メニュー).
-    /// Kept apart from `visible`, which `present` drives: a closed menu's list turns its rows' `visible` off behind the
-    /// binding, and the menu and its dividers read these before it opens.
+    /// Whether this row is on offer — false where the menu's subject has no such row (デザイン規約 §メニュー). Kept
+    /// apart from `visible`, which `present` drives: a closed menu's list turns its rows' `visible` off behind the
+    /// binding, and the menu and its dividers read these before it opens. A row of core's type never sets it:
+    /// `MenuLines` writes it off the answer, by `word`.
     property bool offered: true
+    /// The kind of row this is in core's type (`menu::Row::word`), which `MenuLines` draws it by — whether it is on
+    /// offer, why it greys, where it stands; empty for a row outside the type (`Copy path`, a card's title row).
+    property string word: ""
+    /// Why the type greys the row (`menu::Why::word`), written by `MenuLines` with `offered`; empty while it can be
+    /// pressed. The row says it in `blockedReason`, with the names its words seat (`whyNames`).
+    property string why: ""
+    /// The names `Words.menuWhy` seats in that reason (the worktree holding a branch, where a push goes).
+    property var whyNames: ({})
+    /// What a press is leased to — the commit over there the row stood on as the menu went up — moved since: the row
+    /// stops applying and greys where it stands (`withdrawn`), since a press would now reach commits the menu never
+    /// showed (`RefBranchMenu.state.pushMoved`). False on a menu freshly raised, which stands on what is there.
+    property bool leaseMoved: false
     /// Set while the menu keeps its shape (`AppMenu.holdShape`): the row stays as it was then — on show as
     /// `shownAtHold` says — whatever `offered` turns to. A row gone from under the hand would put another in its place,
     /// a row come would push the rest down.
@@ -20,19 +33,37 @@ MenuItem {
     property bool shownAtHold: false
     /// On show. What the menu lays its rows out and measures by.
     readonly property bool present: menuItem.shapeHeld ? menuItem.shownAtHold : menuItem.offered
-    /// On show though no longer on offer — the row itself, or the whole card it is on (`AppMenu.applies`: a title row
-    /// greyed for it still opens the card): greyed, saying the menu has to be raised again (デザイン規約 §メニュー).
+    /// On show though no longer on offer, or leased to a far side that moved (`leaseMoved`): greyed, saying the menu
+    /// has to be raised again (デザイン規約 §メニュー). A card's own `applies` stays as it was raised while the shape is
+    /// held (`MenuLines` writes it on a fresh stand only), so a title row greys with its rows (`cardOut`), not here.
     readonly property bool withdrawn:
-        menuItem.shapeHeld && menuItem.shownAtHold
-        && (!menuItem.offered || menuItem.menu !== null && menuItem.menu.applies === false)
+        menuItem.shapeHeld && menuItem.shownAtHold && (!menuItem.offered || menuItem.leaseMoved)
     visible: menuItem.present
+    /// Whether what the row does can be done right now: false greys a row with no reason to say (`FieldMenu`'s `Undo`
+    /// with nothing to undo). A row with a reason says it in `blockedReason`, a row of the type in `why`. Never
+    /// `enabled`, which the row keeps for itself (`structure::menu_words`).
+    property bool doable: true
+    // Off show, off: whatever a row shows, a menu's ↓ / ↑ stop on any row that takes the focus by tab and is enabled
+    // (`QQuickMenuPrivate::activateNextItem`, v6.12.0), → hands the focus of the card it opens to its first enabled row
+    // (`firstEnabledMenuItem`), and Return runs the row the focus is on. Not `activeFocusOnTab`: an item keeps that on
+    // while it holds the active focus (`QQuickItem::setActiveFocusOnTab`), so a row its own press takes off show stays
+    // a stop; a disabled item gives the focus up. Net: `tst_menulines`.
+    enabled: menuItem.present && menuItem.doable
     /// The hand on this row, by a handler of its own (`AppMenu.pointerInside`): the row's `hovered` drops the moment
     /// the card goes (`QQuickControl::itemChange`), before Qt hands the hover to what is under the hand; a handler
     /// keeps it until Qt takes it.
     readonly property bool handOn: rowHand.hovered
 
-    /// A short warning tag after the row's words ("already pushed"); the row still runs on click.
+    /// A short tag after the row's words that is part of what it says: which command the row runs, or on what — the
+    /// same row with another note runs something else (`not merged` is the `-D`, `both sides` restores the index too,
+    /// `the file goes`, `3 files`). On a greyed row too, in grey with the words.
     property string note: ""
+    /// A short tag warning of what a press costs now, the command being the same either way ("already pushed": it
+    /// rewrites what others have; "uncommitted too"): said only while the row can be pressed — a greyed row warns of
+    /// nothing, whatever greys it (デザイン規約 §無効). The row still runs on click.
+    property string warning: ""
+    /// The tag the row wears: its `note`, else its `warning` while it is not greyed.
+    readonly property string tag: menuItem.note !== "" ? menuItem.note : menuItem.greyed ? "" : menuItem.warning
     /// That tag's colour: the warning, and the words' colour where they have one of their own — grey on a row that
     /// cannot be chosen (a lit tag in a grey row reads as the part that still works, デザイン規約 §無効), lifted over
     /// the fill (in the warning it would sink into it).
@@ -178,35 +209,49 @@ MenuItem {
     /// sentence does (`refCuts`). Not `labelColW`: a card of names alone would shrink to 152px.
     property bool textNames: false
 
-    /// Why this row cannot be chosen right now — and, by being non-empty, that it cannot. Greyed like a disabled row
-    /// (§無効) but still hoverable, since the line is the point (デザイン規約 §メニュー の削除の表) — not `enabled: false`:
-    /// a disabled `Control` takes no hover, so it could not show the reason's tooltip. Presses, holds and keys do
-    /// nothing. Read off what the opener stood the menu on, like `offered`, and stood again with it. Headless:
-    /// `delete-blocked-tip`.
-    property string blockedReason: ""
+    /// Why this row cannot be chosen right now. Greyed like a disabled row (§無効) but still hoverable, since the line
+    /// is the point (デザイン規約 §メニュー の削除の表) — not `enabled: false`: a disabled `Control` takes no hover, so it
+    /// could not show the reason's tooltip. Presses, holds and keys do nothing. A row of the type says the type's `why`,
+    /// in the words `Words.menuWhy` gives it; a row outside the type sets its own. Headless: `delete-blocked-tip`.
+    property string blockedReason: menuItem.word !== "" ? Words.menuWhy(menuItem.why, menuItem.whyNames) : ""
+    /// The row's own reason holds it: for a row of the type its `why` — the words only say it, and words that come out
+    /// empty (a name the reason seats, not handed) leave the row greyed all the same —, for any other its words.
+    readonly property bool ownBlocked: menuItem.word !== "" ? menuItem.why !== "" : menuItem.blockedReason !== ""
     /// Whether pressing this row starts git — itself, or through the box or bar it opens — which is what the menu's
     /// held doors and a command already running hold back (`AppMenu.rowsHeldWhy`). A row that only reads what is on
     /// screen (`Copy path`) is never held.
     property bool startsCommand: true
     /// The same, said once for the whole menu (`AppMenu.rowsHeldWhy`). A card's title row skips it: the rows inside
-    /// carry the line (the card holds and waits on its own).
+    /// carry the line (the card holds and waits on its own), and the title greys with them (`cardOut`).
     readonly property string menuHeldReason:
         menuItem.subMenu || !menuItem.startsCommand ? ""
         : menuItem.menu !== null && menuItem.menu.rowsHeldWhy !== undefined ? menuItem.menu.rowsHeldWhy : ""
     /// What a row that stopped applying while its menu stood says (`withdrawn`) — under a command that ran, or a change
-    /// made outside.
-    readonly property string withdrawnWhy: qsTr("This changed while the menu was open — open it again")
-    /// A row out of offer says only that; else the row's own reason wins over the menu's: it is about the ref the row
-    /// names, the more particular line.
+    /// made outside: the menu is what went stale (user decision — ask before changing).
+    readonly property string withdrawnWhy: qsTr("This menu is out of date — open it again")
+    /// A row out of offer says only that; else the row's own reason wins over the menu's where it has words: it is
+    /// about the ref the row names, the more particular line.
     readonly property string blockedWhy:
         menuItem.withdrawn ? menuItem.withdrawnWhy
-        : menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
-    readonly property bool blocked: menuItem.blockedWhy !== ""
-    /// The row cannot be chosen — turned off, or `blocked`: its words grey to the last letter (デザイン規約 §無効).
-    readonly property bool greyed: !menuItem.enabled || menuItem.blocked
-    /// A worktree's folder inside the row's own reason (`blockedReason`); empty for none.
+        : menuItem.ownBlocked && menuItem.blockedReason !== "" ? menuItem.blockedReason : menuItem.menuHeldReason
+    readonly property bool blocked: menuItem.withdrawn || menuItem.ownBlocked || menuItem.menuHeldReason !== ""
+    /// The row's hover says why it cannot be chosen: blocked, with words for it — a reason that comes to none asks for
+    /// no box with nothing in it.
+    readonly property bool saysWhy: menuItem.blockedWhy !== ""
+    /// A title row whose card has rows on show and none that can be pressed: greyed with them, but it still opens the
+    /// card, where each row says why (user decision — ask before changing). So it is not `blocked` — it has no reason
+    /// of its own to hover with, and a press or a key opens the card as on any title row. Not over a card of places
+    /// to go to (`AppMenu.greysWithRows`).
+    readonly property bool cardOut: menuItem.subMenu !== null && menuItem.subMenu.liveRows !== undefined
+                                    && menuItem.subMenu.greysWithRows !== false
+                                    && menuItem.subMenu.offeredRows > 0 && menuItem.subMenu.liveRows === 0
+    /// The row cannot be chosen — not `doable`, `blocked`, or a title row over a card of such rows (`cardOut`): its
+    /// words grey to the last letter, its marks with them (デザイン規約 §無効).
+    readonly property bool greyed: !menuItem.doable || menuItem.blocked || menuItem.cardOut
+    /// A name inside the row's own reason (`blockedReason`) that wears its mark — a worktree's folder, or a branch's
+    /// name —, seated by the row for the reason that names it; empty for none.
     property string reasonMarkWord: ""
-    /// The mark that folder wears: the house for the repository's own worktree, else the tree.
+    /// The mark that name wears: the house for the repository's own worktree, the tree for another, a branch's.
     property string reasonMarkKind: "tree"
     /// The names in the row's own reason seated by the caller, where there are several or a ref's, as the tip's field
     /// takes them (`Words.listMarks`, `TipAsk.marksNow`). Wins over `reasonMarkWord`. Pictured by the overlay of
@@ -215,14 +260,14 @@ MenuItem {
     /// The word the tooltip stands the worktree's mark against (`TipAsk.markWordNow`, デザイン規約 §ref の種別
     /// 「ツールチップと見出し(報せ・質問・ダイアログ)は字の中」): the folder in a turned-down row's reason. A row's own
     /// names, the folder among them, are `tipMarks`.
-    readonly property string tipMarkWord: menuItem.blocked ? menuItem.reasonMarkWord : ""
+    readonly property string tipMarkWord: menuItem.saysWhy ? menuItem.reasonMarkWord : ""
     /// …and which mark (`TipAsk.markKindNow`).
-    readonly property string tipMarkKind: menuItem.blocked ? menuItem.reasonMarkKind : ""
+    readonly property string tipMarkKind: menuItem.saysWhy ? menuItem.reasonMarkKind : ""
     /// The names the hover's whole line says (`tip.words`), each behind its mark, seated part by part as that line
     /// joins them — the sentence's (`sentence`), the code name, the worktree after the words, the far column's
     /// branch (`TipAsk.marksNow` reads them off the row).
     readonly property var tipMarks: {
-        if (menuItem.blocked)
+        if (menuItem.saysWhy)
             return menuItem.blockedWhy === menuItem.blockedReason ? menuItem.reasonMarks : []
         const marks = []
         let at = menuItem.code !== "" ? menuItem.code.length + 1 : 0
@@ -387,7 +432,7 @@ MenuItem {
                                     + Math.min(codeNameSeat.item.wantWidth - codeNameSeat.item.markRoom,
                                                menuItem.textNames ? Math.ceil(codeCapRuler.advanceWidth)
                                                                   : Metrics.labelColW)) : 0)
-                   + (menuItem.note !== "" ? Math.ceil(noteLabel.implicitWidth) + Theme.spaceSm : 0)
+                   + (menuItem.tag !== "" ? Math.ceil(noteLabel.implicitWidth) + Theme.spaceSm : 0)
                    // Everything drawn after the words bids too, or the row that sets the menu's width cuts its own
                    // name. Asked of what the row holds, not `visible`: a closed card's rows answer false, and the
                    // card is measured before it opens.
@@ -556,11 +601,11 @@ MenuItem {
         target: menuItem
         // A blocked row's line comes before the elision's: one tooltip, one delay.
         asked: (menuItem.hovered || menuItem.tipForced)
-               && (menuItem.blocked || itemLabel.cutWords || menuItem.refCut || menuItem.trailCut
+               && (menuItem.saysWhy || itemLabel.cutWords || menuItem.refCut || menuItem.trailCut
                    || menuItem.sideCut || menuItem.nameCut)
         // The whole line, code name included — a cut name is what the hover is there to give back, behind a chip too
         // (`worktree remove`).
-        words: menuItem.blocked ? menuItem.blockedWhy
+        words: menuItem.saysWhy ? menuItem.blockedWhy
              : [menuItem.code, menuItem.text, menuItem.codesName ? menuItem.codeName : "", menuItem.trail,
                 menuItem.sideName]
                .filter(words => words !== "").join(" ")
@@ -645,7 +690,7 @@ MenuItem {
             width: Theme.iconMd
             height: itemLabel.height
             kind: menuItem.heads ? menuItem.markKind : "branch"
-            tint: menuItem.markTint
+            tint: menuItem.greyed ? Theme.textMuted : menuItem.markTint
         }
     }
     // A mark about the row (`headed: false`), in the left menu's seat and drawn the way that seat draws it
@@ -1074,10 +1119,10 @@ MenuItem {
         }
         PlainTextLabel {
             id: noteLabel
-            visible: menuItem.note !== ""
+            visible: menuItem.tag !== ""
             // The row's own step, for the same reason the chip's is on the chip.
             Layout.leftMargin: Theme.spaceSm
-            text: menuItem.note
+            text: menuItem.tag
             verticalAlignment: Text.AlignVCenter
             rightPadding: menuItem.subMenu && menuItem.arrow ? menuItem.arrow.width + Theme.spaceXs : 0
             color: menuItem.noteColor
@@ -1142,7 +1187,7 @@ MenuItem {
             anchors.bottom: parent.bottom
             height: Theme.borderWidth
             visible: menuItem.titled && (menuItem.hovered || menuItem.highlighted)
-            color: menuItem.markTint
+            color: menuItem.greyed ? Theme.textMuted : menuItem.markTint
         }
     }
 

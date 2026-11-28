@@ -12,8 +12,9 @@ import platitude.ui
 // sentence's end. The cards keep the carrying menu's hold seat, as every card does (`AppMenu.outerIndent`).
 //
 // **A row only on a remote that has the thing** (user decision — ask before changing): a row GitHub answers with 404
-// leads nowhere (デザイン規約 §メニュー「対象が存在しない」行は消す). A thing no remote has takes its row away, and with
-// none at all the card does not stand. The answer is at hand as the menu opens (`GitHubLinks`).
+// leads nowhere, so which remotes have the thing is the card's class (デザイン規約 §メニュー「右クリックのメニューの
+// 行は、対象の分類で決まる」). A thing no remote has has no row, and with no row at all the card does not stand. The
+// answer is at hand as the menu opens (`GitHubLinks`).
 //
 // It reads no model: the carrying menu works out which remotes have what (`GitHubLinks`) and hands the answer to
 // `standOn` as the menu opens, so the rows are fixed before the card shows (デザイン規約 §メニュー).
@@ -27,6 +28,10 @@ AppMenu {
     /// handed.
     property var leads: []
     property var others: []
+    /// Whether the links still name what the carrying menu stands on: false once it has moved off what they were
+    /// made for with the menu up (`RefRowMenu.standOn`). The card holds its shape with that menu's (`MenuLines`), so
+    /// the rows then grey where they stand (`AppMenuItem.withdrawn`).
+    property bool stillApplies: true
     /// Automation: the card behind OTHER REMOTES, for `AppMenu.openSub`.
     readonly property alias othersCard: othersMenu
 
@@ -112,6 +117,7 @@ AppMenu {
         delegate: AppMenuItem {
             id: leadRow
             required property var modelData
+            offered: githubMenu.stillApplies
             refSentence: leadRow.modelData.sentence
             refName: leadRow.modelData.name
             refMark: leadRow.modelData.mark
@@ -136,6 +142,7 @@ AppMenu {
             delegate: AppMenuItem {
                 id: otherRow
                 required property var modelData
+                offered: githubMenu.stillApplies
                 refSentence: otherRow.modelData.sentence
                 refName: otherRow.modelData.name
                 refMark: otherRow.modelData.mark

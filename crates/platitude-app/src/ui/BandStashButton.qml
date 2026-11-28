@@ -64,14 +64,12 @@ ActionButton {
         // The files on screen are the ones a reader would expect a press here to reach.
         if (!stashButton.curPage.wipWritable)
             return qsTr("Reading another worktree — this sets aside this window's changes")
-        // git's refusals, said before the press (`stash::StashStanding`). These speak though disabled: a disabled
-        // button keeps quiet only where its reason shows elsewhere (規約 §無効), and here it does not — a tree in
-        // conflict looks exactly like one that could be stashed, and the band's conflict badge says only that the
-        // repository is in conflict.
-        if (stashButton.mode === "unborn")
-            return qsTr("No commits yet — git cannot stash before the first one")
-        if (stashButton.mode === "conflicts")
-            return qsTr("Settle the conflicts first — git will not stash an unmerged file")
+        // git's refusals, said before the press in the menus' reasons — a file row's `stash` says the same
+        // (`WorktreeModel.stashWhy`). These speak though disabled: a disabled button keeps quiet only where its reason
+        // shows elsewhere (規約 §無効), and here it does not — a tree in conflict looks exactly like one that could be
+        // stashed, and the band's conflict badge says only that the repository is in conflict.
+        if (stashButton.curPage.pageWorktree.stashWhy !== "")
+            return Words.menuWhy(stashButton.curPage.pageWorktree.stashWhy)
         if (stashButton.mode === "clean")
             return qsTr("Nothing to stash — the working tree is clean")
         // The breadth (untracked files included, `RepoTab::stash_push`) is said only here: the label stays the bare

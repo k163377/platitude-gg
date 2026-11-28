@@ -5,7 +5,9 @@ import platitude
 import platitude.ui
 
 // The right-click on a worktree file row. Every row acts on the pane's chosen files (the click chose the row if
-// nothing else was).
+// nothing else was). Which rows there are and whether each can be pressed is the type's answer for the choice
+// (`GitFacts.filesMenu` — core's `menu::lines` on `menu::On::Files`): the rows of every section the choice reaches,
+// each acting on its own section's files; `Copy path` only reads the screen and stands outside it.
 //
 // Do not add a row that deletes a tracked file from disk (other tools offer `delete file`): a deletion is a new change,
 // made by deleting the file and staging that.
@@ -17,21 +19,14 @@ Item {
     required property RepoTab repoTab
     required property WorktreeModel worktree
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
-    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`follow`), as
-    /// `CommitMenuState.treeAtAsk`.
+    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`MenuLines.waiting`).
     property var treeAtAsk: null
-    onTreeAtAskChanged: if (fileRowMenu.treeAtAsk === null) fileRowMenu.follow()
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Null before the first door, as `CommitMenuState.tree`.
     property var tree: null
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
-    /// standing follows it (`follow`).
+    /// standing follows it (`MenuLines.moved`).
     property int readRevision: 0
-    onReadRevisionChanged: followLater.restart()
-    readonly property TurnLater followLater: TurnLater {
-        id: followLater
-        onTriggered: fileRowMenu.follow()
-    }
     /// Which rows are chosen (`chosenRows()` skips folder rows, which nothing here acts on).
     required property WipPane wipPane
 
@@ -39,15 +34,26 @@ Item {
     /// under one keeps its rows and greys them until it ends (`AppMenu.runningWhy`).
     property string runningWhy: ""
 
-    /// Decided as it opens (デザイン規約 §メニュー).
+    /// The section of the row right-clicked, as the menu opened — what the automation reads (`offered`); the rows
+    /// stand on the whole choice (`lines`).
     property string bucket: ""
-    property string path: ""
-    /// Whether git could stash at all — **a question about the tree**: one unmerged path anywhere and git refuses the
-    /// whole command, named paths or not (read off the row's bucket, the row would stand on every file during a
-    /// conflict and spend a write on the refusal), and an unborn repository has nowhere to put one (`BandStashButton`,
-    /// `platitude_core::stash::standing`). Both of those grey the row in the toolbar's words; `clean` takes it away,
-    /// a file row having nothing to set aside.
-    property string stashStanding: ""
+    /// The rows and why each is greyed, read off the choice and the tree as the menu opens and as it stands again,
+    /// drawn into the menu. Standing again: on what the command left (`wait`) — what a discard would now take, whether
+    /// a stash could now be made —, or on what moved with the menu up (`follow`), which keeps the discard on the files
+    /// it showed (`standOn`). Files the command took out of their place in the list leave the menu nothing to act on.
+    readonly property MenuLines lines: MenuLines {
+        menu: fileMenu
+        moved: fileRowMenu.readRevision
+        waiting: fileRowMenu.treeAtAsk !== null
+        onStandAgain: again => {
+            if (fileRowMenu.wipPane.chosenRows().length === 0) {
+                fileMenu.dismiss()
+                return
+            }
+            fileRowMenu.tree = fileRowMenu.worktree.reading
+            fileRowMenu.standOn(again === "follow")
+        }
+    }
     /// How many files the rows here would touch, counted the way the writes count them.
     property int count: 0
     property var plan: null
@@ -69,10 +75,9 @@ Item {
 
     anchors.fill: parent
 
-    function offer(bucket, path) {
-        fileMenu.releaseShape()
+    function offer(bucket) {
+        fileRowMenu.lines.release()
         fileRowMenu.bucket = bucket
-        fileRowMenu.path = path
         fileRowMenu.tree = fileRowMenu.treeAtAsk !== null ? fileRowMenu.treeAtAsk : fileRowMenu.worktree.reading
         fileRowMenu.standOn(false)
         fileMenu.offer()
@@ -83,7 +88,12 @@ Item {
     /// the files it showed (デザイン規約 §メニュー「表示も押下も開いた時」). Only whether what goes is copied to the
     /// discard record is read again (`unrecorded`, the row's colour): that is the tree's at the press.
     function standOn(following) {
-        fileRowMenu.stashStanding = fileRowMenu.tree.stashStanding
+        const chosen = fileRowMenu.wipPane.chosenRows()
+        const sections = []
+        for (let i = 0; i < chosen.length; i++)
+            sections.push(chosen[i].bucket)
+        fileRowMenu.lines.answer = GitFacts.filesMenu(fileRowMenu.repoTab.state === "open", sections,
+                                                      fileRowMenu.tree)
         if (following !== true)
             fileRowMenu.plan = fileRowMenu.planDiscard()
         else if (fileRowMenu.plan)
@@ -92,32 +102,8 @@ Item {
                                                        fileRowMenu.plan.paths)
             })
         // Rows, not `chosenCount`: a folder in the choice is a chosen key no command here reaches.
-        fileRowMenu.count = fileRowMenu.wipPane.chosenRows().length
+        fileRowMenu.count = chosen.length
     }
-    /// What the rows stand on moved with the menu up — outside while nothing runs, or with a command that has just
-    /// ended: the rows stand again on the tree as it is (デザイン規約 §メニュー「今の内容」). Not while a command is out:
-    /// the menu stands on the tree as that was asked until it ends (`treeAtAsk`), whatever the write.
-    function follow() {
-        if (fileRowMenu.treeAtAsk !== null)
-            return
-        fileRowMenu.standAgain("follow")
-    }
-    /// The command the menu waited for has ended with the menu up: the rows stand on what it left, the menu keeping its
-    /// shape (`AppMenu.holdShape`) — what a discard would now take, whether a stash could now be made. Files the
-    /// command took out of their place in the list leave the menu nothing to act on. `again`: `wait` for that,
-    /// `follow` for what moved with the menu up (`follow`), which keeps the discard on the files it showed (`standOn`).
-    function standAgain(again) {
-        if (!fileRowMenu.showing)
-            return
-        if (fileRowMenu.wipPane.chosenRows().length === 0) {
-            fileMenu.dismiss()
-            return
-        }
-        fileMenu.holdShape()
-        fileRowMenu.tree = fileRowMenu.worktree.reading
-        fileRowMenu.standOn(again === "follow")
-    }
-
     /// Automation: the card was asked for on a row of `bucket`.
     signal offered(string bucket)
 
@@ -205,7 +191,6 @@ Item {
     AppMenu {
         id: fileMenu
         runningWhy: fileRowMenu.runningWhy
-        onWaitEnded: fileRowMenu.standAgain("wait")
         // Named by branch — during a rebase `--ours` / `--theirs` swap over (デザイン規約 §conflict の ours / theirs).
         // Plain clicks: a conflicted file has no settled version to lose.
         // Each side's branch behind its mark (デザイン規約 §ref の種別「名前の印」), plain — the branch stood on in its
@@ -220,7 +205,7 @@ Item {
             text: fileRowMenu.worktree.sideOurs !== ""
                   ? qsTr("Keep %1's version").arg(fileRowMenu.worktree.sideOurs)
                   : qsTr("Keep this branch's version")
-            offered: fileRowMenu.bucket === "conflicts"
+            word: "keep-ours"
             onTriggered: fileRowMenu.takeSideNow("ours")
         }
         AppMenuItem {
@@ -232,10 +217,10 @@ Item {
             text: fileRowMenu.worktree.sideTheirs !== ""
                   ? qsTr("Take %1's version").arg(fileRowMenu.worktree.sideTheirs)
                   : qsTr("Take the incoming version")
-            offered: fileRowMenu.bucket === "conflicts"
+            word: "take-theirs"
             onTriggered: fileRowMenu.takeSideNow("theirs")
         }
-        // The third way to settle this conflict, above the divider with the two. Unset, the same sentence with the slot
+        // The third way to settle this conflict. Unset, the same sentence with the slot
         // empty: `…` keeps its "pressing asks" sense (§回数押し), the angle brackets say what goes there, and the words
         // match the label pressed through to (`Merge editor`). `Edit`, not `Open`: the two above say what becomes of
         // the file, `Open` would make the window the subject. The tool's name plain, not a chip — `stash` here wears
@@ -249,20 +234,14 @@ Item {
             text: fileRowMenu.worktree.mergeTool !== ""
                   ? qsTr("Edit in %1").arg(fileRowMenu.worktree.mergeTool)
                   : qsTr("Edit in <merge editor>…")
-            offered: fileRowMenu.bucket === "conflicts"
+            word: "merge-tool"
             onTriggered: fileRowMenu.openInMergeTool()
         }
-        AppMenuSeparator {}
         AppMenuItem {
             id: fileStashItem
             code: "stash"
             note: fileRowMenu.count > 1 ? qsTr("%n files", "", fileRowMenu.count) : ""
-            offered: fileRowMenu.stashStanding !== "" && fileRowMenu.stashStanding !== "clean"
-            blockedReason: fileRowMenu.stashStanding === "unborn"
-                           ? qsTr("No commits yet — git cannot stash before the first one")
-                           : fileRowMenu.stashStanding === "conflicts"
-                             ? qsTr("Settle the conflicts first — git will not stash an unmerged file")
-                             : ""
+            word: "stash-files"
             onTriggered: {
                 const rows = fileRowMenu.wipPane.chosenRows()
                 const paths = []
@@ -280,14 +259,15 @@ Item {
         // untracked `the file goes`; staged `both sides` — both back to HEAD, an added file deleted, a rename back
         // to its old name. On a file changed on both sides the two rows are the split: the unstaged row keeps what is
         // staged, the staged row takes the lot; the row says which file. Several chosen, the tag counts (`3 files`) the
-        // files the write touches — not a folder row, which no row here acts on. Not on a conflicted row: git refuses
-        // to restore an unmerged path. `warning`: what goes comes back from the discard record's copy — `danger`
-        // where it would not (before the first commit, a file the copy cannot take; デザイン規約 §回数押し の色の表).
+        // files the write touches — not a folder row, which no row here acts on, nor a conflicted one: git refuses to
+        // restore an unmerged path, so a choice of conflicts alone has no row (core's `Part::Restorable`). `warning`:
+        // what goes comes back from the discard record's copy — `danger` where it would not (before the first commit,
+        // a file the copy cannot take; デザイン規約 §回数押し の色の表).
         AppMenuItem {
             id: fileDiscardItem
             text: fileRowMenu.discardWords(fileRowMenu.plan)
             note: fileRowMenu.discardNote(fileRowMenu.plan)
-            offered: fileRowMenu.bucket !== "conflicts"
+            word: "discard"
             holdPresses: Metrics.holdPressesWarned
             holdTone: fileRowMenu.plan && fileRowMenu.plan.unrecorded ? Theme.danger : Theme.warning
             // The files it takes and whether the copy keeps them (the tone).

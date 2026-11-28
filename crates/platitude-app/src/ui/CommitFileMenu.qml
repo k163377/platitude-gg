@@ -22,7 +22,6 @@ Item {
 
     /// Stands the GITHUB card on `links` (`GitHubLinks.ofFile`) and opens. Says whether it opened.
     function offerOn(links) {
-        menu.releaseShape()
         githubMenu.standOn(links)
         return menu.offer()
     }

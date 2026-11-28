@@ -4,8 +4,8 @@ import platitude.ui.words
 
 // The delete table's third row: the branch and its remote reading together. Two commands, so words and no code
 // (§git 用語のコード表記). The local half runs first; its refusal stops the pair with nothing touched, and a refused
-// lease on the remote half stops it with the local one done (`RepoSession::delete_branch_everywhere`). On the first
-// level's last group, standing on the BRANCH card's answers (`RefBranchMenu.state`).
+// lease on the remote half stops it with the local one done (`RepoSession::delete_branch_everywhere`). It stands on
+// the BRANCH card's answers (`RefBranchMenu.state`).
 AppMenuItem {
     id: bothDeleteRow
 
@@ -28,14 +28,14 @@ AppMenuItem {
     text: qsTr("Delete both")
     note: bothDeleteRow.forces ? qsTr("not merged") : ""
     // Its remote half is leased as the table's second row is, and stops applying with it (`remoteMoved`).
-    offered: bothDeleteRow.facts.kind === "branch" && bothDeleteRow.facts.remoteCounterpart !== ""
-             && !bothDeleteRow.facts.remoteMoved
-    // The local half's reasons first, since it runs first — core's order (`offers::RefMenuOffers::delete_both_out`).
-    blockedReason: bothDeleteRow.card.deleteWhy(bothDeleteRow.facts.deleteBothOut)
+    word: "delete-both"
+    leaseMoved: bothDeleteRow.facts.remoteMoved
+    // The local half's reasons first, since it runs first — core's order (`menu::line`).
+    whyNames: bothDeleteRow.card.deleteNames
     // As on the local row and the reading's.
-    reasonMarkWord: bothDeleteRow.facts.deleteBothOut === "held" ? bothDeleteRow.facts.holderLeaf : ""
+    reasonMarkWord: bothDeleteRow.why === "held" ? bothDeleteRow.facts.holderLeaf : ""
     reasonMarkKind: bothDeleteRow.facts.holderHome ? "home" : "tree"
-    reasonMarks: bothDeleteRow.facts.deleteBothOut === "drifted" || bothDeleteRow.facts.deleteBothOut === "unread"
+    reasonMarks: bothDeleteRow.why === "drifted"
                  ? Words.listMarks(bothDeleteRow.blockedReason, bothDeleteRow.facts.remoteCounterpart, "remote") : []
     holdPresses: Metrics.holdPressesWarned
     // `warning` whether the local half runs as `-d` or `-D`: the commits only it reached come back from the discard

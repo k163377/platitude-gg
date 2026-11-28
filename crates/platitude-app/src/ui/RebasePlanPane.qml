@@ -21,7 +21,7 @@ import platitude.ui.face
 //
 // Headless (all `--preset plan`, `AutoActPlanVerbs`): `rebase-plan` / `rebase-plan-run` / `rebase-edit-stop`; a
 // reorder, `plan-fold-carry`; the right pane's boxes handed over, `plan-reword-verb` / `plan-reword-out` /
-// `plan-reword-ask`.
+// `plan-reword-ask`; the verb menu, `plan-menu`.
 Rectangle {
     id: planPane
 
@@ -43,6 +43,8 @@ Rectangle {
 
     /// Automation only: the list, so a verb makes the same calls a hand on a row makes.
     readonly property alias view: planList
+    /// Automation only: the verb menu, opened through its own door (`openFor`).
+    readonly property alias verbMenu: verbMenu
 
     color: Theme.bgBase
 
@@ -263,53 +265,57 @@ Rectangle {
         spinning: planPane.waiting
     }
 
-    // The todo file's six verbs, chips first (デザイン規約 §git 用語のコード表記). The row and whether a fold lands — the
-    // fold rows' seats — are frozen at open (デザイン規約 §メニュー「行の出入りは開いた瞬間に決め、開いている間は
-    // 凍らせる」); the landing question is the model's `canFold`, the same answer the demotion enforces.
+    // The todo file's six verbs, chips first (デザイン規約 §git 用語のコード表記). Which rows there are and whether
+    // each can be pressed is the type's answer for the step (`RebasePlanModel.stepMenu` — core's `menu::On::Step`):
+    // the oldest step has no fold, and a fold over nothing but drops greys. Frozen at open (デザイン規約 §メニュー
+    // 「行の出入りは開いた瞬間に決め、開いている間は凍らせる」).
     Item {
         anchors.fill: parent
         AppMenu {
             id: verbMenu
             property int forRow: -1
-            property bool foldLands: false
+            readonly property MenuLines lines: MenuLines {
+                menu: verbMenu
+            }
             function openFor(row) {
                 verbMenu.forRow = row
-                verbMenu.foldLands = planPane.planModel.canFold(row)
-                verbMenu.offer()
+                verbMenu.lines.answer = planPane.planModel.stepMenu(row)
+                return verbMenu.offer()
             }
             AppMenuItem {
                 code: "pick"
                 text: qsTr("keep it as it is")
+                word: "step-pick"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "pick")
             }
             AppMenuItem {
                 code: "reword"
                 text: qsTr("change its message")
+                word: "step-reword"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "reword")
             }
             AppMenuItem {
                 code: "edit"
                 text: qsTr("stop there to amend")
+                word: "step-edit"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "edit")
             }
-            AppMenuSeparator {}
-            // A fold lands in the nearest kept row below, so it is not offered with only drops (or nothing) under it.
             AppMenuItem {
                 code: "squash"
                 text: qsTr("into parent, both messages")
-                offered: verbMenu.foldLands
+                word: "step-squash"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "squash")
             }
             AppMenuItem {
                 code: "fixup"
                 text: qsTr("into parent, its message dropped")
-                offered: verbMenu.foldLands
+                word: "step-fixup"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "fixup")
             }
-            AppMenuSeparator {}
             AppMenuItem {
                 code: "drop"
                 text: qsTr("leave it out")
+                word: "step-drop"
                 onTriggered: planPane.planModel.setAction(verbMenu.forRow, "drop")
             }
         }

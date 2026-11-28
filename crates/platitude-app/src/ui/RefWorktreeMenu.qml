@@ -5,18 +5,14 @@ import platitude.ui.words
 
 // Everything a worktree answers for, behind the worktree's mark: making one (デザイン規約 §worktree を作る — the two
 // making rows live in this nested card, a user decision: ask before changing) and taking it away (デザイン規約
-// §左メニューの所作 の削除の表). One card, carried like `RefBranchMenu` by both menus — the sidebar's
-// ref menu and the graph row's — and set above the TAG card (デザイン規約 §メニュー の入れ子). Like the TAG card it stands
-// on every row with a commit: `Create worktree here…` is a row about the commit, so the card is there with that one row
-// where the row names nothing else (and while a new worktree has somewhere to go).
+// §左メニューの所作 の削除の表). One card, carried like `RefBranchMenu` by both menus — the sidebar's ref menu and the
+// graph row's (デザイン規約 §メニュー の入れ子).
 //
 // Making and removing share this card though the tab moves to a worktree it makes, and the card is nested, not on the
-// first level: `worktree remove` is used less often than a branch delete (user decision — ask before changing). A
-// divider parts making from removing. The two making rows repeat the first level's `Create branch here…` → `switch`
-// pair in a new worktree: make one and go, then go to one that is there. `worktree add` joins for a
-// branch the row names (`offers::worktree_rows`); `worktree remove` when the target names a worktree (a WORKTREES row,
-// the chip naming a worktree with no branch by its folder, a branch another worktree holds — then the holder's
-// worktree), never the repository's own worktree, which git never removes.
+// first level: `worktree remove` is used less often than a branch delete (user decision — ask before changing). The two
+// making rows repeat the first level's `Create branch here…` → `switch` pair in a new worktree: make one and go, then
+// go to one that is there. Which rows there are, and their seats, is the type's (`menu::Card::Worktree`, drawn by
+// `MenuLines`).
 //
 // Its doors — the WORKTREES rows, a commit row with the chip of a worktree with no branch, the rows and chips of a
 // branch another worktree holds — all reach this one card through `RefRowMenu` and `CommitRowMenu`. A new door carries
@@ -53,61 +49,50 @@ AppMenu {
         property string path: ""
         property string name: ""
         property string holds: ""
-        property bool canRemove: false
-        /// Why the row is out — `locked` / `here`, or empty (`offers::worktree_card`).
-        property string out: ""
         /// What `git worktree lock --reason` was given, empty for none.
         property string lockReason: ""
-        /// The making side (`making` in `standOn`).
+        /// The making side (`standOn`): the commit a new worktree starts on, how the row's own branch goes out
+        /// (`branch` / `track`), the branch and where a tracking one starts, and where it goes — the path, the folder
+        /// and what is in the way there.
         property string oid: ""
-        property bool canHere: false
         property string checkout: ""
         property string branch: ""
         property string start: ""
         property string addPath: ""
         property string place: ""
         property string taken: ""
-        /// Why `worktree add` greys before any place is asked: the branch is out — `current` here, `held` in the
-        /// worktree that goes by `holderLeaf`, `stopped` under a rebase or bisect stopped here (`stoppedBy` says which;
-        /// `offers::WorktreeAddOut`) — or "".
-        property string addOut: ""
+        /// What a greyed `worktree add` names: the local branch a remote row lands on, and the worktree holding the
+        /// branch (`holderLeaf`, the repository's own wearing the house).
+        property string local: ""
         property string holderLeaf: ""
         property bool holderHome: false
-        property string stoppedBy: ""
     }
 
-    /// Stands the card on a row, off what the carrying menu read for it (`RefMenuFacts.stand`): the worktree the
-    /// row's lead names (`lead.card` — `NavSectionModel.leadOf`, undefined for none) and the rows core answered for it
-    /// (`menu.removeWorktree` / `removeOut` — `offers::worktree_card`); the two rows that make a worktree as core
-    /// answered them (`menu.making` — `offers::worktree_rows`: whether `Create worktree here…` has a row, how the
-    /// row's own branch goes out — no row where no place for it is known —, and why that row greys), on the row's
-    /// commit `oid`; where it goes (`lead.place` — its path, its folder and what is in the way there); and the row and
-    /// where it leads (`lead` — the branch it takes out, and the worktree holding it or the operation stopped here on
-    /// it).
+    /// Stands the card on a row, off what the carrying menu read for it (`RefMenuFacts.stand`): the rows core
+    /// answered (`menu` — which there are and why each greys, and `worktreeAdd`, how the row's own branch goes out);
+    /// the worktree the row's lead names (`lead.card` — `NavSectionModel.leadOf`, undefined for none); the row's
+    /// commit `oid`; where a new worktree goes (`lead.place` — its path, its folder and what is in the way there,
+    /// undefined for nowhere); and the row and where it leads (`lead` — the branch it takes out, and the worktree
+    /// holding it).
     function standOn(facts) {
         const lead = facts.lead
         const worktree = lead.card
         const menu = facts.menu
+        const place = lead.place
         state.path = worktree === undefined ? "" : worktree.full
         state.name = worktree === undefined ? "" : worktree.name
         state.holds = worktree === undefined ? "" : worktree.branch
-        state.canRemove = menu.removeWorktree
-        state.out = menu.removeOut
-        state.lockReason = menu.removeOut === "locked" ? worktree.reason : ""
-        const making = menu.making
-        const place = lead.place
+        state.lockReason = worktree === undefined ? "" : worktree.reason
         state.oid = facts.oid
-        state.canHere = making.here
-        state.checkout = making.checkout
-        state.branch = making.checkout === "" ? "" : lead.local
-        state.start = making.checkout === "track" ? lead.full : ""
-        state.addPath = making.checkout === "" ? "" : place.path
-        state.place = making.checkout === "" ? "" : place.name
-        state.taken = making.checkout === "" ? "" : place.taken
-        state.addOut = making.out
-        state.holderLeaf = facts.lead.called
-        state.holderHome = facts.lead.home
-        state.stoppedBy = facts.lead.stoppedBy
+        state.checkout = menu.worktreeAdd
+        state.branch = menu.worktreeAdd === "" ? "" : lead.local
+        state.start = menu.worktreeAdd === "track" ? lead.full : ""
+        state.addPath = place === undefined ? "" : place.path
+        state.place = place === undefined ? "" : place.name
+        state.taken = place === undefined ? "" : place.taken
+        state.local = lead.local
+        state.holderLeaf = lead.called
+        state.holderHome = lead.home
     }
 
     // `dismiss()` folds every level (rules-refs/app-ui.md「メニューを閉じるのは自分」).
@@ -115,40 +100,37 @@ AppMenu {
     titleKind: "tree"
     titleTint: Theme.success
     title: qsTr("WORKTREE")
-    // Off a row with nothing to make and nothing to take away — a stash, or no place for a new worktree beside a
-    // worktree git never removes.
-    applies: state.canHere || state.checkout !== "" || state.canRemove
+    word: "worktree"
 
     // Words, not a command: it opens a box, as `Create branch here…` and `Create tag here…` do.
     AppMenuItem {
         id: refWorktreeHereItem
         text: Words.createWorktreeHere
-        offered: state.canHere
+        word: "worktree-here"
         onTriggered: worktreeMenu.worktreeHereRequested(state.oid)
     }
     // Names the folder it makes, as `worktree remove` names the one it takes (デザイン規約 §ref の種別「名前の印」);
-    // greyed with the reason where the branch is out already — git keeps it to one worktree — or something is in the
-    // way there, warned of before the press (user decision — ask before changing).
+    // greyed with the reason where the branch is out already — git keeps it to one worktree —, where its own row takes
+    // it out, where no place is known, or where something is in the way there, warned of before the press (user
+    // decision — ask before changing).
     AppMenuItem {
         id: refWorktreeAddItem
         code: "worktree add"
         nameMark: "tree"
         codeName: state.place
         growsForText: false
-        offered: state.checkout !== ""
-        blockedReason: state.addOut === "current" ? qsTr("Switch away first — this is the branch you are on")
-                     : state.addOut === "held" ? Words.checkedOutElsewhere(state.holderLeaf)
-                     // The rename box's words for the same hold (`Words.heldByOperation`).
-                     : state.addOut === "stopped" ? Words.heldByOperation(state.stoppedBy, true, "")
-                     : Words.worktreePlaceTaken(state.taken, state.place)
-        // The folder at the end of that line wears its mark, as it does on the row (デザイン規約 §ref の種別).
-        reasonMarkWord: state.addOut === "held" ? state.holderLeaf
-                      : state.addOut === "" && refWorktreeAddItem.blockedReason !== "" ? state.place : ""
-        reasonMarkKind: state.addOut === "held" && state.holderHome ? "home" : "tree"
+        word: "worktree-add"
+        whyNames: ({ "holder": state.holderLeaf, "local": state.local,
+                     "place": { "taken": state.taken, "name": state.place } })
+        // The name at the end of that line wears its mark, as it does on its row (デザイン規約 §ref の種別).
+        reasonMarkWord: refWorktreeAddItem.why === "held" ? state.holderLeaf
+                      : refWorktreeAddItem.why === "local" ? state.local
+                      : refWorktreeAddItem.why === "taken" ? state.place : ""
+        reasonMarkKind: refWorktreeAddItem.why === "held" && state.holderHome ? "home"
+                      : refWorktreeAddItem.why === "local" ? "branch" : "tree"
         onTriggered: worktreeMenu.worktreeAddRequested(state.checkout, state.branch, state.start, state.addPath,
                                                        state.place)
     }
-    AppMenuSeparator {}
     // A plain delete, as `branch --delete`: two presses in the plain ink (デザイン規約 §回数押し) — a local write, and git
     // keeps a worktree holding uncommitted work; that refusal comes down as a report over the graph (デザイン規約
     // §左メニューの所作 の削除の表).
@@ -160,15 +142,12 @@ AppMenu {
         nameMark: "tree"
         codeName: state.name
         growsForText: false
-        offered: state.canRemove
-        // Greyed, not gone, while locked and while this tab stands in it (user decision — ask before changing): it is
-        // the card's one row about that worktree, the only place to say why it cannot go (デザイン規約 §メニュー
-        // 「「今できない」行は無効で残す」; a write running greys the whole menu instead). The repository's own worktree
-        // is "nothing to act on": git never removes it, so core offers no row and the card stands on the add row.
-        blockedReason: state.out === "locked"
-                       ? (state.lockReason === "" ? qsTr("This worktree is locked")
-                                                  : qsTr("Locked — %1").arg(state.lockReason))
-                       : state.out === "here" ? qsTr("This tab is showing this worktree") : ""
+        word: "remove-worktree"
+        // Greyed while locked and while this tab stands in it (user decision — ask before changing): it is the card's
+        // one row about that worktree, the only place to say why it cannot go (デザイン規約 §メニュー「右クリックの
+        // メニューの行は、対象の分類で決まる」; a write running greys the whole menu instead). The repository's own worktree
+        // is "nothing to act on": git never removes it, so core has no row and the card stands on the add row.
+        whyNames: ({ "lockReason": state.lockReason })
         holdPresses: Metrics.holdPressesPlain
         holdTone: Theme.textPrimary
         premise: state.path + "\n" + state.holds

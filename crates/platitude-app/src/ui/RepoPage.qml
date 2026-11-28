@@ -143,7 +143,7 @@ FocusScope {
     /// straight through the writes that replay — a rebase's detached HEAD and `REBASING` partway, the `MERGE_HEAD` /
     /// `CHERRY_PICK_HEAD` a merge or a cherry-pick leaves while its commit is made — and rows standing on that are not
     /// the rows the menu has with nothing running (デザイン規約 §メニュー). Null while nothing is out: a menu standing
-    /// reads the worktree, and one up as it goes null stands again on it (`CommitMenuState.follow`, …). The model's
+    /// reads the worktree, and one up as it goes null stands again on it (`MenuLines.waiting`). The model's
     /// `reading` kept in a `var` property is what the property held then: kept in a JS variable, it would read what the
     /// property holds now (`encode::tests::wire_qml`).
     property var treeAtAsk: null
@@ -157,8 +157,8 @@ FocusScope {
     /// worktree (`WorktreeModel.readingRevision`), a list's rows (`NavSectionModel.changed`, said as they move and as a
     /// fold or the filter shows them otherwise — a stand that finds nothing moved writes nothing), a graph pass
     /// (`GraphModel.finishCount`). A menu standing follows it while nothing runs — its rows stand again on
-    /// the tree as it is, keeping their shape (`CommitMenuState.follow`, `RefRowMenu.follow`, `FileRowMenu.follow`;
-    /// デザイン規約 §メニュー); under a command it waits on `treeAtAsk`, and follows as that goes.
+    /// the tree as it is, keeping their shape (`MenuLines.moved`; デザイン規約 §メニュー); under a command it waits on
+    /// `treeAtAsk`, and follows as that goes.
     property int menuReadRevision: 0
     readonly property int menuReadingSeen: worktree.readingRevision
     onMenuReadingSeenChanged: page.menuReadRevision++
@@ -1153,6 +1153,8 @@ FocusScope {
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                                         page.addWorktreeAt(path, mode, branch, start, name)
             onDeleteRequested: (kind, id, name, oidHex) => page.deleteRow(kind, id, name, oidHex)
+            onApplyStashRequested: selector => repoTab.applyStash(selector)
+            onPopStashRequested: selector => page.popStash(selector)
             onDropStashRequested: selector => page.dropStashNow(selector)
             onUpstreamRequested: (branch, counterpart, unsettable) =>
                 page.startUpstreamAsk(branch, counterpart, unsettable)
@@ -1555,7 +1557,7 @@ FocusScope {
         page.stopRowAsk()
         page.noteMenuDoor("files", GitFacts.fileKey(bucket, path))
         fileMenuSeat.active = true
-        fileMenuSeat.item.offer(bucket, path)
+        fileMenuSeat.item.offer(bucket)
     }
     Loader {
         id: fileMenuSeat
@@ -1705,7 +1707,6 @@ FocusScope {
         page.noteMenuDoor("graph", oidHex)
         commitMenuSeat.active = true
         const menu = commitMenuSeat.item
-        menu.releaseShape()
         if (detailsModel.comparing
                 && menu.offerChoice(githubLinks.ofPair(detailsModel.compareFrom, detailsModel.compareTo)))
             return
@@ -1752,28 +1753,18 @@ FocusScope {
             // switch would be.
             heldReason: page.doorsHeldWhy
             runningWhy: page.runningWhy
-            onWaitEnded: commitMenuState.standAgain("wait")
             onCopyRequested: text => clipboard.copy(text)
-            branch: worktree.heldBranch
+            branch: worktree.movedBranch
             oid: commitMenuState.menuOid
             stashRef: commitMenuState.menuStashRef
             published: commitMenuState.menuPublished
             rebasePublished: commitMenuState.menuRebasePublished
-            canSwitch: commitMenuState.menuCanSwitch
+            lines: commitMenuState.lines
             switchAsks: commitMenuState.menuSwitchAsks
             heldLeaf: commitMenuState.menuHeldLeaf
             heldHome: commitMenuState.menuHeldHome
             pullRuns: commitMenuState.menuPullRuns
-            pullOut: commitMenuState.menuPullOut
             pullUpstream: commitMenuState.menuPullUpstream
-            canCherryPick: commitMenuState.menuCanCherryPick
-            canRevert: commitMenuState.menuCanRevert
-            canIntegrate: commitMenuState.menuCanIntegrate
-            canEditHistory: commitMenuState.menuCanEditHistory
-            canMoveBranch: commitMenuState.menuCanMoveBranch
-            canBranchHere: commitMenuState.menuCanBranchHere
-            opStanding: commitMenuState.menuOpStanding
-            stashCanWrite: commitMenuState.menuStashCanWrite
             hardResetTakes: commitMenuState.menuHardResetTakes
             hardResetNotCopied: commitMenuState.menuHardResetNotCopied
             tipHeldElsewhere: commitMenuState.menuTipHeldElsewhere

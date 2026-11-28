@@ -67,9 +67,17 @@ Menu {
 
     /// For a submenu: whether its title row is offered. Not `visible`, which on a Menu means the card is on screen.
     property bool applies: true
+    /// For a submenu: its title row greys with its rows where none of them can be chosen (`AppMenuItem.cardOut`).
+    /// False for a list of places to go to, whose title is a heading of contents, like the left menu's sections
+    /// (the toolbar's WORKTREE card; user decision — ask before changing).
+    property bool greysWithRows: true
+    /// The card of core's type this is (`menu::Card::word`), which `MenuLines` draws off the answer of the menu it
+    /// hangs off; empty for a menu outside the type.
+    property string word: ""
 
     /// Non-empty: every row is out right now, for this reason (read through `AppMenuItem.blockedWhy`). The rows grey
-    /// and stay (デザイン規約 §メニュー「「今できない」行は無効で残す」); title rows stay live, since the rows inside say why.
+    /// where they stand (デザイン規約 §メニュー「右クリックのメニューの行は、対象の分類で決まる」); a title row greys with
+    /// its card's rows and still opens it, since the rows inside say why (`AppMenuItem.cardOut`).
     property string heldReason: ""
     /// Non-empty while a git command this window asked for is out, its reading included (`RepoPage.runningWhy`): what
     /// a row says while it waits for it. Live, but **what greys the rows is whether one was out as this menu opened**
@@ -82,19 +90,14 @@ Menu {
     /// `menu-wait after` (`--preset slowhook`), `menu-wait stash` / `stash-ref` (`--preset stashes`),
     /// `menu-wait replay` (`--preset replay`).
     property string runningWhy: ""
-    /// Opened while `runningWhy` stood, and it has not ended since.
+    /// Opened — or the menu carrying it opened — while `runningWhy` stood (`settleWaiting`), until that command ends:
+    /// the menu's `MenuLines` lets every level's go then and stands the menu again, as a wait when one on show had
+    /// waited (`MenuLines.commandEnded`) — the rows a press would now act on wrongly, a stash renumbered under its
+    /// selector or a reset over a merge that stopped, are only right off the new reading. Nothing else lets it go, so
+    /// **only a level of a `MenuLines` (its `menu`, or a card that menu carries) is handed a `runningWhy`**: a menu of
+    /// its own would still wait with the command over, and grey every row at once under the next one, its holds with
+    /// them. The end is read once there, before any level lets its wait go, so it is never this menu's to undo.
     property bool waiting: false
-    /// What this menu waited for has ended with the menu up. The opener reads again what the menu stands on and stands
-    /// the rows on it, the menu keeping its shape (`holdShape`): the rows a press would now act on wrongly — a stash
-    /// renumbered under its selector, a reset over a merge that stopped — are only right off the new reading.
-    signal waitEnded()
-    onRunningWhyChanged: {
-        if (appMenu.runningWhy !== "" || !appMenu.waiting)
-            return
-        appMenu.waiting = false
-        if (appMenu.visible)
-            appMenu.waitEnded()
-    }
     /// Why every row is out right now, as the rows read it: the held doors first, then the command this menu waits for.
     readonly property string rowsHeldWhy: appMenu.heldReason !== "" ? appMenu.heldReason
                                         : appMenu.waiting ? appMenu.runningWhy : ""
@@ -106,6 +109,7 @@ Menu {
     /// raised on it with those rows (`widestRow`; デザイン規約 §メニュー「凍らせるのは行の出入りとチップ列の幅だけ」). The words' x moves
     /// too as a hold mark or a `!` comes or goes (`holdIndent`) — the right press count wins.
     function holdShape() {
+        appMenu.shapeHeld = true
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             // Dividers have no `shapeHeld`: they follow the rows (AppMenuSeparator).
@@ -115,8 +119,11 @@ Menu {
             row.shapeHeld = true
         }
     }
+    /// Held (`holdShape`): what `MenuLines` draws moves only what the rows say, not which stand or where.
+    property bool shapeHeld: false
     /// Lets the shape go, for an opener about to stand a fresh menu.
     function releaseShape() {
+        appMenu.shapeHeld = false
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             if (row && row.shapeHeld === true)
@@ -124,13 +131,24 @@ Menu {
         }
     }
 
-    /// Rows on show — possibly none, since a menu shows only what can be chosen (デザイン規約 §メニュー).
+    /// How many rows the menu has on show, dividers aside; possibly none.
     readonly property int offeredRows: {
         let n = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)
             // Not dividers, which decide for themselves (AppMenuSeparator).
             if (row && row.present && row.codeColSeat !== undefined)
+                n++
+        }
+        return n
+    }
+    /// Rows on show that can be pressed now: none on a card whose every row is greyed, which greys the title row it
+    /// hangs off (`AppMenuItem.cardOut`).
+    readonly property int liveRows: {
+        let n = 0
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.present && row.codeColSeat !== undefined && !row.greyed)
                 n++
         }
         return n
@@ -213,8 +231,19 @@ Menu {
     // (デザイン規約 §git 用語のコード表記「メニュー内のチップは 1 本の列を共有する」). Settled as the menu opens, so a
     // chip that changes while the card stands (`branch -D`) moves no row's words.
     property real codeColW: 0
-    onAboutToShow: {
+    /// Settles `waiting` as the menu opens, for the cards it carries too: their rows are this menu's, opened under the
+    /// same command, so a card not open yet waits with them — and its title row greys from the first
+    /// (`AppMenuItem.cardOut`). A card settles again as it opens.
+    function settleWaiting() {
         appMenu.waiting = appMenu.runningWhy !== ""
+        for (let i = 0; i < appMenu.count; i++) {
+            const row = appMenu.itemAt(i)
+            if (row && row.subMenu && row.subMenu.settleWaiting !== undefined)
+                row.subMenu.settleWaiting()
+        }
+    }
+    onAboutToShow: {
+        appMenu.settleWaiting()
         let widest = 0
         for (let i = 0; i < appMenu.count; i++) {
             const row = appMenu.itemAt(i)

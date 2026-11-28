@@ -6,8 +6,8 @@ import platitude.ui
 // The right-click menu of the boxes words are typed or read in (`FieldMenu`, built by `FieldMenuSeat`).
 // - Every box the product draws hands its right-click to the product's menu, and the style's own
 //   (`TextEditingContextMenu`) is never built: a box that left `ContextMenu.menu` unwritten would open both.
-// - The rows are a fixed table (デザイン規約 §メニュー の文字の欄): the ones that change the words go on a read-only
-//   box, the ones the box cannot do right now stay greyed and take no click, and each lit row does what it says.
+// - The rows are a fixed table (デザイン規約 §メニュー の文字の欄): the ones the box cannot do right now — the ones that
+//   change the words, on a read-only box — stay greyed and take no click, and each lit row does what it says.
 // - Qt names a text box's caret as the place of every request it answers, a right-click's too, so the card reads the
 //   right button instead: a request raised inside a right press or release is the right-click's, under the hand;
 //   any other is the keyboard's (the menu key, Windows' Shift+F10, xcb's request at the pointer), under the caret of
@@ -238,14 +238,14 @@ Item {
             box.readOnly = true
             box.select(0, 4)
             compare(rowsOn(seat), ["Copy", "Select all"], "read only, part selected")
-            compare(seat.item.rowWords(false), ["Copy", "Select all"], "a read-only box has no rows that change words")
+            compare(seat.item.rowWords(false), table, "a read-only box keeps the rows that change words, greyed")
             seat.item.close()
             box.deselect()
             compare(rowsOn(seat), ["Select all"], "read only, nothing selected")
             seat.item.close()
             box.text = ""
             compare(rowsOn(seat), [], "read only and empty: the table opens, every row greyed")
-            compare(seat.item.rowWords(false), ["Copy", "Select all"])
+            compare(seat.item.rowWords(false), table)
         }
 
         /// A box being written in stays written in under its own menu, which takes the focus to answer the keys: amend's

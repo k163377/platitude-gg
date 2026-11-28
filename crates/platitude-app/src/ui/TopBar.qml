@@ -882,6 +882,10 @@ Rectangle {
                     // begin their names on one x (`NameCell`).
                     keepsSeat: true
                     widthFloor: 0
+                    // A list of where to go, like the WORKTREES section of the left menu: the heading stays
+                    // live over the row a reader cannot choose (`AppMenu.greysWithRows`; user decision — ask
+                    // before changing).
+                    greysWithRows: false
                     // **Every worktree the left menu's WORKTREES section lists, whatever it is filtering to**
                     // (`NavSectionModel.worktreeCard`), less the one this tab stands in, down that section's road
                     // (`openRepositoryPathRequested`). Copied into `rows` at the press (`pressRepoName`), **never the
@@ -959,7 +963,7 @@ Rectangle {
         // ---- the three actions -----------------------------------------
         // Fetch, push, stash, in that order (stash right of push: user decision — ask before changing). **These three
         // only**: the fixed targets speak for the repository as a whole; `pull` moves one branch, so it is a row on
-        // that branch's menus, never a button here (`offers::pull`). **The word over its mark** (`stacked`) — the
+        // that branch's menus, never a button here (`menu::Row::Pull`). **The word over its mark** (`stacked`) — the
         // panel is two lines deep, and one line here
         // floats in it. **Framed in every state** (`borderStrong`, `bgSurface` inside): this is the one row of the
         // window that is pressed, and a word with no frame reads as a label; a warning takes the frame's colour.

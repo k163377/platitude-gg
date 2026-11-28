@@ -7,12 +7,11 @@ import platitude.ui.words
 
 // The right-click on a ref wherever it is drawn — sidebar row, graph chip, a row of a chip's stacked list — so a
 // branch offers the same things everywhere. Decided as it opens and stood again on the tree as it is while it stands,
-// its rows kept — when a command it waited for has ended (`standAgain`) and when what it reads moves (`follow`;
+// its rows kept — when a command it waited for has ended (`standAgain`) and when what it reads moves (`MenuLines.moved`;
 // デザイン規約 §メニュー).
 //
-// It carries only what the row's gestures do not reach: a rename is a click or two away on the row itself, and a
-// commit's hash is copied in the details pane the row's click opens (`Copy full hash`). The menu's rows are kept for
-// what has no other door — the deletes. `Create branch here…` is the exception (`refBranchHereItem` below).
+// It carries only what the row's gestures do not reach: a rename is a click or two away on the row itself
+// (デザイン規約 §メニュー「置くのは、そこにしか入口が無いものだけ」).
 //
 // An `Item` because a menu measures the window through the item it was declared under (`AppMenu.ownerItem`).
 Item {
@@ -21,23 +20,16 @@ Item {
     required property RepoTab repoTab
     required property WorktreeModel worktree
     /// The worktree as it stood when the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while
-    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`follow`), as
-    /// `CommitMenuState.treeAtAsk`.
+    /// nothing is out. Back to null with the menu up, the rows stand on what the command left (`MenuLines.waiting`).
     property var treeAtAsk: null
-    onTreeAtAskChanged: if (refRowMenu.treeAtAsk === null) refRowMenu.follow()
     /// What the rows are read off, set by the door that stands them: the worktree's `reading` — or, for a menu raised
     /// under a command, `treeAtAsk`. Handed to `GitFacts` as it is, never built here. Null before the first door, as
     /// `CommitMenuState.tree`.
     property var tree: null
     /// Moves each time what the rows stand on has been read again and moved (`RepoPage.menuReadRevision`): a menu
-    /// standing follows it (`follow`).
+    /// standing follows it (`MenuLines.moved`).
     property int readRevision: 0
-    onReadRevisionChanged: followLater.restart()
-    readonly property TurnLater followLater: TurnLater {
-        id: followLater
-        onTriggered: refRowMenu.follow()
-    }
-    /// What the rows and cards stand on, read through `menuFacts`; the `rebase` row's note off the drawn rows
+    /// What the rows and cards stand on, read through `menuFacts`; the `rebase` row's warning off the drawn rows
     /// (`rebasePublished`), and a branch renamed with the menu up followed off the branches (`standAgain`).
     required property GraphModel graphModel
     required property NavSectionModel branchesModel
@@ -73,7 +65,15 @@ Item {
     /// What merge / rebase are handed: the name, or the commit where the row is a worktree — a path is no ref.
     readonly property string integrateRef: refRowMenu.kind === "worktree" ? refRowMenu.refOid : refRowMenu.refId
 
-    property bool canSwitch: false
+    /// The rows the menu and its cards have, and why each is greyed, as core answered the stand, drawn into the menu
+    /// (`MenuLines`) — and when the menu stands again (`standAgain`).
+    readonly property MenuLines lines: MenuLines {
+        id: lines
+        menu: refMenu
+        moved: refRowMenu.readRevision
+        waiting: refRowMenu.treeAtAsk !== null
+        onStandAgain: again => refRowMenu.standAgain(again)
+    }
     /// Whether `switch` will raise a question (an operation standing, or unmerged files), worn as the row's `!` so it
     /// is known before the press (user decision — ask before changing; the mark's seat: `AppMenuItem.asks`).
     property bool switchAsks: false
@@ -83,37 +83,16 @@ Item {
     property string heldLeaf: ""
     /// That worktree is the repository's own: its name wears the house, not the tree (デザイン規約 §ref の種別).
     property bool heldHome: false
-    property bool canBranchHere: false
-    property bool canIntegrateFrom: false
-    /// An operation stands: `Create branch here…`, merge / rebase and the TAG card's `Create tag here…` keep their
-    /// seats, greyed (`offers::RefMenuOffers::standing`).
-    property bool opStanding: false
-    /// What those rows say while it does — empty while they are live.
-    readonly property string startWhy: refRowMenu.opStanding ? Words.finishStoppedFirst : ""
-    /// What the `pull` row runs (`offers::pull_row`): `here` — `git pull`, on either end of the current branch's
+    /// What the `pull` row runs (`menu::pull_runs`): `here` — `git pull`, on either end of the current branch's
     /// upstream comparison —, `aside` — this row's own branch fast-forwarded, the worktree being on another —, or ""
     /// for no row.
     property string pullRuns: ""
-    /// Why that row is greyed — `standing` / `diverged` / `own` / `held` (`Words.pullOut`) — or "" while it is live.
-    property string pullOut: ""
     /// The remote branch this row's branch tracks, which the `own` reason names — the reading its BRANCH card speaks
     /// for (`NavSectionModel.cardOf`'s `remoteCounterpart`): a remote one only, so a branch tracking a local
     /// one (`branch.<n>.remote = .`) has no `aside` row.
     property string pullUpstream: ""
-    /// The stash's drop, in the last group with the branch's delete table; a tag's deletes are its card's
-    /// (`RefTagMenu`).
-    property bool canDelete: false
 
     // ---- bringing two lines of history together --------------------
-    /// Whether merge / rebase are on offer — one reading for both rows and the rebase note, so the note appears
-    /// exactly where its row does. A stash is not a line of history. Keep the tag in for both — a tag is a fixed
-    /// point, worth taking in and worth rebasing onto: dropped from one, the
-    /// same tag would offer it on the graph row (`CommitRowMenu`) and not on the TAGS row here. Core never looks at the
-    /// kind (`offers::ref_menu`'s `integrate_from`).
-    readonly property bool integrateOffered:
-        (refRowMenu.kind === "branch" || refRowMenu.kind === "remote" || refRowMenu.kind === "tag"
-         || refRowMenu.kind === "worktree")
-        && refRowMenu.canIntegrateFrom
     /// Whether a rebase onto this row would rewrite a commit a remote has (`<ref>..HEAD`), read off the drawn rows
     /// (`GraphModel.rebaseRewritesPublished`): a `git rev-list` would land after the card and widen it under the hand
     /// (規約 §行が読む答えはどこから来るか).
@@ -123,9 +102,6 @@ Item {
     /// `visible` read from another file comes back stale (`RefusalBadge`).
     readonly property bool showing: refMenu.visible
     readonly property bool opened: refMenu.opened
-    /// Every level of this menu: the menu and its three cards. The GITHUB card's rows never stand again (they start
-    /// nothing), so its shape is its own from the opening.
-    readonly property var levels: [refMenu, branchMenu, worktreeMenu, tagMenu]
 
     /// Automation-only handles into these rows, like `GraphPane.view`.
     readonly property alias menu: refMenu
@@ -175,6 +151,8 @@ Item {
     signal worktreeHereRequested(string oidHex)
     signal worktreeAddRequested(string mode, string branch, string start, string path, string name)
     signal deleteRequested(string kind, string id, string name, string oidHex)
+    signal applyStashRequested(string selector)
+    signal popStashRequested(string selector)
     signal dropStashRequested(string selector)
     /// The WORKTREE card's `worktree remove`, which takes the worktree's row off the screen at the press (`RepoTab`).
     signal removeWorktreeRequested(string path, string name, string holds)
@@ -206,8 +184,7 @@ Item {
             if (worktree !== undefined && worktree.branch !== "")
                 return refRowMenu.offerOn("branch", worktree.branch, worktree.branch, oidHex, full)
         }
-        for (let i = 0; i < refRowMenu.levels.length; i++)
-            refRowMenu.levels[i].releaseShape()
+        lines.release()
         refRowMenu.tree = refRowMenu.treeAtAsk !== null ? refRowMenu.treeAtAsk : refRowMenu.worktree.reading
         const facts = refRowMenu.standOn(kind, name, full, oidHex, worktreePath, aim)
         // The same links the graph row's menu offers on the commit the ref points at and its name; only as the menu
@@ -216,24 +193,10 @@ Item {
         return refMenu.offer()
     }
 
-    /// What the rows stand on moved with the menu up — outside while nothing runs, or with a command that has just
-    /// ended: the rows stand again on the tree as it is, as when a wait ends (`standAgain`; デザイン規約 §メニュー
-    /// 「今の内容」). Not while a command is out: the menu stands on the tree as that was asked until it ends
-    /// (`treeAtAsk`), whatever the write.
-    function follow() {
-        if (refRowMenu.treeAtAsk !== null)
-            return
-        refRowMenu.standAgain("follow")
-    }
-
-    /// The command the menu waited for has ended with the menu up: what it left is read again and the rows stand on
-    /// it, the menu keeping its shape (`AppMenu.holdShape`) — on the commit the ref points at now, a stash's row on the
-    /// selector it now answers to. A ref the command took away leaves the menu nothing to act on. `again`: `wait` for
-    /// that, `follow` for what moved with the menu up (`follow`) — the cards' rows that reach over there keep their
-    /// leases either way, and git's answers about the branch only while following (`RefBranchMenu.standOn`).
+    /// The menu stands again with the menu up (`MenuLines.standAgain`, whose `again` says why): what the rows stand on
+    /// is read again, the menu keeping its shape (`AppMenu.holdShape`) — on the commit the ref points at now, a stash's
+    /// row on the selector it now answers to. A ref taken away leaves the menu nothing to act on.
     function standAgain(again) {
-        if (!refRowMenu.showing)
-            return
         // A branch renamed outside with the menu up answers to its new name (`NavSectionModel.renamedTo`): the menu
         // follows it there, as it follows the branch to another commit, and the BRANCH card with its leases
         // (`RefBranchMenu.renamed`). Gone without a rename, the name below finds nothing and the menu closes.
@@ -251,21 +214,41 @@ Item {
         // up in the stash list, not the graph: the graph's walk may not reach an old stash.
         const full = refRowMenu.kind === "stash" ? refRowMenu.stashesModel.fullOfOid(refRowMenu.refOid)
                                                  : refRowMenu.refId
-        const oidHex = full === "" ? "" : refRowMenu.oidNow(refRowMenu.kind, full)
-        if (oidHex === "") {
+        if (full === "" || !refRowMenu.stillThere(refRowMenu.kind, full)) {
             refMenu.dismiss()
             return
         }
-        for (let i = 0; i < refRowMenu.levels.length; i++)
-            refRowMenu.levels[i].holdShape()
+        const oidHex = refRowMenu.oidNow(refRowMenu.kind, full)
         refRowMenu.tree = refRowMenu.worktree.reading
         refRowMenu.standOn(refRowMenu.kind, refRowMenu.refName, full, oidHex, refRowMenu.openedFor,
                            refRowMenu.openedAim, again)
     }
-    /// The commit the ref `full` of `kind` points at now; empty where it is gone. A stash's commit does not move. A
-    /// remote branch that moved stands where it is — moved by a fetch outside, or by the one the menu waited for
-    /// (デザイン規約 §hover「外乱で閉じない」) —, its `push --delete` still leased to where it stood as the menu went up
-    /// and greyed, since on the new tip it would take commits the menu never showed (`RefBranchMenu.standOn`).
+    /// Whether the ref `full` of `kind` the menu stands on is still there, by its name (a stash by its commit,
+    /// `standAgain`): a branch with no commits yet is no ref git lists, and stands while the worktree the menu was
+    /// opened on still has it out.
+    function stillThere(kind, full) {
+        if (kind === "branch") {
+            if (refRowMenu.branchesModel.oidOfName(full) !== "")
+                return true
+            const opened = refRowMenu.openedFor === undefined || refRowMenu.openedFor === ""
+                           ? undefined : refRowMenu.worktreesModel.worktreeFacts(refRowMenu.openedFor)
+            return opened !== undefined && opened.branch === full
+        }
+        return refRowMenu.oidNow(kind, full) !== ""
+    }
+    /// Whether the worktree a WORKTREES row raised the menu on (`worktreePath`) has left the branch `full` the menu
+    /// stands on, as the worktree listing tells it (`GitFacts.worktreeLeft`); false for a menu raised anywhere else.
+    function worktreeLeft(kind, full, worktreePath) {
+        if (kind !== "branch" || worktreePath === undefined || worktreePath === "")
+            return false
+        const now = refRowMenu.worktreesModel.worktreeFacts(worktreePath)
+        return GitFacts.worktreeLeft(full, now !== undefined, now === undefined ? "" : now.branch)
+    }
+    /// The commit the ref `full` of `kind` points at now; empty where it is gone or has none. A stash's commit does
+    /// not move. A remote branch that moved stands where it is — moved by a fetch outside, or by the one the menu
+    /// waited for (デザイン規約 §hover「外乱で閉じない」) —, its `push --delete` still leased to where it stood as the
+    /// menu went up and greyed, since on the new tip it would take commits the menu never showed
+    /// (`RefBranchMenu.standOn`).
     function oidNow(kind, full) {
         if (kind === "branch")
             return refRowMenu.branchesModel.oidOfName(full)
@@ -290,32 +273,37 @@ Item {
         refRowMenu.refOid = oidHex
         refRowMenu.openedFor = worktreePath
         refRowMenu.openedAim = aim === undefined ? "" : aim
-        // Core's rule (offers::ref_menu), asked once per stand: the rows and the cards read the answer, not the models.
-        const facts = menuFacts.stand(kind, full, oidHex, refRowMenu.tree, refRowMenu.openedAim, oidHex, worktreePath)
+        // Core's type (`menu::lines`), asked once per stand: the rows and the cards read the answer, not the models.
+        const facts = menuFacts.stand("listed", kind, full, oidHex, refRowMenu.tree, refRowMenu.openedAim, oidHex,
+                                      worktreePath)
         branchMenu.standOn(kind, name, full, oidHex, facts, again)
         tagMenu.standOn(kind, full, oidHex, facts, again)
         worktreeMenu.standOn(facts)
         const menu = facts.menu
+        // A menu raised on a worktree's row is the menu of the branch that worktree has out (`offerOn`). Once the
+        // worktree has left it — removed, switched or taken off it outside, the menu up, the branch still there (one
+        // gone with the worktree takes what was clicked, and the menu closes — §メニュー) —, only the rows on the
+        // worktree itself still act on what was clicked: the answer keeps those alone (`menu::Row::on_worktree`),
+        // and the rest grey where they stand (`AppMenuItem.withdrawn`) — until the menu is raised again, or the
+        // worktree has that branch out again — rather than turn into another branch's, or a free branch's, under
+        // the hand, where a press meant for the old ones would land (user decision — ask before changing). The
+        // GITHUB card's links, made for that branch as the menu opened, grey with them.
+        const left = refRowMenu.worktreeLeft(kind, full, worktreePath)
+        lines.answer = left ? Object.assign({}, menu, { "lines": menu.lines.filter(line => line.onWorktree) }) : menu
+        githubMenu.stillApplies = !left
         // Another worktree having this row's branch out (through the same-named local branch for a remote row) makes
         // `switch` open that worktree instead (offers::SwitchAction::OpenHolder); a worktree with no branch leads to
         // itself, unless this tab already stands in it. Named as its WORKTREES row names it
         // (`NavSectionModel.leadOf`'s `called`).
-        refRowMenu.canSwitch = menu.switch
         refRowMenu.switchAsks = menu.switchAsks
         refRowMenu.heldLeaf = facts.lead.called
         refRowMenu.heldHome = facts.lead.home
-        refRowMenu.canBranchHere = menu.branchHere
-        refRowMenu.canIntegrateFrom = menu.integrate
-        refRowMenu.opStanding = menu.standing
-        // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (offers::pull_row).
+        // The tree's own comparison for `git pull`, the row's branch's for its fast-forward (menu::pull_runs).
         refRowMenu.pullUpstream = kind === "branch" ? facts.card.remoteCounterpart : ""
         refRowMenu.pullRuns = menu.pullRuns
-        refRowMenu.pullOut = menu.pullOut
-        refRowMenu.canDelete = menu.delete
-        // Only where the row that wears it is offered, and live: a greyed row warns of a press that cannot be made.
+        // Read where the menu has the row; the row wears it while it can be pressed (`refRebaseItem.warning`).
         refRowMenu.rebasePublished =
-            refRowMenu.integrateOffered && !refRowMenu.opStanding
-            && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.tree.headOid)
+            lines.has("rebase") && refRowMenu.graphModel.rebaseRewritesPublished(oidHex, refRowMenu.tree.headOid)
         return facts
     }
 
@@ -324,18 +312,15 @@ Item {
         id: refMenu
         heldReason: refRowMenu.heldReason
         runningWhy: refRowMenu.runningWhy
-        onWaitEnded: refRowMenu.standAgain("wait")
         // Nothing to clear at the close: a refused delete's `-D` is left standing, the card clears it as the menu
         // opens (`RefBranchMenu.standOn`), and nothing reads it while the menu is down.
 
-        // `Create branch here…` and `switch` are one group: it runs `switch --create` (デザイン規約 §メニュー の入れ子).
-        // On top, over the first divider, in every section but STASHES: it gives the current branch's menu one live
-        // row, which would otherwise open on nothing but a greyed delete table.
+        // `Create branch here…` runs `switch --create` (デザイン規約 §メニュー の入れ子). It gives the current branch's
+        // menu one live row, which would otherwise open on nothing but a greyed delete table.
         AppMenuItem {
             id: refBranchHereItem
             text: Words.createBranchHere
-            offered: refRowMenu.canBranchHere
-            blockedReason: refRowMenu.startWhy
+            word: "branch-here"
             onTriggered: refRowMenu.branchHereRequested(refRowMenu.refOid)
         }
         AppMenuItem {
@@ -349,28 +334,25 @@ Item {
             text: refRowMenu.heldLeaf === "" ? "" : qsTr("Open")
             nameMark: refRowMenu.heldLeaf === "" ? "" : refRowMenu.heldHome ? "home" : "tree"
             codeName: refRowMenu.heldLeaf
-            offered: refRowMenu.canSwitch
-            // Never greyed for its own reason: what stands in the move's way presses through to a question, marked by
-            // `asks` (user decision — ask before changing) — a greyed row says why on hover only, and the hand reaching
-            // for it is the reader who wants to know. Held doors still hold it (`heldReason`) — a move mid-rewrite
-            // is the exit nobody meant (§フル interactive rebase) — and so does a command the menu waits for
-            // (`runningWhy`).
-            blockedReason: ""
+            word: "reach"
+            // Greyed for no reason of its own but the tab still opening: what stands in the move's way presses
+            // through to a question, marked by `asks` (user decision — ask before changing) — a greyed row says why on
+            // hover only, and the hand reaching for it is the reader who wants to know. Held doors still hold it
+            // (`heldReason`) — a move mid-rewrite is the exit nobody meant (§フル interactive rebase) — and so does a
+            // command the menu waits for (`runningWhy`).
             asks: refRowMenu.switchAsks
             // Through the chips' dispatcher: a remote branch whose local one already exists cannot simply be created.
             onTriggered: refRowMenu.switchRequested(refRowMenu.kind, refRowMenu.refId)
         }
-        AppMenuSeparator {}
         AppMenuItem {
             id: refMergeItem
             code: "merge"
             refSentence: Words.intoBranch
-            // The branch the worktree holds, off the tree as it is (`WorktreeModel.heldBranch`) — the rebase and pull
+            // The branch the worktree holds, off the tree as it is (`WorktreeModel.movedBranch`) — the rebase and pull
             // rows below too.
-            refName: refRowMenu.worktree.heldBranch
+            refName: refRowMenu.worktree.movedBranch
             refMark: "branch"
-            offered: refRowMenu.integrateOffered
-            blockedReason: refRowMenu.startWhy
+            word: "merge"
             onTriggered: refRowMenu.repoTab.merge(refRowMenu.integrateRef, false, false, "")
         }
         AppMenuItem {
@@ -378,23 +360,23 @@ Item {
             code: "rebase"
             //: Follows the `rebase` chip: "rebase main onto it".
             refSentence: qsTr("%1 onto it")
-            refName: refRowMenu.worktree.heldBranch
+            refName: refRowMenu.worktree.movedBranch
             refMark: "branch"
             // A tag stays put under a rebase onto it: git peels it to its commit, and the rebase moves the current
             // branch alone (デザイン規約 §履歴を合流させる「既定のフラグ」).
-            offered: refRowMenu.integrateOffered
-            blockedReason: refRowMenu.startWhy
-            // Published = reachable from a remote-tracking ref, as of the last fetch.
-            note: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
+            word: "rebase"
+            whyNames: ({ "head": refRowMenu.worktree.movedBranch })
+            // The branch with no commits yet in that reason wears its mark, as on the row.
+            reasonMarkWord: refRebaseItem.why === "head-unborn" ? refRowMenu.worktree.movedBranch : ""
+            reasonMarkKind: "branch"
+            // Published = reachable from a remote-tracking ref, as of the last fetch. A greyed row, whatever greys it,
+            // warns of a press that cannot be made.
+            warning: refRowMenu.rebasePublished ? Words.rewritesPushed : ""
             onTriggered: refRowMenu.repoTab.rebase(refRowMenu.integrateRef, "")
         }
-        AppMenuSeparator {}
-        // The group that moves the named branch along its upstream, one group with the push, above the delete table
-        // (user decision — ask before changing): merge / rebase bring the clicked row into the current branch,
-        // while a pull moves the branch itself, so the subject differs; in this seat it sits in the same place in every
-        // menu (規約 §メニュー). The sentence names the branch that moves (user decision — ask before changing), though
-        // a row's own name is usually left to the row (規約 §メニュー「行が自分で示しているもの(右クリックした行のコミット)は行に任せる」): one row,
-        // in one seat, moves the current branch on its upstream's row and the row's own branch elsewhere, so the words
+        // The sentence names the branch that moves (user decision — ask before changing), though a row's own name is
+        // usually left to the row (規約 §メニュー「行が自分で示しているもの(右クリックした行のコミット)は行に任せる」):
+        // one row moves the current branch on its upstream's row and the row's own branch elsewhere, so the words
         // alone would not say which moves before the press. Shaped as `merge` into <current> is. In the name's own
         // colour (規約 §ref の種別「文の中の名前」): the current branch `textLink`, another local branch white; a greyed
         // row greys its name too.
@@ -402,15 +384,15 @@ Item {
             id: refPullItem
             code: "pull"
             refSentence: Words.intoBranch
-            refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.worktree.heldBranch
+            refName: refRowMenu.pullRuns === "aside" ? refRowMenu.refId : refRowMenu.worktree.movedBranch
             refTint: refRowMenu.pullRuns === "aside" ? Theme.textPrimary : Theme.textLink
             refMark: "branch"
-            offered: refRowMenu.pullRuns !== ""
-            // Greyed where git would turn the press down, saying where to go instead (`offers::PullOut`).
-            blockedReason: Words.pullOut(refRowMenu.pullOut, refRowMenu.heldLeaf, refRowMenu.pullUpstream)
-            reasonMarkWord: refRowMenu.pullOut === "held" ? refRowMenu.heldLeaf : ""
+            // Greyed where git would turn the press down, saying where to go instead.
+            word: "pull"
+            whyNames: ({ "holder": refRowMenu.heldLeaf, "upstream": refRowMenu.pullUpstream })
+            reasonMarkWord: refPullItem.why === "held" ? refRowMenu.heldLeaf : ""
             reasonMarkKind: refRowMenu.heldHome ? "home" : "tree"
-            reasonMarks: refRowMenu.pullOut === "own"
+            reasonMarks: refPullItem.why === "own"
                          ? Words.listMarks(refPullItem.blockedReason, refRowMenu.pullUpstream, "remote") : []
             // `git pull` resolves the other end itself; the fast-forward is told the branch. Headless: `pull-menu
             // [<branch>|<remote ref>]`, `pull-blocked [chip][:<branch>]`, `pull-go`, `pull-ahead`, `pull-branch-go
@@ -422,10 +404,7 @@ Item {
             id: refPushRow
             card: branchMenu
         }
-        AppMenuSeparator {}
-        // What takes the row's name away, the widest reach of the rows used often, so the last group above the cards
-        // (デザイン規約 §メニュー): the branch's delete table on the BRANCH card's answers — the same rows the graph
-        // row's menu carries —, or the stash's drop.
+        // The branch's delete table, on the BRANCH card's answers — the same rows the graph row's menu carries.
         BranchDeleteRow {
             id: refDeleteRow
             card: branchMenu
@@ -438,26 +417,34 @@ Item {
             id: refBothDeleteRow
             card: branchMenu
         }
+        // A stash's `apply` / `pop`, as the graph's stash row says them (`CommitRowMenu`).
+        AppMenuItem {
+            code: "apply"
+            word: "apply-stash"
+            onTriggered: refRowMenu.applyStashRequested(refRowMenu.refId)
+        }
+        AppMenuItem {
+            code: "pop"
+            word: "pop-stash"
+            onTriggered: refRowMenu.popStashRequested(refRowMenu.refId)
+        }
         // Held: what is dropped leaves the list, and only the discard record brings it back. The graph's stash row
-        // offers it in the same words
-        // (`CommitRowMenu`).
+        // offers it in the same words (`CommitRowMenu`).
         AppMenuItem {
             id: refStashDropItem
             code: "drop"
-            offered: refRowMenu.kind === "stash" && refRowMenu.canDelete
+            word: "drop-stash"
             holdPresses: Metrics.holdPressesWarned
             onHeld: {
                 refStashDropItem.closeMenu()
                 refRowMenu.dropStashRequested(refRowMenu.refId)
             }
         }
-        AppMenuSeparator {}
         // The same card the graph row's menu carries.
         RefBranchMenu {
             id: branchMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain("wait")
             // git's two answers, live: the card turns the delete rows on them while the menu stands.
             refusedDelete: refRowMenu.repoTab.branchDeleteRefused
             landedDelete: refRowMenu.repoTab.branchDeleteLanded
@@ -478,28 +465,22 @@ Item {
             onDeleteEverywhereRequested: (branch, remoteRef, forced, expect) =>
                 refRowMenu.repoTab.deleteBranchEverywhere(branch, remoteRef, forced, expect)
         }
-        AppMenuSeparator {}
-        // A worktree made off this row, and the one this row names or leads to; above the TAG card
-        // (デザイン規約 §メニュー の入れ子). The same card the graph row's menu carries.
+        // A worktree made off this row, and the one this row names or leads to (デザイン規約 §メニュー の入れ子). The
+        // same card the graph row's menu carries.
         RefWorktreeMenu {
             id: worktreeMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain("wait")
             onWorktreeHereRequested: oidHex => refRowMenu.worktreeHereRequested(oidHex)
             onWorktreeAddRequested: (mode, branch, start, path, name) =>
                 refRowMenu.worktreeAddRequested(mode, branch, start, path, name)
             onRemoveRequested: (path, name, holds) => refRowMenu.removeWorktreeRequested(path, name, holds)
         }
-        AppMenuSeparator {}
         // The same card the graph row's menu carries.
         RefTagMenu {
             id: tagMenu
             heldReason: refRowMenu.heldReason
             runningWhy: refRowMenu.runningWhy
-            onWaitEnded: refRowMenu.standAgain("wait")
-            canBranchHere: refRowMenu.canBranchHere
-            makeWhy: refRowMenu.startWhy
             onTagHereRequested: oidHex => refRowMenu.tagHereRequested(oidHex)
             onPushTagRequested: (remote, tag, expect) => refRowMenu.repoTab.pushTag(remote, tag, expect)
             onDeleteTagRequested: tag => refRowMenu.repoTab.deleteTag(tag)

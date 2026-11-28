@@ -3,16 +3,18 @@ import platitude.ui
 import platitude.ui.input
 
 // The right-click menu of a box words are typed or read in: the rows of the style's own (`TextEditingContextMenu`), on
-// the product's card (デザイン規約 §メニュー の文字の欄). A fixed table: a row the box has no use for goes (a read-only
-// box takes no typing: the five rows that change the words are `offered` on `typing`), and a row that cannot be done
-// right now stays, greyed by a plain `enabled: false` — not `blockedReason`, as there is no reason to say. Settled as
-// the menu opens (`offerNow` freezes the `can*`). Built by `FieldMenuSeat`.
+// the product's card (デザイン規約 §メニュー の文字の欄). A fixed table: every box has every row, and a row that cannot
+// be done right now stands greyed by `doable: false` — not `blockedReason`, as there is no reason to say. A box that
+// takes no typing greys the five rows that change the words (`typing`; user decision — ask before changing): read-only
+// says both a box only to read and one that cannot be written in right now, and the table is the same for both.
+// Settled as the menu opens (`offerNow` freezes the `can*`). Built by `FieldMenuSeat`.
 //
 // The product's own card here is a user decision — ask before changing. Every row is a key away, so this card is the
-// exception to "a menu holds only what has no other way in". Laid out as Windows' standard box and Qt Widgets'
-// `QLineEdit` lay theirs: the same rows in the same order every time, so a read-only empty box still opens, on its two
-// grey rows. While the card stands the box is still being written in — its focus frame and amend's save row stay up
-// (`holding`), and the caret goes back to it as the card closes.
+// exception to "a menu holds only what has no other way in". Laid out as Windows' standard box lays its own: the same
+// rows in the same order every time, so a read-only empty box still opens, on its seven grey rows. Qt Widgets'
+// `QLineEdit` lays only Copy and Select All out on a read-only box (`createStandardContextMenu`); here the five that
+// change the words stand greyed there instead (`typing`, above). While the card stands the box is still being written
+// in — its focus frame and amend's save row stay up (`holding`), and the caret goes back to it as the card closes.
 AppMenu {
     id: fieldMenu
 
@@ -20,7 +22,7 @@ AppMenu {
     required property Item editor
 
     // Decided as the menu opens and held while it stands (規約 §メニュー).
-    /// The box takes typing: the rows that change its words are on the table.
+    /// The box takes typing: the rows that change its words can be chosen.
     property bool typing: false
     property bool canUndo: false
     property bool canRedo: false
@@ -78,7 +80,7 @@ AppMenu {
         const words = []
         for (let i = 0; i < fieldMenu.count; i++) {
             const row = fieldMenu.itemAt(i)
-            if (row && row.offered && row.codeColSeat !== undefined && (!live || row.enabled))
+            if (row && row.offered && row.codeColSeat !== undefined && (!live || row.doable))
                 words.push(row.text)
         }
         return words
@@ -86,44 +88,39 @@ AppMenu {
 
     AppMenuItem {
         text: qsTr("Undo")
-        offered: fieldMenu.typing
-        enabled: fieldMenu.canUndo
+        doable: fieldMenu.typing && fieldMenu.canUndo
         onTriggered: fieldMenu.editor.undo()
     }
     AppMenuItem {
         text: qsTr("Redo")
-        offered: fieldMenu.typing
-        enabled: fieldMenu.canRedo
+        doable: fieldMenu.typing && fieldMenu.canRedo
         onTriggered: fieldMenu.editor.redo()
     }
     AppMenuSeparator {}
     AppMenuItem {
         text: qsTr("Cut")
-        offered: fieldMenu.typing
-        enabled: fieldMenu.canCut
+        doable: fieldMenu.typing && fieldMenu.canCut
         onTriggered: fieldMenu.editor.cut()
     }
     AppMenuItem {
         text: qsTr("Copy")
-        enabled: fieldMenu.canCopy
+        doable: fieldMenu.canCopy
         onTriggered: fieldMenu.editor.copy()
     }
     AppMenuItem {
         text: qsTr("Paste")
-        offered: fieldMenu.typing
-        enabled: fieldMenu.canPaste
+        doable: fieldMenu.typing && fieldMenu.canPaste
         onTriggered: fieldMenu.editor.paste()
     }
     AppMenuItem {
         text: qsTr("Delete")
-        offered: fieldMenu.typing
-        enabled: fieldMenu.canCut
+        doable: fieldMenu.typing && fieldMenu.canCut
         onTriggered: fieldMenu.editor.remove(fieldMenu.editor.selectionStart, fieldMenu.editor.selectionEnd)
     }
     AppMenuSeparator {}
     AppMenuItem {
         text: qsTr("Select all")
-        enabled: fieldMenu.canSelectAll
+        doable: fieldMenu.canSelectAll
         onTriggered: fieldMenu.editor.selectAll()
     }
 }

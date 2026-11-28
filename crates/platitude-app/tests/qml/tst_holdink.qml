@@ -156,29 +156,29 @@ Item {
         }
         function test_menu_row(given) {
             row.holdTone = given.tone
-            row.enabled = true
+            row.doable = true
             compareMarks(row, given.live, given.tag + " live")
-            row.enabled = false
+            row.doable = false
             verify(Qt.colorEqual(row.wordColor, Theme.textMuted), given.tag + " words: " + row.wordColor)
             compareMarks(row, given.off, given.tag + " off")
-            row.enabled = true
+            row.doable = true
         }
         // A name in a row's words is plain whatever tone the row wears (`AppMenuItem.refColor`, `Words.nameInk`), its
         // mark its kind's; a greyed row takes both along (デザイン規約 §メニュー「黄・赤の回数押しの行でも名前は名前の色」).
         function test_menu_row_names_data() {
             return [
-                { tag: "white delete", tone: Theme.textPrimary, enabled: true, name: Theme.textPrimary },
-                { tag: "warning", tone: Theme.warning, enabled: true, name: Theme.textPrimary },
-                { tag: "danger", tone: Theme.danger, enabled: true, name: Theme.textPrimary },
-                { tag: "white delete, greyed", tone: Theme.textPrimary, enabled: false, name: Theme.textMuted }
+                { tag: "white delete", tone: Theme.textPrimary, doable: true, name: Theme.textPrimary },
+                { tag: "warning", tone: Theme.warning, doable: true, name: Theme.textPrimary },
+                { tag: "danger", tone: Theme.danger, doable: true, name: Theme.textPrimary },
+                { tag: "white delete, greyed", tone: Theme.textPrimary, doable: false, name: Theme.textMuted }
             ]
         }
         function test_menu_row_names(given) {
             row.refTint = Theme.textPrimary
             row.holdTone = given.tone
-            row.enabled = given.enabled
+            row.doable = given.doable
             verify(Qt.colorEqual(row.refColor, given.name), given.tag + ": " + row.refColor)
-            row.enabled = true
+            row.doable = true
         }
         function test_exit_row() {
             compareMarks(exitRow, Theme.danger, "live")

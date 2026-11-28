@@ -181,6 +181,7 @@ RefChipStack 1.0 RefChipStack.qml
 RefListPopup 1.0 RefListPopup.qml
 RefBranchMenu 1.0 RefBranchMenu.qml
 RefMenuFacts 1.0 RefMenuFacts.qml
+MenuLines 1.0 MenuLines.qml
 RefRowMenu 1.0 RefRowMenu.qml
 RefTagMenu 1.0 RefTagMenu.qml
 RemoteRowMenu 1.0 RemoteRowMenu.qml

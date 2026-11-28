@@ -1,14 +1,15 @@
 import QtQuick
 import QtQuick.Controls.Fusion
 import QtTest
+import platitude
 import platitude.ui
 import "painted.js" as Painted
 
 // The real branch card (`RefBranchMenu`) standing on the answers a menu would hand it (`RefMenuFacts.stand`), and
 // the four rows it lends the level above — the push beside `pull` and the delete table (`BranchPushRow` /
 // `BranchDeleteRow` / `BranchRemoteDeleteRow` / `BranchBothDeleteRow`), laid out as both entrances lay them: which rows
-// each keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a state may
-// offer is `offers::ref_menu`'s and tested there.
+// each keeps, what each says, the gesture and colour each takes, and what a press asks for. Which rows a state has
+// and why each greys is core's (`menu::lines`) and tested there.
 //
 // The greyed rows' sentences are judged here: a wrong reason frames like a right one.
 Item {
@@ -20,29 +21,33 @@ Item {
     /// What a press asked for, last one wins: the card and its rows run nothing themselves.
     property string asked: ""
 
-    /// The part of core's answer (`GitFacts.refMenu` — `encode::RefMenu`) the BRANCH card reads, for a branch nothing
-    /// holds whose reading stands beside it, with `fields` over it — data, the answers `offers::tests::ref_menu` pins.
-    function menuOf(fields) {
-        return Object.assign({ "delete": true, "deleteRemote": true, "setUpstream": true, "unsetUpstream": true,
-                               "deleteOut": "", "deleteRemoteOut": "", "deleteBothOut": "", "upstreamWhere": "remote" },
-                             fields)
+    /// The part of core's answer (`GitFacts.menuOn` — `encode::MenuAnswer`) the BRANCH card reads: the rows it has and
+    /// lends, and why each greys (`rows` / `whys`, by core's words) — data, the answers `menu::tests` pins. A branch
+    /// nothing holds whose reading stands beside it has every row live; `whys` greys rows, `without` takes them off.
+    function linesOf(whys, without) {
+        const rows = ["delete-branch", "delete-remote-branch", "delete-both", "set-upstream", "unset-upstream"]
+            .filter(row => without === undefined || without.indexOf(row) < 0)
+        return { "rows": rows, "whys": rows.map(row => whys !== undefined && whys[row] !== undefined ? whys[row] : "") }
     }
-    readonly property var free: root.menuOf({})
+    readonly property var free: root.linesOf()
     /// The branch the worktree is on: no delete here, and the rows say so — the local half's reason first.
-    readonly property var current: root.menuOf({ "delete": false, "deleteOut": "current", "deleteBothOut": "current" })
-    /// One another worktree holds: the delete goes, saying where it is out.
-    readonly property var held: root.menuOf({ "delete": false, "deleteOut": "held", "deleteBothOut": "held" })
-    /// A reading standing on another commit: the local delete stays, the one that reaches over there goes.
-    readonly property var drifted: root.menuOf({ "deleteRemote": false, "deleteRemoteOut": "drifted",
-                                                 "deleteBothOut": "drifted" })
+    readonly property var current: root.linesOf({ "delete-branch": "current", "delete-both": "current" })
+    /// One another worktree holds: the delete greys, saying where it is out.
+    readonly property var held: root.linesOf({ "delete-branch": "held", "delete-both": "held" })
+    /// A reading standing on another commit: the local delete stays, the ones that reach over there grey.
+    readonly property var drifted: root.linesOf({ "delete-remote-branch": "drifted", "delete-both": "drifted" })
     /// A branch with no reading: only what reaches nowhere.
-    readonly property var unread: root.menuOf({ "deleteRemote": false, "unsetUpstream": false })
+    readonly property var unread: root.linesOf({}, ["delete-remote-branch", "delete-both", "unset-upstream"])
+    /// A remote-tracking row: its own delete alone.
+    readonly property var remoteRow: ({ "rows": ["delete-remote-branch"], "whys": [""] })
     /// A row with no branch table: nothing the card offers.
-    readonly property var none: root.menuOf({ "delete": false, "deleteRemote": false, "setUpstream": false,
-                                              "unsetUpstream": false })
+    readonly property var none: ({ "rows": [], "whys": [] })
 
     /// The level above the card, holding the rows the card lends it and the card itself, as `RefRowMenu` and
-    /// `CommitRowMenu` hold them.
+    /// `CommitRowMenu` hold them — and drawn off the answer the card stands on, as there (`MenuLines`).
+    readonly property MenuLines lines: MenuLines {
+        menu: level
+    }
     AppMenu {
         id: level
         BranchPushRow {
@@ -77,42 +82,55 @@ Item {
         }
     }
 
-    /// `offers` is core's answer (`menuOf`), with the upstream standing `upstreamWhere`. `merged` is what the drawn
-    /// rows already say (`yes` / `no`, empty when only git can answer). The row stands on
-    /// `abc123` and its reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
-    /// (`NavSectionModel.branchPushFacts`), none by default. `again`: why the menu stands again with the card up
-    /// (`RefBranchMenu.standOn`'s — `follow` / `wait`), none as it is raised; the row on `oid` (`abc123` unless named).
+    /// `offers` is core's answer for the rows (`linesOf`), with the upstream standing `upstreamWhere`. `merged` is what
+    /// the drawn rows already say (`yes` / `no`, empty when only git can answer). The row stands on `abc123` and its
+    /// reading on `def456`, so a press says which commit it leased. `push` is the push row's answer
+    /// (`NavSectionModel.branchPushFacts`), none by default; with one, a branch's rows hold `push` (`pushSeat`,
+    /// unless named), greyed as core greys its standing (`pushWhy`, unless named). `again`:
+    /// why the menu stands again with the card up (`RefBranchMenu.standOn`'s — `follow` / `wait`), none as it is
+    /// raised; the row on `oid` (`abc123` unless named).
     function standOn(fields, again, oid) {
         const all = { "kind": "branch", "name": "feature/topic-a", "full": "feature/topic-a",
                       "holderLeaf": "", "remoteCounterpart": "origin/feature/topic-a",
                       "upstream": "origin/feature/topic-a", "upstreamWhere": "remote",
-                      "remoteCounterpartOid": "def456", "open": true, "merged": "yes",
+                      "remoteCounterpartOid": "def456", "merged": "yes",
                       "offers": root.free, "push": undefined }
         for (const key in fields)
             all[key] = fields[key]
+        const seated = all.pushSeat !== undefined ? all.pushSeat
+                     : all.kind === "branch" && all.push !== undefined
+        const pushWhy = all.pushWhy !== undefined ? all.pushWhy
+                      : seated && root.pushWhys[all.push.state] !== undefined ? root.pushWhys[all.push.state] : ""
         root.asked = ""
+        const menu = GitFacts.seated({
+            "rows": (seated ? ["push"] : []).concat(all.offers.rows),
+            "whys": (seated ? [pushWhy] : []).concat(all.offers.whys),
+            "upstreamWhere": all.upstreamWhere
+        })
         branchCard.standOn(all.kind, all.name, all.full, oid === undefined ? "abc123" : oid, {
             "lead": { "called": all.holderLeaf, "home": false },
             "card": { "remoteCounterpart": all.remoteCounterpart, "remoteCounterpartOid": all.remoteCounterpartOid,
                       "upstream": all.upstream },
-            "menu": Object.assign({}, all.offers, { "upstreamWhere": all.upstreamWhere }),
-            "open": all.open,
+            "menu": menu,
             "merged": all.merged,
             "push": all.push
         }, again === undefined ? "" : again)
+        root.lines.answer = menu
     }
-    /// What a press does in each standing and whether the row keeps a seat, as core answers them — data, the
-    /// answers `remote::standing::tests::each_standing_takes_a_plain_press_the_overwrite_or_none` pins.
+    /// What a press does in each standing, as core answers them — data, the answers
+    /// `remote::standing::tests::each_standing_takes_a_plain_press_the_overwrite_or_none` pins.
     readonly property var takes: ({
-        "closed": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": false },
-        "publish": { "sendsPlain": true, "asks": true, "overwrites": false, "offered": true },
-        "stays-here": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": true },
-        "elsewhere": { "sendsPlain": true, "asks": false, "overwrites": false, "offered": true },
-        "ready": { "sendsPlain": true, "asks": false, "overwrites": false, "offered": true },
-        "clean": { "sendsPlain": false, "asks": false, "overwrites": false, "offered": true },
-        "behind": { "sendsPlain": false, "asks": false, "overwrites": true, "offered": true },
-        "diverged": { "sendsPlain": false, "asks": false, "overwrites": true, "offered": true }
+        "closed": { "sendsPlain": false, "asks": false, "overwrites": false },
+        "publish": { "sendsPlain": true, "asks": true, "overwrites": false },
+        "stays-here": { "sendsPlain": false, "asks": false, "overwrites": false },
+        "elsewhere": { "sendsPlain": true, "asks": false, "overwrites": false },
+        "ready": { "sendsPlain": true, "asks": false, "overwrites": false },
+        "clean": { "sendsPlain": false, "asks": false, "overwrites": false },
+        "behind": { "sendsPlain": false, "asks": false, "overwrites": true },
+        "diverged": { "sendsPlain": false, "asks": false, "overwrites": true }
     })
+    /// The standings core greys the push row for, by its word for each (`menu::line`) — data.
+    readonly property var pushWhys: ({ "closed": "unread", "stays-here": "stays-here", "clean": "clean" })
     /// A push row's answer in `state` (`encode::PushRecord`), going to `origin/feature/topic-a` and leased to
     /// `fed789` where it counts.
     function pushing(state) {
@@ -123,6 +141,10 @@ Item {
     /// marked to no remote, or marked to `.`): nowhere named, nothing leased.
     readonly property var pushingHere: Object.assign(root.pushing("stays-here"),
                                                      { "target": "", "lease": "", "upstream": "" })
+    /// …and where the listing has not caught up with the tree (`closed` — the branch HEAD's there while the tree reads
+    /// another, or not named yet): nowhere named, nothing leased.
+    readonly property var pushingUnread: Object.assign(root.pushing("closed"),
+                                                       { "target": "", "lease": "", "upstream": "" })
     /// git turns the plain delete of `name` down, handed to the card as the carrying menu hands it: cleared as the
     /// delete is asked, then the name (`RepoTab.branchDeleteRefused`), so each refusal is an edge of its own.
     function refuse(name) {
@@ -234,7 +256,7 @@ Item {
             compare(bothDeleteRow.holdTone, Theme.warning, "while the local half is not a force delete")
         }
 
-        /// It writes configuration, which the current branch and a held one still take (offers::ref_menu).
+        /// It writes configuration, which the current branch and a held one still take (`menu::Row::SetUpstream`).
         function test_the_upstream_row_follows_its_own_word() {
             root.standOn({})
             verify(branchCard.upstreamItem.offered)
@@ -310,12 +332,13 @@ Item {
         /// machine.
         function test_a_remote_row_keeps_only_the_rows_it_can_name() {
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", offers: root.unread })
-            verify(deleteRow.offered)
-            compare(deleteRow.code, "push --delete")
-            verify(deleteRow.holdPresses > 0)
-            compare(deleteRow.holdTone, Theme.warning)
-            verify(!remoteDeleteRow.offered, "a reading has no reading of its own")
+                           remoteCounterpart: "", offers: root.remoteRow })
+            verify(remoteDeleteRow.offered, "its own delete is the remote branch's row")
+            compare(remoteDeleteRow.code, "push --delete")
+            compare(remoteDeleteRow.codeName, "origin/main")
+            verify(remoteDeleteRow.holdPresses > 0)
+            compare(remoteDeleteRow.holdTone, Theme.warning)
+            verify(!deleteRow.offered, "a reading has no branch here to delete")
             verify(!bothDeleteRow.offered)
             verify(!branchCard.upstreamItem.offered, "and no setting of its own either")
             verify(!branchCard.unsetUpstreamItem.offered)
@@ -347,16 +370,14 @@ Item {
             compare(pushRow.holdTone, Theme.warning, "an overwrite reaches past this machine")
         }
 
-        /// Nothing to name, or a door of its own: no seat (デザイン規約 §メニュー). Where is core's answer
-        /// (`remote::PushStanding::offered`): the branch the tree is on — the toolbar's button —, and a tab that is not
-        /// open, stand closed (`RefsSnapshot::branch_push`).
+        /// Nothing to name, or a door of its own: no seat (デザイン規約 §メニュー). Where is core's answer (the type's
+        /// rows): the branch the tree is on has the toolbar's button, and a remote-tracking row sends nothing.
         function test_the_push_row_has_no_seat_where_it_could_do_nothing_here_data() {
             return [
                 { tag: "no answer read", fields: {} },
-                { tag: "core gives it none", fields: { push: root.pushing("closed") } },
                 { tag: "a remote-tracking row sends nothing",
                   fields: { kind: "remote", name: "origin/main", full: "origin/main", remoteCounterpart: "",
-                            offers: root.unread, push: root.pushing("ready") } },
+                            offers: root.remoteRow, push: root.pushing("ready") } },
             ]
         }
 
@@ -382,7 +403,7 @@ Item {
         }
 
         /// The far side has it all: the row keeps its seat, named where it goes, and says there is nothing to send —
-        /// the toolbar's words for the same standing (デザイン規約 §メニュー「「今できない」行は無効で残す」).
+        /// the toolbar's words for the same standing (デザイン規約 §メニュー「右クリックのメニューの行は、対象の分類で決まる」).
         function test_the_push_row_stands_out_where_there_is_nothing_to_send() {
             root.standOn({ push: root.pushing("clean") })
             verify(pushRow.offered)
@@ -393,21 +414,21 @@ Item {
             compare(pushRow.blockedReason, "Nothing to push — origin/feature/topic-a is up to date")
         }
 
-        /// Whether the row has a seat and what a press does are core's answers, the toolbar's
-        /// (`remote::PushStanding::offered` / `sends_plain` / `asks`), not a table of the words here: the word picks
-        /// only what the row says.
+        /// Whether the row has a seat, whether it greys and what a press does are core's answers — the type's rows
+        /// and the toolbar's (`remote::PushStanding::sends_plain` / `asks`) —, not a table of the words here: the
+        /// word picks only what the row says.
         function test_the_push_row_presses_where_core_says_a_press_reaches_data() {
             return [
-                { tag: "ready, core giving it no seat", state: "ready", core: { "offered": false }, offered: false },
-                { tag: "clean, core sending it", state: "clean", core: { "sendsPlain": true }, offered: true,
-                  asked: "push feature/topic-a  " },
+                { tag: "ready, core giving it no seat", state: "ready", fields: { pushSeat: false }, offered: false },
+                { tag: "clean, core leaving it live", state: "clean", fields: { pushWhy: "" },
+                  core: { "sendsPlain": true }, offered: true, asked: "push feature/topic-a  " },
                 { tag: "publish, core sending it without asking", state: "publish", core: { "asks": false },
                   offered: true, asked: "push feature/topic-a  " },
             ]
         }
 
         function test_the_push_row_presses_where_core_says_a_press_reaches(data) {
-            root.standOn({ push: Object.assign(root.pushing(data.state), data.core) })
+            root.standOn(Object.assign({ push: Object.assign(root.pushing(data.state), data.core) }, data.fields))
             compare(pushRow.offered, data.offered)
             compare(pushRow.blockedReason, "")
             if (!data.offered)
@@ -559,16 +580,41 @@ Item {
             verify(pushRow.offered)
         }
 
-        /// A push that would stay here keeps what it showed too: standing again where the row has no seat — the tab
-        /// closed, or the tree on that branch — under a hand on the menu, it greys in its own words rather than
-        /// blanking them (デザイン規約 §メニュー「表示も押下も開いた時」), as a row leased to a far side does.
-        function test_standing_again_keeps_a_push_that_would_stay_here_in_its_words() {
+        /// A push that would stay here keeps what it showed too: standing again where the row reads closed — the
+        /// listing behind the tree — or has no seat — the tree on that branch — under a hand on the menu, it greys in
+        /// its own words rather than blanking them (デザイン規約 §メニュー「表示も押下も開いた時」), as a row leased to
+        /// a far side does.
+        function test_standing_again_keeps_a_push_that_would_stay_here_in_its_words_data() {
+            return [
+                { tag: "read closed", fields: { push: root.pushingUnread } },
+                { tag: "no seat", fields: { push: undefined } },
+            ]
+        }
+
+        function test_standing_again_keeps_a_push_that_would_stay_here_in_its_words(data) {
             root.standOn({ push: root.pushingHere })
             level.holdShape()
-            root.standOn({ push: root.pushing("closed") }, "follow")
+            root.standOn(data.fields, "follow")
             verify(pushRow.withdrawn)
             compare(pushRow.text, "to…")
             compare(pushRow.blockedWhy, pushRow.withdrawnWhy)
+        }
+
+        /// A branch the listing has not caught up with reads closed, naming no far side, and the row greys asking for
+        /// the read (`menu::Why::Unread`). The read lands with the menu up: the row takes it as it stands — the closed
+        /// answer held nothing to keep (`RefBranchMenu.standOn`) — and is pressed for where it now names.
+        function test_a_push_row_not_read_yet_takes_the_read_as_it_lands() {
+            root.standOn({ push: root.pushingUnread })
+            verify(pushRow.offered)
+            verify(pushRow.blocked)
+            compare(pushRow.blockedReason, "Wait for the branches to be read again")
+            compare(pushRow.text, "", "no far side to name yet")
+            level.holdShape()
+            root.standOn({ push: root.pushing("ready") }, "follow")
+            verify(!pushRow.withdrawn, "the read is what the row asked to wait for")
+            verify(!pushRow.blocked)
+            compare(pushRow.text, "to origin/feature/topic-a")
+            compare(branchCard.state.push.lease, "fed789", "leased where the read put it")
         }
 
         /// The remote rows stay on the reading the menu went up with: the branch's upstream pointed elsewhere outside
@@ -595,20 +641,21 @@ Item {
         /// menu stays up (デザイン規約 §hover「外乱で閉じない」) and the row keeps that commit and greys.
         function test_a_remote_branch_that_moved_keeps_its_delete_leased_and_greys_it() {
             const remote = { kind: "remote", name: "origin/main", full: "origin/main",
-                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread }
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.remoteRow }
             root.standOn(remote)
             level.holdShape()
             root.standOn(remote, "follow", "abc999")
             compare(branchCard.state.refOid, "abc123", "the lease stays the commit the row stood on")
-            verify(deleteRow.withdrawn, "the delete greys where it stands")
-            compare(deleteRow.blockedWhy, deleteRow.withdrawnWhy)
+            verify(remoteDeleteRow.withdrawn, "the delete greys where it stands")
+            compare(remoteDeleteRow.blockedWhy, remoteDeleteRow.withdrawnWhy)
             root.standOn(remote, "follow")
-            verify(deleteRow.withdrawn, "moved once is moved for the menu that showed it")
+            verify(remoteDeleteRow.withdrawn, "moved once is moved for the menu that showed it")
 
             level.releaseShape()
             root.standOn(remote, "", "abc999")
             compare(branchCard.state.refOid, "abc999", "a menu raised afresh leases where it is now")
-            verify(deleteRow.offered)
+            verify(remoteDeleteRow.offered)
+            verify(!remoteDeleteRow.withdrawn)
         }
 
         /// The branch renamed with the menu up (`renamed`): the card goes on standing on it under the new name as the
@@ -649,12 +696,12 @@ Item {
         /// is asked again: the command may have merged the branch.
         function test_a_wait_that_ends_holds_the_leases_and_asks_git_again() {
             const remote = { kind: "remote", name: "origin/main", full: "origin/main",
-                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread }
+                             remoteCounterpart: "", remoteCounterpartOid: "", offers: root.remoteRow }
             root.standOn(remote)
             level.holdShape()
             root.standOn(remote, "wait", "abc999")
             compare(branchCard.state.refOid, "abc123", "the remote branch's own delete keeps its lease")
-            verify(deleteRow.withdrawn, "and greys where it stands")
+            verify(remoteDeleteRow.withdrawn, "and greys where it stands")
 
             level.releaseShape()
             root.standOn({ push: root.pushing("diverged") })
@@ -767,8 +814,8 @@ Item {
 
             // A remote row's own delete goes to the reading it names, leased to the commit the row stands on.
             root.standOn({ kind: "remote", name: "origin/main", full: "origin/main",
-                           remoteCounterpart: "", remoteCounterpartOid: "", offers: root.unread })
-            deleteRow.held()
+                           remoteCounterpart: "", remoteCounterpartOid: "", offers: root.remoteRow })
+            remoteDeleteRow.held()
             compare(root.asked, "delete-remote origin/main abc123")
         }
     }

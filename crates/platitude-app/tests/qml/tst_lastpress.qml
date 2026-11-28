@@ -1,5 +1,6 @@
 import QtQuick
 import QtTest
+import platitude
 import platitude.ui
 
 // What a press count answers, and when (`HoldDriver`): the answer is decided and sent at the last press, while
@@ -14,6 +15,14 @@ Item {
     /// What the delete table asked for, every request in order: it runs nothing itself.
     property var asked: []
 
+    /// The part of `GitFacts.menuOn`'s answer the card reads (`encode::MenuAnswer`): the delete table, live — drawn
+    /// into the level as both entrances draw it (`MenuLines`).
+    readonly property var deleteTable: GitFacts.seated({
+        "rows": ["delete-branch", "delete-remote-branch", "delete-both", "set-upstream"],
+        "whys": ["", "", "", ""], "upstreamWhere": "remote" })
+    readonly property MenuLines lines: MenuLines {
+        menu: level
+    }
     /// A branch's menu as both entrances lay its delete table out: rows on this level, on the BRANCH card's answers.
     AppMenu {
         id: level
@@ -46,12 +55,10 @@ Item {
             "lead": { "path": "", "called": "", "home": false },
             "card": { "remoteCounterpart": "origin/" + name, "remoteCounterpartOid": "def456",
                       "upstream": "origin/" + name },
-            // The part of `GitFacts.refMenu`'s answer the card reads (`encode::RefMenu`).
-            "menu": { "delete": true, "deleteRemote": true, "setUpstream": true, "unsetUpstream": false,
-                      "deleteOut": "", "deleteRemoteOut": "", "deleteBothOut": "", "upstreamWhere": "remote" },
-            "open": true,
+            "menu": root.deleteTable,
             "merged": ""
         })
+        root.lines.answer = root.deleteTable
     }
 
     AskBar {
@@ -145,8 +152,8 @@ Item {
             draft.cancels++
         }
         function selectRow(row) {}
-        function canFold(row) {
-            return false
+        function stepMenu(row) {
+            return undefined
         }
     }
     RebasePlanPane {

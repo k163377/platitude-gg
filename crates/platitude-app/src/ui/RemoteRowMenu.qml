@@ -1,8 +1,10 @@
 import QtQuick
+import platitude
 import platitude.ui
 
 // What a remote itself offers, from its REMOTES row — configuration, so a menu of its own. No chips: the mark row
-// runs `git config`, a word only the command log spells (デザイン規約 §git 用語のコード表記).
+// runs `git config`, a word only the command log spells (デザイン規約 §git 用語のコード表記). Which rows there are and
+// whether each can be pressed is the type's answer (`GitFacts.remoteMenu` — core's `menu::On::Remote`).
 //
 // The origin mark (デザイン規約 §リモートを書き留める) has two doors with one sentence and one slot: this menu's row
 // and `RemoteDialog`'s box, both `RepoTab.markOrigin` (`remote.pushDefault` and `checkout.defaultRemote` together; an
@@ -24,21 +26,32 @@ Item {
 
     /// The remote the menu stands on.
     property string remote: ""
-    /// Whether the mark row is on offer: decided as the menu opens and as it stands again (デザイン規約 §メニュー).
-    property bool canMark: false
+    /// The rows and why each is greyed, read as the menu opens and as it stands again (デザイン規約 §メニュー), drawn
+    /// into the menu — and when it stands again: on what the rows read (`standsOn`), outside too (`follow`;
+    /// デザイン規約 §メニュー「今の内容」). A remote taken away leaves the menu nothing to act on.
+    readonly property MenuLines lines: MenuLines {
+        menu: remoteRowMenu.menu
+        moved: remoteRowMenu.standsOn
+        waiting: remoteRowMenu.treeAtAsk !== null
+        onStandAgain: {
+            if (remoteRowMenu.repoTab.remoteNames.indexOf(remoteRowMenu.remote) < 0)
+                remoteRowMenu.menu.dismiss()
+            else
+                remoteRowMenu.standOn()
+        }
+    }
 
     readonly property alias menu: menu
     readonly property alias githubCard: githubMenu
     readonly property alias opened: menu.opened
     /// Whether the menu is up, for the pane that holds still under it.
     readonly property bool showing: menu.opened
-    /// What the rows read off the tab: the menu standing follows it as it moves, outside too (`follow`;
-    /// デザイン規約 §メニュー「今の内容」).
+    /// What the rows read off the tab, which the menu standing follows (`MenuLines.moved`).
     readonly property string standsOn: remoteRowMenu.repoTab.markedOrigin + "\n"
                                        + remoteRowMenu.repoTab.remoteNames.join("\n")
     /// The worktree as the command the menus wait for was asked (`RepoPage.treeAtAsk`); null while nothing is out.
-    /// While it stands, the rows keep what they stood on, as every opener's (`CommitMenuState.follow`); back to null,
-    /// they stand on what the command left.
+    /// While it stands, the rows keep what they stood on, as every opener's (`MenuLines.waiting`); back to null, they
+    /// stand on what the command left.
     property var treeAtAsk: null
 
     /// The form for this remote's URL — the same dialog `Add remote…` opens, with the half that is already known
@@ -49,7 +62,7 @@ Item {
 
     /// The one door in. Says whether it opened.
     function offerOn(name) {
-        menu.releaseShape()
+        remoteRowMenu.lines.release()
         remoteRowMenu.remote = name
         remoteRowMenu.standOn()
         // Only as the menu opens, as every GITHUB card (`CommitRowMenu.standGithub`).
@@ -57,42 +70,14 @@ Item {
         return menu.offer()
     }
     function standOn() {
-        remoteRowMenu.canMark = remoteRowMenu.remote !== ""
-                                && remoteRowMenu.remote !== remoteRowMenu.repoTab.markedOrigin
+        remoteRowMenu.lines.answer = GitFacts.remoteMenu(remoteRowMenu.repoTab.state === "open", remoteRowMenu.remote,
+                                                         remoteRowMenu.repoTab.markedOrigin)
     }
-    /// What the rows read moved with the menu up — outside while nothing runs, or with a command that has just ended.
-    /// Not while a command is out: a menu raised under it waits on it as it is (`AppMenu.runningWhy`).
-    function follow() {
-        if (remoteRowMenu.treeAtAsk !== null)
-            return
-        remoteRowMenu.standAgain()
-    }
-    /// The command the menu waited for has ended with the menu up, or what the rows read moved: the rows stand on what
-    /// is there now, the menu keeping its shape (`AppMenu.holdShape`). A remote taken away leaves the menu nothing to
-    /// act on.
-    function standAgain() {
-        if (!remoteRowMenu.showing)
-            return
-        if (remoteRowMenu.repoTab.remoteNames.indexOf(remoteRowMenu.remote) < 0) {
-            menu.dismiss()
-            return
-        }
-        menu.holdShape()
-        remoteRowMenu.standOn()
-    }
-
-    onStandsOnChanged: followLater.restart()
-    readonly property TurnLater followLater: TurnLater {
-        id: followLater
-        onTriggered: remoteRowMenu.follow()
-    }
-    onTreeAtAskChanged: if (remoteRowMenu.treeAtAsk === null) remoteRowMenu.follow()
 
     AppMenu {
         id: menu
         heldReason: remoteRowMenu.heldReason
         runningWhy: remoteRowMenu.runningWhy
-        onWaitEnded: remoteRowMenu.standAgain()
 
         AppMenuItem {
             //: Opens the form that holds this remote's URL. Says the same words as the form's own heading.
@@ -100,14 +85,13 @@ Item {
             refName: remoteRowMenu.remote
             refTint: Theme.textPrimary
             refMark: "remote"
+            word: "remote-url"
             onTriggered: remoteRowMenu.urlRequested(remoteRowMenu.remote)
         }
-        // No divider: both rows are one group (user decision — ask before changing). Gone on the remote both keys
-        // already name; a remote only one key names keeps it, to finish the mark (デザイン規約 §リモートを書き留める).
         AppMenuItem {
             id: markItem
             text: qsTr("Mark as origin (default remote)")
-            offered: remoteRowMenu.canMark
+            word: "mark-origin"
             onTriggered: remoteRowMenu.repoTab.markOrigin(remoteRowMenu.remote)
         }
         AppMenuSeparator {}

@@ -84,9 +84,9 @@ Item {
             compare(bar.marks.map(mark => mark[1]), ["remote"], "no worktree named, no tree: the remote's cloud alone")
         }
 
-        /// The mark goes in front of the name where the sentence says it — last in a tip, at the seat a heading's own
-        /// sentence gives it — and never into a word that only holds the same letters (`work` and `tree` in
-        /// `worktree`).
+        /// The mark goes in front of the name where the sentence says it — last in a tip or first in one about it, at
+        /// the seat a heading's own sentence gives it — and never into a word that only holds the same letters (`work`
+        /// and `tree` in `worktree`).
         function test_the_tree_mark_stands_before_the_name_and_nowhere_else() {
             compare(Words.tipNameSeat("Checked out in another worktree — tree", "tree"), 34)
             compare(Words.tipNameSeat("Checked out in another worktree — work", "work"), 34)
@@ -97,6 +97,10 @@ Item {
                     "a tip may open what follows its conclusion with the name")
             compare(Words.tipNameSeat("Cannot rename — revaulted is locked", "vaulted"), -1,
                     "the letters, not the word")
+            compare(Words.tipNameSeat("topic has no commits yet", "topic"), 0, "a tip may open with what it is about")
+            compare(Words.tipNameSeat("topics have no commits yet", "topic"), -1, "the letters, not the word")
+            compare(Words.tipNameSeat("Cannot rename — Cannot is locked", "Cannot"), 16,
+                    "the seat after the conclusion before the sentence's first word")
             compare(Words.tipNameSeat("anything", ""), -1)
             // A heading's: the seat its own sentence gives the name, first or within, its length with it.
             compare(Words.reportMarks("worktree-kept", "", "removed", "tree"), [[0, "tree", undefined, 7]],

@@ -54,8 +54,10 @@ Item {
 
         function init() {
             row.blockedReason = ""
-            row.enabled = true
+            row.doable = true
             row.offered = true
+            row.note = ""
+            row.warning = ""
             elsewhere.forceActiveFocus()
             keyRelease(Qt.Key_Space)
             tryVerify(() => !row.gesturing)
@@ -66,6 +68,44 @@ Item {
         function outlastTheHold() {
             // waits(paced): the subject is a row that must **not** land, so the wait is the floor it would land after.
             wait(Metrics.holdFloorMs * 2)
+        }
+
+        /// A row's tag: its note is part of what it says and stays on a greyed row; its warning is of a press, so a
+        /// greyed row drops it, whatever greys it (デザイン規約 §無効).
+        function test_a_greyed_row_keeps_its_note_and_warns_of_nothing() {
+            const bare = row.besideWords
+            row.warning = "already pushed"
+            compare(row.tag, "already pushed", "warned while it can be pressed")
+            verify(drawn(row, "already pushed"), "after the words on screen")
+            verify(row.besideWords > bare, "with its room bid beside the words")
+            row.blockedReason = "Git is busy"
+            compare(row.tag, "", "a reason greys it")
+            verify(!drawn(row, "already pushed"), "and none is on screen")
+            compare(row.besideWords, bare, "nor bid for")
+            row.blockedReason = ""
+            row.doable = false
+            compare(row.tag, "", "and so does a press it cannot make now")
+            row.doable = true
+            compare(row.tag, "already pushed", "back as it can be pressed again")
+            row.warning = ""
+            row.note = "not merged"
+            row.blockedReason = "Git is busy"
+            compare(row.tag, "not merged", "the words' own tag stays, grey with them")
+            verify(drawn(row, "not merged"), "on screen")
+        }
+
+        /// Whether `words` are on screen in `item`: a label under it on show that says them.
+        function drawn(item, words) {
+            if (!item.visible)
+                return false
+            if (item.text === words)
+                return true
+            const kids = item.children === undefined ? [] : item.children
+            for (let i = 0; i < kids.length; i++) {
+                if (drawn(kids[i], words))
+                    return true
+            }
+            return false
         }
 
         /// The count goes the moment the row is blocked, and presses after it comes back begin a new one — short of the
@@ -126,9 +166,9 @@ Item {
             row.blockedReason = "Git is busy"
             compare(row.completeHold(), false, "blocked")
             row.blockedReason = ""
-            row.enabled = false
-            compare(row.completeHold(), false, "disabled")
-            row.enabled = true
+            row.doable = false
+            compare(row.completeHold(), false, "turned off")
+            row.doable = true
             row.offered = false
             compare(row.completeHold(), false, "not on offer")
             outlastTheHold()
